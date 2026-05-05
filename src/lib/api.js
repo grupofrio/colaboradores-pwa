@@ -1140,32 +1140,17 @@ async function directAdmin(method, path, body) {
     if (dateFrom) domain.push(['date_order', '>=', dateFrom])
     if (dateTo) domain.push(['date_order', '<=', `${dateTo} 23:59:59`])
     const offset = Number(query.get('offset') || 0)
-    // Intentar con campos de aprobación (requieren -u gf_pwa_admin en el servidor).
-    // Si el resultado contiene error de DB (campo no existe), reintentamos sin ellos.
     // picking_ids: necesario para derivar receipt_state cuando el backend aún no
     // expone los campos computados del controlador requisition-receipt-detail.
     const BASE_FIELDS = ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes', 'order_line', 'picking_ids']
-    const APPROVAL_FIELDS = ['pwa_approval_state', 'pwa_approval_reason', 'pwa_approved_by_id', 'pwa_approved_at']
-    let result = await readModelSorted('purchase.order', {
-      fields: [...BASE_FIELDS, ...APPROVAL_FIELDS],
+    const result = await readModelSorted('purchase.order', {
+      fields: BASE_FIELDS,
       domain,
       sort_column: 'date_order',
       sort_desc: true,
       limit,
       sudo: 1,
     })
-    // readModelSorted no lanza excepción en errores de app — devuelve { error, case }
-    const hasDbError = result && typeof result === 'object' && result.error
-    if (hasDbError) {
-      result = await readModelSorted('purchase.order', {
-        fields: BASE_FIELDS,
-        domain,
-        sort_column: 'date_order',
-        sort_desc: true,
-        limit,
-        sudo: 1,
-      })
-    }
     const orders = pickListResponse(result)
     // Bulk fetch de stock.picking states para todas las requisiciones.
     // received       = >=1 picking en 'done' y todos final ('done'/'cancel')
@@ -1212,10 +1197,10 @@ async function directAdmin(method, path, body) {
         origin: row.origin || '',
         notes: row.notes || '',
         line_count: Array.isArray(row.order_line) ? row.order_line.length : 0,
-        approval_state: row.pwa_approval_state || 'none',
-        approval_reason: row.pwa_approval_reason || null,
-        approved_by: row.pwa_approved_by_id?.[1] || null,
-        approved_at: row.pwa_approved_at || null,
+        approval_state: 'none',
+        approval_reason: null,
+        approved_by: null,
+        approved_at: null,
         // Receipt fields — preferimos lo que mande Odoo; si no, derivamos del picking.
         receipt_state: row.receipt_state || derivedReceiptState,
         qty_received_total: Number(row.qty_received_total || 0),
