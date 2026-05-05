@@ -56,8 +56,9 @@ test('rolito bag declaration computes damaged vs returned from MP bag settlement
     },
   ])
 
+  // damagedByKey usa item.key ('material:777'), no el settlement_id
   const totals = computeRolitoBagDeclarationTotals(items, {
-    '91': 5,
+    'material:777': 5,
   })
 
   assert.equal(totals.totalIssued, 100)
@@ -66,9 +67,9 @@ test('rolito bag declaration computes damaged vs returned from MP bag settlement
   assert.equal(totals.totalDamaged, 5)
   assert.equal(totals.totalReturned, 50)
 
-  const [payload] = buildRolitoBagResolutionPayloads(items, { '91': 5 })
+  const [payload] = buildRolitoBagResolutionPayloads(items, { 'material:777': 5 })
   assert.deepEqual(payload, {
-    key: '91',
+    key: 'material:777',
     settlementId: 91,
     shiftId: 27,
     lineId: 2,

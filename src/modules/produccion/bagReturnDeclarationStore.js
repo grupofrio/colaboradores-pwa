@@ -72,7 +72,10 @@ export function saveBagReturnDeclaration(shiftLike, summary) {
   const shiftId = normalizeShiftId(shiftLike || summary?.shift_id)
   if (!shiftId) return false
   const store = parseStore()
-  store[shiftId] = buildBagReturnDeclarationSummary({ ...summary, shiftId })
+  // summary ya viene normalizado de buildBagReturnDeclarationSummary (snake_case).
+  // Re-llamar buildBagReturnDeclarationSummary con spread del snake_case perdería los
+  // valores porque espera parámetros camelCase. Guardamos directo con shift_id corregido.
+  store[shiftId] = { ...summary, shift_id: String(shiftId) }
   writeStore(store)
   return true
 }

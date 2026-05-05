@@ -247,7 +247,7 @@ export default function ScreenCargaUnidades() {
     })
   }
 
-  function useSuggestion(van) {
+  function applySuggestion(van) {
     const id = van.employee_id
     if (!van.suggestion?.length) return
     const lines = van.suggestion
@@ -501,7 +501,7 @@ export default function ScreenCargaUnidades() {
                           ))}
                         </div>
                         <button
-                          onClick={() => useSuggestion(van)}
+                          onClick={() => applySuggestion(van)}
                           style={{
                             width: '100%', padding: '8px 0', borderRadius: TOKENS.radius.sm,
                             background: 'rgba(43,143,224,0.08)', border: '1px dashed rgba(43,143,224,0.35)',

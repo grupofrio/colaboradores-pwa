@@ -34,6 +34,7 @@ test('normalizeSessionRoleContext keeps normalized additional_job_keys and valid
       role: 'auxiliar_admin',
       additional_job_keys: ['gerente_sucursal'],
       module_role_contexts: { admin_sucursal: 'gerente_sucursal' },
+      plaza_id: null,
     },
   )
 })
@@ -49,6 +50,7 @@ test('normalizeSessionRoleContext accepts legacy additional_roles as fallback in
       additional_roles: [' gerente_sucursal ', 'auxiliar_admin'],
       additional_job_keys: ['gerente_sucursal'],
       module_role_contexts: {},
+      plaza_id: null,
     },
   )
 })

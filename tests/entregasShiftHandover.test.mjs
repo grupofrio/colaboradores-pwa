@@ -77,9 +77,11 @@ test('direct entregas eligible-receivers keeps warehouse match even for cross-co
   const receivers = await api('GET', '/pwa-entregas/eligible-receivers?warehouse_id=89&exclude_employee_id=730')
 
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].url, '/odoo-api/web/dataset/call_kw/hr.employee/search_read')
+  // readModelSorted usa /get_records_sorted (no el antiguo call_kw)
+  assert.equal(calls[0].url, '/odoo-api/get_records_sorted')
   const payload = JSON.parse(calls[0].options.body)
-  const domain = payload?.params?.args?.[0] || []
+  // La estructura del payload es params.domain (no params.args[0])
+  const domain = payload?.params?.domain || []
   assert.deepEqual(domain.slice(0, 3), [
     ['active', '=', true],
     ['job_id.name', 'ilike', 'Almacenista'],
