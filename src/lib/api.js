@@ -206,6 +206,10 @@ function toMany2oneId(value) {
   if (value && typeof value === 'object') {
     return Number(value.id || value.product_id || value[0] || 0)
   }
+  if (typeof value === 'string') {
+    const modelRef = value.match(/^[a-zA-Z0-9_.]+,(\d+)$/)
+    if (modelRef) return Number(modelRef[1] || 0)
+  }
   return Number(value || 0)
 }
 
@@ -4736,9 +4740,9 @@ async function directSupervision(method, path, body) {
       sudo: 1,
     }))
     const linkedReadingIds = [
-      shift?.energy_start_id?.[0] || shift?.energy_start_id,
-      shift?.energy_end_id?.[0] || shift?.energy_end_id,
-    ].map((id) => Number(id || 0)).filter((id) => id > 0)
+      toMany2oneId(shift?.energy_start_id),
+      toMany2oneId(shift?.energy_end_id),
+    ].filter((id) => id > 0)
 
     const domain = linkedReadingIds.length > 0
       ? ['|', ['shift_id', '=', shiftId], ['id', 'in', linkedReadingIds]]
