@@ -19,6 +19,8 @@ import {
   getLiquidation,
   closeRoute,
 } from './api'
+export { calculateFlowState } from './routeFlowState'
+export { buildInventoryView } from './routeInventoryView'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Constants
@@ -125,79 +127,6 @@ export async function getRouteDaySummary(employeeId) {
 //  LIVE — Flow Step Calculator
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Determine current step and status of each step in the guided flow.
- * Returns { currentStep, steps: [{id, label, status, route}] }
- *
- * status: 'done' | 'active' | 'pending' | 'blocked'
- */
-export function calculateFlowState(plan, bridgeData = {}) {
-  const state = plan?.state || 'draft'
-  const checklistDone = bridgeData.checklistDone || false
-  const loadAccepted = plan?.load_sealed || false
-  const kmSalida = bridgeData.kmSalida || null
-  const stopsTotal = plan?.stops_total || 0
-  const stopsDone = plan?.stops_done || 0
-  const hasReconciliation = !!plan?.reconciliation_id
-  const corteDone = bridgeData.corteDone || false
-  const liquidacionDone = bridgeData.liquidacionDone || false
-  const cierreDone = state === 'closed' || state === 'reconciled'
-
-  // Determine if inicio phase is complete
-  const inicioDone = state === 'in_progress' && loadAccepted
-
-  // Build step statuses
-  const steps = [
-    {
-      id: 'inicio',
-      label: 'Inicio del Día',
-      status: inicioDone ? 'done' : 'active',
-      route: '/ruta',
-      detail: !loadAccepted ? 'Acepta tu carga' : !kmSalida ? 'Registra KM salida' : 'Completado',
-    },
-    {
-      id: 'control',
-      label: 'Control de Ruta',
-      status: inicioDone ? (stopsDone >= stopsTotal && stopsTotal > 0 ? 'done' : 'active') : 'pending',
-      route: '/ruta/control',
-      detail: inicioDone ? `${stopsDone}/${stopsTotal} paradas` : 'Completa inicio',
-    },
-    {
-      id: 'inventario',
-      label: 'Inventario',
-      status: stopsDone >= stopsTotal && stopsTotal > 0 ? 'active' : 'pending',
-      route: '/ruta/inventario',
-      detail: 'Carga vs ventas vs devoluciones',
-    },
-    {
-      id: 'corte',
-      label: 'Corte',
-      status: corteDone ? 'done' : (stopsDone >= stopsTotal && stopsTotal > 0 ? 'active' : 'pending'),
-      route: '/ruta/corte',
-      detail: corteDone ? 'Cuadre OK' : 'Cuadre de unidades',
-    },
-    {
-      id: 'liquidacion',
-      label: 'Liquidación',
-      status: liquidacionDone ? 'done' : (corteDone ? 'active' : 'pending'),
-      route: '/ruta/liquidacion',
-      detail: liquidacionDone ? 'Cuadre dinero OK' : 'Cuadre de dinero',
-    },
-    {
-      id: 'cierre',
-      label: 'Cierre de Ruta',
-      status: cierreDone ? 'done' : (liquidacionDone ? 'active' : 'pending'),
-      route: '/ruta/cierre',
-      detail: cierreDone ? 'Ruta cerrada' : 'KM final + resumen',
-    },
-  ]
-
-  // Find current step (first non-done)
-  const currentStep = steps.find(s => s.status === 'active')?.id || steps[0].id
-
-  return { currentStep, steps }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LIVE — Progress Calculations
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -230,63 +159,6 @@ export function getTargetProgress(target) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LIVE — Inventory Calculations (from reconciliation + load lines)
 // ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Build inventory view: what was loaded vs delivered vs returned vs remaining.
- * Uses reconciliation data (LIVE) when available.
- */
-export function buildInventoryView(reconciliation, loadLines) {
-  if (reconciliation?.line_ids && reconciliation.line_ids.length > 0) {
-    // Use reconciliation lines (more accurate)
-    return {
-      source: 'reconciliation',
-      totals: {
-        loaded: reconciliation.qty_loaded || 0,
-        delivered: reconciliation.qty_delivered || 0,
-        returned: reconciliation.qty_returned || 0,
-        scrap: reconciliation.qty_scrap || 0,
-        difference: reconciliation.qty_difference || 0,
-      },
-      lines: (reconciliation.line_ids || []).map(line => ({
-        product: line.product_id?.[1] || line.product_name || 'Producto',
-        product_id: line.product_id?.[0] || line.product_id,
-        loaded: line.qty_loaded || 0,
-        delivered: line.qty_delivered || 0,
-        returned: line.qty_returned || 0,
-        scrap: line.qty_scrap || 0,
-        difference: line.qty_difference || 0,
-        remaining: (line.qty_loaded || 0) - (line.qty_delivered || 0) - (line.qty_returned || 0) - (line.qty_scrap || 0),
-      })),
-    }
-  }
-
-  // Fallback: use load lines only (no delivery info yet)
-  if (loadLines && loadLines.length > 0) {
-    const totalLoaded = loadLines.reduce((s, l) => s + (l.product_uom_qty || l.quantity || 0), 0)
-    return {
-      source: 'load_lines',
-      totals: {
-        loaded: totalLoaded,
-        delivered: 0,
-        returned: 0,
-        scrap: 0,
-        difference: 0,
-      },
-      lines: loadLines.map(line => ({
-        product: line.product_id?.[1] || line.product_name || 'Producto',
-        product_id: line.product_id?.[0] || line.product_id,
-        loaded: line.product_uom_qty || line.quantity || 0,
-        delivered: 0,
-        returned: 0,
-        scrap: 0,
-        difference: 0,
-        remaining: line.product_uom_qty || line.quantity || 0,
-      })),
-    }
-  }
-
-  return { source: 'empty', totals: { loaded: 0, delivered: 0, returned: 0, scrap: 0, difference: 0 }, lines: [] }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LIVE — Corte Validation

@@ -4,7 +4,7 @@
 
 - Ten tu PIN y tu barcode listos.
 - Usa el celular asignado al turno.
-- Si algo no aparece, avisa a tu supervisor.
+- Si algo no aparece, avisa a tu supervisor.  
 
 ## Cómo entrar
 
