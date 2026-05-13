@@ -139,15 +139,18 @@ export default function ScreenCierreRolito() {
         await saveBagReconciliation(shift.id, totalBagsReceived, totalBagsReturned)
       }
 
-      markOperatorTurnClosed(shift, activeOperatorRole, {
-        employee_name: session?.employee_name || session?.name || session?.user_name || '',
-      })
-      notifyOperatorClose({
+      const notifyResult = await notifyOperatorClose({
         shift_id: shift.id,
         role: activeOperatorRole,
         employee_id: session?.employee_id || 0,
         closed_at: new Date().toISOString(),
-      }).catch(() => {})
+      })
+      if (!notifyResult || notifyResult.ok === false) {
+        throw new Error(notifyResult?.error || notifyResult?.message || 'Error al registrar cierre en el servidor')
+      }
+      markOperatorTurnClosed(shift, activeOperatorRole, {
+        employee_name: session?.employee_name || session?.name || session?.user_name || '',
+      })
       setAlreadyClosed(true)
       setSuccess('Tu cierre fue entregado al supervisor. El cierre final del turno lo realiza supervision.')
       setTimeout(() => navigate('/produccion'), 1800)
