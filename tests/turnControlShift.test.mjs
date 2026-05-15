@@ -27,3 +27,11 @@ test('does not use navigated shift if it is already closed', () => {
 
   assert.equal(resolved, null)
 })
+
+test('falls back to persisted active shift when fetch and navigation state are missing', () => {
+  const persistedShift = { id: 804, state: 'in_progress', name: 'Turno persistido' }
+
+  const resolved = resolveTurnControlShift(null, null, persistedShift)
+
+  assert.equal(resolved, persistedShift)
+})

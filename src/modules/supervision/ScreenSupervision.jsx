@@ -15,6 +15,7 @@ import { listTanks } from '../produccion/barraService'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
 import { logScreenError } from '../shared/logScreenError'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
+import { savePersistedTurnControlShift } from './turnControlShift'
 
 // Hub de Supervisor — backend-first.
 //
@@ -84,6 +85,7 @@ export default function ScreenSupervision() {
         listTanks().catch(() => ({ tanks: [] })),
       ])
       setShift(s)
+      savePersistedTurnControlShift(s)
       setTanks(tanksRes?.tanks || [])
       if (s?.id) {
         const r = await loadShiftReadiness(s.id, { includeSnapshot: false })

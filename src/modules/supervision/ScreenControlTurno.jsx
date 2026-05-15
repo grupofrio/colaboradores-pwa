@@ -23,7 +23,12 @@ import {
   validateBrineReadingInput,
 } from './brineReadings'
 import { getShiftStartReadiness } from './shiftStartReadiness'
-import { resolveTurnControlShift } from './turnControlShift'
+import {
+  clearPersistedTurnControlShift,
+  loadPersistedTurnControlShift,
+  resolveTurnControlShift,
+  savePersistedTurnControlShift,
+} from './turnControlShift'
 
 const SHIFT_CODES = [
   { value: 1, label: 'Dia' },
@@ -205,8 +210,13 @@ export default function ScreenControlTurno() {
     setLoading(true)
     try {
       const fetchedShift = await getActiveShift(supervisionWarehouseId)
-      const s = resolveTurnControlShift(fetchedShift, location.state?.fallbackShift)
+      const s = resolveTurnControlShift(
+        fetchedShift,
+        location.state?.fallbackShift,
+        loadPersistedTurnControlShift(),
+      )
       setShift(s)
+      savePersistedTurnControlShift(s)
       let nextOperatorSummary = s?.id ? getOperatorCloseSummary(s) : []
       if (s?.id && s.state !== 'draft') {
         try {
@@ -305,6 +315,7 @@ export default function ScreenControlTurno() {
         throw new Error(result.error || 'Error cerrando turno')
       }
       clearOperatorTurnClosed(shift)
+      clearPersistedTurnControlShift()
       const handoverPendingMsg = result.pt_handover_created || result.pt_blocked
         ? 'Turno cerrado. PT quedó en relevo pendiente y otro almacenista debe aceptarlo para reabrir movimientos.'
         : 'Turno cerrado correctamente'
