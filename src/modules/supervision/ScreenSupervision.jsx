@@ -272,7 +272,7 @@ export default function ScreenSupervision() {
               warnings={warnings}
               canClose={canClose}
               typo={typo}
-              onClose={() => navigate('/supervision/turno')}
+              onClose={() => navigate('/supervision/turno', { state: { fallbackShift: shift } })}
             />
 
             {/* KPIs — todos leídos del summary del backend; null → — */}
@@ -338,7 +338,7 @@ export default function ScreenSupervision() {
                 { id: 'mantenimiento', label: 'Mantenimiento', desc: maintenanceLabel(shift.open_maintenance_requests), route: '/supervision/mantenimiento', color: '#a78bfa' },
               ]}
               typo={typo}
-              onGo={(route) => navigate(route)}
+              onGo={(route) => navigate(route, route === '/supervision/turno' ? { state: { fallbackShift: shift } } : undefined)}
             />
             <div style={{ height: 32 }} />
           </>

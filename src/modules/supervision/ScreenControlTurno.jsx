@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { listTanks } from '../produccion/barraService'
@@ -23,6 +23,7 @@ import {
   validateBrineReadingInput,
 } from './brineReadings'
 import { getShiftStartReadiness } from './shiftStartReadiness'
+import { resolveTurnControlShift } from './turnControlShift'
 
 const SHIFT_CODES = [
   { value: 1, label: 'Dia' },
@@ -114,6 +115,7 @@ function buildOperatorSummaryForSupervisor(shiftLike, backendSummary = null) {
 
 export default function ScreenControlTurno() {
   const { session } = useSession()
+  const location = useLocation()
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -202,7 +204,8 @@ export default function ScreenControlTurno() {
   async function loadData() {
     setLoading(true)
     try {
-      const s = await getActiveShift(supervisionWarehouseId)
+      const fetchedShift = await getActiveShift(supervisionWarehouseId)
+      const s = resolveTurnControlShift(fetchedShift, location.state?.fallbackShift)
       setShift(s)
       let nextOperatorSummary = s?.id ? getOperatorCloseSummary(s) : []
       if (s?.id && s.state !== 'draft') {

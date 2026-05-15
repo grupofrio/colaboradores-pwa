@@ -35,6 +35,13 @@ function normalizeShiftCode(value) {
   return raw
 }
 
+function inferShiftCodeFromName(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const match = raw.match(/\bturno\s*([12])\b/i)
+  return match?.[1] || ''
+}
+
 function extractShiftScopeParts(shiftLike) {
   if (!shiftLike || typeof shiftLike !== 'object') return null
 
@@ -46,11 +53,14 @@ function extractShiftScopeParts(shiftLike) {
       ?? 0
   )
   const date = String(shiftLike.date || shiftLike.shift_date || '').trim()
-  const shiftCode = normalizeShiftCode(
+  const rawShiftCode =
     shiftLike.shift_code
-      ?? shiftLike.code
-      ?? shiftLike.turno
-      ?? shiftLike.shift?.shift_code
+    || shiftLike.code
+    || shiftLike.turno
+    || shiftLike.shift?.shift_code
+    || inferShiftCodeFromName(shiftLike.name || shiftLike.display_name)
+  const shiftCode = normalizeShiftCode(
+    rawShiftCode
   )
 
   if (!warehouseId || !date || !shiftCode) return null
@@ -149,12 +159,13 @@ export function normalizeOperatorCloseRole(role) {
 export function shouldAutoCloseOperatorTurn(shiftLike, role) {
   const normalizedRole = normalizeOperatorCloseRole(role)
   if (normalizedRole !== 'operador_rolito') return false
-  return normalizeShiftCode(
+  const rawShiftCode =
     shiftLike?.shift_code
-      ?? shiftLike?.code
-      ?? shiftLike?.turno
-      ?? shiftLike?.shift?.shift_code
-  ) === '2'
+    || shiftLike?.code
+    || shiftLike?.turno
+    || shiftLike?.shift?.shift_code
+    || inferShiftCodeFromName(shiftLike?.name || shiftLike?.display_name)
+  return normalizeShiftCode(rawShiftCode) === '2'
 }
 
 export function getOperatorCloseRecord(shiftLike, role) {

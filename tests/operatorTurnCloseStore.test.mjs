@@ -197,6 +197,25 @@ test('turno 1 rolito still requires manual close', () => {
   assert.equal(rolitoState.can_reopen, false)
 })
 
+test('turno 2 auto-close still works when supervisor shift only exposes the turn in name', () => {
+  const supervisorNightShift = {
+    id: 603,
+    warehouse_id: 76,
+    date: '2026-05-15',
+    shift_code: '',
+    state: 'in_progress',
+    name: 'Planta Iguala - 2026-05-15 - Turno 2',
+  }
+
+  const summary = getOperatorCloseSummary(supervisorNightShift)
+  const rolitoState = getOperatorCloseState(supervisorNightShift, 'operador_rolito', supervisorNightShift)
+
+  assert.equal(summary.find((item) => item.role === 'operador_rolito')?.closed, true)
+  assert.equal(rolitoState.closed, true)
+  assert.equal(rolitoState.effectively_closed, true)
+  assert.equal(rolitoState.employee_name, 'Auto-entregado')
+})
+
 test('clearOperatorTurnClosed removes the full shift entry', () => {
   markOperatorTurnClosed(404, 'operador_barra', { employee_name: 'Luis' })
   clearOperatorTurnClosed(404)
