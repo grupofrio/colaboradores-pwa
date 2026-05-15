@@ -57,6 +57,11 @@ input, button, textarea, select {
   background: none;
 }
 
+/* Forzar tema oscuro en controles nativos (dropdown options, date picker, etc.) */
+select {
+  color-scheme: dark;
+}
+
 button { cursor: pointer; }
 
 a { color: inherit; text-decoration: none; }
