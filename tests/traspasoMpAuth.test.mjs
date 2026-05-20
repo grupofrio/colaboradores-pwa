@@ -57,33 +57,112 @@ test.afterEach(() => {
   globalThis.window = originalWindow
 })
 
-test('iguala stock sends the persisted API key on refresh', async () => {
+test('iguala stock loads from model reads without requiring the strict admin endpoint', async () => {
   setSession()
 
   const calls = []
   globalThis.fetch = async (url, options = {}) => {
-    calls.push({ url, options })
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+    if (url === '/odoo-api/get_records_sorted' && payload?.params?.model === 'gf.production.material') {
+      return createJsonResponse(200, {
+        result: {
+          response: [
+            {
+              id: 501,
+              name: 'MP BOLSA LAURITA ROLITO (13KG)',
+              product_id: [901, 'MP BOLSA LAURITA ROLITO (13KG)'],
+            },
+          ],
+        },
+      })
+    }
+    if (url === '/odoo-api/get_records_sorted' && payload?.params?.model === 'stock.quant') {
+      return createJsonResponse(200, {
+        result: {
+          response: [
+            {
+              id: 701,
+              product_id: [901, 'MP BOLSA LAURITA ROLITO (13KG)'],
+              quantity: 24,
+            },
+          ],
+        },
+      })
+    }
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  const stock = await api('GET', '/pwa-admin/traspaso-mp/iguala-stock')
+
+  assert.equal(calls.length, 2)
+  assert.equal(calls[0].url, '/odoo-api/get_records_sorted')
+  assert.equal(calls[0].payload.params.model, 'gf.production.material')
+  assert.deepEqual(calls[0].payload.params.domain, [
+    ['active', '=', true],
+    ['applies_to_rolito', '=', true],
+    ['name', 'ilike', 'MP BOLSA LAURITA ROLITO'],
+  ])
+  assert.equal(calls[1].url, '/odoo-api/get_records_sorted')
+  assert.equal(calls[1].payload.params.model, 'stock.quant')
+  assert.deepEqual(stock, {
+    location_id: 1172,
+    location_name: 'PIGU/MP-IGUALA',
+    products: [
+      {
+        product_id: 901,
+        product_name: 'MP BOLSA LAURITA ROLITO (13KG)',
+        material_id: 501,
+        material_name: 'MP BOLSA LAURITA ROLITO (13KG)',
+        uom: 'Units',
+        qty_available: 24,
+      },
+    ],
+  })
+})
+
+test('iguala transfer posts directly to the Odoo admin controller', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
     return createJsonResponse(200, {
-      ok: true,
-      message: 'OK',
-      data: {
-        location_id: 1172,
-        location_name: 'PIGU/MP-IGUALA',
-        products: [],
+      result: {
+        ok: true,
+        message: 'Traspaso realizado',
+        data: {
+          issue_id: 88,
+          qty: 3,
+        },
       },
     })
   }
 
-  await api('GET', '/pwa-admin/traspaso-mp/iguala-stock')
+  const result = await api('POST', '/pwa-admin/traspaso-mp/iguala-transfer', {
+    product_id: 901,
+    qty: 3,
+    notes: 'Entrega gerente',
+    issued_by: 699,
+  })
 
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].url, '/odoo-api/pwa-admin/traspaso-mp/iguala-stock')
+  assert.equal(calls[0].url, '/odoo-api/pwa-admin/traspaso-mp/iguala-transfer')
   assert.equal(calls[0].options.headers['Api-Key'], 'api-key-test')
-  assert.equal(calls[0].options.headers['X-GF-Employee-Token'], 'employee-token-test')
-  assert.equal(calls[0].options.headers.Authorization, 'Bearer token-test')
+  assert.equal(calls[0].payload.params.product_id, 901)
+  assert.equal(calls[0].payload.params.qty, 3)
+  assert.deepEqual(result, {
+    ok: true,
+    message: 'Traspaso realizado',
+    data: {
+      issue_id: 88,
+      qty: 3,
+    },
+  })
 })
 
-test('iguala stock treats backend API key rejection as an expired session', async () => {
+test('direct Odoo admin API key rejection is treated as an expired session', async () => {
   setSession({ api_key: 'stale-api-key' })
 
   const events = []
@@ -99,7 +178,12 @@ test('iguala stock treats backend API key rejection as an expired session', asyn
   })
 
   await assert.rejects(
-    api('GET', '/pwa-admin/traspaso-mp/iguala-stock'),
+    api('POST', '/pwa-admin/traspaso-mp/iguala-transfer', {
+      product_id: 901,
+      qty: 3,
+      notes: 'Entrega gerente',
+      issued_by: 699,
+    }),
     (error) => {
       assert.ok(error instanceof ApiError)
       assert.equal(error.status, 401)

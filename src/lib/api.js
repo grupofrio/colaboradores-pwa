@@ -581,8 +581,73 @@ async function createUpdate(payload) {
 
 const IGUALA_BARRA_PT_LOCATION_ID = 1519
 const IGUALA_MERMA_LOCATION_ID = 1173
+const IGUALA_MP_LOCATION_ID = 1172
 const IGUALA_COMPANY_ID = 35
 const UNIT_UOM_ID = 1
+
+async function getIgualaTraspasoMpStock() {
+  const materialRows = pickListResponse(await readModelSorted('gf.production.material', {
+    fields: ['id', 'name', 'product_id', 'uom_id'],
+    domain: [
+      ['active', '=', true],
+      ['applies_to_rolito', '=', true],
+      ['name', 'ilike', 'MP BOLSA LAURITA ROLITO'],
+    ],
+    sort_column: 'name',
+    sort_desc: false,
+    limit: 50,
+    sudo: 1,
+  }))
+
+  const materialByProduct = new Map()
+  for (const material of materialRows) {
+    const productId = toMany2oneId(material?.product_id)
+    if (!productId) continue
+    materialByProduct.set(productId, material)
+  }
+
+  const productIds = Array.from(materialByProduct.keys())
+  const quantRows = productIds.length
+    ? pickListResponse(await readModelSorted('stock.quant', {
+        fields: ['id', 'product_id', 'quantity', 'available_quantity'],
+        domain: [
+          ['location_id', '=', IGUALA_MP_LOCATION_ID],
+          ['product_id', 'in', productIds],
+        ],
+        sort_column: 'product_id',
+        sort_desc: false,
+        limit: 200,
+        sudo: 1,
+      }))
+    : []
+
+  const qtyByProduct = new Map()
+  for (const quant of quantRows) {
+    const productId = toMany2oneId(quant?.product_id)
+    if (!productId) continue
+    const quantity = Number(quant?.quantity ?? quant?.available_quantity ?? 0) || 0
+    qtyByProduct.set(productId, (qtyByProduct.get(productId) || 0) + quantity)
+  }
+
+  return {
+    location_id: IGUALA_MP_LOCATION_ID,
+    location_name: 'PIGU/MP-IGUALA',
+    products: productIds.map((productId) => {
+      const material = materialByProduct.get(productId) || {}
+      const productName = Array.isArray(material.product_id)
+        ? material.product_id[1]
+        : (material.product_name || material.name || 'Materia prima')
+      return {
+        product_id: productId,
+        product_name: productName,
+        material_id: Number(material.id || 0),
+        material_name: material.name || productName,
+        uom: Array.isArray(material.uom_id) ? (material.uom_id[1] || 'Units') : 'Units',
+        qty_available: qtyByProduct.get(productId) || 0,
+      }
+    }),
+  }
+}
 
 async function createBarHarvestScrap({
   product = {},
@@ -1750,10 +1815,18 @@ async function directAdmin(method, path, body) {
     })
   }
 
-  // ── Traspaso MP gerente — stock filtrado a 3 Laurita en PIGU/MP-IGUALA ──
-  // Delega al controller Odoo (hardcoded para Fabricacion-Iguala).
+  // ── Traspaso MP gerente — stock filtrado a Laurita en PIGU/MP-IGUALA ──
   if (cleanPath === '/pwa-admin/traspaso-mp/iguala-stock' && method === 'GET') {
-    return odooHttp('GET', '/pwa-admin/traspaso-mp/iguala-stock', {})
+    return getIgualaTraspasoMpStock()
+  }
+
+  if (cleanPath === '/pwa-admin/traspaso-mp/iguala-transfer' && method === 'POST') {
+    return odooJson('/pwa-admin/traspaso-mp/iguala-transfer', {
+      product_id: Number(body?.product_id || body?.productId || 0),
+      qty: Number(body?.qty || 0),
+      notes: body?.notes || '',
+      issued_by: Number(body?.issued_by || body?.issuedBy || getEmployeeId() || 0) || undefined,
+    })
   }
 
   if (cleanPath === '/pwa-admin/traspaso-mp/today' && method === 'GET') {
