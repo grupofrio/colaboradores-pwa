@@ -22,6 +22,7 @@ import {
   stockLabel,
 } from './posCart'
 import {
+  canRefreshCustomerPricelist,
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
@@ -104,9 +105,11 @@ function MobilePOS({ warehouseId }) {
         name: catalog?.pricelist_name || '',
       })
       setCart((prev) => repriceCartFromCatalog(prev, list))
+      return true
     } catch (e) {
       logScreenError('ScreenPOS', 'getPosCatalog', e)
       setError('Error cargando productos')
+      return false
     } finally {
       setLoading(false)
     }
@@ -178,6 +181,11 @@ function MobilePOS({ warehouseId }) {
     setShowCustomerSearch(false)
     setCustomerQuery('')
     setCustomerResults([])
+  }
+
+  function refreshPricelistForCustomer() {
+    if (!canRefreshCustomerPricelist(customer)) return
+    loadProducts(customer.id)
   }
 
   // Payment
@@ -310,6 +318,25 @@ function MobilePOS({ warehouseId }) {
                 background: `${TOKENS.colors.blue2}18`, border: `1px solid ${TOKENS.colors.blue2}30`,
               }}>
                 <span style={{ ...typo.caption, color: TOKENS.colors.blue3 }}>Cambiar cliente</span>
+              </button>
+              <button
+                onClick={refreshPricelistForCustomer}
+                disabled={loading || !canRefreshCustomerPricelist(customer)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: TOKENS.radius.pill,
+                  background: loading ? TOKENS.colors.surface : `${TOKENS.colors.success}18`,
+                  border: `1px solid ${loading ? TOKENS.colors.border : `${TOKENS.colors.success}35`}`,
+                  cursor: loading ? 'wait' : canRefreshCustomerPricelist(customer) ? 'pointer' : 'not-allowed',
+                  opacity: canRefreshCustomerPricelist(customer) ? 1 : 0.55,
+                }}
+              >
+                <span style={{
+                  ...typo.caption,
+                  color: loading ? TOKENS.colors.textMuted : TOKENS.colors.success,
+                }}>
+                  {loading ? 'Actualizando...' : 'Actualizar lista'}
+                </span>
               </button>
             </div>
 

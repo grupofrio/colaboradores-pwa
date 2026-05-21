@@ -3,6 +3,10 @@ export function shouldLoadCustomerSuggestions(query) {
   return normalized.length === 0 || normalized.length >= 2
 }
 
+export function canRefreshCustomerPricelist(customer) {
+  return Boolean(Number(customer?.id || 0))
+}
+
 function relationId(value) {
   if (Array.isArray(value)) return Number(value[0] || 0) || 0
   if (value && typeof value === 'object') return Number(value.id || value.partner_id || value.customer_id || 0) || 0

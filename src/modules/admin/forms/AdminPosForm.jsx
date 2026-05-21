@@ -22,6 +22,7 @@ import {
   stockLabel,
 } from '../posCart'
 import {
+  canRefreshCustomerPricelist,
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
@@ -83,8 +84,10 @@ export default function AdminPosForm() {
         name: catalog?.pricelist_name || '',
       })
       setCart((prev) => repriceCartFromCatalog(prev, list))
+      return true
     } catch (e) {
       setError(e?.message || 'Error cargando productos')
+      return false
     } finally {
       setLoading(false)
     }
@@ -170,6 +173,12 @@ export default function AdminPosForm() {
     setShowCustomerSearch(false)
     setCustomerQuery('')
     setCustomerResults([])
+  }
+
+  async function refreshPricelistForCustomer() {
+    if (!canRefreshCustomerPricelist(customer)) return
+    const ok = await loadCatalog(customer.id)
+    if (ok) toast.success('Lista de precios actualizada')
   }
 
   async function confirmPay() {
@@ -447,6 +456,25 @@ export default function AdminPosForm() {
               }}
             >
               Cambiar
+            </button>
+            <button
+              type="button"
+              onClick={refreshPricelistForCustomer}
+              disabled={loading || !canRefreshCustomerPricelist(customer)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: TOKENS.radius.md,
+                background: loading ? TOKENS.colors.surface : `${TOKENS.colors.success}18`,
+                border: `1px solid ${loading ? TOKENS.colors.border : `${TOKENS.colors.success}35`}`,
+                fontSize: 11,
+                fontWeight: 600,
+                color: loading ? TOKENS.colors.textMuted : TOKENS.colors.success,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: loading ? 'wait' : canRefreshCustomerPricelist(customer) ? 'pointer' : 'not-allowed',
+                opacity: canRefreshCustomerPricelist(customer) ? 1 : 0.55,
+              }}
+            >
+              {loading ? 'Actualizando...' : 'Actualizar lista'}
             </button>
           </div>
 

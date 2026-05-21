@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  canRefreshCustomerPricelist,
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
@@ -15,6 +16,11 @@ test('shouldLoadCustomerSuggestions loads defaults for empty queries', () => {
 test('shouldLoadCustomerSuggestions waits for at least two characters when query is not empty', () => {
   assert.equal(shouldLoadCustomerSuggestions('a'), false)
   assert.equal(shouldLoadCustomerSuggestions('ab'), true)
+})
+
+test('canRefreshCustomerPricelist enables the list refresh button for selected customers', () => {
+  assert.equal(canRefreshCustomerPricelist({ id: 44 }), true)
+  assert.equal(canRefreshCustomerPricelist({ id: null }), false)
 })
 
 test('normalizeCustomerResults unwraps direct arrays and nested data arrays', () => {
