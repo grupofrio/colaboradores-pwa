@@ -151,3 +151,94 @@ test('pos catalog loads from model reads without requiring the strict admin endp
     },
   })
 })
+
+test('pos catalog reads pricelists with domains accepted by get_records_sorted', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, payload })
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    const params = payload?.params || {}
+    assert.equal(params.domain.includes('|'), false, `${params.model} used an OR domain`)
+
+    if (params.model === 'stock.warehouse') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 89, company_id: [34, 'GLACIEM'], lot_stock_id: [1519, 'CIGU/Existencias'] }] },
+      })
+    }
+    if (params.model === 'product.pricelist') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 105, name: 'Mostrador Iguala', display_name: 'Mostrador Iguala' }] },
+      })
+    }
+    if (params.model === 'product.product') {
+      return createJsonResponse(200, { result: { response: [] } })
+    }
+    return createJsonResponse(200, { result: { response: [] } })
+  }
+
+  await api('GET', '/pwa-admin/pos-products?warehouse_id=89&company_id=34')
+
+  const pricelistCall = calls.find((call) => call.payload?.params?.model === 'product.pricelist')
+  assert.deepEqual(pricelistCall.payload.params.domain, [['company_id', '=', 34]])
+})
+
+test('pos customer search splits text search into safe simple domains', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, payload })
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    const params = payload?.params || {}
+    assert.equal(params.model, 'res.partner')
+    assert.equal(params.domain.includes('|'), false, 'customer search used an OR domain')
+    assert.equal(
+      params.domain.some((term) => Array.isArray(term) && term[0] === 'display_name'),
+      false,
+      'customer search used display_name in the domain',
+    )
+
+    const hasNameSearch = params.domain.some((term) => (
+      Array.isArray(term) && term[0] === 'name' && term[1] === 'ilike' && term[2] === 'pala'
+    ))
+    return createJsonResponse(200, {
+      result: {
+        response: hasNameSearch
+          ? [{ id: 44, name: 'Palapa Centro', customer_rank: 1, property_product_pricelist: [105, 'Mostrador'] }]
+          : [],
+      },
+    })
+  }
+
+  const result = await api('GET', '/pwa-admin/customers?q=pala&company_id=34')
+
+  assert.equal(calls.length > 1, true)
+  assert.deepEqual(result, {
+    ok: true,
+    message: 'OK',
+    data: [{
+      id: 44,
+      name: 'Palapa Centro',
+      email: '',
+      phone: '',
+      mobile: '',
+      vat: '',
+      ref: '',
+      is_company: false,
+      pricelist_id: 105,
+      pricelist_name: 'Mostrador',
+    }],
+  })
+})

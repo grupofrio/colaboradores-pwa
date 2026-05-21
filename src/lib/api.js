@@ -609,16 +609,21 @@ async function readPosPricelist(companyId, partnerId = 0) {
     }
   }
 
-  const pricelistRows = pickListResponse(await readModelSorted('product.pricelist', {
-    fields: ['id', 'name', 'display_name'],
-    domain: companyId
-      ? ['|', ['company_id', '=', companyId], ['company_id', '=', false]]
-      : [],
-    sort_column: 'id',
-    sort_desc: false,
-    limit: 1,
-    sudo: 1,
-  }))
+  const domains = companyId
+    ? [[['company_id', '=', companyId]], [['company_id', '=', false]]]
+    : [[]]
+  let pricelistRows = []
+  for (const domain of domains) {
+    pricelistRows = pickListResponse(await readModelSorted('product.pricelist', {
+      fields: ['id', 'name', 'display_name'],
+      domain,
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    }))
+    if (pricelistRows.length) break
+  }
   const pricelist = pricelistRows[0] || null
   return pricelist
     ? { id: Number(pricelist.id || 0) || null, name: pricelist.display_name || pricelist.name || '' }
@@ -707,38 +712,65 @@ async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {
   }
 }
 
-function buildPosCustomerDomain(companyId, q = '') {
-  const domain = [
+function buildPosCustomerBaseDomains(companyId) {
+  const baseDomain = [
     ['active', '=', true],
     ['customer_rank', '>', 0],
   ]
-  if (companyId) {
-    domain.push('|', ['company_id', '=', companyId], ['company_id', '=', false])
+  return companyId
+    ? [
+        [...baseDomain, ['company_id', '=', companyId]],
+        [...baseDomain, ['company_id', '=', false]],
+      ]
+    : [baseDomain]
+}
+
+function addUniquePosCustomers(target, rows = []) {
+  const seen = new Set(target.map((row) => Number(row?.id || 0)).filter(Boolean))
+  for (const row of rows) {
+    const id = Number(row?.id || 0)
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    target.push(row)
   }
-  const query = String(q || '').trim()
-  if (query) {
-    domain.push(
-      '|', '|', '|', '|', '|',
-      ['name', 'ilike', query],
-      ['display_name', 'ilike', query],
-      ['vat', 'ilike', query],
-      ['ref', 'ilike', query],
-      ['phone', 'ilike', query],
-      ['mobile', 'ilike', query],
-    )
-  }
-  return domain
+}
+
+async function readPosCustomerRows(domain, limit) {
+  return pickListResponse(await readModelSorted('res.partner', {
+    fields: ['id', 'name', 'display_name', 'email', 'phone', 'mobile', 'vat', 'ref', 'is_company', 'property_product_pricelist', 'pricelist_id'],
+    domain,
+    sort_column: 'name',
+    sort_desc: false,
+    limit,
+    sudo: 1,
+  }))
 }
 
 async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = {}) {
-  const rows = pickListResponse(await readModelSorted('res.partner', {
-    fields: ['id', 'name', 'display_name', 'email', 'phone', 'mobile', 'vat', 'ref', 'is_company', 'property_product_pricelist', 'pricelist_id'],
-    domain: buildPosCustomerDomain(Number(companyId || 0), q),
-    sort_column: 'name',
-    sort_desc: false,
-    limit: Math.min(Number(limit || 30) || 30, 100),
-    sudo: 1,
-  }))
+  const safeLimit = Math.min(Number(limit || 30) || 30, 100)
+  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0))
+  const query = String(q || '').trim()
+  const rows = []
+
+  if (!query) {
+    for (const baseDomain of baseDomains) {
+      if (rows.length >= safeLimit) break
+      addUniquePosCustomers(rows, await readPosCustomerRows(baseDomain, safeLimit - rows.length))
+    }
+  } else {
+    const searchFields = ['name', 'vat', 'ref', 'phone', 'mobile']
+    for (const baseDomain of baseDomains) {
+      if (rows.length >= safeLimit) break
+      for (const field of searchFields) {
+        if (rows.length >= safeLimit) break
+        addUniquePosCustomers(
+          rows,
+          await readPosCustomerRows([...baseDomain, [field, 'ilike', query]], safeLimit - rows.length),
+        )
+      }
+    }
+  }
+
   return {
     ok: true,
     message: 'OK',
@@ -748,32 +780,27 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
 
 async function getDefaultPosCustomerFromModels(companyId) {
   const baseCompanyId = Number(companyId || 0)
-  const fields = ['id', 'name', 'display_name', 'email', 'phone', 'mobile', 'vat', 'ref', 'is_company', 'property_product_pricelist', 'pricelist_id']
-  const exactRows = pickListResponse(await readModelSorted('res.partner', {
-    fields,
-    domain: [...buildPosCustomerDomain(baseCompanyId), ['name', '=ilike', 'VENTA PUBLICO IGUALA']],
-    sort_column: 'name',
-    sort_desc: false,
-    limit: 1,
-    sudo: 1,
-  }))
-  let partner = exactRows[0]
+  const baseDomains = buildPosCustomerBaseDomains(baseCompanyId)
+  let partner = null
+  for (const baseDomain of baseDomains) {
+    const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', 'VENTA PUBLICO IGUALA']], 1)
+    if (exactRows[0]) {
+      partner = exactRows[0]
+      break
+    }
+  }
   if (!partner) {
-    const fallbackRows = pickListResponse(await readModelSorted('res.partner', {
-      fields,
-      domain: [
-        ...buildPosCustomerDomain(baseCompanyId),
-        '|', '|',
-        ['name', 'ilike', 'PUBLICO'],
-        ['name', 'ilike', 'PUBLIC'],
-        ['name', 'ilike', 'MOSTRADOR'],
-      ],
-      sort_column: 'name',
-      sort_desc: false,
-      limit: 1,
-      sudo: 1,
-    }))
-    partner = fallbackRows[0]
+    const fallbackNames = ['PUBLICO', 'PUBLIC', 'MOSTRADOR']
+    for (const baseDomain of baseDomains) {
+      if (partner) break
+      for (const fallbackName of fallbackNames) {
+        const fallbackRows = await readPosCustomerRows([...baseDomain, ['name', 'ilike', fallbackName]], 1)
+        if (fallbackRows[0]) {
+          partner = fallbackRows[0]
+          break
+        }
+      }
+    }
   }
 
   return {
