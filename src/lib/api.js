@@ -577,6 +577,7 @@ const POS_CUSTOMER_ANALYTIC_PLAN_ID = 2
 const POS_CUSTOMER_ANALYTIC_CODE = 'IGU'
 const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
+const ANGELICA_JAIMES_NAME_PARTS = ['angelica', 'jaimes']
 
 function shapePosCustomer(row = {}) {
   const pricelist = row.pricelist_id || row.property_product_pricelist
@@ -824,6 +825,111 @@ async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {
         }
       }),
     },
+  }
+}
+
+function normalizeScopeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+function isAngelicaJaimesSession() {
+  const session = getSession()
+  const normalizedName = normalizeScopeText([
+    session?.name,
+    session?.employee?.name,
+    session?.display_name,
+  ].filter(Boolean).join(' '))
+  return ANGELICA_JAIMES_NAME_PARTS.every((part) => normalizedName.includes(part))
+}
+
+function sessionAnalyticAccountId() {
+  const session = getSession()
+  return toMany2oneId(
+    session?.x_analytic_account_id
+    || session?.analytic_account_id
+    || session?.employee?.x_analytic_account_id
+    || session?.employee?.analytic_account_id,
+  )
+}
+
+async function readEmployeeAnalyticAccountId(employeeId) {
+  const resolvedEmployeeId = Number(employeeId || 0)
+  if (!resolvedEmployeeId) return 0
+  const rows = pickListResponse(await readModelSorted('hr.employee', {
+    fields: ['id', 'name', 'user_id', 'x_analytic_account_id'],
+    domain: [['id', '=', resolvedEmployeeId]],
+    sort_column: 'id',
+    sort_desc: false,
+    limit: 1,
+    sudo: 1,
+  }))
+  return toMany2oneId(rows[0]?.x_analytic_account_id)
+}
+
+async function resolveIgualaAnalyticAccountId() {
+  const domains = [
+    [['code', '=', POS_CUSTOMER_ANALYTIC_CODE]],
+    [['name', 'ilike', POS_CUSTOMER_ANALYTIC_NAME]],
+  ]
+  for (const domain of domains) {
+    const rows = pickListResponse(await readModelSorted('account.analytic.account', {
+      fields: ['id', 'name', 'code'],
+      domain,
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 10,
+      sudo: 1,
+    }))
+    const match = rows.find((row) => {
+      const code = normalizeScopeText(row?.code)
+      const name = normalizeScopeText(row?.name)
+      return code === 'igu' || (name.includes('igu') && name.includes('iguala'))
+    }) || rows[0]
+    const id = Number(match?.id || 0)
+    if (id) return id
+  }
+  return 0
+}
+
+async function readEmployeeScopeForAnalyticAccount(analyticAccountId) {
+  const resolvedAnalyticAccountId = Number(analyticAccountId || 0)
+  if (!resolvedAnalyticAccountId) return { employeeIds: [], userIds: [] }
+  const rows = pickListResponse(await readModelSorted('hr.employee', {
+    fields: ['id', 'name', 'user_id', 'x_analytic_account_id'],
+    domain: [['x_analytic_account_id', '=', resolvedAnalyticAccountId]],
+    sort_column: 'name',
+    sort_desc: false,
+    limit: 500,
+    sudo: 1,
+  }))
+  const employeeIds = []
+  const userIds = []
+  for (const row of rows) {
+    const employeeId = Number(row?.id || 0)
+    const userId = toMany2oneId(row?.user_id)
+    if (employeeId) employeeIds.push(employeeId)
+    if (userId) userIds.push(userId)
+  }
+  return {
+    employeeIds: [...new Set(employeeIds)],
+    userIds: [...new Set(userIds)],
+  }
+}
+
+async function resolveAngelicaJaimesSalesScope() {
+  if (!isAngelicaJaimesSession()) return { enabled: false, employeeIds: [], userIds: [] }
+
+  const analyticAccountId = sessionAnalyticAccountId()
+    || await readEmployeeAnalyticAccountId(getEmployeeId())
+    || await resolveIgualaAnalyticAccountId()
+  const scope = await readEmployeeScopeForAnalyticAccount(analyticAccountId)
+  return {
+    enabled: true,
+    analyticAccountId,
+    ...scope,
   }
 }
 
@@ -1364,8 +1470,16 @@ async function directAdmin(method, path, body) {
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const domain = [['date_order', '>=', todayStart], ['date_order', '<=', todayEnd]]
     if (reqWarehouseId) domain.push(['warehouse_id', '=', reqWarehouseId])
+    const employeeScope = await resolveAngelicaJaimesSalesScope()
+    if (employeeScope.enabled) {
+      if (employeeScope.userIds.length) {
+        domain.push(['user_id', 'in', employeeScope.userIds])
+      } else {
+        domain.push(['id', '=', 0])
+      }
+    }
     const result = await readModelSorted('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'payment_method', 'x_studio_mtodo_de_pago'],
+      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'user_id', 'payment_method', 'x_studio_mtodo_de_pago'],
       domain,
       sort_column: 'date_order',
       sort_desc: true,
@@ -1381,6 +1495,8 @@ async function directAdmin(method, path, body) {
       state: row.state || 'draft',
       date_order: row.date_order || null,
       warehouse_id: row.warehouse_id?.[0] || reqWarehouseId || 0,
+      user_id: row.user_id?.[0] || 0,
+      user_name: row.user_id?.[1] || '',
       payment_method: row.payment_method || row.x_studio_mtodo_de_pago || '',
     }))
   }
