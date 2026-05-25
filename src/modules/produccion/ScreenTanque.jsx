@@ -494,13 +494,10 @@ export default function ScreenTanque() {
                   })()}
                   {saltThreshold != null && (() => {
                     const cur = tank.salt_level
-                    const todayStr = getTodayDateKey()
-                    const updStr = tank.salt_level_updated_at ? getReadingLocalDateKey(tank.salt_level_updated_at) : ''
-                    const isToday = updStr === todayStr
-                    const missing = !cur || !isToday
+                    const missing = !cur
                     const ok = !missing && cur >= saltThreshold
                     const color = missing ? TOKENS.colors.warning : ok ? TOKENS.colors.success : TOKENS.colors.error
-                    const hint = !cur ? 'sin lectura' : !isToday ? 'no es de hoy' : null
+                    const hint = !cur ? 'sin lectura' : null
                     return (
                       <ConditionRow
                         label={`Nivel de sal (${saltUnit})`}
