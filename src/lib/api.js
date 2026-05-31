@@ -9,6 +9,7 @@ import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
+  resolveHarvestShiftId,
   resolvePackedProductFromHarvest,
 } from '../modules/produccion/barraHarvestReception.js'
 import {
@@ -3965,6 +3966,20 @@ async function directProduction(method, path, body) {
     if (!shiftId) throw new Error('shift_id requerido')
     if (!quantities.valid) throw new Error(quantities.error || 'Barras mermadas invalidas')
 
+    // La cosecha de barra ocurre 25h+ despues del llenado (llenado + congelacion
+    // > 24h), por lo que body.shift_id arrastra el turno de LLENADO (ya cerrado).
+    // El packing.entry debe registrarse contra el TURNO ACTIVO de cosecha para
+    // que el almacenista PT (que consulta por turno activo) lo vea pendiente.
+    let activeShiftId = 0
+    try {
+      const currentShift = await odooHttp('GET', '/api/production/shift/current', {})
+      activeShiftId = Number(currentShift?.data?.shift_id || 0)
+    } catch { /* ignore: fallback al shift del slot */ }
+    const harvestShiftId = resolveHarvestShiftId({
+      slot: { shift_id: shiftId },
+      activeShift: { id: activeShiftId },
+    }) || shiftId
+
     const receptionPayload = buildPtReceptionFromHarvest({ slot, tank, scrapBars: quantities.scrapBars })
     const sourceProductId = Number(body?.source_product_id || receptionPayload.source_product_id || 0)
     const qtyReported = Number(receptionPayload.qty_reported || 0)
@@ -4017,7 +4032,7 @@ async function directProduction(method, path, body) {
           quantities,
           slot,
           tank,
-          shiftId,
+          shiftId: harvestShiftId,
           operatorId,
           lineId: Number(body?.line_id || tank?.line_id || 0),
           machineId: Number(body?.machine_id || tank?.id || 0),
@@ -4049,7 +4064,7 @@ async function directProduction(method, path, body) {
         if (!harvestedProduct.product_id) throw new Error('product_id requerido para recepcion PT')
 
         const packResult = await odooHttp('POST', '/api/production/pack', {}, {
-          shift_id: shiftId,
+          shift_id: harvestShiftId,
           cycle_id: 0,
           product_id: harvestedProduct.product_id,
           qty_bags: qtyReported,
