@@ -22,6 +22,42 @@ import {
 } from './ptService'
 import { logScreenError } from '../shared/logScreenError'
 
+const MX_TIME_ZONE = 'America/Mexico_City'
+
+// Odoo guarda datetimes en UTC como string "naive" ("YYYY-MM-DD HH:MM:SS").
+// new Date("2026-05-31 01:41:00") los interpreta como hora LOCAL, así que la
+// hora salía en UTC. Aquí los tratamos explícitamente como UTC y los
+// mostramos en hora de México. Las filas locales usan ISO con 'Z' (toISOString),
+// que ya es UTC y se parsea tal cual.
+function parseTransferDate(raw) {
+  if (!raw) return null
+  const s = String(raw).trim()
+  const hasTz = /[zZ]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)
+  const d = hasTz ? new Date(s) : new Date(`${s.replace(' ', 'T')}Z`)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function formatTransferTime(raw) {
+  const d = parseTransferDate(raw)
+  if (!d) return ''
+  return d.toLocaleTimeString('es-MX', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: MX_TIME_ZONE,
+  })
+}
+
+// Normaliza las líneas de un traspaso (backend o log local) a { name, qty }.
+function transferLineItems(t) {
+  const raw = Array.isArray(t?.lines) ? t.lines
+            : Array.isArray(t?.move_lines) ? t.move_lines
+            : []
+  return raw.map((l) => ({
+    name: l.product_name || l.product || (l.product_id ? `#${l.product_id}` : 'Producto'),
+    qty: Number(l.qty_done ?? l.qty_demand ?? l.qty ?? l.quantity ?? 0),
+  }))
+}
+
 export default function ScreenTraspasoPT() {
   const { session } = useSession()
   const navigate = useNavigate()
@@ -425,11 +461,10 @@ export default function ScreenTraspasoPT() {
                   {todayTransfers.map(t => {
                     // Normalize backend row vs local-log row
                     const rawDate = t.date || t.date_done || t.scheduled_date || t.timestamp || null
-                    const time = rawDate ? new Date(rawDate).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''
+                    const time = formatTransferTime(rawDate)
                     const destName = t.destination || t.cedis_name || t.partner_id?.[1] || t.name || 'Entregas'
-                    const linesCount = Array.isArray(t.lines) ? t.lines.length
-                                     : Array.isArray(t.move_lines) ? t.move_lines.length
-                                     : Number(t.lines_count || 0)
+                    const lineItems = transferLineItems(t)
+                    const linesCount = lineItems.length || Number(t.lines_count || 0)
                     const totalQty = Number(
                       t.total_qty != null ? t.total_qty
                       : t.qty_total != null ? t.qty_total
@@ -456,6 +491,15 @@ export default function ScreenTraspasoPT() {
                             {time}{linesCount ? ` · ${linesCount} productos` : ''}
                             {t.state ? ` · ${t.state}` : ''}
                           </p>
+                          {lineItems.length > 0 && (
+                            <div style={{ marginTop: 4 }}>
+                              {lineItems.map((li, i) => (
+                                <p key={i} style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: 0, lineHeight: 1.35 }}>
+                                  • {li.name}{li.qty > 0 ? ` · ${fmtNum(li.qty)}` : ''}
+                                </p>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           {totalQty > 0 && (
