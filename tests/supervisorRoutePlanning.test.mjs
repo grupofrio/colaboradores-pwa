@@ -44,6 +44,7 @@ test('getRoutePlanningState maps route lifecycle to card states', () => {
   assert.equal(getRoutePlanningState({ plan_id: 0 }), 'sin_plan')
   assert.equal(getRoutePlanningState({ plan_id: 10, forecast_state: 'draft' }), 'plan_draft')
   assert.equal(getRoutePlanningState({ plan_id: 10, plan_state: 'published' }), 'published')
+  assert.equal(getRoutePlanningState({ plan_id: 10, plan_state: 'published', forecast_state: 'confirmed' }), 'published')
   assert.equal(getRoutePlanningState({ plan_id: 10, forecast_state: 'confirmed' }), 'forecast_confirmed')
   assert.equal(getRoutePlanningState({ plan_id: 10, load_picking_id: 55 }), 'load_ready')
   assert.equal(getRoutePlanningState({ plan_id: 10, load_picking_id: 55, load_sealed: true }), 'load_executed')

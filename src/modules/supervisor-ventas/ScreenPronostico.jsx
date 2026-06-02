@@ -845,6 +845,7 @@ export default function ScreenPronostico() {
   }
 
   async function handlePublishRoutePlan() {
+    if (submitting) return
     if (!routePlanId) {
       flashMsg('Genera primero la propuesta de clientes')
       return

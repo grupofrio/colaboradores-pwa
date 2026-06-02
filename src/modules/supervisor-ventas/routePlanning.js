@@ -87,8 +87,8 @@ export function getRoutePlanningState(row = {}) {
   if (row.blocked) return 'blocked'
   if (row.load_sealed) return 'load_executed'
   if (toM2oId(row.load_picking_id)) return 'load_ready'
-  if (String(row.forecast_state || '').toLowerCase() === 'confirmed') return 'forecast_confirmed'
   if (String(row.plan_state || '').toLowerCase() === 'published') return 'published'
+  if (String(row.forecast_state || '').toLowerCase() === 'confirmed') return 'forecast_confirmed'
   if (toM2oId(row.plan_id)) return 'plan_draft'
   return 'sin_plan'
 }
