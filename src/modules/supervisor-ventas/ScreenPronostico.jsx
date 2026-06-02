@@ -879,6 +879,13 @@ export default function ScreenPronostico() {
     return state || 'Sin estado'
   }
 
+  function routePrimaryActionLabel(route) {
+    const planState = String(route.plan_state || '').toLowerCase()
+    if (!route.plan_id) return 'Crear propuesta'
+    if (planState === 'published') return 'Ver publicado'
+    return 'Revisar clientes'
+  }
+
   return (
     <div style={{
       minHeight: '100dvh',
@@ -1159,6 +1166,8 @@ export default function ScreenPronostico() {
             }}>
               <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 14 }}>PLAN DIARIO PARA FECHA OBJETIVO</p>
 
+              {manualView === 'routes' && (
+              <>
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14,
               }}>
@@ -1215,11 +1224,52 @@ export default function ScreenPronostico() {
                   <p style={{ ...typo.h2, color: TOKENS.colors.warning, margin: '2px 0 0', fontSize: 18 }}>{routesWithoutPlan}</p>
                 </div>
               </div>
+              </>
+              )}
 
+              {manualView === 'detail' && (
               <div style={{
                 marginBottom: 14, padding: 12, borderRadius: TOKENS.radius.md,
                 background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
               }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
+                }}>
+                  <button
+                    type="button"
+                    onClick={handleBackToRoutes}
+                    style={{
+                      flexShrink: 0, width: 34, height: 34, borderRadius: TOKENS.radius.sm,
+                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                      color: TOKENS.colors.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    aria-label="Volver a rutas"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M19 12H5"/>
+                      <path d="M12 19l-7-7 7-7"/>
+                    </svg>
+                  </button>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedRoute ? selectedRoute.route_name || `Ruta #${selectedRoute.route_id}` : 'Ruta'}
+                    </p>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '2px 0 0', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedRoute?.employee_name || 'Sin empleado'}
+                    </p>
+                  </div>
+                  {selectedRoute && (
+                    <span style={{
+                      flexShrink: 0, padding: '3px 8px', borderRadius: TOKENS.radius.pill,
+                      color: routeStateColor(selectedRoute.state),
+                      background: `${routeStateColor(selectedRoute.state)}14`,
+                      border: `1px solid ${routeStateColor(selectedRoute.state)}30`,
+                      fontSize: 10, fontWeight: 700,
+                    }}>
+                      {routeStateLabel(selectedRoute.state)}
+                    </span>
+                  )}
+                </div>
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Filtros de clientes</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
                   <select
@@ -1362,7 +1412,10 @@ export default function ScreenPronostico() {
                   ))}
                 </select>
               </div>
+              )}
 
+              {manualView === 'routes' && (
+              <>
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Rutas del CEDIS</p>
               {routeError && (
                 <div style={{
@@ -1387,7 +1440,7 @@ export default function ScreenPronostico() {
                   {routes.map((route) => {
                     const selected = Number(selectedRouteId) === Number(route.route_id)
                     const color = routeStateColor(route.state)
-                    const isCreating = routeLoading === route.route_id
+                    const actionLabel = routePrimaryActionLabel(route)
                     return (
                       <div
                         key={route.route_id}
@@ -1400,7 +1453,7 @@ export default function ScreenPronostico() {
                       >
                         <button
                           type="button"
-                          onClick={() => setSelectedRouteId(route.route_id)}
+                          onClick={() => handleOpenRouteDetail(route)}
                           style={{
                             flex: 1, minWidth: 0, textAlign: 'left',
                             display: 'flex', flexDirection: 'column', gap: 3,
@@ -1423,20 +1476,19 @@ export default function ScreenPronostico() {
                         {!route.plan_id ? (
                           <button
                             type="button"
-                            onClick={() => handleEnsurePlan(route)}
-                            disabled={isCreating}
+                            onClick={() => handleOpenRouteDetail(route)}
                             style={{
                               flexShrink: 0, padding: '8px 10px', borderRadius: TOKENS.radius.md,
-                              background: isCreating ? TOKENS.colors.surface : TOKENS.colors.blue2,
-                              color: '#fff', fontSize: 11, fontWeight: 700, opacity: isCreating ? 0.6 : 1,
+                              background: TOKENS.colors.blue2,
+                              color: '#fff', fontSize: 11, fontWeight: 700,
                             }}
                           >
-                            {isCreating ? 'Creando...' : 'Crear plan'}
+                            {actionLabel}
                           </button>
                         ) : (
                           <button
                             type="button"
-                            onClick={() => setSelectedRouteId(route.route_id)}
+                            onClick={() => handleOpenRouteDetail(route)}
                             style={{
                               flexShrink: 0, padding: '8px 10px', borderRadius: TOKENS.radius.md,
                               background: selected ? TOKENS.colors.blueGlow : TOKENS.colors.surface,
@@ -1445,13 +1497,15 @@ export default function ScreenPronostico() {
                               fontSize: 11, fontWeight: 700,
                             }}
                           >
-                            {selected ? 'Editando' : 'Editar'}
+                            {actionLabel}
                           </button>
                         )}
                       </div>
                     )
                   })}
                 </div>
+              )}
+              </>
               )}
 
               <div style={{
