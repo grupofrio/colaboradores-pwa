@@ -24,6 +24,10 @@ import {
 import { BACKEND_CAPS } from '../adminService'
 import { localDateString } from '../../../lib/api'
 import RouteFormatViewer from '../components/RouteFormatViewer'
+import {
+  normalizeLiquidationDetailResponse,
+  normalizeLiquidationListResponse,
+} from '../liquidacionesResponse'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -62,8 +66,7 @@ export default function AdminLiquidacionesForm() {
       setDetail(null)
       try {
         const res = await getPendingLiquidations({ companyId, warehouseId })
-        const data = res?.data ?? res
-        const rows = Array.isArray(data) ? data : (Array.isArray(data?.plans) ? data.plans : [])
+        const rows = normalizeLiquidationListResponse(res)
         if (alive) setList(rows)
       } catch (e) {
         if (alive) setError(e?.message || 'Error al cargar liquidaciones pendientes')
@@ -84,8 +87,7 @@ export default function AdminLiquidacionesForm() {
       setError('')
       try {
         const res = await getLiquidationDetail(selectedId)
-        const data = res?.data ?? res
-        if (alive) setDetail(data || null)
+        if (alive) setDetail(normalizeLiquidationDetailResponse(res))
       } catch (e) {
         if (alive) setError(e?.message || 'Error al cargar detalle')
       } finally {
@@ -109,8 +111,7 @@ export default function AdminLiquidacionesForm() {
       setConfirmOpen(false)
       // Recargar pendientes y abrir el mismo reporte en Validadas.
       const res = await getPendingLiquidations({ companyId, warehouseId })
-      const data = res?.data ?? res
-      const rows = Array.isArray(data) ? data : (Array.isArray(data?.plans) ? data.plans : [])
+      const rows = normalizeLiquidationListResponse(res)
       setList(rows)
       setHistorySelectedId(validatedPlanId)
       setView('history')
@@ -583,10 +584,7 @@ function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null
           dateFrom, dateTo,
           limit: 100,
         })
-        const data = res?.data ?? res
-        const rows = Array.isArray(data)
-          ? data
-          : (Array.isArray(data?.plans) ? data.plans : (Array.isArray(data?.history) ? data.history : []))
+        const rows = normalizeLiquidationListResponse(res, ['plans', 'history'])
         if (alive) {
           setList(rows)
           setSelectedId((current) => {
@@ -615,8 +613,7 @@ function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null
       setError('')
       try {
         const res = await getLiquidationDetail(selectedId)
-        const data = res?.data ?? res
-        if (alive) setDetail(data || null)
+        if (alive) setDetail(normalizeLiquidationDetailResponse(res))
       } catch (e) {
         if (alive) setError(e?.message || 'Error al cargar detalle')
       } finally {
