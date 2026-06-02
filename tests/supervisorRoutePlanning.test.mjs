@@ -24,13 +24,14 @@ test('getTomorrowDateString returns local YYYY-MM-DD for the next day', () => {
   assert.equal(getTomorrowDateString(base), '2026-05-02')
 })
 
-test('planning date bounds default to tomorrow and allow later future dates', () => {
+test('planning date bounds default to today and allow later future dates', () => {
   const base = new Date(2026, 4, 1, 10, 30, 0)
   assert.deepEqual(getPlanningDateBounds(base), {
-    defaultDate: '2026-05-02',
-    minDate: '2026-05-02',
+    defaultDate: '2026-05-01',
+    minDate: '2026-05-01',
   })
-  assert.equal(isFuturePlanningDate('2026-05-01', base), false)
+  assert.equal(isFuturePlanningDate('2026-04-30', base), false)
+  assert.equal(isFuturePlanningDate('2026-05-01', base), true)
   assert.equal(isFuturePlanningDate('2026-05-02', base), true)
   assert.equal(isFuturePlanningDate('2026-05-15', base), true)
 })
