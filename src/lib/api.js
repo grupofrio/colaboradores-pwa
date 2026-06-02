@@ -8196,6 +8196,20 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  const cleanNumberList = (values) => (Array.isArray(values) ? values : [])
+    .map(Number)
+    .filter(Boolean)
+
+  const cleanDemandClasses = (values) => {
+    const allowed = ['AA', 'A', 'B', 'C']
+    const seen = new Set()
+    for (const raw of Array.isArray(values) ? values : []) {
+      const v = String(raw || '').trim().toUpperCase()
+      if (allowed.includes(v)) seen.add(v)
+    }
+    return allowed.filter((v) => seen.has(v))
+  }
+
   if (cleanPath === '/pwa-supv/route-plan-add-customer' && method === 'POST') {
     return odooJson('/gf/salesops/supervisor/v2/route_plan/add_customer', {
       meta: supervisorMeta(),
@@ -8204,6 +8218,54 @@ async function directSupervisorVentas(method, path, body) {
         customer_id: Number(body?.customer_id || 0),
         notes: String(body?.notes || '').trim(),
       },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/route-plan-preview-customers' && method === 'POST') {
+    return odooJson('/gf/salesops/supervisor/v2/route_plan/preview_customers', {
+      meta: supervisorMeta(),
+      data: {
+        route_id: Number(body?.route_id || 0),
+        date_target: body?.date_target || undefined,
+        polygon_id: Number(body?.polygon_id || 0) || undefined,
+        subpolygon_ids: cleanNumberList(body?.subpolygon_ids),
+        channel_ids: cleanNumberList(body?.channel_ids),
+        visit_days: Array.isArray(body?.visit_days) ? body.visit_days.filter(Boolean) : [],
+        time_window_id: body?.time_window_id ? Number(body.time_window_id) : null,
+        demand_classes: cleanDemandClasses(body?.demand_classes),
+      },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/route-plan-save-draft' && method === 'POST') {
+    return odooJson('/gf/salesops/supervisor/v2/route_plan/save_draft', {
+      meta: supervisorMeta(),
+      data: {
+        route_plan_id: Number(body?.route_plan_id || 0) || undefined,
+        route_id: Number(body?.route_id || 0) || undefined,
+        date_target: body?.date_target || undefined,
+        polygon_id: Number(body?.polygon_id || 0) || undefined,
+        subpolygon_ids: cleanNumberList(body?.subpolygon_ids),
+        customer_ids: cleanNumberList(body?.customer_ids),
+      },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/route-plan-remove-customer' && method === 'POST') {
+    return odooJson('/gf/salesops/supervisor/v2/route_plan/remove_customer', {
+      meta: supervisorMeta(),
+      data: {
+        route_plan_id: Number(body?.route_plan_id || 0),
+        customer_id: Number(body?.customer_id || 0) || undefined,
+        stop_id: Number(body?.stop_id || 0) || undefined,
+      },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/route-plan-publish' && method === 'POST') {
+    return odooJson('/gf/salesops/supervisor/v2/route_plan/publish', {
+      meta: supervisorMeta(),
+      data: { route_plan_id: Number(body?.route_plan_id || 0) },
     })
   }
 
