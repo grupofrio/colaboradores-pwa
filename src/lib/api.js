@@ -8242,7 +8242,7 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/route-plan-preview-customers' && method === 'POST') {
-    return odooJson('/gf/salesops/supervisor/v2/route_plan/preview_customers', {
+    const ensureResponse = await odooJson('/gf/salesops/supervisor/v2/route_plan/ensure', {
       meta: supervisorMeta(),
       data: {
         route_id: Number(body?.route_id || 0),
@@ -8255,6 +8255,42 @@ async function directSupervisorVentas(method, path, body) {
         demand_classes: cleanDemandClasses(body?.demand_classes),
       },
     })
+
+    if (ensureResponse?.ok === false) return ensureResponse
+
+    const ensureData = ensureResponse?.data && typeof ensureResponse.data === 'object'
+      ? ensureResponse.data
+      : {}
+    const routePlanId = Number(ensureData.route_plan_id || ensureData.plan_id || 0)
+    if (!routePlanId) return ensureResponse
+
+    const stopsResult = await readModelSorted('gf.route.stop', {
+      fields: [
+        'id', 'route_plan_id', 'customer_id', 'state', 'result_status',
+        'route_sequence', 'not_visited_reason_id', 'actual_start_time',
+        'actual_end_time', 'comments',
+      ],
+      domain: [['route_plan_id', '=', routePlanId]],
+      sort_column: 'route_sequence',
+      sort_desc: false,
+      limit: 500,
+      sudo: 1,
+    })
+    const customers = pickListResponse(stopsResult).map((row) => ({
+      ...row,
+      stop_id: row.id,
+    }))
+
+    return {
+      ...ensureResponse,
+      ok: ensureResponse?.ok !== false,
+      data: {
+        ...ensureData,
+        plan_id: routePlanId,
+        route_plan_id: routePlanId,
+        customers,
+      },
+    }
   }
 
   if (cleanPath === '/pwa-supv/route-plan-save-draft' && method === 'POST') {
@@ -8845,7 +8881,21 @@ async function directSupervisorVentas(method, path, body) {
   // API key user (capa #34) ∩ employee token (capa #35).
 
   if (cleanPath === '/pwa-supv/branch-configs' && method === 'GET') {
-    return odooHttp('GET', '/pwa-supv/branch-configs', {})
+    try {
+      return await odooHttp('GET', '/pwa-supv/branch-configs', {})
+    } catch (e) {
+      if (e?.status === 403 || e?.code === 'forbidden') {
+        return {
+          ok: false,
+          message: e.message || 'Usuario sin permisos para esta operacion.',
+          data: {
+            code: e.code || 'forbidden',
+            branch_configs: [],
+          },
+        }
+      }
+      throw e
+    }
   }
 
   if (cleanPath === '/pwa-supv/route-suggestions' && method === 'GET') {

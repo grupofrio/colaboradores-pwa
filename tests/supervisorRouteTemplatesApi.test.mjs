@@ -144,3 +144,85 @@ test('supervisor route templates does not introspect ir.model.fields metadata', 
   assert.equal(rows[0].forecast_id, 900)
   assert.equal(models.includes('ir.model.fields'), false)
 })
+
+test('supervisor route plan preview uses ensure endpoint and reads generated stops', async () => {
+  setSession()
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = JSON.parse(options.body)
+    const params = payload.params || {}
+    calls.push({ url, params })
+
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/preview_customers') {
+      throw new Error('preview_customers endpoint is not installed')
+    }
+
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/ensure') {
+      return createJsonResponse(200, {
+        result: {
+          ok: true,
+          data: {
+            plan_id: 800,
+            plan_name: 'PLAN/800',
+            state: 'draft',
+            stops_total: 1,
+          },
+        },
+      })
+    }
+
+    if (url === '/odoo-api/get_records_sorted' && params.model === 'gf.route.stop') {
+      return createJsonResponse(200, {
+        result: {
+          response: [
+            {
+              id: 501,
+              route_plan_id: [800, 'PLAN/800'],
+              customer_id: [301, 'Abarrotes Sol'],
+              route_sequence: 1,
+              state: 'draft',
+            },
+          ],
+        },
+      })
+    }
+
+    return createJsonResponse(200, { result: { response: [] } })
+  }
+
+  const response = await api('POST', '/pwa-supv/route-plan-preview-customers', {
+    route_id: 16,
+    date_target: '2026-06-03',
+    polygon_id: 69,
+    subpolygon_ids: [],
+    channel_ids: [],
+    visit_days: [],
+    time_window_id: null,
+    demand_classes: [],
+  })
+
+  assert.equal(response.data.route_plan_id, 800)
+  assert.equal(response.data.customers.length, 1)
+  assert.equal(response.data.customers[0].customer_id[0], 301)
+  assert.equal(calls.some((call) => call.url.endsWith('/preview_customers')), false)
+})
+
+test('supervisor branch configs forbidden response degrades without throwing', async () => {
+  setSession()
+
+  globalThis.fetch = async (url) => {
+    assert.equal(url, '/odoo-api/pwa-supv/branch-configs')
+    return createJsonResponse(403, {
+      ok: false,
+      message: 'Usuario sin permisos para esta operacion.',
+      data: { code: 'forbidden' },
+    })
+  }
+
+  const response = await api('GET', '/pwa-supv/branch-configs')
+
+  assert.equal(response.ok, false)
+  assert.equal(response.data.code, 'forbidden')
+  assert.deepEqual(response.data.branch_configs, [])
+})
