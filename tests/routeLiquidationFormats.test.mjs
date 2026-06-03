@@ -60,7 +60,8 @@ test('closed route enables formats and normalizes inventory, scrap, corte, liqui
   assert.equal(vm.formats.liquidation.totals.credit, 50)
   assert.equal(vm.formats.liquidation.totals.cashExpected, 100)
   assert.equal(vm.formats.liquidation.totals.cashReceived, 100)
-  assert.equal(vm.formats.liquidation.totals.difference, 0)
+  assert.equal(vm.formats.liquidation.totals.cashDifference, 0)
+  assert.equal(vm.formats.liquidation.totals.effectiveDifference, 0)
   assert.equal(vm.formats.sales.unavailable, true)
 })
 
@@ -207,5 +208,37 @@ test('summary html removes recargas column from inventario y corte and shows kil
   assert.match(html, /Kilos vendidos/)
   assert.match(html, /Credito/)
   assert.match(html, /Cash \/ efectivo/)
+  assert.match(html, /Diferencia cash/)
+  assert.match(html, /Diferencia efectivo/)
   assert.doesNotMatch(html, /<th>Recargas<\/th>/)
+})
+
+test('summary keeps cash and effective differences at zero when route has no credit and no explicit cash capture', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    cash_received_amount: null,
+    summary: {
+      by_method: { cash: 5589, credit: 0 },
+      payments: { cash: { total: 0 }, credit: { total: 0 } },
+      expected_payments: { cash: { total: 5589 }, credit: { total: 0 }, transfer: { total: 0 } },
+      total_expected: 5589,
+      total_collected: 5589,
+    },
+    sales: [
+      {
+        folio: 'S003',
+        customer_name: 'Cliente contado',
+        payment_method: 'cash',
+        amount_total: 5589,
+        kg_total: 15,
+      },
+    ],
+  })
+
+  assert.equal(vm.formats.summary.sales.total, 5589)
+  assert.equal(vm.formats.liquidation.totals.credit, 0)
+  assert.equal(vm.formats.liquidation.totals.cashExpected, 5589)
+  assert.equal(vm.formats.liquidation.totals.cashReceived, 5589)
+  assert.equal(vm.formats.liquidation.totals.cashDifference, 0)
+  assert.equal(vm.formats.liquidation.totals.effectiveDifference, 0)
 })

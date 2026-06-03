@@ -301,26 +301,32 @@ function normalizeLiquidation(detail = {}) {
   const expectedCash = firstNumber(expectedBuckets.cash?.total, expectedBuckets.cash, summary.total_expected)
   const expectedCredit = firstNumber(expectedBuckets.credit?.total, expectedBuckets.credit)
   const expectedTransfer = firstNumber(expectedBuckets.transfer?.total, expectedBuckets.transfer)
-  const receivedCash = firstNumber(
+  const hasExplicitCashReceived = [
     detail.cash_received_amount,
     detail.plan?.cash_received_amount,
-    paymentBuckets.cash?.total,
-    summary.by_method?.cash,
-  )
+  ].some((value) => value != null && value !== false && value !== '')
+  const receivedCash = hasExplicitCashReceived
+    ? firstNumber(
+      detail.cash_received_amount,
+      detail.plan?.cash_received_amount,
+    )
+    : expectedCash
   const receivedTransfer = firstNumber(
     paymentBuckets.transfer?.total,
     summary.by_method?.transfer,
   )
   const expected = number(summary.total_expected ?? summary.expected_total ?? (expectedCash + expectedCredit + expectedTransfer))
   const collected = number(summary.total_collected ?? summary.collected_total ?? rows.reduce((sum, row) => sum + row.amount, 0))
-  const difference = number(receivedCash - expectedCash)
+  const cashDifference = number(receivedCash - expectedCash)
+  const effectiveDifference = number(expected - expectedCredit - expectedTransfer - expectedCash)
 
   return {
     rows,
     totals: {
       expected,
       collected,
-      difference,
+      cashDifference,
+      effectiveDifference,
       credit: expectedCredit,
       cashExpected: expectedCash,
       cashReceived: receivedCash,
@@ -535,7 +541,8 @@ function formatSummaryRows(format) {
       { label: 'Kilos vendidos', value: format.sales.unavailable ? 'N/D' : `${format.sales.kilos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` },
       { label: 'Credito', value: money(format.liquidation.totals.credit) },
       { label: 'Cash / efectivo', value: money(format.liquidation.totals.cashExpected) },
-      { label: 'Diferencia', value: money(format.liquidation.totals.difference) },
+      { label: 'Diferencia cash', value: money(format.liquidation.totals.cashDifference) },
+      { label: 'Diferencia efectivo', value: money(format.liquidation.totals.effectiveDifference) },
     ])}
     <h2>Lista de visitas</h2>
     ${visitTable}
@@ -545,12 +552,13 @@ function formatSummaryRows(format) {
     ${reloadTable}
     <h2>Liquidacion</h2>
     ${table(
-      ['Credito', 'Cash esperado', 'Cash recibido', 'Diferencia'],
+      ['Credito', 'Cash esperado', 'Cash recibido', 'Diferencia cash', 'Diferencia efectivo'],
       [[
         money(format.liquidation.totals.credit),
         money(format.liquidation.totals.cashExpected),
         money(format.liquidation.totals.cashReceived),
-        money(format.liquidation.totals.difference),
+        money(format.liquidation.totals.cashDifference),
+        money(format.liquidation.totals.effectiveDifference),
       ]],
     )}
   `
@@ -618,7 +626,7 @@ function formatTotals(vm, formatId) {
     return `<p><strong>Totales:</strong> Cargado ${escapeHtml(format.totals.loaded)} · Entregado ${escapeHtml(format.totals.delivered)} · Devuelto ${escapeHtml(format.totals.returned)} · Merma ${escapeHtml(format.totals.scrap)} · Diferencia ${escapeHtml(format.totals.difference)}</p>`
   }
   if (formatId === 'liquidation') {
-    return `<p><strong>Crédito:</strong> ${escapeHtml(money(format.totals.credit))} · <strong>Cash esperado:</strong> ${escapeHtml(money(format.totals.cashExpected))} · <strong>Cash recibido:</strong> ${escapeHtml(money(format.totals.cashReceived))} · <strong>Diferencia:</strong> ${escapeHtml(money(format.totals.difference))}</p>`
+    return `<p><strong>Crédito:</strong> ${escapeHtml(money(format.totals.credit))} · <strong>Cash esperado:</strong> ${escapeHtml(money(format.totals.cashExpected))} · <strong>Cash recibido:</strong> ${escapeHtml(money(format.totals.cashReceived))} · <strong>Diferencia cash:</strong> ${escapeHtml(money(format.totals.cashDifference))} · <strong>Diferencia efectivo:</strong> ${escapeHtml(money(format.totals.effectiveDifference))}</p>`
   }
   return ''
 }

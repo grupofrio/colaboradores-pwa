@@ -270,7 +270,8 @@ function SummaryReport({ format }) {
         <SummaryMetric label="Kilos vendidos" value={format.sales.unavailable ? 'N/D' : `${fmtNum(format.sales.kilos)} kg`} />
         <SummaryMetric label="Crédito" value={formatRouteMoney(format.liquidation.totals.credit)} />
         <SummaryMetric label="Cash / efectivo" value={formatRouteMoney(format.liquidation.totals.cashExpected)} />
-        <SummaryMetric label="Diferencia" value={formatRouteMoney(format.liquidation.totals.difference)} />
+        <SummaryMetric label="Diferencia cash" value={formatRouteMoney(format.liquidation.totals.cashDifference)} />
+        <SummaryMetric label="Diferencia efectivo" value={formatRouteMoney(format.liquidation.totals.effectiveDifference)} />
       </div>
 
       <ReportSectionTitle title="Lista de visitas" />
@@ -314,11 +315,12 @@ function SummaryReport({ format }) {
       )}
 
       <ReportSectionTitle title="Liquidacion" />
-      <Table headers={['Crédito', 'Cash esperado', 'Cash recibido', 'Diferencia']} rows={[[
+      <Table headers={['Crédito', 'Cash esperado', 'Cash recibido', 'Diferencia cash', 'Diferencia efectivo']} rows={[[
         formatRouteMoney(format.liquidation.totals.credit),
         formatRouteMoney(format.liquidation.totals.cashExpected),
         formatRouteMoney(format.liquidation.totals.cashReceived),
-        formatRouteMoney(format.liquidation.totals.difference),
+        formatRouteMoney(format.liquidation.totals.cashDifference),
+        formatRouteMoney(format.liquidation.totals.effectiveDifference),
       ]]} />
     </>
   )
@@ -442,7 +444,7 @@ function LiquidationReport({ format }) {
       ])} />
       <TotalLine
         label="Resumen"
-        value={`Crédito ${formatRouteMoney(format.totals.credit)} · Cash esperado ${formatRouteMoney(format.totals.cashExpected)} · Cash recibido ${formatRouteMoney(format.totals.cashReceived)} · Diferencia ${formatRouteMoney(format.totals.difference)}`}
+        value={`Crédito ${formatRouteMoney(format.totals.credit)} · Cash esperado ${formatRouteMoney(format.totals.cashExpected)} · Cash recibido ${formatRouteMoney(format.totals.cashReceived)} · Diferencia cash ${formatRouteMoney(format.totals.cashDifference)} · Diferencia efectivo ${formatRouteMoney(format.totals.effectiveDifference)}`}
       />
     </>
   )
