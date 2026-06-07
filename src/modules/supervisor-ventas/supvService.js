@@ -24,6 +24,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { api } from '../../lib/api.js'
+import { resolveMonthlySalesActual } from './monthSales.js'
 
 // Re-export all existing + new API functions for convenience
 export {
@@ -71,15 +72,17 @@ export async function getDayOverview(date) {
   const dateStr = date || getTodayStr()
   const isToday = dateStr === getTodayStr()
 
-  const [teamRes, routesRes, targetsRes] = await Promise.allSettled([
+  const [teamRes, routesRes, targetsRes, monthSalesRes] = await Promise.allSettled([
     api('GET', '/pwa-supv/team'),
     api('GET', `/pwa-supv/team-routes?date=${dateStr}`),
     api('GET', '/pwa-supv/team-targets'),
+    api('GET', `/pwa-supv/month-sales-summary?date=${dateStr}`),
   ])
 
   const team = teamRes.status === 'fulfilled' ? (Array.isArray(teamRes.value) ? teamRes.value : []) : []
   const routes = routesRes.status === 'fulfilled' ? (Array.isArray(routesRes.value) ? routesRes.value : []) : []
   const targets = targetsRes.status === 'fulfilled' ? (Array.isArray(targetsRes.value) ? targetsRes.value : []) : []
+  const monthSales = monthSalesRes.status === 'fulfilled' ? (monthSalesRes.value || null) : null
 
   // Map routes to drivers/salespersons
   const routeByDriver = {}
@@ -140,7 +143,7 @@ export async function getDayOverview(date) {
   const doneStops = vendors.reduce((s, v) => s + v.stops_done, 0)
   const avgCompliance = totalStops > 0 ? Math.round((doneStops / totalStops) * 100) : 0
   const totalSalesTarget = targets.reduce((s, t) => s + (t.sales_target || 0), 0)
-  const totalSalesActual = targets.reduce((s, t) => s + (t.sales_actual || 0), 0)
+  const totalSalesActual = resolveMonthlySalesActual(targets, monthSales)
 
   // Departure aggregates
   const vendorsWithRoute = vendors.filter((v) => v.has_route)

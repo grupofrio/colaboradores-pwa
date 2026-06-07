@@ -36,6 +36,10 @@ import {
   SUPV_ROUTE_EMPLOYEE_FIELDS,
 } from '../modules/supervisor-ventas/teamScope.js'
 import {
+  buildCedisMonthlySalesDomain,
+  sumSaleOrderTotals,
+} from '../modules/supervisor-ventas/monthSales.js'
+import {
   normalizeOdooPickingId,
   normalizePtTransferActionId,
 } from '../modules/entregas/ptTransferGuards.js'
@@ -8679,6 +8683,38 @@ async function directSupervisorVentas(method, path, body) {
       sales_actual: Number(row.actual_sales || 0),
       collection_actual: Number(row.actual_collection || 0),
     }))
+  }
+
+  if (cleanPath === '/pwa-supv/month-sales-summary' && method === 'GET') {
+    const warehouseId = Number(query.get('warehouse_id') || getWarehouseId() || 0)
+    const requestedDate = String(query.get('date') || '')
+    const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
+      ? new Date(`${requestedDate}T12:00:00`)
+      : new Date()
+    const [startMonth, endMonth] = monthRange(anchorDate)
+    const domain = buildCedisMonthlySalesDomain({
+      startMonth,
+      endMonth,
+      warehouseId,
+      companyId,
+    })
+    const result = await readModelSorted('sale.order', {
+      fields: ['id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'company_id'],
+      domain,
+      sort_column: 'date_order',
+      sort_desc: true,
+      limit: 0,
+      sudo: 1,
+    })
+    const rows = pickListResponse(result)
+    return {
+      start_month: startMonth,
+      end_month: endMonth,
+      warehouse_id: warehouseId,
+      company_id: companyId || 0,
+      sales_count: rows.length,
+      sales_actual: sumSaleOrderTotals(rows),
+    }
   }
 
   if (cleanPath === '/pwa-supv/kpi-snapshots' && method === 'GET') {
