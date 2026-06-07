@@ -378,9 +378,11 @@ export default function AdminLiquidacionesForm() {
                 )}
               </div>
 
+              <RouteFormatViewer detail={detail} />
+
               {/* Resumen de pagos */}
               <div style={{
-                padding: 14, borderRadius: TOKENS.radius.md, marginBottom: 14,
+                padding: 14, borderRadius: TOKENS.radius.md, marginTop: 14, marginBottom: 14,
                 background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
               }}>
                 <p style={{
@@ -543,7 +545,6 @@ export default function AdminLiquidacionesForm() {
                 </button>
               )}
 
-              <RouteFormatViewer detail={detail} />
             </>
           )}
         </div>

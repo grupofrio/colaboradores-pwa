@@ -531,15 +531,25 @@ function buildFormats(detail = {}) {
 
 export function buildRouteFormatsViewModel(detail = {}) {
   const plan = normalizePlan(detail)
-  const enabled = isFormatEnabled(plan)
+  const formats = buildFormats(detail)
+  const enabled = isFormatEnabled(plan) || hasPrintableRouteData(formats)
 
   return {
     enabled,
-    blockedReason: enabled ? '' : 'Los formatos solo estan disponibles cuando la ruta esta cerrada.',
+    blockedReason: enabled ? '' : 'Los formatos solo estan disponibles cuando hay corte o liquidacion disponible.',
     plan,
     formatDefinitions: ROUTE_FORMATS,
-    formats: buildFormats(detail),
+    formats,
   }
+}
+
+function hasPrintableRouteData(formats) {
+  return Boolean(
+    formats?.corte?.rows?.length
+    || formats?.liquidation?.rows?.length
+    || formats?.summary?.inventory?.rows?.length
+    || formats?.summary?.liquidation?.rows?.length,
+  )
 }
 
 function getFormatTitle(formatId) {

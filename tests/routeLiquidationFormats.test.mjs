@@ -74,7 +74,18 @@ test('open route blocks formats with a clear reason', () => {
   })
 
   assert.equal(vm.enabled, false)
-  assert.match(vm.blockedReason, /cerrada/i)
+  assert.match(vm.blockedReason, /corte o liquidacion/i)
+})
+
+test('pending liquidation enables printable formats when corte detail exists', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    state: 'in_progress',
+  })
+
+  assert.equal(vm.enabled, true)
+  assert.equal(vm.formats.corte.rows.length, 2)
+  assert.equal(vm.formats.liquidation.rows.length, 2)
 })
 
 test('sales format normalizes common backend sales shapes', () => {
