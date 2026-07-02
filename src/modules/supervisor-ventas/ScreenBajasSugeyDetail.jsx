@@ -137,6 +137,9 @@ export default function ScreenBajasSugeyDetail() {
         <p style={{ ...typo.caption, margin: '8px 0 0', color: TOKENS.colors.textSoft }}>
           Motivo: {request.reason_label || request.reason || 'Sin motivo'}
         </p>
+        <p style={{ ...typo.caption, margin: '4px 0 0', color: TOKENS.colors.textSoft }}>
+          Estado: {request.state || 'Sin estado'}
+        </p>
         {request.request_contact_person && (
           <p style={{ ...typo.caption, margin: '4px 0 0', color: TOKENS.colors.textSoft }}>
             Contacto consultado: {request.request_contact_person}
