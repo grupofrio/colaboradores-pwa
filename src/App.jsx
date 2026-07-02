@@ -110,6 +110,11 @@ const ScreenTareasSupervisor     = lazy(() => import('./modules/supervisor-venta
 const ScreenNotasCliente         = lazy(() => import('./modules/supervisor-ventas/ScreenNotasCliente'))
 const ScreenClientesRecuperacion = lazy(() => import('./modules/supervisor-ventas/ScreenClientesRecuperacion'))
 const ScreenControlComercial    = lazy(() => import('./modules/supervisor-ventas/ScreenControlComercial'))
+const ScreenBajasHub            = lazy(() => import('./modules/supervisor-ventas/ScreenBajasHub'))
+const ScreenBajasSugey          = lazy(() => import('./modules/supervisor-ventas/ScreenBajasSugey'))
+const ScreenBajasSugeyDetail    = lazy(() => import('./modules/supervisor-ventas/ScreenBajasSugeyDetail'))
+const ScreenBajasAngelica       = lazy(() => import('./modules/supervisor-ventas/ScreenBajasAngelica'))
+const ScreenBajasAngelicaDetail = lazy(() => import('./modules/supervisor-ventas/ScreenBajasAngelicaDetail'))
 const ScreenDetalleVendedor    = lazy(() => import('./modules/supervisor-ventas/ScreenDetalleVendedor'))
 const ScreenClientesSinVisitar = lazy(() => import('./modules/supervisor-ventas/ScreenClientesSinVisitar'))
 const ScreenScoreSemanal       = lazy(() => import('./modules/supervisor-ventas/ScreenScoreSemanal'))
@@ -517,6 +522,11 @@ export default function App() {
             {/* ── Supervisor de Ventas ─────────────────────────────────── */}
             {/* Supervisor Ventas V2 — Centro de Control Comercial */}
             <Route path="/equipo" element={<PrivateRoute><ScreenControlComercial /></PrivateRoute>} />
+            <Route path="/equipo/bajas" element={<PrivateRoute><ScreenBajasHub /></PrivateRoute>} />
+            <Route path="/equipo/bajas/sugey" element={<PrivateRoute><ScreenBajasSugey /></PrivateRoute>} />
+            <Route path="/equipo/bajas/sugey/:requestId" element={<PrivateRoute><ScreenBajasSugeyDetail /></PrivateRoute>} />
+            <Route path="/equipo/bajas/angelica" element={<PrivateRoute><ScreenBajasAngelica /></PrivateRoute>} />
+            <Route path="/equipo/bajas/angelica/:requestId" element={<PrivateRoute><ScreenBajasAngelicaDetail /></PrivateRoute>} />
             <Route path="/equipo/vendedor/:vendedorId" element={<PrivateRoute><ScreenDetalleVendedor /></PrivateRoute>} />
             <Route path="/equipo/sin-visitar" element={<PrivateRoute><ScreenClientesSinVisitar /></PrivateRoute>} />
             <Route path="/equipo/score-semanal" element={<PrivateRoute><ScreenScoreSemanal /></PrivateRoute>} />

@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { ScreenShell, StatusBadge, EmptyState } from '../entregas/components'
 import {
   getDayOverview, getYesterdaySummary, getStatusColor, getComplianceColor,
   fmtMoney, fmtTime, getDepartureStatus, getLiquidationStatus,
 } from './supvService'
+import {
+  DEFAULT_DEACTIVATION_JOB_CONFIG,
+  canAccessAngelicaDeactivation,
+  canAccessSugeyDeactivation,
+} from './customerDeactivationState'
 
 /* ============================================================================
    ScreenControlComercial — Centro de Control Comercial (V2 Hub)
@@ -14,6 +20,7 @@ import {
 
 export default function ScreenControlComercial() {
   const navigate = useNavigate()
+  const { session } = useSession()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
@@ -116,6 +123,9 @@ export default function ScreenControlComercial() {
   const visitsColor = getComplianceColor(visitsPct)
   const salesPct = total_sales_target > 0 ? Math.round((total_sales_actual / total_sales_target) * 100) : 0
   const salesColor = getComplianceColor(salesPct)
+  const canOpenBajas = canAccessSugeyDeactivation(session, DEFAULT_DEACTIVATION_JOB_CONFIG)
+    || canAccessAngelicaDeactivation(session, DEFAULT_DEACTIVATION_JOB_CONFIG)
+  const visibleQuickActions = canOpenBajas ? [BAJAS_QUICK_ACTION, ...QUICK_ACTIONS] : QUICK_ACTIONS
 
   return (
     <ScreenShell title="Control Comercial" backTo="/" rightAction={refreshBtn}>
@@ -194,7 +204,7 @@ export default function ScreenControlComercial() {
         ACCIONES RAPIDAS
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-        {QUICK_ACTIONS.map((qa) => (
+        {visibleQuickActions.map((qa) => (
           <button
             key={qa.route}
             onClick={() => navigate(qa.route)}
@@ -411,6 +421,13 @@ function VendorRow({ v, typo, navigate, showDeparture }) {
 }
 
 /* ── Quick Actions config ────────────────────────────────────────────────── */
+
+const BAJAS_QUICK_ACTION = {
+  label: 'Bajas controladas',
+  route: '/equipo/bajas',
+  color: '#14b8a6',
+  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>,
+}
 
 const QUICK_ACTIONS = [
   {
