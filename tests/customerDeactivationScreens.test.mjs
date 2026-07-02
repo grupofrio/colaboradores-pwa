@@ -17,6 +17,7 @@ test('bajas hub loads summary and gates Sugey and Angelica links by job access',
   assert.match(source, /canAccessSugeyDeactivation/)
   assert.match(source, /canAccessAngelicaDeactivation/)
   assert.match(source, /DEFAULT_DEACTIVATION_JOB_CONFIG/)
+  assert.match(source, /hasDeactivationAccess/)
   assert.match(source, /\/equipo\/bajas\/sugey/)
   assert.match(source, /\/equipo\/bajas\/angelica/)
   assert.match(source, /pending_sugey/)
@@ -30,11 +31,13 @@ test('Sugey screens load queue and submit GPS photo verification payload', () =>
   const detail = readScreen('ScreenBajasSugeyDetail')
 
   assert.match(queue, /getSugeyDeactivationQueue/)
+  assert.match(queue, /canAccessSugeyDeactivation/)
   assert.match(queue, /normalizeDeactivationRequest/)
   assert.match(queue, /\/equipo\/bajas\/sugey\/\$\{request\.id\}/)
 
   assert.match(detail, /getCustomerDeactivationDetail/)
   assert.match(detail, /verifyCustomerDeactivationAsSugey/)
+  assert.match(detail, /canAccessSugeyDeactivation/)
   assert.match(detail, /validateSugeyVerificationForm/)
   assert.match(detail, /buildSugeyVerificationPayload/)
   assert.match(detail, /navigator\.geolocation\.getCurrentPosition/)
@@ -47,11 +50,13 @@ test('Angelica screens load queue and submit approval decision payload', () => {
   const detail = readScreen('ScreenBajasAngelicaDetail')
 
   assert.match(queue, /getAngelicaDeactivationQueue/)
+  assert.match(queue, /canAccessAngelicaDeactivation/)
   assert.match(queue, /normalizeDeactivationRequest/)
   assert.match(queue, /\/equipo\/bajas\/angelica\/\$\{request\.id\}/)
 
   assert.match(detail, /getCustomerDeactivationDetail/)
   assert.match(detail, /decideCustomerDeactivationAsAngelica/)
+  assert.match(detail, /canAccessAngelicaDeactivation/)
   assert.match(detail, /validateAngelicaDecisionForm/)
   assert.match(detail, /buildAngelicaDecisionPayload/)
   assert.match(detail, /ANGELICA_DECISIONS/)

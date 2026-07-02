@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useSession } from '../../App'
 import PhotoCapture from '../../components/PhotoCapture'
 import { ErrorState, Loader } from '../../components/Loader'
 import { TOKENS, getTypo } from '../../tokens'
 import { ScreenShell, EmptyState } from '../entregas/components'
 import {
   SUGEY_VERIFICATION_RESULTS,
+  DEFAULT_DEACTIVATION_JOB_CONFIG,
   buildSugeyVerificationPayload,
+  canAccessSugeyDeactivation,
   normalizeDeactivationRequest,
   validateSugeyVerificationForm,
 } from './customerDeactivationState'
@@ -18,6 +21,7 @@ import {
 export default function ScreenBajasSugeyDetail() {
   const navigate = useNavigate()
   const { requestId } = useParams()
+  const { session } = useSession()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const [request, setRequest] = useState(null)
@@ -33,6 +37,7 @@ export default function ScreenBajasSugeyDetail() {
     longitude: null,
     accuracy: null,
   })
+  const canAccessSugey = canAccessSugeyDeactivation(session, DEFAULT_DEACTIVATION_JOB_CONFIG)
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -41,6 +46,10 @@ export default function ScreenBajasSugeyDetail() {
   }, [])
 
   const load = useCallback(async () => {
+    if (!canAccessSugey) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -50,7 +59,7 @@ export default function ScreenBajasSugeyDetail() {
     } finally {
       setLoading(false)
     }
-  }, [requestId])
+  }, [canAccessSugey, requestId])
 
   useEffect(() => { load() }, [load])
 
@@ -99,6 +108,19 @@ export default function ScreenBajasSugeyDetail() {
     } finally {
       setSaving(false)
     }
+  }
+
+  if (!canAccessSugey) {
+    return (
+      <ScreenShell title="Verificacion Sugey" backTo="/equipo/bajas">
+        <EmptyState
+          icon="🔒"
+          title="Sin acceso"
+          subtitle="No tienes una asignacion de puesto habilitada para verificar bajas."
+          typo={typo}
+        />
+      </ScreenShell>
+    )
   }
 
   if (loading) {

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useSession } from '../../App'
 import { ErrorState, Loader } from '../../components/Loader'
 import { TOKENS, getTypo } from '../../tokens'
 import { ScreenShell, EmptyState } from '../entregas/components'
 import {
   ANGELICA_DECISIONS,
+  DEFAULT_DEACTIVATION_JOB_CONFIG,
   buildAngelicaDecisionPayload,
+  canAccessAngelicaDeactivation,
   normalizeDeactivationRequest,
   validateAngelicaDecisionForm,
 } from './customerDeactivationState'
@@ -17,6 +20,7 @@ import {
 export default function ScreenBajasAngelicaDetail() {
   const navigate = useNavigate()
   const { requestId } = useParams()
+  const { session } = useSession()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const [request, setRequest] = useState(null)
@@ -28,6 +32,7 @@ export default function ScreenBajasAngelicaDetail() {
     decision: '',
     comment: '',
   })
+  const canAccessAngelica = canAccessAngelicaDeactivation(session, DEFAULT_DEACTIVATION_JOB_CONFIG)
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -36,6 +41,10 @@ export default function ScreenBajasAngelicaDetail() {
   }, [])
 
   const load = useCallback(async () => {
+    if (!canAccessAngelica) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -45,7 +54,7 @@ export default function ScreenBajasAngelicaDetail() {
     } finally {
       setLoading(false)
     }
-  }, [requestId])
+  }, [canAccessAngelica, requestId])
 
   useEffect(() => { load() }, [load])
 
@@ -70,6 +79,19 @@ export default function ScreenBajasAngelicaDetail() {
     } finally {
       setSaving(false)
     }
+  }
+
+  if (!canAccessAngelica) {
+    return (
+      <ScreenShell title="Visto bueno Angelica" backTo="/equipo/bajas">
+        <EmptyState
+          icon="🔒"
+          title="Sin acceso"
+          subtitle="No tienes una asignacion de puesto habilitada para aprobar bajas."
+          typo={typo}
+        />
+      </ScreenShell>
+    )
   }
 
   if (loading) {

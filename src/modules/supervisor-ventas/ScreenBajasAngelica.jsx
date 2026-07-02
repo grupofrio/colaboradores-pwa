@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSession } from '../../App'
 import { ErrorState, Loader } from '../../components/Loader'
 import { TOKENS, getTypo } from '../../tokens'
 import { ScreenShell, EmptyState } from '../entregas/components'
-import { normalizeDeactivationRequest } from './customerDeactivationState'
+import {
+  DEFAULT_DEACTIVATION_JOB_CONFIG,
+  canAccessAngelicaDeactivation,
+  normalizeDeactivationRequest,
+} from './customerDeactivationState'
 import { getAngelicaDeactivationQueue } from './customerDeactivationService'
 
 export default function ScreenBajasAngelica() {
   const navigate = useNavigate()
+  const { session } = useSession()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const [route, setRoute] = useState('')
@@ -15,6 +21,7 @@ export default function ScreenBajasAngelica() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const canAccessAngelica = canAccessAngelicaDeactivation(session, DEFAULT_DEACTIVATION_JOB_CONFIG)
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -23,6 +30,10 @@ export default function ScreenBajasAngelica() {
   }, [])
 
   const load = useCallback(async (filters = {}) => {
+    if (!canAccessAngelica) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -34,7 +45,7 @@ export default function ScreenBajasAngelica() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [canAccessAngelica])
 
   useEffect(() => { load() }, [load])
 
@@ -45,6 +56,15 @@ export default function ScreenBajasAngelica() {
 
   return (
     <ScreenShell title="Visto bueno Angelica" backTo="/equipo/bajas">
+      {!canAccessAngelica ? (
+        <EmptyState
+          icon="🔒"
+          title="Sin acceso"
+          subtitle="No tienes una asignacion de puesto habilitada para aprobar bajas."
+          typo={typo}
+        />
+      ) : (
+        <>
       <form onSubmit={applyFilters} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginTop: 8 }}>
         <FilterInput label="Ruta" value={route} onChange={setRoute} />
         <FilterInput label="Motivo" value={reason} onChange={setReason} />
@@ -95,6 +115,8 @@ export default function ScreenBajasAngelica() {
             </button>
           ))}
         </div>
+      )}
+        </>
       )}
     </ScreenShell>
   )

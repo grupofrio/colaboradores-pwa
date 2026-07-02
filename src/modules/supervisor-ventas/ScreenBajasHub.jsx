@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { ErrorState, Loader } from '../../components/Loader'
@@ -22,6 +22,7 @@ export default function ScreenBajasHub() {
 
   const canAccessSugey = canAccessSugeyDeactivation(session, DEFAULT_DEACTIVATION_JOB_CONFIG)
   const canAccessAngelica = canAccessAngelicaDeactivation(session, DEFAULT_DEACTIVATION_JOB_CONFIG)
+  const hasDeactivationAccess = canAccessSugey || canAccessAngelica
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -29,9 +30,7 @@ export default function ScreenBajasHub() {
     return () => window.removeEventListener('resize', h)
   }, [])
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -41,23 +40,28 @@ export default function ScreenBajasHub() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (hasDeactivationAccess) load()
+    else setLoading(false)
+  }, [hasDeactivationAccess, load])
 
   const counts = normalizeSummary(summary)
 
   return (
     <ScreenShell title="Bajas controladas" backTo="/equipo">
-      {loading ? (
-        <Loader label="Cargando bajas controladas" />
-      ) : error ? (
-        <ErrorState message={error} onRetry={load} />
-      ) : !canAccessSugey && !canAccessAngelica ? (
+      {!hasDeactivationAccess ? (
         <EmptyState
           icon="🔒"
           title="Sin acceso"
           subtitle="No tienes una asignacion de puesto habilitada para bajas controladas."
           typo={typo}
         />
+      ) : loading ? (
+        <Loader label="Cargando bajas controladas" />
+      ) : error ? (
+        <ErrorState message={error} onRetry={load} />
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
