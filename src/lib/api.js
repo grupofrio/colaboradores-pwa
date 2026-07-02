@@ -7959,6 +7959,42 @@ async function directSupervisorVentas(method, path, body) {
 
   if (!cleanPath.startsWith('/pwa-supv/')) return NO_DIRECT
 
+  if (cleanPath === '/pwa-supv/customer-deactivation/summary' && method === 'GET') {
+    return odooHttp('GET', '/pwa-supv/customer-deactivation/summary', { company_id: companyId || undefined })
+  }
+
+  if (cleanPath === '/pwa-supv/customer-deactivation/sugey' && method === 'GET') {
+    return odooHttp('GET', '/pwa-supv/customer-deactivation/sugey', {
+      company_id: companyId || undefined,
+      limit: query.get('limit') || undefined,
+      offset: query.get('offset') || undefined,
+      route: query.get('route') || undefined,
+      reason: query.get('reason') || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/customer-deactivation/angelica' && method === 'GET') {
+    return odooHttp('GET', '/pwa-supv/customer-deactivation/angelica', {
+      company_id: companyId || undefined,
+      limit: query.get('limit') || undefined,
+      offset: query.get('offset') || undefined,
+      route: query.get('route') || undefined,
+      reason: query.get('reason') || undefined,
+    })
+  }
+
+  if (/^\/pwa-supv\/customer-deactivation\/\d+$/.test(cleanPath) && method === 'GET') {
+    return odooHttp('GET', cleanPath, { company_id: companyId || undefined })
+  }
+
+  if (/^\/pwa-supv\/customer-deactivation\/\d+\/sugey-verify$/.test(cleanPath) && method === 'POST') {
+    return odooJson(cleanPath, body || {})
+  }
+
+  if (/^\/pwa-supv\/customer-deactivation\/\d+\/angelica-decide$/.test(cleanPath) && method === 'POST') {
+    return odooJson(cleanPath, body || {})
+  }
+
   async function getSupportedFields(model, candidates) {
     const supported = []
     for (const field of candidates) {
