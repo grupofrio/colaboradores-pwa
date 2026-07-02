@@ -24,3 +24,20 @@ test('bajas hub loads summary and gates Sugey and Angelica links by job access',
   assert.match(source, /second_visit_required/)
   assert.match(source, /commercial_recovery/)
 })
+
+test('Sugey screens load queue and submit GPS photo verification payload', () => {
+  const queue = readScreen('ScreenBajasSugey')
+  const detail = readScreen('ScreenBajasSugeyDetail')
+
+  assert.match(queue, /getSugeyDeactivationQueue/)
+  assert.match(queue, /normalizeDeactivationRequest/)
+  assert.match(queue, /\/equipo\/bajas\/sugey\/\$\{request\.id\}/)
+
+  assert.match(detail, /getCustomerDeactivationDetail/)
+  assert.match(detail, /verifyCustomerDeactivationAsSugey/)
+  assert.match(detail, /validateSugeyVerificationForm/)
+  assert.match(detail, /buildSugeyVerificationPayload/)
+  assert.match(detail, /navigator\.geolocation\.getCurrentPosition/)
+  assert.match(detail, /PhotoCapture/)
+  assert.match(detail, /photo_base64/)
+})
