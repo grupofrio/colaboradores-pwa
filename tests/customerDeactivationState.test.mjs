@@ -50,7 +50,17 @@ test('getSessionJobIds normalizes supported session role sources', () => {
       additional_roles: ['auxiliar_admin'],
       additional_job_ids: [[44, 'Otro'], 55],
     }),
-    ['supervisor_ventas', '33', 'Supervisor Ventas', 'gerente_sucursal', 'auxiliar_admin', '44', 'Otro', '55'],
+    ['supervisor_ventas', '33', 'gerente_sucursal', 'auxiliar_admin', '44', '55'],
+  )
+})
+
+test('permission helpers do not grant access from Odoo display names', () => {
+  assert.equal(
+    canAccessSugeyDeactivation(
+      { job_id: [11, 'Supervisor Ventas'] },
+      { sugeyJobIds: ['Supervisor Ventas'], angelicaJobIds: [] },
+    ),
+    false,
   )
 })
 

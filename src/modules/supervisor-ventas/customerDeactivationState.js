@@ -29,12 +29,32 @@ const ANGELICA_DECISIONS_REQUIRING_COMMENT = new Set([
 ])
 
 function addToken(tokens, value) {
-  if (Array.isArray(value)) {
-    value.forEach((item) => addToken(tokens, item))
-    return
-  }
   const token = String(value ?? '').trim()
   if (token) tokens.push(token)
+}
+
+function addMany2oneId(tokens, value) {
+  if (Array.isArray(value)) {
+    addToken(tokens, value[0])
+    return
+  }
+  addToken(tokens, value)
+}
+
+function addMany2oneIds(tokens, values) {
+  if (!Array.isArray(values)) {
+    addMany2oneId(tokens, values)
+    return
+  }
+  values.forEach((value) => addMany2oneId(tokens, value))
+}
+
+function addTokens(tokens, values) {
+  if (!Array.isArray(values)) {
+    addToken(tokens, values)
+    return
+  }
+  values.forEach((value) => addToken(tokens, value))
 }
 
 function uniqueTokens(values) {
@@ -50,10 +70,10 @@ export function getSessionJobIds(session = {}) {
   const values = []
   addToken(values, session.role)
   addToken(values, session.job_key)
-  addToken(values, session.job_id)
-  addToken(values, session.additional_job_keys)
-  addToken(values, session.additional_roles)
-  addToken(values, session.additional_job_ids)
+  addMany2oneId(values, session.job_id)
+  addTokens(values, session.additional_job_keys)
+  addTokens(values, session.additional_roles)
+  addMany2oneIds(values, session.additional_job_ids)
   return uniqueTokens(values)
 }
 
