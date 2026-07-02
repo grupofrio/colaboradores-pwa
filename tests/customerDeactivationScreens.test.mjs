@@ -41,3 +41,20 @@ test('Sugey screens load queue and submit GPS photo verification payload', () =>
   assert.match(detail, /PhotoCapture/)
   assert.match(detail, /photo_base64/)
 })
+
+test('Angelica screens load queue and submit approval decision payload', () => {
+  const queue = readScreen('ScreenBajasAngelica')
+  const detail = readScreen('ScreenBajasAngelicaDetail')
+
+  assert.match(queue, /getAngelicaDeactivationQueue/)
+  assert.match(queue, /normalizeDeactivationRequest/)
+  assert.match(queue, /\/equipo\/bajas\/angelica\/\$\{request\.id\}/)
+
+  assert.match(detail, /getCustomerDeactivationDetail/)
+  assert.match(detail, /decideCustomerDeactivationAsAngelica/)
+  assert.match(detail, /validateAngelicaDecisionForm/)
+  assert.match(detail, /buildAngelicaDecisionPayload/)
+  assert.match(detail, /ANGELICA_DECISIONS/)
+  assert.match(detail, /request_photo_url/)
+  assert.match(detail, /sugey_photo_url/)
+})
