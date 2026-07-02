@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import PhotoCapture from '../../components/PhotoCapture'
 import { ErrorState, Loader } from '../../components/Loader'
@@ -40,9 +40,7 @@ export default function ScreenBajasSugeyDetail() {
     return () => window.removeEventListener('resize', h)
   }, [])
 
-  useEffect(() => { load() }, [requestId])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -52,7 +50,9 @@ export default function ScreenBajasSugeyDetail() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [requestId])
+
+  useEffect(() => { load() }, [load])
 
   function captureGps() {
     setFormError('')

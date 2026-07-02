@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ErrorState, Loader } from '../../components/Loader'
 import { TOKENS, getTypo } from '../../tokens'
@@ -35,9 +35,7 @@ export default function ScreenBajasAngelicaDetail() {
     return () => window.removeEventListener('resize', h)
   }, [])
 
-  useEffect(() => { load() }, [requestId])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -47,7 +45,9 @@ export default function ScreenBajasAngelicaDetail() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [requestId])
+
+  useEffect(() => { load() }, [load])
 
   async function submit(event) {
     event.preventDefault()

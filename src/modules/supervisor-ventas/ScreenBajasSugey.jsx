@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ErrorState, Loader } from '../../components/Loader'
 import { TOKENS, getTypo } from '../../tokens'
@@ -22,9 +22,7 @@ export default function ScreenBajasSugey() {
     return () => window.removeEventListener('resize', h)
   }, [])
 
-  useEffect(() => { load() }, [])
-
-  async function load(filters = { route, reason }) {
+  const load = useCallback(async (filters = {}) => {
     setLoading(true)
     setError('')
     try {
@@ -36,7 +34,9 @@ export default function ScreenBajasSugey() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => { load() }, [load])
 
   function applyFilters(event) {
     event.preventDefault()
@@ -54,7 +54,7 @@ export default function ScreenBajasSugey() {
       {loading ? (
         <Loader label="Cargando revisitas" />
       ) : error ? (
-        <ErrorState message={error} onRetry={() => load()} />
+        <ErrorState message={error} onRetry={() => load({ route, reason })} />
       ) : requests.length === 0 ? (
         <EmptyState icon="📋" title="Sin revisitas" subtitle="No hay bajas pendientes para Sugey" typo={typo} />
       ) : (
