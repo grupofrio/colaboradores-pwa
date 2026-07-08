@@ -1,0 +1,150 @@
+{
+  "version": "1.0.0",
+  "generated_for_role": "supervisor_ventas",
+  "data_as_of": "2026-07-08T14:56:34-06:00",
+  "read_only": true,
+  "source_of_truth": "docs/pc/PC_CLOSURE_TRACKER.md",
+  "role_gate": {
+    "is_gated": false,
+    "gate": null,
+    "reason": null
+  },
+  "modules": [
+    {
+      "id": "plan_vs_real",
+      "name": "Plan vs Real",
+      "description": "Comparar ruta planeada vs ejecutada (km / paradas / tiempo).",
+      "badge": "piloto",
+      "badge_label": "Piloto",
+      "badge_tone": "teal",
+      "source": "gf.route.plan (vistas MVP1.5A)",
+      "link_kind": "metabase_or_status",
+      "roles": [
+        "direccion_general",
+        "gerente_sucursal",
+        "supervisor_ventas"
+      ],
+      "can_not": [
+        "recalcular",
+        "publicar",
+        "optimizar",
+        "escribir"
+      ],
+      "residual": "km real limitado (D-KM-FALLBACK); adopción general no medida",
+      "tracker_ref": "MVP1.5A / PC#14",
+      "last_evidence": "MVP1.5A cierre técnico [P]",
+      "owner": "Sebastián"
+    },
+    {
+      "id": "planear_ruta",
+      "name": "Planear Ruta",
+      "description": "Optimización de ruta (motor OSRM / solver externo).",
+      "badge": "piloto",
+      "badge_label": "Piloto",
+      "badge_tone": "teal",
+      "source": "route-optimizer + PC#14",
+      "link_kind": "status",
+      "roles": [
+        "gerente_sucursal",
+        "supervisor_ventas"
+      ],
+      "can_not": [
+        "ejecutar optimización que escriba",
+        "publicar",
+        "iniciar/cerrar ruta"
+      ],
+      "residual": "NO cubre publish/start/close e2e; default OSRM sin decidir; TW coverage 07-09 (-> E4)",
+      "tracker_ref": "PC#14",
+      "last_evidence": "HITO1 1871 8/8 [P]",
+      "owner": "Sebastián"
+    },
+    {
+      "id": "kold_field_ops",
+      "name": "KOLD Field Ops",
+      "description": "Estado operativo diario de rutas/equipos.",
+      "badge": "operativo",
+      "badge_label": "Operativo",
+      "badge_tone": "green",
+      "source": "gf.route.plan/stop (#116)",
+      "link_kind": "status",
+      "roles": [
+        "gerente_sucursal",
+        "supervisor_ventas"
+      ],
+      "can_not": [
+        "cerrar/liquidar/mutar desde aquí"
+      ],
+      "residual": "backend técnico-operativo; sin residual bloqueante",
+      "tracker_ref": "PC#1",
+      "last_evidence": "mutante + prod real 0 dup/4641 [P]",
+      "owner": "Sebastián"
+    },
+    {
+      "id": "checklist_unidad",
+      "name": "Checklist unidad",
+      "description": "Checklist pre-salida de unidad (piloto ruta 16).",
+      "badge": "piloto",
+      "badge_label": "Piloto",
+      "badge_tone": "teal",
+      "source": "gf.route.vehicle.checklist",
+      "link_kind": "status",
+      "roles": [
+        "gerente_sucursal",
+        "supervisor_ventas"
+      ],
+      "can_not": [
+        "activar/bloquear salidas desde aquí",
+        "escribir"
+      ],
+      "residual": "adopción sin medir (ruta 16)",
+      "tracker_ref": "PC#7",
+      "last_evidence": "PC#7 [R]",
+      "owner": "Sebastián/gerente Iguala"
+    },
+    {
+      "id": "pod_v1",
+      "name": "POD v1",
+      "description": "Evidencia fotográfica de entrega (v1).",
+      "badge": "parcial",
+      "badge_label": "Parcial",
+      "badge_tone": "amber",
+      "source": "gf.route.stop.image",
+      "link_kind": "status",
+      "roles": [
+        "gerente_sucursal",
+        "supervisor_ventas"
+      ],
+      "can_not": [
+        "tratar como POD estricto",
+        "escribir"
+      ],
+      "residual": "v1 sin evidence_type/geo-captura/firma (-> E3.5)",
+      "tracker_ref": "PC#6",
+      "last_evidence": "PC#6 v1 [R]",
+      "owner": "Sebastián"
+    },
+    {
+      "id": "optimizadores_osrm_tw",
+      "name": "Optimizadores / OSRM / TW",
+      "description": "Motor de ruteo y ventanas de tiempo (estado del motor).",
+      "badge": "piloto",
+      "badge_label": "Piloto",
+      "badge_tone": "teal",
+      "source": "route-optimizer + PC#14",
+      "link_kind": "status_only",
+      "roles": [
+        "admin_plataforma",
+        "supervisor_ventas"
+      ],
+      "can_not": [
+        "ejecutar",
+        "publicar",
+        "escribir"
+      ],
+      "residual": "TW coverage 07-09; default OSRM sin decidir",
+      "tracker_ref": "PC#14",
+      "last_evidence": "PC#14 [P]",
+      "owner": "Sebastián"
+    }
+  ]
+}
