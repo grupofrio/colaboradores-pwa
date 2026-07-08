@@ -14,7 +14,8 @@ import {
 } from '../src/modules/torre/e1/loadTowerStatus.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const FIX = join(HERE, '..', 'public', 'e1')
+// Fixtures de preview viven en src/ (NO en public/) para que un deploy no los sirva sin auth.
+const FIX = join(HERE, '..', 'src', 'modules', 'torre', 'e1', 'fixtures')
 const read = (f) => JSON.parse(readFileSync(join(FIX, f), 'utf-8'))
 const samples = readdirSync(FIX).filter((f) => /^tower\.status\.[a-z0-9_]+\.json$/.test(f))
 const GATED = ['direccion_general', 'comercial', 'finanzas']
