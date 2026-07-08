@@ -1,20 +1,38 @@
 // E1-B — loader READ-ONLY del contrato tower.status (producido por E1-A en grupofrio/kold-os).
-// NO usa el api operativo; hace fetch de un asset ESTÁTICO. No escribe, no llama endpoints nuevos.
-// Los JSON bajo /e1/ son FIXTURES de preview (copias del output de E1-A); la entrega real del
-// artefacto E1-A -> PWA es un paso de build/CI de E1-C (no hand-copy).
+// NO usa el api operativo; hace fetch de un asset ESTÁTICO local. No escribe, no llama endpoints.
+// Los JSON bajo /e1/ son FIXTURES de preview; para roles GATED van minimizados (sin módulos).
+// La entrega real del artefacto E1-A -> PWA es un paso de build/CI de E1-C (no hand-copy).
 
 const ROLE_ID_RE = /^[a-z0-9_]+$/; // mismo candado que el generador E1-A
 const BADGES = new Set(["operativo", "piloto", "parcial", "pc", "bloqueado", "estado_admin"]);
 const FORBIDDEN_KEYS = new Set(["evidence_internal", "risk_internal", "secret", "token", "raw_tracker"]);
+
+// Blocker 1 (Codex): en producción E1-B SOLO consume el asset estático "/e1".
+export const ALLOWED_PROD_BASE = "/e1";
+// URL absoluta, protocolo, traversal, doble-slash, o bases de endpoint operativo => prohibido.
+const DANGEROUS_BASE_RE = /(^https?:)|(:\/\/)|(\.\.)|(^\/\/)|(^\/(api|rpc|odoo|n8n|webhook|graphql|xmlrpc|jsonrpc)(\/|$))/i;
+
+// allowCustom = true SOLO en test/dev (cuando se inyecta fetchImpl). En prod queda false.
+export function assertSafeBase(base, { allowCustom = false } = {}) {
+  if (typeof base !== "string" || !base) throw new Error("base inválido");
+  if (base === ALLOWED_PROD_BASE) return base;
+  if (!allowCustom) {
+    throw new Error(
+      `base '${base}' no permitido: E1-B solo consume asset estático '${ALLOWED_PROD_BASE}' en prod`
+    );
+  }
+  if (DANGEROUS_BASE_RE.test(base)) {
+    throw new Error(`base '${base}' peligroso (URL absoluta / traversal / endpoint operativo) — prohibido`);
+  }
+  return base;
+}
 
 function assertNoForbiddenKeys(node, path = "") {
   if (Array.isArray(node)) {
     node.forEach((v, i) => assertNoForbiddenKeys(v, `${path}[${i}]`));
   } else if (node && typeof node === "object") {
     for (const [k, v] of Object.entries(node)) {
-      if (FORBIDDEN_KEYS.has(k)) {
-        throw new Error(`tower.status contiene clave prohibida: ${path}.${k}`);
-      }
+      if (FORBIDDEN_KEYS.has(k)) throw new Error(`tower.status contiene clave prohibida: ${path}.${k}`);
       assertNoForbiddenKeys(v, `${path}.${k}`);
     }
   }
@@ -38,14 +56,29 @@ export function validateTowerStatus(doc) {
   return doc;
 }
 
-// base configurable; por defecto asset estático servido por el propio PWA (sin endpoint nuevo).
-export function towerStatusUrl(role, base = "/e1") {
+export function towerStatusUrl(role, base = ALLOWED_PROD_BASE, { allowCustom = false } = {}) {
   if (!ROLE_ID_RE.test(role)) throw new Error(`role id inseguro: ${role}`);
+  assertSafeBase(base, { allowCustom });
   return `${base}/tower.status.${role}.json`;
 }
 
-export async function fetchTowerStatus(role, { base = "/e1", fetchImpl = fetch } = {}) {
-  const res = await fetchImpl(towerStatusUrl(role, base), { method: "GET" });
+export async function fetchTowerStatus(role, { base = ALLOWED_PROD_BASE, fetchImpl } = {}) {
+  // Sólo se permite base custom cuando hay fetchImpl inyectado (test/dev). En prod: "/e1".
+  const allowCustom = Boolean(fetchImpl);
+  const url = towerStatusUrl(role, base, { allowCustom });
+  const impl = fetchImpl || (typeof fetch !== "undefined" ? fetch : null);
+  if (!impl) throw new Error("fetch no disponible");
+  const res = await impl(url, { method: "GET" });
   if (!res.ok) throw new Error(`tower.status ${role}: HTTP ${res.status}`);
   return validateTowerStatus(await res.json());
+}
+
+// Blocker 2 (Codex): decisión de render PURA y testeable. Default seguro: gated = BLOQUEADO.
+// Si el rol está gated y no hay preview explícito de test/dev, NO se devuelven módulos.
+export function resolveBoardView(doc, { allowGatedPreview = false } = {}) {
+  const gate = doc?.role_gate || { is_gated: false, gate: null, reason: null };
+  if (gate.is_gated && !allowGatedPreview) {
+    return { blocked: true, gate, modules: [] };
+  }
+  return { blocked: false, gate, modules: Array.isArray(doc?.modules) ? doc.modules : [] };
 }

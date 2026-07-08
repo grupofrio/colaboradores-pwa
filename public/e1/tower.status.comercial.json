@@ -9,50 +9,5 @@
     "gate": "FASE-1.5",
     "reason": "Comercial diferido a Fase 1.5 hasta owner/dueño claro; no se expone en E1.0."
   },
-  "modules": [
-    {
-      "id": "koldhome_b2c",
-      "name": "KoldHome Tower (B2C)",
-      "description": "Funnel / estado retail B2C.",
-      "badge": "parcial",
-      "badge_label": "Parcial",
-      "badge_tone": "amber",
-      "source": "funnel.event / koldhome_v4_dashboard",
-      "link_kind": "metabase_embed",
-      "roles": [
-        "direccion_general",
-        "comercial"
-      ],
-      "can_not": [
-        "leer como operación completa",
-        "escribir"
-      ],
-      "residual": "Control Tower Fase 1; depende de Sebás aplicar SQL/réplica; embed gated (D-METABASE)",
-      "tracker_ref": "iniciativa control-tower (fuera de los 15 PC)",
-      "last_evidence": "doc control-tower [P]",
-      "owner": "Sebastián"
-    },
-    {
-      "id": "glaciem_b2b",
-      "name": "Glaciem Tower (B2B)",
-      "description": "Control multicanal de ventas Glaciem.",
-      "badge": "pc",
-      "badge_label": "En clasificación",
-      "badge_tone": "gray",
-      "source": "gf.sales.channel, v_glaciem_*",
-      "link_kind": "metabase_embed",
-      "roles": [
-        "direccion_general",
-        "comercial"
-      ],
-      "can_not": [
-        "tratar como cerrado",
-        "escribir"
-      ],
-      "residual": "doc maestro espera /goal Fase 1/2; embed gated (D-METABASE)",
-      "tracker_ref": "iniciativa glaciem (fuera de los 15 PC)",
-      "last_evidence": "doc glaciem [P]",
-      "owner": "Sebastián"
-    }
-  ]
+  "modules": []
 }

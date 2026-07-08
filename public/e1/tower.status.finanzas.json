@@ -9,28 +9,5 @@
     "gate": "FASE-1.5",
     "reason": "Rentabilidad agregada diferida a Fase 1.5; depende de km real + consignación (PC#12 -> E5)."
   },
-  "modules": [
-    {
-      "id": "rentabilidad",
-      "name": "Rentabilidad",
-      "description": "Margen por ruta/cliente (ingreso vs costo).",
-      "badge": "parcial",
-      "badge_label": "Parcial",
-      "badge_tone": "amber",
-      "source": "liquidación + costos + km",
-      "link_kind": "metabase",
-      "roles": [
-        "direccion_general",
-        "finanzas"
-      ],
-      "can_not": [
-        "tomar dato no consolidado como verdad",
-        "escribir"
-      ],
-      "residual": "km real limitado; consignación dedup pendiente (PC#12 -> E5); cash pending",
-      "tracker_ref": "PC#12",
-      "last_evidence": "PC#12 técnico [P]",
-      "owner": "Sebastián/Finanzas"
-    }
-  ]
+  "modules": []
 }
