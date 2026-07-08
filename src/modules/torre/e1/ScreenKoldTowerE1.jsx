@@ -2,27 +2,8 @@
 // IMPORTANTE: NO está montada en el router (App.jsx). Montarla/exponerla a usuarios requiere
 // S/N posterior de Yamil (ver README de este directorio). Sin writes, sin endpoints, sin deploy.
 import { useMemo } from "react";
-import { getEffectiveJobKeys } from "../../../lib/roleContext";
 import TowerStatusBoard from "./TowerStatusBoard";
-
-// Mapa job_key de sesión -> rol del contrato E1-A. Roles E1.5 (comercial/finanzas) quedan
-// gated en el propio contrato; aquí solo resolvemos qué documento pedir.
-const JOBKEY_TO_ROLE = {
-  direccion_general: "direccion_general",
-  admin_plataforma: "admin_plataforma",
-  gerente_sucursal: "gerente_sucursal",
-  supervisor_ventas: "supervisor_ventas",
-  comercial: "comercial",
-  finanzas: "finanzas",
-};
-
-export function resolveTowerRole(session) {
-  const keys = getEffectiveJobKeys(session || {});
-  for (const k of keys) {
-    if (JOBKEY_TO_ROLE[k]) return JOBKEY_TO_ROLE[k];
-  }
-  return null;
-}
+import { resolveTowerRole } from "./resolveTowerRole";
 
 export default function ScreenKoldTowerE1({ session }) {
   const role = useMemo(() => resolveTowerRole(session), [session]);
