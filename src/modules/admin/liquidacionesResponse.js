@@ -5,10 +5,16 @@ function unwrapResponse(response) {
 
 function localIsoDate(date = new Date()) {
   const d = date instanceof Date ? date : new Date(date)
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  // Fecha del día en la zona horaria de NEGOCIO (México, -06 sin DST desde 2022),
+  // determinística sin importar la TZ del runtime (browser MX, servidor UTC o CI UTC).
+  // Antes usaba getFullYear/getMonth/getDate (TZ ambiente) → el "hoy" se corría al día
+  // siguiente a partir de las 18:00 MX (00:00 UTC) en entornos UTC. `en-CA` => YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
 }
 
 export function assertOkResponse(response) {
