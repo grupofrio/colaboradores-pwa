@@ -11,11 +11,14 @@ import {
   assertSafeBase,
   resolveBoardView,
   ALLOWED_PROD_BASE,
+  readAuthoritativeTowerStatus,
+  ALLOWED_TOWER_STATUS,
 } from '../src/modules/torre/e1/loadTowerStatus.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 // Fixtures de preview viven en src/ (NO en public/) para que un deploy no los sirva sin auth.
 const FIX = join(HERE, '..', 'src', 'modules', 'torre', 'e1', 'fixtures')
+const SRC = join(HERE, '..', 'src')
 const read = (f) => JSON.parse(readFileSync(join(FIX, f), 'utf-8'))
 const samples = readdirSync(FIX).filter((f) => /^tower\.status\.[a-z0-9_]+\.json$/.test(f))
 const GATED = ['direccion_general', 'comercial', 'finanzas']
@@ -123,4 +126,121 @@ test('validateTowerStatus rechaza contratos inválidos', () => {
     read_only: true, version: '1', generated_for_role: 'x', data_as_of: 'y',
     role_gate: { is_gated: false }, modules: [{ id: 'x', badge: 'INVENTADO' }],
   }))
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// E1-C.2 — la PWA consume el rol AUTORITATIVO de Odoo (session.employee.tower_status).
+// Odoo decide el rol; la PWA obedece. /e1 NO autoriza; resolveTowerRole = legacy.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Espeja la decisión de render del screen (ScreenKoldTowerE1): rol autoritativo -> superficie; null -> sin módulos.
+function surfaceFor(session) {
+  const role = readAuthoritativeTowerStatus(session)
+  if (!role) return { role: null, rendered: false, modules: [] }
+  const view = resolveBoardView(read(`tower.status.${role}.json`))
+  return { role, rendered: !view.blocked, modules: view.modules }
+}
+
+test('allowlist de tower_status = exactamente {admin_plataforma, supervisor_ventas}', () => {
+  assert.deepEqual([...ALLOWED_TOWER_STATUS].sort(), ['admin_plataforma', 'supervisor_ventas'])
+})
+
+test('test_admin_status_renders_admin_surface', () => {
+  const s = surfaceFor({ employee: { tower_status: 'admin_plataforma' } })
+  assert.equal(s.role, 'admin_plataforma')
+  assert.equal(s.rendered, true)
+  assert.ok(s.modules.length > 0)
+})
+
+test('test_supervisor_status_renders_supervisor', () => {
+  const s = surfaceFor({ employee: { tower_status: 'supervisor_ventas' } })
+  assert.equal(s.role, 'supervisor_ventas')
+  assert.equal(s.rendered, true)
+  assert.ok(s.modules.length > 0)
+})
+
+test('test_null_status_renders_no_modules', () => {
+  const s = surfaceFor({ employee: { tower_status: null } })
+  assert.equal(s.role, null)
+  assert.equal(s.rendered, false)
+  assert.equal(s.modules.length, 0)
+  // sin employee / sin sesión tampoco hay superficie
+  assert.equal(readAuthoritativeTowerStatus({}), null)
+  assert.equal(readAuthoritativeTowerStatus(undefined), null)
+  assert.equal(readAuthoritativeTowerStatus({ employee: {} }), null)
+})
+
+test('test_invalid_status_renders_nothing', () => {
+  const invalids = [
+    'direccion_general', 'gerente_sucursal', 'comercial', 'finanzas', // roles reales pero NO permitidos en v1
+    'root', 'admin', 'x', '', '   ', 123, true, {}, ['admin_plataforma'], // basura / tipos no-string
+  ]
+  for (const bad of invalids) {
+    assert.equal(
+      readAuthoritativeTowerStatus({ employee: { tower_status: bad } }), null,
+      `valor inválido debe tratarse como null: ${JSON.stringify(bad)}`
+    )
+  }
+  const s = surfaceFor({ employee: { tower_status: 'gerente_sucursal' } })
+  assert.equal(s.rendered, false)
+  assert.equal(s.modules.length, 0)
+})
+
+test('test_resolveTowerRole_does_not_authorize', () => {
+  // gf_session es editable: el cliente pone role/job keys de "admin_plataforma" — exactamente el input
+  // que consume resolveTowerRole.js (LEGACY). Ese camino de cliente NO autoriza la superficie:
+  // la autorización la decide SOLO readAuthoritativeTowerStatus (Odoo: session.employee.tower_status).
+  const clientForged = { role: 'admin_plataforma', additional_job_keys: ['direccion_general'] }
+  assert.equal(readAuthoritativeTowerStatus(clientForged), null) // sin tower_status de Odoo => sin rol
+  assert.equal(surfaceFor(clientForged).rendered, false)         // no renderiza superficie
+  // Aunque el cliente afirme un rol, el screen (ScreenKoldTowerE1) usa readAuthoritativeTowerStatus,
+  // NO resolveTowerRole, para decidir qué mostrar.
+})
+
+test('test_no_appjsx_mount', () => {
+  // App.jsx (router) NO importa ni monta la pantalla Tower E1.
+  const appJsx = readFileSync(join(SRC, 'App.jsx'), 'utf-8')
+  assert.ok(!/ScreenKoldTowerE1/.test(appJsx), 'App.jsx no debe referenciar ScreenKoldTowerE1')
+})
+
+test('test_no_visible_route', () => {
+  // Ningún archivo de src/ (fuera del propio módulo torre/e1) importa/monta la pantalla => sin ruta visible.
+  const e1Dir = join('torre', 'e1')
+  const offenders = []
+  const walk = (dir) => {
+    for (const d of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, d.name)
+      if (d.isDirectory()) { walk(p); continue }
+      if (!/\.(jsx?|mjs)$/.test(d.name)) continue
+      if (p.includes(e1Dir)) continue // el propio módulo define el screen, no lo monta
+      if (/ScreenKoldTowerE1/.test(readFileSync(p, 'utf-8'))) offenders.push(p)
+    }
+  }
+  walk(SRC)
+  assert.deepEqual(offenders, [], `ScreenKoldTowerE1 no debe montarse fuera de su módulo: ${offenders.join(', ')}`)
+})
+
+test('test_no_new_endpoint_fetch', () => {
+  // El loader consume SOLO el asset estático /e1; jamás un endpoint operativo (api/rpc/odoo/n8n/…).
+  assert.equal(towerStatusUrl('admin_plataforma'), '/e1/tower.status.admin_plataforma.json')
+  assert.equal(towerStatusUrl('supervisor_ventas'), '/e1/tower.status.supervisor_ventas.json')
+  for (const bad of ['/api', '/odoo-api', '/rpc', '/n8n', '/webhook', 'https://x/e1']) {
+    assert.throws(() => towerStatusUrl('admin_plataforma', bad))
+  }
+  // readAuthoritativeTowerStatus es PURO (no toca red): resolver el rol NO hace fetch a ningún endpoint.
+  assert.equal(readAuthoritativeTowerStatus({ employee: { tower_status: 'admin_plataforma' } }), 'admin_plataforma')
+})
+
+test('test_e1_not_used_as_authorization', () => {
+  // Aunque exista /e1/tower.status.admin_plataforma.json (fixture), NO autoriza: manda tower_status de Odoo.
+  const forged = {
+    role: 'admin_plataforma',                 // job key del cliente (editable) — no autoriza
+    additional_job_keys: ['direccion_general'],
+    employee: { tower_status: null },         // Odoo dice: sin rol
+  }
+  assert.equal(readAuthoritativeTowerStatus(forged), null)
+  assert.equal(surfaceFor(forged).rendered, false)
+  // Y el tower_status de Odoo MANDA sobre el role del cliente:
+  const s = { role: 'direccion_general', employee: { tower_status: 'supervisor_ventas' } }
+  assert.equal(readAuthoritativeTowerStatus(s), 'supervisor_ventas')
 })

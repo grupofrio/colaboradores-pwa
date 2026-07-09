@@ -82,3 +82,18 @@ export function resolveBoardView(doc, { allowGatedPreview = false } = {}) {
   }
   return { blocked: false, gate, modules: Array.isArray(doc?.modules) ? doc.modules : [] };
 }
+
+// ── E1-C.2 — rol AUTORITATIVO entregado por Odoo (la PWA NO decide el rol) ──────
+// Odoo lo resuelve server-side (rol principal + adicionales) y lo pone en
+// response["employee"]["tower_status"]; la PWA lo recibe en el login y lo guarda como
+// session.employee.tower_status (ver src/lib/api.js / App.jsx). La PWA OBEDECE ese valor.
+// NO deriva el rol de job keys del cliente (resolveTowerRole.js = LEGACY, no autoriza).
+// Allowlist DURA (Opción A v1): SOLO estos dos. Cualquier otro valor => null (sin superficie).
+export const ALLOWED_TOWER_STATUS = new Set(["admin_plataforma", "supervisor_ventas"]);
+
+export function readAuthoritativeTowerStatus(session) {
+  const raw = session?.employee?.tower_status;
+  if (typeof raw !== "string") return null;            // null/undefined/número/objeto/array => null
+  const val = raw.trim().toLowerCase();
+  return ALLOWED_TOWER_STATUS.has(val) ? val : null;   // valor fuera de la allowlist => null (rechazado)
+}
