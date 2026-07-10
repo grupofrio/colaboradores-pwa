@@ -197,27 +197,36 @@ test('test_resolveTowerRole_does_not_authorize', () => {
   // NO resolveTowerRole, para decidir qué mostrar.
 })
 
-test('test_no_appjsx_mount', () => {
-  // App.jsx (router) NO importa ni monta la pantalla Tower E1.
+test('test_appjsx_mounts_tower_gated', () => {
+  // E1-C.4: la ruta Tower YA se monta, pero SIEMPRE detrás del gate por tower_status autoritativo.
   const appJsx = readFileSync(join(SRC, 'App.jsx'), 'utf-8')
-  assert.ok(!/ScreenKoldTowerE1/.test(appJsx), 'App.jsx no debe referenciar ScreenKoldTowerE1')
+  assert.match(appJsx, /ScreenKoldTowerE1/, 'App.jsx debe montar ScreenKoldTowerE1 (E1-C.4)')
+  assert.match(appJsx, /function TowerRoute/, 'debe existir el wrapper de gate TowerRoute')
+  assert.match(appJsx, /readAuthoritativeTowerStatus/, 'el gate debe usar el tower_status autoritativo (Odoo)')
+  assert.match(appJsx, /path="\/torre"/, 'la ruta /torre debe existir')
+  assert.match(appJsx, /Navigate to="\/" replace/, 'TowerRoute debe redirigir a "/" si no autorizado')
 })
 
-test('test_no_visible_route', () => {
-  // Ningún archivo de src/ (fuera del propio módulo torre/e1) importa/monta la pantalla => sin ruta visible.
-  const e1Dir = join('torre', 'e1')
-  const offenders = []
+test('test_tower_route_gated_and_no_menu', () => {
+  const appJsx = readFileSync(join(SRC, 'App.jsx'), 'utf-8')
+  // /torre va SIEMPRE envuelta en TowerRoute (gate), nunca como ruta desnuda:
+  assert.match(
+    appJsx,
+    /<TowerRoute>[\s\S]*ScreenKoldTowerE1Mount[\s\S]*<\/TowerRoute>/,
+    'la ruta /torre debe ir envuelta en el gate TowerRoute',
+  )
+  // v1 SIN menú general: ningún archivo de src/ enlaza a /torre (no hay entrada de navegación).
+  const links = []
   const walk = (dir) => {
     for (const d of readdirSync(dir, { withFileTypes: true })) {
       const p = join(dir, d.name)
       if (d.isDirectory()) { walk(p); continue }
       if (!/\.(jsx?|mjs)$/.test(d.name)) continue
-      if (p.includes(e1Dir)) continue // el propio módulo define el screen, no lo monta
-      if (/ScreenKoldTowerE1/.test(readFileSync(p, 'utf-8'))) offenders.push(p)
+      if (/(?:to|href)=["']\/torre["']/.test(readFileSync(p, 'utf-8'))) links.push(p)
     }
   }
   walk(SRC)
-  assert.deepEqual(offenders, [], `ScreenKoldTowerE1 no debe montarse fuera de su módulo: ${offenders.join(', ')}`)
+  assert.deepEqual(links, [], `v1 sin menú: no debe haber link a /torre; encontrado en: ${links.join(', ')}`)
 })
 
 test('test_no_new_endpoint_fetch', () => {

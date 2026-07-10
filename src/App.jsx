@@ -8,6 +8,8 @@ import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById } from './modules/registry'
 import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
+// E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
+import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -19,6 +21,8 @@ import ScreenProfile from './screens/ScreenProfile'
 
 // ─── Módulos operativos (lazy — solo descarga si el rol lo necesita) ─────────
 const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente'))
+// E1-C.4 — superficie KOLD Tower read-only (E1-B), montada detrás de TowerRoute (gate por rol autoritativo)
+const ScreenKoldTowerE1 = lazy(() => import('./modules/torre/e1/ScreenKoldTowerE1'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -175,6 +179,22 @@ function RouteRoleRoute({ children }) {
   const allowed = effective.some(role => RUTA_ALLOWED_ROLES.includes(role))
   if (!allowed) return <Navigate to="/" replace />
   return children
+}
+
+// E1-C.4 — montaje de la superficie KOLD Tower (read-only) detrás de auth + rol AUTORITATIVO.
+// El rol lo decide Odoo (session.employee.tower_status); allowlist dura en readAuthoritativeTowerStatus
+// (solo admin_plataforma/supervisor_ventas). null / no autorizado => redirect seguro a "/".
+// Sin menú general (solo ruta directa /torre). Sin datos reales nuevos, sin endpoints, sin writes.
+function TowerRoute({ children }) {
+  const { session } = useSession()
+  if (!session) return <Navigate to="/login" replace />
+  if (!readAuthoritativeTowerStatus(session)) return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenKoldTowerE1Mount() {
+  const { session } = useSession()
+  return <ScreenKoldTowerE1 session={session} />
 }
 
 function ProductionOperatorRoute({ children, allowDelivered = false }) {
@@ -424,6 +444,9 @@ export default function App() {
             <Route path="/surveys" element={<PrivateRoute><ScreenSurveys /></PrivateRoute>} />
             <Route path="/badges" element={<PrivateRoute><ScreenBadges /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><ScreenProfile /></PrivateRoute>} />
+
+            {/* ── E1-C.4 — KOLD Tower (read-only, gated por tower_status autoritativo; SIN menú) ── */}
+            <Route path="/torre" element={<TowerRoute><ScreenKoldTowerE1Mount /></TowerRoute>} />
 
             {/* ── Producción — Operadores ─────────────────────────────────── */}
             <Route path="/produccion" element={<ProductionOperatorRoute><ScreenMiTurno /></ProductionOperatorRoute>} />
