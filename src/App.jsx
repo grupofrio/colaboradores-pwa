@@ -23,6 +23,8 @@ import ScreenProfile from './screens/ScreenProfile'
 const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente'))
 // E1-C.4 — superficie KOLD Tower read-only (E1-B), montada detrás de TowerRoute (gate por rol autoritativo)
 const ScreenKoldTowerE1 = lazy(() => import('./modules/torre/e1/ScreenKoldTowerE1'))
+// M1-D — Backlog M1 read-only (mismo gate TowerRoute; SIN menú, solo ruta directa)
+const ScreenM1Backlog = lazy(() => import('./modules/torre/m1/ScreenM1Backlog'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -195,6 +197,11 @@ function TowerRoute({ children }) {
 function ScreenKoldTowerE1Mount() {
   const { session } = useSession()
   return <ScreenKoldTowerE1 session={session} />
+}
+
+function ScreenM1BacklogMount() {
+  const { session } = useSession()
+  return <ScreenM1Backlog session={session} />
 }
 
 function ProductionOperatorRoute({ children, allowDelivered = false }) {
@@ -447,6 +454,8 @@ export default function App() {
 
             {/* ── E1-C.4 — KOLD Tower (read-only, gated por tower_status autoritativo; SIN menú) ── */}
             <Route path="/torre" element={<TowerRoute><ScreenKoldTowerE1Mount /></TowerRoute>} />
+            {/* ── M1-D — Backlog M1 (read-only, mismo gate; SIN menú, ruta directa) ── */}
+            <Route path="/torre/backlog" element={<TowerRoute><ScreenM1BacklogMount /></TowerRoute>} />
 
             {/* ── Producción — Operadores ─────────────────────────────────── */}
             <Route path="/produccion" element={<ProductionOperatorRoute><ScreenMiTurno /></ProductionOperatorRoute>} />
