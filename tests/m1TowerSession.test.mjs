@@ -44,9 +44,18 @@ const signInResult = (towerStatus) => ({
   },
 })
 
-test('sanitizeTowerStatus: normaliza forma y es fail-closed', () => {
+test('sanitizeTowerStatus: STRICT-CASE — solo forma (trim/tipo/largo), jamás convierte case', () => {
+  // canónicos exactos pasan; whitespace alrededor se tolera por trim
   assert.equal(sanitizeTowerStatus('admin_plataforma'), 'admin_plataforma')
-  assert.equal(sanitizeTowerStatus('  Supervisor_Ventas  '), 'supervisor_ventas')
+  assert.equal(sanitizeTowerStatus(' admin_plataforma '), 'admin_plataforma')
+  assert.equal(sanitizeTowerStatus(' supervisor_ventas '), 'supervisor_ventas')
+  // variantes de case NO se transforman: el valor sale trimmed TAL CUAL
+  // (el sanitizador nunca convierte un inválido en uno permitido)
+  assert.equal(sanitizeTowerStatus('ADMIN_PLATAFORMA'), 'ADMIN_PLATAFORMA')
+  assert.equal(sanitizeTowerStatus('Supervisor_Ventas'), 'Supervisor_Ventas')
+  assert.equal(sanitizeTowerStatus('SUPERVISOR_VENTAS'), 'SUPERVISOR_VENTAS')
+  // desconocido tampoco se transforma
+  assert.equal(sanitizeTowerStatus('gerente_sucursal'), 'gerente_sucursal')
   for (const bad of [null, undefined, 123, {}, [], '', '   ', 'x'.repeat(65)]) {
     assert.equal(sanitizeTowerStatus(bad), null, `debe ser null: ${String(bad).slice(0, 12)}`)
   }
@@ -65,20 +74,34 @@ test('buildSessionEmployee persiste id + tower_status desde la respuesta real', 
   })
 })
 
-test('sesión realista: /torre autoriza admin y supervisor; fail-closed el resto', () => {
+test('sesión realista: /torre autoriza SOLO canónicos exactos (strict-case); fail-closed el resto', () => {
+  // los dos valores canónicos exactos siguen autorizados
   for (const role of ['admin_plataforma', 'supervisor_ventas']) {
     const res = signInResult(role)
     const session = { employee: buildSessionEmployee(res.employee, res.employee.id) }
     assert.equal(readAuthoritativeTowerStatus(session), role,
       `el gate debe autorizar ${role} con sesión construida desde el sign-in real`)
   }
-  // null / desconocido / mayúsculas-fuera-de-allowlist / basura => redirección
-  for (const bad of [null, undefined, 'gerente_sucursal', 'ADMIN', 'direccion_general', '  ']) {
+  // espacios alrededor de un canónico SÍ se toleran (trim), end-to-end builder+gate
+  for (const padded of [' admin_plataforma ', ' supervisor_ventas ']) {
+    const res = signInResult(padded)
+    const session = { employee: buildSessionEmployee(res.employee, res.employee.id) }
+    assert.equal(readAuthoritativeTowerStatus(session), padded.trim(),
+      `trim tolerado para ${JSON.stringify(padded)}`)
+  }
+  // STRICT-CASE: variantes de mayúsculas/mixed-case => null (sin acceso)
+  // + null / desconocido / basura => redirección
+  const rejected = ['ADMIN_PLATAFORMA', 'Supervisor_Ventas', 'SUPERVISOR_VENTAS',
+    null, undefined, 'gerente_sucursal', 'ADMIN', 'direccion_general', '  ']
+  for (const bad of rejected) {
     const res = signInResult(bad)
     const session = { employee: buildSessionEmployee(res.employee, res.employee.id) }
     assert.equal(readAuthoritativeTowerStatus(session), null,
       `fail-closed para tower_status=${String(bad)}`)
   }
+  // el gate tampoco normaliza por su cuenta (defensa aunque el sanitizador no corra)
+  assert.equal(readAuthoritativeTowerStatus(
+    { employee: { tower_status: 'ADMIN_PLATAFORMA' } }), null)
   // sin employee (p.ej. sesión bypass actual): redirección
   assert.equal(readAuthoritativeTowerStatus({}), null)
   assert.equal(readAuthoritativeTowerStatus({ employee: {} }), null)
