@@ -94,6 +94,9 @@ export const ALLOWED_TOWER_STATUS = new Set(["admin_plataforma", "supervisor_ven
 export function readAuthoritativeTowerStatus(session) {
   const raw = session?.employee?.tower_status;
   if (typeof raw !== "string") return null;            // null/undefined/número/objeto/array => null
-  const val = raw.trim().toLowerCase();
+  // STRICT-CASE (decisión de contrato, Codex PR #62): el backend entrega solo los
+  // valores canónicos exactos; se tolera whitespace (trim) pero NUNCA se normaliza
+  // el case — "ADMIN_PLATAFORMA"/"Supervisor_Ventas" => null (rechazado).
+  const val = raw.trim();
   return ALLOWED_TOWER_STATUS.has(val) ? val : null;   // valor fuera de la allowlist => null (rechazado)
 }

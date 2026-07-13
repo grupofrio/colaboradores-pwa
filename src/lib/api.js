@@ -6,6 +6,11 @@ import {
   withExpectedFreezeField,
 } from '../modules/produccion/cycleTiming.js'
 import {
+  TOWER_M1_BACKLOG_PATH,
+  isTowerM1Path,
+  filterTowerM1Params,
+} from './towerM1Route.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -9242,10 +9247,27 @@ async function directKoldcup(method, path, body) {
   return odooJson(cleanPath, body || {})
 }
 
+// ── KOLD Tower M1 (gf_tower_m1) ── Odoo directo; PROHIBIDO fallback n8n ────
+async function directTower(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isTowerM1Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // el endpoint existe SOLO como GET en Odoo; jamás dejar caer esta ruta a n8n
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // odooHttp usa buildBaseHeaders => hereda X-GF-Employee-Token; errores llegan
+  // como ApiError(status/code) al manejo existente (401/403/400/503/500). Sin retries.
+  return odooHttp('GET', TOWER_M1_BACKLOG_PATH, filterTowerM1Params(query))
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
   const directHandlers = [
+    directTower,
     directProfile,
     directGerente,
     directAdmin,
