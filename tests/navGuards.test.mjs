@@ -173,9 +173,17 @@ test('AdminShell no compone triple panel en 1024–1365', () => {
 
 // ── Registry sano: todo módulo con ruta y roles no-vacíos ────────────────────
 const isTowerRoute = (r) => r === '/torre' || String(r).startsWith('/torre/')
-test('registry: cada módulo tiene id/route/roles válidos y ninguno es Tower (/torre)', () => {
+test('registry: módulos completos; el único /torre es torre_operativa (towerGated)', () => {
   for (const m of MODULES) {
     assert.ok(m.id && m.route && Array.isArray(m.roles) && m.roles.length > 0, `módulo ${m.id} completo`)
-    assert.ok(!isTowerRoute(m.route), `Tower fuera del registry (${m.id}=${m.route}); /torres es otro módulo`)
+    if (isTowerRoute(m.route)) {
+      // El único módulo Tower permitido es torre_operativa y DEBE ser towerGated
+      // (visibilidad por tower_status autoritativo, no por x_job_key).
+      assert.equal(m.id, 'torre_operativa', `único /torre = torre_operativa (no ${m.id})`)
+      assert.equal(m.towerGated, true, 'torre_operativa debe ser towerGated')
+      assert.equal(m.route, '/torre/backlog')
+    } else {
+      assert.notEqual(m.towerGated, true, `solo torre_operativa es towerGated (no ${m.id})`)
+    }
   }
 })

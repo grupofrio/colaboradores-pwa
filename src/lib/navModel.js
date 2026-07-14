@@ -5,12 +5,45 @@
 // isModuleVisibleForRoles (fail-closed) sobre una sesión VÁLIDA
 // (isValidAuthenticatedSession — Codex PR #66 BLOCKER 1).
 //
-// Tower (/torre/backlog) NO está en el registry a propósito: no aparece en
-// ninguna nav hasta un PR futuro. Ver src/modules/registry.js.
+// Tower (torre_operativa → /torre/backlog) es un módulo `towerGated` del
+// registry: su visibilidad se decide por el rol AUTORITATIVO tower_status
+// (readAuthoritativeTowerStatus), NO por x_job_key. Solo lo ven sesiones con
+// tower_status admin_plataforma/supervisor_ventas. Ver src/modules/registry.js.
 
 import { MODULES, isModuleVisibleForRoles } from '../modules/registry.js'
 import { getEffectiveJobKeys } from './roleContext.js'
 import { isValidAuthenticatedSession } from './session.js'
+import { readAuthoritativeTowerStatus } from '../modules/torre/e1/loadTowerStatus.js'
+
+// Visibilidad de un módulo para una SESIÓN concreta (misma autoridad que la
+// tarjeta del home, la nav y — vía TowerRoute/ModuleRoleRoute — la ruta):
+//   towerGated  → rol AUTORITATIVO tower_status (readAuthoritativeTowerStatus,
+//                 allowlist admin_plataforma/supervisor_ventas). NUNCA por
+//                 x_job_key: un gerente/auxiliar/chofer sin tower_status NO lo ve.
+//   normal      → roles x_job_key (isModuleVisibleForRoles).
+// Fail-closed: sin sesión válida => nada.
+export function isModuleVisibleForSession(module, session) {
+  if (!module || module.showInNav === false && module.showOnHome === false) return false
+  if (!isValidAuthenticatedSession(session)) return false
+  if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
+  return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
+}
+
+// Módulos visibles para la sesión (home + nav comparten esta fuente única),
+// ordenados por navPriority y orden del registry. Fail-closed => [].
+export function getVisibleModulesForSession(session = null) {
+  if (!isValidAuthenticatedSession(session)) return []
+  const seen = new Set()
+  return MODULES
+    .map((module, index) => ({ module, index }))
+    .filter(({ module }) => {
+      if (seen.has(module.id) || !isModuleVisibleForSession(module, session)) return false
+      seen.add(module.id)
+      return true
+    })
+    .sort((a, b) => (navPriorityOf(a.module) - navPriorityOf(b.module)) || (a.index - b.index))
+    .map(({ module }) => module)
+}
 
 // Anclas fijas (no son módulos del registry). Siempre presentes con sesión:
 // todos pueden ir a su Inicio y a su perfil.
@@ -97,13 +130,9 @@ function navPriorityOf(module) {
 // FAIL-CLOSED (BLOCKER 1): sesión inválida (null/{}/token vacío/expirada/
 // corrupta) => []. Sesión válida sin roles especiales => solo universales.
 export function getNavModules(session = null) {
-  if (!isValidAuthenticatedSession(session)) return []
-  const roles = getEffectiveJobKeys(session)
-  return MODULES
-    .map((module, index) => ({ module, index }))
-    .filter(({ module }) => module.showInNav !== false && isModuleVisibleForRoles(module, roles))
-    .sort((a, b) => (navPriorityOf(a.module) - navPriorityOf(b.module)) || (a.index - b.index))
-    .map(({ module }) => module)
+  // Nav = módulos visibles para la sesión con showInNav !== false.
+  // (Incluye torre_operativa cuando la sesión tiene tower_status autorizado.)
+  return getVisibleModulesForSession(session).filter((m) => m.showInNav !== false)
 }
 
 // ¿la ruta del item corresponde a la ubicación actual? (soporta subrutas)
