@@ -162,6 +162,10 @@ function getStoredSession() {
     }
     return normalized
   } catch {
+    // JSON corrupto/ilegible: eliminarlo para que la próxima carga no vuelva a
+    // fallar por el mismo valor. Defensivo: removeItem no debe propagar error;
+    // no tocamos otras claves.
+    try { localStorage.removeItem('gf_session') } catch { /* ignore */ }
     return null
   }
 }
@@ -457,7 +461,7 @@ export default function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Auth */}
-            <Route path="/login" element={session ? <Navigate to="/" replace /> : <ScreenLogin />} />
+            <Route path="/login" element={isValidAuthenticatedSession(session) ? <Navigate to="/" replace /> : <ScreenLogin />} />
 
             {/* ── Layout global: navegación por rol persistente en todas las pantallas autenticadas ── */}
             <Route element={<AppShell />}>

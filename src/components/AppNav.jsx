@@ -308,7 +308,9 @@ export default function AppNav() {
             aria-label="Más módulos"
             aria-haspopup="dialog"
             aria-expanded={moreOpen}
-            aria-current={nav.moreActive ? 'true' : undefined}
+            // aria-current SOLO con el sheet cerrado (el activo vive en overflow):
+            // abierto, el único aria-current="page" del DOM es el item del dialog.
+            aria-current={nav.moreActive && !moreOpen ? 'page' : undefined}
             style={{
               flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', gap: 3, padding: '9px 2px',

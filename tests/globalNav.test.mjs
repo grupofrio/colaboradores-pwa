@@ -204,7 +204,7 @@ test('MoreSheet: dialog accesible completo (trap, labelledby, cierre, scroll loc
   assert.match(appNav, /popstate/, 'Back del navegador cierra el sheet')
   assert.match(appNav, /moreBtnRef\.current\?\.focus\(\)/, 'restaura el foco al botón Más')
   assert.match(appNav, /closeBtnRef\.current\?\.focus\(\)/, 'foco inicial predecible')
-  assert.match(appNav, /aria-current=\{nav\.moreActive \? 'true' : undefined\}/, 'Más se marca activo con overflow activo')
+  assert.match(appNav, /aria-current=\{nav\.moreActive && !moreOpen \? 'page' : undefined\}/, 'Más marca activo (page) solo con sheet cerrado')
 })
 
 // ── Rail compacto (compresión desktop Admin 1024–1439 — hallazgo Codex) ─────

@@ -23,12 +23,43 @@ test('sesión {} (vacía) → NO autenticado', () => {
   assert.equal(isValidAuthenticatedSession({}), false)
 })
 
-test('employee_id ausente/inválido → NO autenticado', () => {
+// ── employee_id: SOLO entero positivo seguro (Codex ronda 2 BLOCKER) ─────────
+const withId = (employee_id) => ({ employee_id, session_token: 'x.y.z' })
+
+test('employee_id VÁLIDO: entero positivo (number o string decimal puro)', () => {
+  for (const id of [1, 5, 718, '1', '5', '718']) {
+    assert.equal(isValidAuthenticatedSession(withId(id)), true, `válido: ${JSON.stringify(id)}`)
+  }
+})
+
+test('employee_id INVÁLIDO: string no numérico / decimal / negativo / cero / vacío', () => {
+  for (const id of ['abc', '5abc', '1.5', '-1', '0', '', ' ', '  ', '01', '+5', ' 5x', '5.0', '0x10']) {
+    assert.equal(isValidAuthenticatedSession(withId(id)), false, `inválido string: ${JSON.stringify(id)}`)
+  }
+})
+
+test('employee_id: string con espacios alrededor se recorta (trim) y vale si es entero puro', () => {
+  // La spec pide trim: " 5 " → "5" → válido; " 5x" → "5x" → inválido.
+  assert.equal(isValidAuthenticatedSession(withId(' 5 ')), true)
+  assert.equal(isValidAuthenticatedSession(withId('718 ')), true)
+})
+
+test('employee_id INVÁLIDO: number no entero / no positivo / no finito / fuera de rango', () => {
+  for (const id of [0, -1, -3, 1.5, NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal(isValidAuthenticatedSession(withId(id)), false, `inválido number: ${String(id)}`)
+  }
+})
+
+test('employee_id INVÁLIDO: ausente / tipo no numérico', () => {
   assert.equal(isValidAuthenticatedSession({ session_token: 'x.y.z' }), false)
-  assert.equal(isValidAuthenticatedSession({ employee_id: 0, session_token: 'x.y.z' }), false)
-  assert.equal(isValidAuthenticatedSession({ employee_id: -3, session_token: 'x.y.z' }), false)
-  assert.equal(isValidAuthenticatedSession({ employee_id: NaN, session_token: 'x.y.z' }), false)
-  assert.equal(isValidAuthenticatedSession({ employee_id: '   ', session_token: 'x.y.z' }), false)
+  for (const id of [null, undefined, [], {}, true, false]) {
+    assert.equal(isValidAuthenticatedSession(withId(id)), false, `inválido tipo: ${JSON.stringify(id)}`)
+  }
+})
+
+test('employee_id VÁLIDO en el límite: MAX_SAFE_INTEGER exacto', () => {
+  assert.equal(isValidAuthenticatedSession(withId(Number.MAX_SAFE_INTEGER)), true)
+  assert.equal(isValidAuthenticatedSession(withId(String(Number.MAX_SAFE_INTEGER))), true)
 })
 
 test('session_token ausente/vacío/no-string → NO autenticado', () => {
