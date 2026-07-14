@@ -1,18 +1,22 @@
 // ─── AppNav — navegación global única, basada en roles ───────────────────────
 // Deriva 100% de src/lib/navModel.js (que usa el registry canónico). NO hay
 // arrays de navegación hardcodeados aquí. Móvil = barra inferior (Inicio +
-// prioritarios + "Más" + Yo). Desktop/tablet = rail lateral persistente.
-// Fail-closed: sin sesión no se renderiza nada.
+// prioritarios + "Más" + Yo). Desktop/tablet = rail lateral persistente:
+// COMPACTO (solo iconos, 76px) en 1024–1439 para no comprimir shells con
+// sidebar interno (Admin 220px + feed 320px — hallazgo Codex), COMPLETO
+// (232px) desde 1440.
+// Fail-closed: sin sesión VÁLIDA (isValidAuthenticatedSession) no se
+// renderiza nada — jamás hay flash de navegación con sesión nula/corrupta.
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS } from '../tokens'
-import { buildMobileNav, buildDesktopNav, navLabel } from '../lib/navModel'
-
-const DESKTOP_MIN = 1024
-export const DESKTOP_RAIL_WIDTH = 232
-export const MOBILE_NAV_HEIGHT = 64
+import {
+  buildMobileNav, buildDesktopNav, navLabel,
+  DESKTOP_MIN, RAIL_FULL_MIN, DESKTOP_RAIL_WIDTH, DESKTOP_RAIL_WIDTH_COMPACT,
+} from '../lib/navModel'
+import { isValidAuthenticatedSession } from '../lib/session'
 
 function NavIcon({ name, size = 20 }) {
   const p = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }
@@ -48,6 +52,7 @@ function TabButton({ item, active, short, onClick }) {
       style={{
         flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 3, padding: '9px 2px',
+        minHeight: 48,
         color: active ? TOKENS.colors.blue2 : TOKENS.colors.textLow,
         cursor: 'pointer', background: 'none', border: 'none',
         transition: `color ${TOKENS.motion.fast}`,
@@ -64,15 +69,58 @@ function TabButton({ item, active, short, onClick }) {
   )
 }
 
-/* ── Sheet "Más" ──────────────────────────────────────────────────────────── */
+/* ── Sheet "Más" (dialog accesible) ───────────────────────────────────────────
+   a11y completa (Codex PR #66):
+   - role=dialog + aria-modal + aria-labelledby (título real)
+   - foco inicial en el primer elemento interactivo (botón cerrar)
+   - focus trap con Tab/Shift+Tab ciclando dentro del sheet
+   - Escape, click en backdrop y botón visible de cerrar
+   - bloqueo del scroll del body mientras está abierto (restaura al cerrar)
+   - Back del navegador (popstate) cierra el sheet en vez de dejarlo colgado
+   - al cerrar, el foco REGRESA al botón "Más" (lo restaura AppNav)            */
 function MoreSheet({ items, activeId, onPick, onClose }) {
-  const ref = useRef(null)
+  const sheetRef = useRef(null)
+  const closeBtnRef = useRef(null)
+
+  // Bloqueo de scroll del body mientras el sheet está abierto.
   useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    ref.current?.focus()
-    return () => window.removeEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prevOverflow }
+  }, [])
+
+  // Teclado: Escape cierra; Tab/Shift+Tab quedan atrapados dentro del dialog.
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
+      if (e.key !== 'Tab') return
+      const root = sheetRef.current
+      if (!root) return
+      const focusables = Array.from(root.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])'))
+        .filter((el) => !el.disabled && el.offsetParent !== null)
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {
+        e.preventDefault(); last.focus()
+      } else if (!e.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {
+        e.preventDefault(); first.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
+
+  // Back del navegador: cerrar el sheet (no navegar con el dialog abierto).
+  useEffect(() => {
+    function onPop() { onClose() }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [onClose])
+
+  // Foco inicial predecible: el botón de cerrar.
+  useEffect(() => { closeBtnRef.current?.focus() }, [])
+
   return (
     <div
       onClick={onClose}
@@ -83,11 +131,10 @@ function MoreSheet({ items, activeId, onPick, onClose }) {
       }}
     >
       <div
-        ref={ref}
-        tabIndex={-1}
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Más módulos"
+        aria-labelledby="gf-more-sheet-title"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxHeight: '70vh', overflowY: 'auto',
@@ -98,8 +145,26 @@ function MoreSheet({ items, activeId, onPick, onClose }) {
           outline: 'none',
         }}
       >
-        <div style={{ width: 40, height: 4, borderRadius: 3, background: 'rgba(255,255,255,0.18)', margin: '4px auto 12px' }} />
-        <p style={{ fontSize: 11, letterSpacing: '0.14em', color: TOKENS.colors.textLow, margin: '0 6px 10px' }}>MÁS MÓDULOS</p>
+        <div style={{ width: 40, height: 4, borderRadius: 3, background: 'rgba(255,255,255,0.18)', margin: '4px auto 8px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 6px 10px' }}>
+          <p id="gf-more-sheet-title" style={{ fontSize: 11, letterSpacing: '0.14em', color: TOKENS.colors.textLow, margin: 0 }}>
+            MÁS MÓDULOS
+          </p>
+          <button
+            ref={closeBtnRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar menú de módulos"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 32, height: 32, borderRadius: 10, cursor: 'pointer',
+              background: 'rgba(255,255,255,0.06)', border: `1px solid ${TOKENS.colors.border}`,
+              color: TOKENS.colors.textSoft,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {items.map((item) => {
             const active = item.id === activeId
@@ -112,7 +177,7 @@ function MoreSheet({ items, activeId, onPick, onClose }) {
                 aria-current={active ? 'page' : undefined}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                  padding: '14px 6px', borderRadius: 14, cursor: 'pointer',
+                  padding: '14px 6px', borderRadius: 14, cursor: 'pointer', minHeight: 48,
                   background: active ? 'rgba(43,143,224,0.14)' : 'rgba(255,255,255,0.04)',
                   border: `1px solid ${active ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
                   color: active ? TOKENS.colors.blue2 : TOKENS.colors.textSoft,
@@ -129,22 +194,28 @@ function MoreSheet({ items, activeId, onPick, onClose }) {
   )
 }
 
-/* ── Rail lateral desktop/tablet ──────────────────────────────────────────── */
-function DesktopRail({ nav, onGo }) {
+/* ── Rail lateral desktop/tablet ──────────────────────────────────────────────
+   compact=true (1024–1439px): solo iconos con title/aria-label — evita el
+   triple panel comprimido en Admin/Gerente (rail 232 + sidebar 220 + feed 320
+   dejaban ~252px de contenido a 1024px; compacto deja ≥408px).               */
+function DesktopRail({ nav, compact, onGo }) {
   const items = [nav.home, ...nav.modules, nav.profile]
+  const width = compact ? DESKTOP_RAIL_WIDTH_COMPACT : DESKTOP_RAIL_WIDTH
   return (
     <nav
       aria-label="Navegación principal"
       style={{
-        position: 'fixed', top: 0, left: 0, bottom: 0, width: DESKTOP_RAIL_WIDTH,
+        position: 'fixed', top: 0, left: 0, bottom: 0, width,
         background: 'rgba(3,8,17,0.96)', borderRight: `1px solid ${TOKENS.colors.border}`,
         backdropFilter: 'blur(20px)', display: 'flex', flexDirection: 'column',
-        padding: '18px 12px', gap: 4, zIndex: 100, overflowY: 'auto',
+        padding: compact ? '18px 10px' : '18px 12px', gap: 4, zIndex: 100, overflowY: 'auto',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: 8, padding: compact ? '0 0 14px' : '0 8px 14px' }}>
         <img src="/icons/icon-grupo-frio.svg" alt="Grupo Frío" style={{ width: 28, height: 28, borderRadius: 7 }} />
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: TOKENS.colors.textLow }}>COLABORADORES</span>
+        {!compact && (
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: TOKENS.colors.textLow }}>COLABORADORES</span>
+        )}
       </div>
       {items.map((item) => {
         const active = item.id === nav.activeId
@@ -154,16 +225,20 @@ function DesktopRail({ nav, onGo }) {
             type="button"
             onClick={() => onGo(item.route)}
             aria-current={active ? 'page' : undefined}
+            aria-label={navLabel(item)}
+            title={compact ? navLabel(item) : undefined}
             style={{
               display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-              padding: '11px 12px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+              justifyContent: compact ? 'center' : 'flex-start',
+              padding: compact ? '12px 0' : '11px 12px', borderRadius: 12, cursor: 'pointer',
+              textAlign: 'left', minHeight: 44,
               background: active ? 'rgba(43,143,224,0.14)' : 'transparent',
               border: `1px solid ${active ? 'rgba(43,143,224,0.35)' : 'transparent'}`,
               color: active ? TOKENS.colors.blue2 : TOKENS.colors.textSoft,
             }}
           >
             <NavIcon name={iconFor(item)} />
-            <span style={{ fontSize: 13, fontWeight: active ? 700 : 500 }}>{navLabel(item)}</span>
+            {!compact && <span style={{ fontSize: 13, fontWeight: active ? 700 : 500 }}>{navLabel(item)}</span>}
           </button>
         )
       })}
@@ -178,6 +253,7 @@ export default function AppNav() {
   const location = useLocation()
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 375)
   const [moreOpen, setMoreOpen] = useState(false)
+  const moreBtnRef = useRef(null)
 
   useEffect(() => {
     const onResize = () => setW(window.innerWidth)
@@ -185,15 +261,25 @@ export default function AppNav() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  // fail-closed: sin sesión no hay navegación
-  if (!session) return null
+  // Cerrar el sheet en cualquier navegación (evita estados colgados).
+  useEffect(() => { setMoreOpen(false) }, [location.pathname])
+
+  // FAIL-CLOSED (BLOCKER 1): sin sesión VÁLIDA no hay navegación de ningún
+  // tipo. null / {} / token vacío / expirada / corrupta => null (sin flash:
+  // la sesión se hidrata de forma síncrona desde localStorage en App.jsx).
+  if (!isValidAuthenticatedSession(session)) return null
 
   const go = (route) => { setMoreOpen(false); navigate(route) }
+  const closeMore = () => {
+    setMoreOpen(false)
+    // Restaurar el foco al botón "Más" al cerrar (a11y).
+    requestAnimationFrame(() => moreBtnRef.current?.focus())
+  }
 
   if (w >= DESKTOP_MIN) {
     const nav = buildDesktopNav(session, location.pathname)
     if (nav.hidden) return null
-    return <DesktopRail nav={nav} onGo={go} />
+    return <DesktopRail nav={nav} compact={w < RAIL_FULL_MIN} onGo={go} />
   }
 
   const nav = buildMobileNav(session, location.pathname)
@@ -216,26 +302,29 @@ export default function AppNav() {
         ))}
         {nav.hasMore && (
           <button
+            ref={moreBtnRef}
             type="button"
             onClick={() => setMoreOpen(true)}
             aria-label="Más módulos"
             aria-haspopup="dialog"
             aria-expanded={moreOpen}
+            aria-current={nav.moreActive ? 'true' : undefined}
             style={{
               flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', gap: 3, padding: '9px 2px',
-              color: moreOpen ? TOKENS.colors.blue2 : TOKENS.colors.textLow,
+              minHeight: 48,
+              color: (moreOpen || nav.moreActive) ? TOKENS.colors.blue2 : TOKENS.colors.textLow,
               cursor: 'pointer', background: 'none', border: 'none',
             }}
           >
             <NavIcon name="more" />
-            <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.02em' }}>Más</span>
+            <span style={{ fontSize: 10, fontWeight: nav.moreActive ? 700 : 500, letterSpacing: '0.02em' }}>Más</span>
           </button>
         )}
         <TabButton item={nav.profile} short active={nav.profile.id === nav.activeId} onClick={() => go(nav.profile.route)} />
       </nav>
       {moreOpen && (
-        <MoreSheet items={nav.overflow} activeId={nav.activeId} onPick={(item) => go(item.route)} onClose={() => setMoreOpen(false)} />
+        <MoreSheet items={nav.overflow} activeId={nav.activeId} onPick={(item) => go(item.route)} onClose={closeMore} />
       )}
     </>
   )
