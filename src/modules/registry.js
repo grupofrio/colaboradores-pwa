@@ -192,6 +192,8 @@ export const MODULES = [
     tone:   'blue',
     roles:  ['admin_plataforma', 'supervisor_ventas'],
     towerGated: true,
+    showOnHome: true,   // explícito: tarjeta en el home (autoridad = tower_status)
+    showInNav:  true,   // explícito: entrada en la navegación global
     status: 'live',
     icon:   'torres',
     navPriority: 15,

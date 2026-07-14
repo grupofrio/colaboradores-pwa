@@ -4,7 +4,7 @@ import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
 import { getVisibleModulesForSession } from '../lib/navModel'
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
-import { getModuleEntryDecision, upsertModuleRoleContext } from '../lib/roleContext'
+import { getModuleEntryDecisionForSession, upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
 
 /* ============================================================================
@@ -253,7 +253,7 @@ export default function ScreenHome() {
   const turnoLabel = TURNO_LABELS[session?.turno] ?? ''
 
   function handleModule(mod) {
-    const decision = getModuleEntryDecision(mod, session)
+    const decision = getModuleEntryDecisionForSession(mod, session)
     if (decision.type === 'denied') return
     if (decision.type === 'choose') {
       setRolePromptModule({ module: mod, compatibleRoles: decision.compatibleRoles })

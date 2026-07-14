@@ -8,6 +8,7 @@ import {
   HOME_ANCHOR, PROFILE_ANCHOR,
 } from '../src/lib/navModel.js'
 import { getModuleById, MODULES } from '../src/modules/registry.js'
+import { getModuleEntryDecisionForSession, getModuleEntryDecision } from '../src/lib/roleContext.js'
 
 const ids = (arr) => arr.map((m) => m.id)
 const TOWER = getModuleById('torre_operativa')
@@ -78,6 +79,77 @@ test('sesión inválida: no ve Torre aunque traiga employee.tower_status', () =>
   assert.equal(isModuleVisibleForSession(TOWER, { employee: { tower_status: 'supervisor_ventas' } }), false, 'sin employee_id/token')
   assert.equal(isModuleVisibleForSession(TOWER, null), false)
   assert.equal(isModuleVisibleForSession(TOWER, {}), false)
+})
+
+// ── Entrada del home (clic): MISMA autoridad que la tarjeta ─────────────────
+// getModuleEntryDecisionForSession es la función PURA que consume
+// ScreenHome.handleModule. Para towerGated autoriza por tower_status
+// AUTORITATIVO (no x_job_key); para el resto delega en la lógica por rol.
+// allowed = (type !== 'denied'); route = TOWER.route; reason encoded by type.
+const entry = (session) => getModuleEntryDecisionForSession(TOWER, session)
+
+test('CLAVE: admin_plataforma con x_job_key ajeno (direccion_general) ENTRA por tower_status', () => {
+  const sess = towerSession('admin_plataforma', 'direccion_general')
+  const d = entry(sess)
+  assert.equal(d.type, 'direct', 'autorizado (allowed) vía tower_status')
+  assert.equal(d.selectedRole, '', 'sin role-context: navega directo a la ruta')
+  assert.equal(TOWER.route, '/torre/backlog', 'ruta destino')
+  // Contraste: la vía SOLO-x_job_key habría DENEGADO (direccion_general ∉ roles).
+  // Ésa era exactamente la incoherencia YELLOW que reportó Codex.
+  assert.equal(getModuleEntryDecision(TOWER, sess).type, 'denied')
+})
+
+test('supervisor_ventas con tower_status: ENTRA (direct, sin role-context)', () => {
+  const d = entry(towerSession('supervisor_ventas'))
+  assert.equal(d.type, 'direct')
+  assert.equal(d.selectedRole, '')
+})
+
+test('supervisor_ventas SIN tower_status (solo x_job_key): NO entra a Torre', () => {
+  assert.equal(entry(roleSession('supervisor_ventas')).type, 'denied')
+})
+
+test('gerente_sucursal (sin tower_status): NO entra a Torre', () => {
+  assert.equal(entry(roleSession('gerente_sucursal')).type, 'denied')
+})
+
+test('tower_status mal-case / inválido en el clic: NO entra (strict-case, fail-closed)', () => {
+  for (const ts of ['ADMIN_PLATAFORMA', 'Supervisor_Ventas', '', ' ', 'chofer', null, 123]) {
+    assert.equal(entry(towerSession(ts)).type, 'denied', `ts=${JSON.stringify(ts)}`)
+  }
+  assert.equal(entry(towerSession('  supervisor_ventas  ')).type, 'direct', 'trim sí, case no')
+})
+
+test('sesión inválida en el clic: NO entra a Torre aunque traiga tower_status', () => {
+  for (const bad of [null, {}, { employee: { tower_status: 'admin_plataforma' } },
+    { employee_id: 1, session_token: 'x', exp: 1 }]) {
+    assert.equal(entry(bad).type, 'denied')
+  }
+})
+
+test('módulo NORMAL: getModuleEntryDecisionForSession delega en la lógica por rol', () => {
+  // Universal (kpis): decisión idéntica a getModuleEntryDecision con sesión válida.
+  const kpis = getModuleById('kpis')
+  const sess = roleSession('gerente_sucursal')
+  assert.deepEqual(getModuleEntryDecisionForSession(kpis, sess), getModuleEntryDecision(kpis, sess))
+  // No autorizado por rol: sigue denegado (delegación intacta, sin bypass).
+  const admin = getModuleById('admin_sucursal')
+  assert.equal(getModuleEntryDecisionForSession(admin, roleSession('supervisor_ventas')).type, 'denied')
+  // Autorizado por rol: entra (gerente_sucursal ∈ admin_sucursal.roles).
+  assert.notEqual(getModuleEntryDecisionForSession(admin, roleSession('gerente_sucursal')).type, 'denied')
+})
+
+test('ScreenHome.handleModule usa la decisión session-aware (no la de solo-x_job_key)', () => {
+  const home = readFileSync(new URL('../src/screens/ScreenHome.jsx', import.meta.url), 'utf8')
+  assert.match(home, /getModuleEntryDecisionForSession\(mod, session\)/, 'el clic usa la fuente session-aware')
+  assert.ok(!/getModuleEntryDecision\(mod, session\)/.test(home), 'el clic ya no se autoriza por x_job_key directo')
+})
+
+test('registry: torre_operativa declara showOnHome/showInNav EXPLÍCITOS (=true)', () => {
+  assert.equal(Object.prototype.hasOwnProperty.call(TOWER, 'showOnHome'), true, 'showOnHome declarado')
+  assert.equal(Object.prototype.hasOwnProperty.call(TOWER, 'showInNav'), true, 'showInNav declarado')
+  assert.equal(TOWER.showOnHome, true)
+  assert.equal(TOWER.showInNav, true)
 })
 
 // ── Colocación en la nav (móvil/desktop) + estado activo ────────────────────
