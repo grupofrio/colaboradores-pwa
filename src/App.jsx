@@ -2,6 +2,7 @@ import { lazy, Suspense, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, createContext, useContext } from 'react'
 import { ToastProvider } from './components/Toast'
+import AppShell from './components/AppShell'
 import { normalizeSessionRoleContext } from './lib/roleContext'
 import { api } from './lib/api'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
@@ -445,6 +446,9 @@ export default function App() {
             {/* Auth */}
             <Route path="/login" element={session ? <Navigate to="/" replace /> : <ScreenLogin />} />
 
+            {/* ── Layout global: navegación por rol persistente en todas las pantallas autenticadas ── */}
+            <Route element={<AppShell />}>
+
             {/* Generales */}
             <Route path="/" element={<PrivateRoute><ScreenHome /></PrivateRoute>} />
             <Route path="/kpis" element={<PrivateRoute><ScreenKPIs /></PrivateRoute>} />
@@ -588,6 +592,7 @@ export default function App() {
             <Route path="/torres/requisicion/:poId" element={<PrivateRoute><ScreenTorreDetail /></PrivateRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
           </Routes>
         </Suspense>
         </ErrorBoundary>

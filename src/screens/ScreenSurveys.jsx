@@ -101,29 +101,6 @@ const NAV_ITEMS = [
   { id:"perfil",    label:"Yo",        icon:()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
 ];
 
-function BottomNav({ sw }) {
-  const navigate = useNavigate();
-  const ROUTES = { home: "/", kpis: "/kpis", encuestas: "/surveys", logros: "/badges", badges: "/badges", perfil: "/profile" };
-  const navH = sw < 340 ? 58 : 64;
-  const itemW = sw < 340 ? 48 : 58;
-
-  return (
-    <div style={{ position:"absolute", left:10, right:10, bottom:10, height:navH, borderRadius:20, background:TOKENS.glass.panel, border:`1px solid ${TOKENS.colors.border}`, backdropFilter:"blur(16px)", boxShadow:TOKENS.shadow.md, display:"flex", alignItems:"center", justifyContent:"space-around", zIndex:5 }}>
-      {NAV_ITEMS.map((item) => {
-        const isActive = item.id === "encuestas";
-        const Icon = item.icon;
-        return (
-          <button key={item.id} onClick={() => navigate(ROUTES[item.id] || "/")} style={{ width:itemW, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, color:isActive?TOKENS.colors.blue3:"rgba(255,255,255,0.42)", transition:`all ${TOKENS.motion.fast}` }}>
-            <div style={{ width:34, height:34, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", background:isActive?"rgba(43,143,224,0.10)":"transparent", border:isActive?"1px solid rgba(97,178,255,0.14)":"1px solid transparent", boxShadow:isActive?"0 0 16px rgba(43,143,224,0.12)":"none" }}>
-              <Icon />
-            </div>
-            <span style={{ fontSize:9, fontWeight:isActive?700:500 }}>{item.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 /* ============================================================================
    SHARED UI
@@ -610,7 +587,6 @@ function DoneState({ survey, onBack, sw }) {
         <span style={{ fontSize:9, color:TOKENS.colors.textLow }}>Respuestas guardadas en Odoo · Sync automático</span>
       </div>
 
-      <BottomNav sw={sw} />
     </div>
   );
 }
@@ -789,7 +765,6 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
         <DoneState survey={activeSurvey} onBack={handleBack} sw={sw} />
       )}
 
-      {view === "list" && <BottomNav sw={sw} />}
     </div>
   );
 }

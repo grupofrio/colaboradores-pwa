@@ -83,16 +83,6 @@ const ICONS = {
   ),
 }
 
-/* ============================================================================
-   NAV BOTTOM
-============================================================================ */
-const NAV = [
-  { id: 'home',   label: 'Inicio', path: '/',        icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-  { id: 'kpis',   label: 'KPIs',   path: '/kpis',    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
-  { id: 'surveys',label: 'Encuestas', path: '/surveys', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
-  { id: 'badges', label: 'Premios', path: '/badges',  icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg> },
-  { id: 'perfil', label: 'Yo',      path: '/profile', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-]
 
 /* ============================================================================
    PARTICLES
@@ -453,8 +443,6 @@ export default function ScreenHome() {
         <div style={{ height: 24 }} />
       </div>
 
-      {/* ── Nav Bottom ──────────────────────────────────────────────────── */}
-      <BottomNav current="home" />
     </div>
     <ModuleRolePrompt
       title={rolePromptModule ? `Elegir puesto para ${rolePromptModule.module.label}` : undefined}
@@ -484,44 +472,3 @@ function Chip({ label, color }) {
   )
 }
 
-/* ============================================================================
-   BOTTOM NAV
-============================================================================ */
-export function BottomNav({ current }) {
-  const navigate = useNavigate()
-  return (
-    <nav style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0,
-      background: 'rgba(3,8,17,0.92)',
-      borderTop: `1px solid ${TOKENS.colors.border}`,
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      display: 'flex',
-      paddingBottom: 'env(safe-area-inset-bottom)',
-      zIndex: 100,
-    }}>
-      {NAV.map(item => {
-        const active = item.id === current
-        return (
-          <button
-            key={item.id}
-            onClick={() => navigate(item.path)}
-            style={{
-              flex: 1, display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              gap: 4, padding: '10px 0',
-              color: active ? TOKENS.colors.blue2 : TOKENS.colors.textLow,
-              cursor: 'pointer',
-              transition: `color ${TOKENS.motion.fast}`,
-            }}
-          >
-            {item.icon}
-            <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, letterSpacing: '0.04em' }}>
-              {item.label}
-            </span>
-          </button>
-        )
-      })}
-    </nav>
-  )
-}
