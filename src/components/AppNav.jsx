@@ -8,7 +8,7 @@
 // Fail-closed: sin sesión VÁLIDA (isValidAuthenticatedSession) no se
 // renderiza nada — jamás hay flash de navegación con sesión nula/corrupta.
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS } from '../tokens'
@@ -17,6 +17,11 @@ import {
   DESKTOP_MIN, RAIL_FULL_MIN, DESKTOP_RAIL_WIDTH, DESKTOP_RAIL_WIDTH_COMPACT,
 } from '../lib/navModel'
 import { isValidAuthenticatedSession } from '../lib/session'
+import {
+  MORE_SHEET_HISTORY_KEY,
+  consumeTransientHistoryEntry,
+  pushTransientHistoryEntry,
+} from '../lib/transientHistory'
 
 function NavIcon({ name, size = 20 }) {
   const p = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }
@@ -109,13 +114,6 @@ function MoreSheet({ items, activeId, onPick, onClose }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
-
-  // Back del navegador: cerrar el sheet (no navegar con el dialog abierto).
-  useEffect(() => {
-    function onPop() { onClose() }
-    window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
   }, [onClose])
 
   // Foco inicial predecible: el botón de cerrar.
@@ -254,6 +252,8 @@ export default function AppNav() {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 375)
   const [moreOpen, setMoreOpen] = useState(false)
   const moreBtnRef = useRef(null)
+  const moreClosingRef = useRef(false)
+  const pendingMoreRouteRef = useRef('')
 
   useEffect(() => {
     const onResize = () => setW(window.innerWidth)
@@ -261,19 +261,56 @@ export default function AppNav() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  // Cerrar el sheet en cualquier navegación (evita estados colgados).
-  useEffect(() => { setMoreOpen(false) }, [location.pathname])
+  const finishCloseMore = useCallback(() => {
+    moreClosingRef.current = false
+    setMoreOpen(false)
+    requestAnimationFrame(() => moreBtnRef.current?.focus())
+
+    const pendingRoute = pendingMoreRouteRef.current
+    pendingMoreRouteRef.current = ''
+    if (pendingRoute) navigate(pendingRoute)
+  }, [navigate])
+
+  const closeMore = useCallback(() => {
+    if (moreClosingRef.current) return
+    moreClosingRef.current = true
+    if (!consumeTransientHistoryEntry(window.history, MORE_SHEET_HISTORY_KEY)) {
+      finishCloseMore()
+    }
+  }, [finishCloseMore])
+
+  const openMore = useCallback(() => {
+    if (moreOpen) return
+    moreClosingRef.current = false
+    pushTransientHistoryEntry(window.history, MORE_SHEET_HISTORY_KEY)
+    setMoreOpen(true)
+  }, [moreOpen])
+
+  useEffect(() => {
+    if (!moreOpen) return undefined
+    function onMoreHistoryPop() { finishCloseMore() }
+    window.addEventListener('popstate', onMoreHistoryPop)
+    return () => window.removeEventListener('popstate', onMoreHistoryPop)
+  }, [finishCloseMore, moreOpen])
+
+  // El sheet solo existe en móvil. Si el viewport cruza a desktop mientras
+  // está abierto, consumir también su entrada efímera.
+  useEffect(() => {
+    if (moreOpen && w >= DESKTOP_MIN) closeMore()
+  }, [closeMore, moreOpen, w])
 
   // FAIL-CLOSED (BLOCKER 1): sin sesión VÁLIDA no hay navegación de ningún
   // tipo. null / {} / token vacío / expirada / corrupta => null (sin flash:
   // la sesión se hidrata de forma síncrona desde localStorage en App.jsx).
   if (!isValidAuthenticatedSession(session)) return null
 
-  const go = (route) => { setMoreOpen(false); navigate(route) }
-  const closeMore = () => {
-    setMoreOpen(false)
-    // Restaurar el foco al botón "Más" al cerrar (a11y).
-    requestAnimationFrame(() => moreBtnRef.current?.focus())
+  const go = (route) => {
+    if (moreOpen) {
+      pendingMoreRouteRef.current = route
+      closeMore()
+      return
+    }
+    navigate(route)
   }
 
   if (w >= DESKTOP_MIN) {
@@ -304,7 +341,7 @@ export default function AppNav() {
           <button
             ref={moreBtnRef}
             type="button"
-            onClick={() => setMoreOpen(true)}
+            onClick={openMore}
             aria-label="Más módulos"
             aria-haspopup="dialog"
             aria-expanded={moreOpen}
