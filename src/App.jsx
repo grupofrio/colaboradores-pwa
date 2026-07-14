@@ -2,12 +2,14 @@ import { lazy, Suspense, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, createContext, useContext } from 'react'
 import { ToastProvider } from './components/Toast'
+import AppShell from './components/AppShell'
 import { normalizeSessionRoleContext } from './lib/roleContext'
 import { api } from './lib/api'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
-import { getModuleById } from './modules/registry'
+import { getModuleById, isModuleVisibleForRoles } from './modules/registry'
 import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
+import { isValidAuthenticatedSession } from './lib/session'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 
@@ -150,36 +152,52 @@ function getStoredSession() {
     const raw = localStorage.getItem('gf_session')
     if (!raw) return null
     const s = JSON.parse(raw)
-    if (s?.exp && Date.now() / 1000 > s.exp) {
+    const normalized = normalizeSessionRoleContext(s)
+    // Validación ÚNICA y autoritativa (src/lib/session.js): employee_id +
+    // session_token no vacío + exp vigente. Una sesión corrupta/expirada se
+    // limpia aquí mismo => la app arranca SIN sesión (cero flash de nav).
+    if (!isValidAuthenticatedSession(normalized)) {
       localStorage.removeItem('gf_session')
       return null
     }
-    return normalizeSessionRoleContext(s)
+    return normalized
   } catch {
+    // JSON corrupto/ilegible: eliminarlo para que la próxima carga no vuelva a
+    // fallar por el mismo valor. Defensivo: removeItem no debe propagar error;
+    // no tocamos otras claves.
+    try { localStorage.removeItem('gf_session') } catch { /* ignore */ }
     return null
   }
 }
 
+// Sesión VÁLIDA obligatoria (isValidAuthenticatedSession, BLOCKER 1 Codex):
+// null / {} / token vacío / expirada / corrupta => /login. Para rutas ancla
+// (Inicio, Perfil) sin módulo del registry asociado.
 function PrivateRoute({ children }) {
   const { session } = useSession()
-  if (!session) return <Navigate to="/login" replace />
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   return children
 }
 
-// Role gating estricto para /ruta/* — antes cualquier sesión autenticada
-// podía entrar por URL directa. Solo jefe_ruta y auxiliar_ruta tienen acceso.
-// Si la sesión no incluye ninguno de esos roles (primary o additional),
-// redirige al home. La validación final de tenancy sucede server-side
-// en cada endpoint (ya verificado: /pwa-ruta/liquidation, close-route, etc.
-// devuelven "No tienes acceso a este plan" cuando no sos el dueño).
-const RUTA_ALLOWED_ROLES = ['jefe_ruta', 'auxiliar_ruta']
-
-function RouteRoleRoute({ children }) {
+// ── ModuleRoleRoute — guard ÚNICO por módulo (BLOCKER 2 Codex) ───────────────
+// La MISMA autoridad decide tarjeta del home, entrada de navegación y ACCESO
+// POR URL DIRECTA: registry (fuente canónica de roles por módulo) +
+// getEffectiveJobKeys + isModuleVisibleForRoles, sobre una sesión válida.
+// Cero allowlists duplicadas en App.jsx (el viejo guard de /ruta desaparece).
+// Orden fail-closed:
+//   1. sesión inválida        → /login
+//   2. moduleId desconocido   → / (fail-closed: nunca montar sin autoridad)
+//   3. rol sin visibilidad    → / (la tenancy final sigue siendo server-side:
+//      cada endpoint /pwa-* revalida al dueño — p. ej. "/pwa-ruta/*")
+//   4. solo entonces monta la ruta.
+// Tower NO usa este guard: conserva su TowerRoute especializado (rol
+// AUTORITATIVO tower_status servido por Odoo, allowlist dura).
+function ModuleRoleRoute({ moduleId, children }) {
   const { session } = useSession()
-  if (!session) return <Navigate to="/login" replace />
-  const effective = getEffectiveJobKeys(session)
-  const allowed = effective.some(role => RUTA_ALLOWED_ROLES.includes(role))
-  if (!allowed) return <Navigate to="/" replace />
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  const module = getModuleById(moduleId)
+  if (!module) return <Navigate to="/" replace />
+  if (!isModuleVisibleForRoles(module, getEffectiveJobKeys(session))) return <Navigate to="/" replace />
   return children
 }
 
@@ -189,7 +207,7 @@ function RouteRoleRoute({ children }) {
 // Sin menú general (solo ruta directa /torre). Sin datos reales nuevos, sin endpoints, sin writes.
 function TowerRoute({ children }) {
   const { session } = useSession()
-  if (!session) return <Navigate to="/login" replace />
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   if (!readAuthoritativeTowerStatus(session)) return <Navigate to="/" replace />
   return children
 }
@@ -443,13 +461,16 @@ export default function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Auth */}
-            <Route path="/login" element={session ? <Navigate to="/" replace /> : <ScreenLogin />} />
+            <Route path="/login" element={isValidAuthenticatedSession(session) ? <Navigate to="/" replace /> : <ScreenLogin />} />
+
+            {/* ── Layout global: navegación por rol persistente en todas las pantallas autenticadas ── */}
+            <Route element={<AppShell />}>
 
             {/* Generales */}
             <Route path="/" element={<PrivateRoute><ScreenHome /></PrivateRoute>} />
-            <Route path="/kpis" element={<PrivateRoute><ScreenKPIs /></PrivateRoute>} />
-            <Route path="/surveys" element={<PrivateRoute><ScreenSurveys /></PrivateRoute>} />
-            <Route path="/badges" element={<PrivateRoute><ScreenBadges /></PrivateRoute>} />
+            <Route path="/kpis" element={<ModuleRoleRoute moduleId="kpis"><ScreenKPIs /></ModuleRoleRoute>} />
+            <Route path="/surveys" element={<ModuleRoleRoute moduleId="encuestas"><ScreenSurveys /></ModuleRoleRoute>} />
+            <Route path="/badges" element={<ModuleRoleRoute moduleId="logros"><ScreenBadges /></ModuleRoleRoute>} />
             <Route path="/profile" element={<PrivateRoute><ScreenProfile /></PrivateRoute>} />
 
             {/* ── E1-C.4 — KOLD Tower (read-only, gated por tower_status autoritativo; SIN menú) ── */}
@@ -458,52 +479,52 @@ export default function App() {
             <Route path="/torre/backlog" element={<TowerRoute><ScreenM1BacklogMount /></TowerRoute>} />
 
             {/* ── Producción — Operadores ─────────────────────────────────── */}
-            <Route path="/produccion" element={<ProductionOperatorRoute><ScreenMiTurno /></ProductionOperatorRoute>} />
-            <Route path="/produccion/checklist" element={<ProductionOperatorRoute><ScreenChecklist /></ProductionOperatorRoute>} />
-            <Route path="/produccion/ciclo" element={<ProductionOperatorRoute><ScreenCiclo /></ProductionOperatorRoute>} />
-            <Route path="/produccion/empaque" element={<ProductionOperatorRoute><ScreenEmpaque /></ProductionOperatorRoute>} />
-            <Route path="/produccion/corte" element={<ProductionOperatorRoute><ScreenCorte /></ProductionOperatorRoute>} />
-            <Route path="/produccion/transformacion" element={<ProductionOperatorRoute><ScreenTransformacion /></ProductionOperatorRoute>} />
-            <Route path="/produccion/tanque" element={<ProductionOperatorRoute><ScreenTanqueLista /></ProductionOperatorRoute>} />
-            <Route path="/produccion/tanque/:machineId" element={<ProductionOperatorRoute><ScreenTanque /></ProductionOperatorRoute>} />
-            <Route path="/produccion/incidencia" element={<ProductionOperatorRoute><ScreenIncidenciaRolito /></ProductionOperatorRoute>} />
-            <Route path="/produccion/cierre" element={<ProductionOperatorRoute><ScreenCierreRolito /></ProductionOperatorRoute>} />
-            <Route path="/produccion/declaracion-bolsas" element={<ProductionOperatorRoute><ScreenDeclaracionBolsas /></ProductionOperatorRoute>} />
-            <Route path="/produccion/handover" element={<ProductionOperatorRoute><ScreenHandoverTurno /></ProductionOperatorRoute>} />
-            <Route path="/produccion/turno-entregado" element={<ProductionOperatorRoute allowDelivered><ScreenTurnoEntregado /></ProductionOperatorRoute>} />
-            <Route path="/produccion/reconciliacion" element={<ProductionOperatorRoute><ScreenReconciliacionPT /></ProductionOperatorRoute>} />
+            <Route path="/produccion" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenMiTurno /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/checklist" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenChecklist /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/ciclo" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenCiclo /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/empaque" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenEmpaque /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/corte" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenCorte /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/transformacion" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenTransformacion /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/tanque" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenTanqueLista /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/tanque/:machineId" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenTanque /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/incidencia" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenIncidenciaRolito /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/cierre" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenCierreRolito /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/declaracion-bolsas" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenDeclaracionBolsas /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/handover" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenHandoverTurno /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/turno-entregado" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute allowDelivered><ScreenTurnoEntregado /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/reconciliacion" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenReconciliacionPT /></ProductionOperatorRoute></ModuleRoleRoute>} />
 
             {/* ── Almacén PT V2 ────────────────────────────────────────── */}
-            <Route path="/almacen-pt" element={<PrivateRoute><ScreenAlmacenPT /></PrivateRoute>} />
-            <Route path="/almacen-pt/recepcion" element={<PrivateRoute><ScreenRecepcion /></PrivateRoute>} />
-            <Route path="/almacen-pt/inventario" element={<PrivateRoute><ScreenInventarioPT /></PrivateRoute>} />
-            <Route path="/almacen-pt/transformacion" element={<PrivateRoute><ScreenTransformacionPT /></PrivateRoute>} />
-            <Route path="/almacen-pt/traspaso" element={<PrivateRoute><ScreenTraspasoPT /></PrivateRoute>} />
-            <Route path="/almacen-pt/handover" element={<PrivateRoute><ScreenHandoverPT /></PrivateRoute>} />
-            <Route path="/almacen-pt/merma" element={<PrivateRoute><ScreenMermaPT /></PrivateRoute>} />
-            <Route path="/almacen-pt/materiales" element={<PrivateRoute><ScreenMaterialesIssue /></PrivateRoute>} />
-            <Route path="/almacen-pt/materiales/crear" element={<PrivateRoute><ScreenMaterialesCrearIssue /></PrivateRoute>} />
-            <Route path="/almacen-pt/declaracion-bolsas" element={<PrivateRoute><ScreenDeclaracionBolsasPT /></PrivateRoute>} />
-            <Route path="/almacen-pt/materiales/report/:issueId" element={<PrivateRoute><ScreenMaterialesReport /></PrivateRoute>} />
-            <Route path="/almacen-pt/materiales/reconciliar" element={<PrivateRoute><ScreenMaterialesReconcile /></PrivateRoute>} />
+            <Route path="/almacen-pt" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenAlmacenPT /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/recepcion" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenRecepcion /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/inventario" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenInventarioPT /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/transformacion" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenTransformacionPT /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/traspaso" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenTraspasoPT /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/handover" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenHandoverPT /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/merma" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenMermaPT /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/materiales" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenMaterialesIssue /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/materiales/crear" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenMaterialesCrearIssue /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/declaracion-bolsas" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenDeclaracionBolsasPT /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/materiales/report/:issueId" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenMaterialesReport /></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/materiales/reconciliar" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenMaterialesReconcile /></ModuleRoleRoute>} />
 
             {/* ── KOLDCUP ─────────────────────────────────────────────── */}
-            <Route path="/koldcup" element={<PrivateRoute><ScreenKoldcupHub /></PrivateRoute>} />
-            <Route path="/koldcup/compra" element={<PrivateRoute><ScreenKoldcupCompra /></PrivateRoute>} />
-            <Route path="/koldcup/produccion" element={<PrivateRoute><ScreenKoldcupProduccion /></PrivateRoute>} />
-            <Route path="/koldcup/corte" element={<PrivateRoute><ScreenKoldcupCorte /></PrivateRoute>} />
-            <Route path="/koldcup/traspaso" element={<PrivateRoute><ScreenKoldcupTraspaso /></PrivateRoute>} />
+            <Route path="/koldcup" element={<ModuleRoleRoute moduleId="koldcup"><ScreenKoldcupHub /></ModuleRoleRoute>} />
+            <Route path="/koldcup/compra" element={<ModuleRoleRoute moduleId="koldcup"><ScreenKoldcupCompra /></ModuleRoleRoute>} />
+            <Route path="/koldcup/produccion" element={<ModuleRoleRoute moduleId="koldcup"><ScreenKoldcupProduccion /></ModuleRoleRoute>} />
+            <Route path="/koldcup/corte" element={<ModuleRoleRoute moduleId="koldcup"><ScreenKoldcupCorte /></ModuleRoleRoute>} />
+            <Route path="/koldcup/traspaso" element={<ModuleRoleRoute moduleId="koldcup"><ScreenKoldcupTraspaso /></ModuleRoleRoute>} />
 
             {/* ── Supervisión Producción ───────────────────────────────── */}
-            <Route path="/supervision" element={<PrivateRoute><ScreenSupervision /></PrivateRoute>} />
-            <Route path="/supervision/paros" element={<PrivateRoute><ScreenParos /></PrivateRoute>} />
-            <Route path="/supervision/merma" element={<PrivateRoute><ScreenMerma /></PrivateRoute>} />
-            <Route path="/supervision/energia" element={<PrivateRoute><ScreenEnergia /></PrivateRoute>} />
-            <Route path="/supervision/mantenimiento" element={<PrivateRoute><ScreenMantenimiento /></PrivateRoute>} />
-            <Route path="/supervision/turno" element={<PrivateRoute><ScreenControlTurno /></PrivateRoute>} />
+            <Route path="/supervision" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenSupervision /></ModuleRoleRoute>} />
+            <Route path="/supervision/paros" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenParos /></ModuleRoleRoute>} />
+            <Route path="/supervision/merma" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenMerma /></ModuleRoleRoute>} />
+            <Route path="/supervision/energia" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenEnergia /></ModuleRoleRoute>} />
+            <Route path="/supervision/mantenimiento" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenMantenimiento /></ModuleRoleRoute>} />
+            <Route path="/supervision/turno" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenControlTurno /></ModuleRoleRoute>} />
 
             {/* ── Admin Sucursal (POS + Gastos + Requisiciones) ────────── */}
-            <Route path="/admin" element={<PrivateRoute><AdminThemeScope /></PrivateRoute>}>
+            <Route path="/admin" element={<ModuleRoleRoute moduleId="admin_sucursal"><AdminThemeScope /></ModuleRoleRoute>}>
               <Route index element={<ScreenAdminPanel />} />
               <Route path="pos" element={<ScreenPOS />} />
               <Route path="ticket/:orderId" element={<ScreenTicket />} />
@@ -523,71 +544,72 @@ export default function App() {
 
             {/* ── Almacenista Entregas ─────────────────────────────────── */}
             {/* Entregas V2 — flujo guiado */}
-            <Route path="/entregas" element={<PrivateRoute><ScreenHubDia /></PrivateRoute>} />
-            <Route path="/entregas/recibir-pt" element={<PrivateRoute><ScreenRecibirPT /></PrivateRoute>} />
-            <Route path="/entregas/transformacion" element={<PrivateRoute><ScreenTransformacionEntregas /></PrivateRoute>} />
-            <Route path="/entregas/carga" element={<PrivateRoute><ScreenCargaUnidades /></PrivateRoute>} />
-            <Route path="/entregas/historial-cargas" element={<PrivateRoute><ScreenHistorialCargas /></PrivateRoute>} />
-            <Route path="/entregas/operacion" element={<PrivateRoute><ScreenOperacionDia /></PrivateRoute>} />
-            <Route path="/entregas/devoluciones" element={<PrivateRoute><ScreenDevolucionesV2 /></PrivateRoute>} />
-            <Route path="/entregas/merma" element={<PrivateRoute><ScreenMermaEntregas /></PrivateRoute>} />
-            <Route path="/entregas/cierre-turno" element={<PrivateRoute><ScreenCierreTurno /></PrivateRoute>} />
+            <Route path="/entregas" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenHubDia /></ModuleRoleRoute>} />
+            <Route path="/entregas/recibir-pt" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenRecibirPT /></ModuleRoleRoute>} />
+            <Route path="/entregas/transformacion" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenTransformacionEntregas /></ModuleRoleRoute>} />
+            <Route path="/entregas/carga" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenCargaUnidades /></ModuleRoleRoute>} />
+            <Route path="/entregas/historial-cargas" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenHistorialCargas /></ModuleRoleRoute>} />
+            <Route path="/entregas/operacion" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenOperacionDia /></ModuleRoleRoute>} />
+            <Route path="/entregas/devoluciones" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenDevolucionesV2 /></ModuleRoleRoute>} />
+            <Route path="/entregas/merma" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenMermaEntregas /></ModuleRoleRoute>} />
+            <Route path="/entregas/cierre-turno" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenCierreTurno /></ModuleRoleRoute>} />
             {/* Legacy route aliases — eliminado V1 2026-04-17 */}
             <Route path="/entregas/aceptar-turno" element={<Navigate to="/entregas/cierre-turno" replace />} />
             <Route path="/entregas/validar" element={<Navigate to="/entregas/operacion" replace />} />
-            <Route path="/entregas/inventario" element={<PrivateRoute><ScreenInventarioEntregas /></PrivateRoute>} />
+            <Route path="/entregas/inventario" element={<ModuleRoleRoute moduleId="almacen_entregas"><ScreenInventarioEntregas /></ModuleRoleRoute>} />
 
             {/* ── Jefe de Ruta ─────────────────────────────────────────── */}
             {/* Role gating: solo jefe_ruta y auxiliar_ruta acceden por URL directa. */}
-            <Route path="/ruta" element={<RouteRoleRoute><ScreenMiRutaV2 /></RouteRoleRoute>} />
-            <Route path="/ruta/checklist" element={<RouteRoleRoute><ScreenChecklistUnidad /></RouteRoleRoute>} />
-            <Route path="/ruta/carga" element={<RouteRoleRoute><ScreenAceptarCarga /></RouteRoleRoute>} />
-            <Route path="/ruta/incidencias" element={<RouteRoleRoute><ScreenIncidencias /></RouteRoleRoute>} />
-            <Route path="/ruta/kpis" element={<RouteRoleRoute><ScreenKPIsRuta /></RouteRoleRoute>} />
-            <Route path="/ruta/conciliacion" element={<RouteRoleRoute><ScreenConciliacion /></RouteRoleRoute>} />
-            <Route path="/ruta/control" element={<RouteRoleRoute><ScreenControlRuta /></RouteRoleRoute>} />
-            <Route path="/ruta/inventario" element={<RouteRoleRoute><ScreenInventarioRuta /></RouteRoleRoute>} />
-            <Route path="/ruta/corte" element={<RouteRoleRoute><ScreenCorteRuta /></RouteRoleRoute>} />
-            <Route path="/ruta/liquidacion" element={<RouteRoleRoute><ScreenLiquidacion /></RouteRoleRoute>} />
-            <Route path="/ruta/cierre" element={<RouteRoleRoute><ScreenCierreRuta /></RouteRoleRoute>} />
+            <Route path="/ruta" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenMiRutaV2 /></ModuleRoleRoute>} />
+            <Route path="/ruta/checklist" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenChecklistUnidad /></ModuleRoleRoute>} />
+            <Route path="/ruta/carga" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenAceptarCarga /></ModuleRoleRoute>} />
+            <Route path="/ruta/incidencias" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenIncidencias /></ModuleRoleRoute>} />
+            <Route path="/ruta/kpis" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenKPIsRuta /></ModuleRoleRoute>} />
+            <Route path="/ruta/conciliacion" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenConciliacion /></ModuleRoleRoute>} />
+            <Route path="/ruta/control" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenControlRuta /></ModuleRoleRoute>} />
+            <Route path="/ruta/inventario" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenInventarioRuta /></ModuleRoleRoute>} />
+            <Route path="/ruta/corte" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenCorteRuta /></ModuleRoleRoute>} />
+            <Route path="/ruta/liquidacion" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenLiquidacion /></ModuleRoleRoute>} />
+            <Route path="/ruta/cierre" element={<ModuleRoleRoute moduleId="cierre_ruta"><ScreenCierreRuta /></ModuleRoleRoute>} />
 
             {/* ── Supervisor de Ventas ─────────────────────────────────── */}
             {/* Supervisor Ventas V2 — Centro de Control Comercial */}
-            <Route path="/equipo" element={<PrivateRoute><ScreenControlComercial /></PrivateRoute>} />
-            <Route path="/equipo/bajas" element={<PrivateRoute><ScreenBajasHub /></PrivateRoute>} />
-            <Route path="/equipo/bajas/sugey" element={<PrivateRoute><ScreenBajasSugey /></PrivateRoute>} />
-            <Route path="/equipo/bajas/sugey/:requestId" element={<PrivateRoute><ScreenBajasSugeyDetail /></PrivateRoute>} />
-            <Route path="/equipo/bajas/angelica" element={<PrivateRoute><ScreenBajasAngelica /></PrivateRoute>} />
-            <Route path="/equipo/bajas/angelica/:requestId" element={<PrivateRoute><ScreenBajasAngelicaDetail /></PrivateRoute>} />
-            <Route path="/equipo/vendedor/:vendedorId" element={<PrivateRoute><ScreenDetalleVendedor /></PrivateRoute>} />
-            <Route path="/equipo/sin-visitar" element={<PrivateRoute><ScreenClientesSinVisitar /></PrivateRoute>} />
-            <Route path="/equipo/score-semanal" element={<PrivateRoute><ScreenScoreSemanal /></PrivateRoute>} />
-            <Route path="/equipo/cierre" element={<PrivateRoute><ScreenCierreOperativo /></PrivateRoute>} />
-            <Route path="/equipo/dashboard" element={<PrivateRoute><ScreenDashboardVentas /></PrivateRoute>} />
-            <Route path="/equipo/pronostico" element={<PrivateRoute><ScreenPronostico /></PrivateRoute>} />
-            <Route path="/equipo/planes/clientes" element={<PrivateRoute><ScreenPlanDiarioClientes /></PrivateRoute>} />
-            <Route path="/equipo/clientes" element={<PrivateRoute><ScreenClientesSupervisor /></PrivateRoute>} />
-            <Route path="/equipo/metas" element={<PrivateRoute><ScreenMetasVendedores /></PrivateRoute>} />
-            <Route path="/equipo/tareas" element={<PrivateRoute><ScreenTareasSupervisor /></PrivateRoute>} />
-            <Route path="/equipo/notas" element={<PrivateRoute><ScreenNotasCliente /></PrivateRoute>} />
-            <Route path="/equipo/recuperacion" element={<PrivateRoute><ScreenClientesRecuperacion /></PrivateRoute>} />
-            <Route path="/equipo/nota-rapida" element={<PrivateRoute><ScreenNotaRapida /></PrivateRoute>} />
+            <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenControlComercial /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasHub /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/sugey" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugey /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/sugey/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugeyDetail /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/angelica" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasAngelica /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/angelica/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasAngelicaDetail /></ModuleRoleRoute>} />
+            <Route path="/equipo/vendedor/:vendedorId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDetalleVendedor /></ModuleRoleRoute>} />
+            <Route path="/equipo/sin-visitar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesSinVisitar /></ModuleRoleRoute>} />
+            <Route path="/equipo/score-semanal" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenScoreSemanal /></ModuleRoleRoute>} />
+            <Route path="/equipo/cierre" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenCierreOperativo /></ModuleRoleRoute>} />
+            <Route path="/equipo/dashboard" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDashboardVentas /></ModuleRoleRoute>} />
+            <Route path="/equipo/pronostico" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPronostico /></ModuleRoleRoute>} />
+            <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPlanDiarioClientes /></ModuleRoleRoute>} />
+            <Route path="/equipo/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesSupervisor /></ModuleRoleRoute>} />
+            <Route path="/equipo/metas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenMetasVendedores /></ModuleRoleRoute>} />
+            <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenTareasSupervisor /></ModuleRoleRoute>} />
+            <Route path="/equipo/notas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenNotasCliente /></ModuleRoleRoute>} />
+            <Route path="/equipo/recuperacion" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesRecuperacion /></ModuleRoleRoute>} />
+            <Route path="/equipo/nota-rapida" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenNotaRapida /></ModuleRoleRoute>} />
             {/* V1 legacy routes */}
             <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />
             <Route path="/equipo/control" element={<Navigate to="/equipo" replace />} />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
-            <Route path="/gerente" element={<PrivateRoute><ScreenGerente /></PrivateRoute>} />
-            <Route path="/gerente/dashboard" element={<PrivateRoute><ScreenDashboardGerente /></PrivateRoute>} />
-            <Route path="/gerente/alertas" element={<PrivateRoute><ScreenAlertasGerente /></PrivateRoute>} />
-            <Route path="/gerente/gastos" element={<PrivateRoute><ScreenGastosGerente /></PrivateRoute>} />
-            <Route path="/gerente/forecast" element={<PrivateRoute><ScreenForecastUnlock /></PrivateRoute>} />
+            <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />
+            <Route path="/gerente/dashboard" element={<ModuleRoleRoute moduleId="gerente"><ScreenDashboardGerente /></ModuleRoleRoute>} />
+            <Route path="/gerente/alertas" element={<ModuleRoleRoute moduleId="gerente"><ScreenAlertasGerente /></ModuleRoleRoute>} />
+            <Route path="/gerente/gastos" element={<ModuleRoleRoute moduleId="gerente"><ScreenGastosGerente /></ModuleRoleRoute>} />
+            <Route path="/gerente/forecast" element={<ModuleRoleRoute moduleId="gerente"><ScreenForecastUnlock /></ModuleRoleRoute>} />
 
             {/* ── Torres de Control — Validación de Requisiciones ────────── */}
-            <Route path="/torres" element={<PrivateRoute><ScreenTorreRequisiciones /></PrivateRoute>} />
-            <Route path="/torres/requisicion/:poId" element={<PrivateRoute><ScreenTorreDetail /></PrivateRoute>} />
+            <Route path="/torres" element={<ModuleRoleRoute moduleId="torre_control"><ScreenTorreRequisiciones /></ModuleRoleRoute>} />
+            <Route path="/torres/requisicion/:poId" element={<ModuleRoleRoute moduleId="torre_control"><ScreenTorreDetail /></ModuleRoleRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
           </Routes>
         </Suspense>
         </ErrorBoundary>

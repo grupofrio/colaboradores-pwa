@@ -18,4 +18,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      # El job se llama "build": DEBE compilar de verdad (hallazgo Codex PR #66
+      # — antes solo corría lint+test y el nombre mentía). dist/ queda en el
+      # runner, no se versiona (está en .gitignore).
+      - run: npm run build
       - run: node scripts/check_public_e1.mjs
