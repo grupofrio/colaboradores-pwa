@@ -14,6 +14,7 @@ import { isValidAuthenticatedSession } from './lib/session'
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
 import { readM3Access } from './modules/ejecucion/m3/access'
+import { readM4Access } from './modules/ventas/m4/access'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -33,6 +34,8 @@ const ScreenM1Backlog = lazy(() => import('./modules/torre/m1/ScreenM1Backlog'))
 const ScreenPlaneacionM2 = lazy(() => import('./modules/planeacion/ScreenPlaneacionM2'))
 // KOLD OS · M3 — Ejecución de rutas (observatorio read-only, gate propio M3EjecucionRoute)
 const ScreenEjecucionM3 = lazy(() => import('./modules/ejecucion/ScreenEjecucionM3'))
+// KOLD OS · M4 — Ventas y clientes (observatorio read-only, gate propio M4VentasRoute)
+const ScreenVentasM4 = lazy(() => import('./modules/ventas/ScreenVentasM4'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -256,6 +259,21 @@ function M3EjecucionRoute({ children }) {
 function ScreenEjecucionM3Mount() {
   const { session } = useSession()
   return <ScreenEjecucionM3 session={session} />
+}
+
+// KOLD OS · M4 (Ventas y clientes) — gate fail-closed PROPIO, misma mecánica
+// que M2 y sin reutilizar el de Tower: cada módulo revalida con SU contrato.
+// El route guard es la autoridad FINAL, independiente de lo que decida la nav.
+function M4VentasRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM4Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenVentasM4Mount() {
+  const { session } = useSession()
+  return <ScreenVentasM4 session={session} />
 }
 
 function ProductionOperatorRoute({ children, allowDelivered = false }) {
@@ -637,6 +655,8 @@ export default function App() {
             <Route path="/planeacion" element={<M2PlaneacionRoute><ScreenPlaneacionM2Mount /></M2PlaneacionRoute>} />
             {/* ── KOLD OS · M3 — Ejecución de rutas (read-only) ────────── */}
             <Route path="/ejecucion" element={<M3EjecucionRoute><ScreenEjecucionM3Mount /></M3EjecucionRoute>} />
+            {/* ── KOLD OS · M4 — Ventas y clientes (read-only) ─────────── */}
+            <Route path="/ventas-clientes" element={<M4VentasRoute><ScreenVentasM4Mount /></M4VentasRoute>} />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />

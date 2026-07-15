@@ -194,6 +194,30 @@ export const MODULES = [
     showInNav:  true,
   },
 
+  // ── KOLD OS · M4 — Ventas y clientes (observatorio read-only) ────────────
+  // Evidencia de la operación comercial (maestro de clientes, canal, leads,
+  // pedidos, precio/descuento, recurrencia, portafolio, pérdida/recompra,
+  // señal M4→M2) desde la API autenticada gf_kold_os_m4 (backend CONGELADO
+  // 978994c4 bajo auditoría de Codex; contrato provisional).
+  // accessPolicy 'm4': tarjeta, nav Y clic se deciden con readM4Access
+  // (misma mecánica que M2 — dispatch inline en navModel), NUNCA por roles
+  // genéricos. `roles` queda SOLO como documentación. M4VentasRoute (App.jsx)
+  // revalida como autoridad final de la ruta.
+  {
+    id:     'ventas-clientes',
+    label:  'Ventas y clientes',
+    shortLabel: 'Ventas',
+    route:  '/ventas-clientes',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm4',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 15,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',
