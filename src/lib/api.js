@@ -15,6 +15,10 @@ import {
   filterKoldOsM2Params,
 } from './koldOsM2Route.js'
 import {
+  isKoldOsM3Path,
+  filterKoldOsM3Params,
+} from './koldOsM3Route.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -9319,12 +9323,28 @@ async function directKoldOsM2(method, path) {
   return odooHttp('GET', cleanPath, filterKoldOsM2Params(query))
 }
 
+// ── KOLD OS M3 (gf_kold_os_m3) ── Odoo directo; PROHIBIDO fallback n8n ─────
+async function directKoldOsM3(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM3Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M3 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1 y M2.
+  return odooHttp('GET', cleanPath, filterKoldOsM3Params(query))
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
   const directHandlers = [
     directTower,
     directKoldOsM2,
+    directKoldOsM3,
     directProfile,
     directGerente,
     directAdmin,

@@ -173,6 +173,27 @@ export const MODULES = [
     showInNav:  true,
   },
 
+  // ── KOLD OS · M3 — Ejecución de rutas (observatorio read-only) ────────────
+  // Evidencia incumplimientos de EJECUCIÓN (arranque/paradas/comercial/carga/
+  // incidentes/cierre/plan-vs-real) desde la API autenticada gf_kold_os_m3.
+  // accessPolicy 'm3': misma mecánica que M2 — se resuelve por el registro
+  // ACCESS_POLICY_RESOLVERS de navModel, NUNCA por roles genéricos.
+  // M3EjecucionRoute (App.jsx) revalida como autoridad final.
+  {
+    id:     'ejecucion',
+    label:  'Ejecución de rutas',
+    shortLabel: 'Ejecución',
+    route:  '/ejecucion',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm3',
+    status: 'live',
+    icon:   'ruta',
+    navPriority: 14,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',

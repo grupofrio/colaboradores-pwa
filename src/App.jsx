@@ -13,6 +13,7 @@ import { isValidAuthenticatedSession } from './lib/session'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
+import { readM3Access } from './modules/ejecucion/m3/access'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -30,6 +31,8 @@ const ScreenKoldTowerE1 = lazy(() => import('./modules/torre/e1/ScreenKoldTowerE
 const ScreenM1Backlog = lazy(() => import('./modules/torre/m1/ScreenM1Backlog'))
 // KOLD OS · M2 — Planeación y readiness (observatorio read-only, gate propio M2PlaneacionRoute)
 const ScreenPlaneacionM2 = lazy(() => import('./modules/planeacion/ScreenPlaneacionM2'))
+// KOLD OS · M3 — Ejecución de rutas (observatorio read-only, gate propio M3EjecucionRoute)
+const ScreenEjecucionM3 = lazy(() => import('./modules/ejecucion/ScreenEjecucionM3'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -238,6 +241,21 @@ function M2PlaneacionRoute({ children }) {
 function ScreenPlaneacionM2Mount() {
   const { session } = useSession()
   return <ScreenPlaneacionM2 session={session} />
+}
+
+// KOLD OS · M3 (Ejecución de rutas) — gate fail-closed PROPIO, misma mecánica
+// que M2 y sin reutilizar el de Tower: cada módulo revalida con SU contrato.
+// El route guard es la autoridad FINAL, independiente de lo que decida la nav.
+function M3EjecucionRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM3Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenEjecucionM3Mount() {
+  const { session } = useSession()
+  return <ScreenEjecucionM3 session={session} />
 }
 
 function ProductionOperatorRoute({ children, allowDelivered = false }) {
@@ -617,6 +635,8 @@ export default function App() {
 
             {/* ── KOLD OS · M2 — Planeación y readiness (read-only) ────── */}
             <Route path="/planeacion" element={<M2PlaneacionRoute><ScreenPlaneacionM2Mount /></M2PlaneacionRoute>} />
+            {/* ── KOLD OS · M3 — Ejecución de rutas (read-only) ────────── */}
+            <Route path="/ejecucion" element={<M3EjecucionRoute><ScreenEjecucionM3Mount /></M3EjecucionRoute>} />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />
