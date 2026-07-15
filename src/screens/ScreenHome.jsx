@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
-import { getModulesForRoles } from '../modules/registry'
+import { getHomeModulesForSession } from '../lib/navModel'
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
-import { getEffectiveJobKeys, getModuleEntryDecision, upsertModuleRoleContext } from '../lib/roleContext'
+import { getModuleEntryDecisionForSession, upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
 
 /* ============================================================================
@@ -241,9 +241,10 @@ export default function ScreenHome() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  // Módulos visibles para este rol
+  // Módulos visibles para esta SESIÓN (misma fuente única que la navegación
+  // global: roles x_job_key + towerGated por tower_status autoritativo).
   const modules = useMemo(() =>
-    getModulesForRoles(getEffectiveJobKeys(session)),
+    getHomeModulesForSession(session),
   [session])
 
   const firstName = session?.name?.split(' ')[0] ?? 'Colaborador'
@@ -252,7 +253,7 @@ export default function ScreenHome() {
   const turnoLabel = TURNO_LABELS[session?.turno] ?? ''
 
   function handleModule(mod) {
-    const decision = getModuleEntryDecision(mod, session)
+    const decision = getModuleEntryDecisionForSession(mod, session)
     if (decision.type === 'denied') return
     if (decision.type === 'choose') {
       setRolePromptModule({ module: mod, compatibleRoles: decision.compatibleRoles })
@@ -471,4 +472,3 @@ function Chip({ label, color }) {
     </span>
   )
 }
-

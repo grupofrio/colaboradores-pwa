@@ -175,13 +175,38 @@ export const MODULES = [
     icon:   'admin',
     navPriority: 12,
   },
+
+  // ── KOLD Tower M1 — superficie de supervisión (read-only) ────────────────
+  // towerGated: la visibilidad NO se decide por x_job_key sino por el rol
+  // AUTORITATIVO tower_status (session.employee.tower_status), vía
+  // readAuthoritativeTowerStatus (allowlist dura admin_plataforma/
+  // supervisor_ventas). `roles` queda SOLO como documentación/coherencia; el
+  // gate real de visibilidad es towerGated. TowerRoute sigue siendo la
+  // autoridad final de la ruta. La pantalla muestra feature_disabled si el
+  // flag backend gf_tower.m1.enabled está OFF.
+  {
+    id:     'torre_operativa',
+    label:  'Torre operativa',
+    shortLabel: 'Torre',
+    route:  '/torre/backlog',
+    tone:   'blue',
+    roles:  ['admin_plataforma', 'supervisor_ventas'],
+    towerGated: true,
+    showOnHome: true,   // explícito: tarjeta en el home (autoridad = tower_status)
+    showInNav:  true,   // explícito: entrada en la navegación global
+    status: 'live',
+    icon:   'torres',
+    navPriority: 15,
+  },
 ]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** ¿el módulo es visible para alguno de estos roles? (fail-closed) */
+/** ¿el módulo es visible para alguno de estos roles (x_job_key)? (fail-closed)
+ *  Los módulos `towerGated` NUNCA son visibles por rol: su autoridad es el
+ *  tower_status autoritativo (ver navModel.isModuleVisibleForSession). */
 export function isModuleVisibleForRoles(module, roles = []) {
-  if (!module || !Array.isArray(module.roles)) return false
+  if (!module || module.towerGated || !Array.isArray(module.roles)) return false
   return module.roles.includes('*') || roles.some((role) => module.roles.includes(role))
 }
 
