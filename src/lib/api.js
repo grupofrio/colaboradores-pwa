@@ -11,6 +11,10 @@ import {
   filterTowerM1Params,
 } from './towerM1Route.js'
 import {
+  isKoldOsM2Path,
+  filterKoldOsM2Params,
+} from './koldOsM2Route.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -9299,11 +9303,28 @@ async function directTower(method, path) {
   return odooHttp('GET', TOWER_M1_BACKLOG_PATH, filterTowerM1Params(query))
 }
 
+// ── KOLD OS M2 (gf_kold_os_m2) ── Odoo directo; PROHIBIDO fallback n8n ─────
+async function directKoldOsM2(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM2Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M2 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1: X-GF-Employee-Token vía
+  // buildBaseHeaders, errores como ApiError(status/code), sin retries.
+  return odooHttp('GET', cleanPath, filterKoldOsM2Params(query))
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
   const directHandlers = [
     directTower,
+    directKoldOsM2,
     directProfile,
     directGerente,
     directAdmin,

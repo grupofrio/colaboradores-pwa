@@ -1,9 +1,16 @@
-# M2 — Runbook operativo
+# M2 — Runbook operativo (v2)
 
-## 1. Cómo ejecutar la auditoría read-only (reproducir evidencia)
+## 0. Cadena completa (quién hace qué)
 
-La ejecuta **backend (Sebastián)** vía odoo-shell sobre el módulo `gf_route_compliance`
-(GrupoVeniu/GrupoFrio). Variables (producción):
+1. **Sebastián**: revisa/mergea backend PR GrupoVeniu/GrupoFrio#201 → deploy Odoo.sh
+   (instalar `gf_kold_os_m2` es no-op: flag nace "0").
+2. **Operador autorizado**: corre el auditor read-only y **e ingiere** el run (abajo).
+3. **Yamil (S/N)**: enciende `gf_kold_os.m2.enabled = "1"`.
+4. **Sebastián**: revisa/mergea frontend PR #68 (después de #67 + rebase) → Vercel deploy.
+5. La superficie `/planeacion` muestra datos reales; sin pasos 1-3 muestra
+   UNAVAILABLE/disabled honestos.
+
+## 1. Ejecutar la auditoría read-only (producción)
 
 ```
 KOLD_TOWER_M2_ENVIRONMENT=production
@@ -11,58 +18,60 @@ KOLD_TOWER_M2_PRODUCTION_CONFIRM=AUTHORIZE_KOLD_TOWER_M2_READ_ONLY_PRODUCTION
 KOLD_TOWER_M2_EXPECTED_DATABASE=grupofrio-grupofrio-31972140
 KOLD_TOWER_M2_COMPANY_IDS=1,34,35,36
 KOLD_TOWER_M2_WINDOW_DAYS=90
-KOLD_TOWER_M2_RUN_ID=<token opaco>
-KOLD_TOWER_M2_BUILD_SHA=<sha del auditor>
+KOLD_TOWER_M2_RUN_ID=<token opaco>  KOLD_TOWER_M2_BUILD_SHA=<sha auditor>
+odoo-shell … < gf_route_compliance/tools/audit_kold_tower_m2_readonly.py > run.log
 ```
 
+Guardas automáticas: READ ONLY verificado, write-probe 25006, rollback, timeouts.
+Extraer el JSON de la línea `JSON_SUMMARY=` a `reporte.json`.
+
+## 2. Ingerir el run al observatorio (única escritura; idempotente)
+
 ```
-odoo-shell ... < gf_route_compliance/tools/audit_kold_tower_m2_readonly.py
+KOLD_OS_M2_INGEST_FILE=/ruta/reporte.json \
+KOLD_OS_M2_INGEST_CONFIRM=INGEST_KOLD_OS_M2_RUN \
+odoo-shell … < gf_kold_os_m2/tools/ingest_kold_os_m2_run.py
 ```
 
-Salida: `KOLD_TOWER_M2_AUDIT_STATUS=PASS`, hashes de manifiesto/evidencia y `JSON_SUMMARY=`
-(el run). Guardas automáticas: transacción READ ONLY verificada, write-probe bloqueado, rollback
-confirmado, timeouts. Si algo falla → exit 2 y NO hay evidencia parcial.
+- Sin `KOLD_OS_M2_INGEST_CONFIRM` ⇒ **dry-run con rollback** (verifica sin escribir).
+- Re-ingestar la misma evidencia ⇒ `created=False` (dedupe por `run_id` +
+  `evidence_sha256`; constraints SQL).
+- Solo escribe `gf.kold.os.m2.*` (datastore del observatorio) — jamás tablas operativas.
+- El lifecycle (new/persistent/recurrent) se calcula al ingerir contra la cadena previa.
 
-## 2. Cómo verificar la evidencia
+## 3. Encender/apagar la API
 
-- `manifest_sha256` debe coincidir con el manifiesto del build (propiedad determinista del código).
-- `evidence_sha256` = sha256 del JSON canónico sin campos volátiles (`render_report` lo verifica).
-- Run real de referencia (2026-07-14): manifest `0fb967bd06eb…9204c`, evidencia `317252aac265…0435`,
-  build `fb03840919cf…7be`, 342 ms, 13/13.
+`gf_kold_os.m2.enabled`: `"0"` (default, deploy no-op) → `"1"` SOLO con S/N. Apagar =
+volver a "0" (los endpoints responden 503 feature_disabled al instante).
 
-## 3. Cómo publicar el run a la superficie (v1.1 — NO hecho en este PR)
+## 4. Verificación de evidencia
 
-La PWA lee `GET /m2/kold.tower.m2.run.latest.json` (base allowlisted). Opciones de fuente, ambas
-con su propia autorización:
+- `manifest_sha256` del run debe coincidir con el del build del auditor (propiedad
+  determinista del código; el de producción es `0fb967bd06eb…9204c` @ `fb03840`).
+- `evidence_sha256` = sha256 del JSON canónico sin campos volátiles (render_report lo
+  verifica al emitir; la ingesta lo usa como clave de dedupe).
 
-- **Recomendada**: endpoint autenticado en Odoo (`/pwa-tower/m2-run`, patrón gf_tower_m1: flag OFF
-  por default + token + rol + scope) y un rewrite `/m2/*` → endpoint en `vercel.json`.
-- Alternativa: origen estático **gateado** (nunca `public/` del repo — test de blindaje lo prohíbe).
+## 5. Estados y acción
 
-Mientras no exista fuente publicada: la pantalla muestra **UNAVAILABLE honesto** y el modo
-`?demo=1` permite revisar la superficie con la reconstrucción sanitizada.
-
-## 4. Estados y qué hacer
-
-| Señal | Significado | Acción |
+| Señal en UI | Significado | Acción |
 |---|---|---|
-| AUDITOR: PASS + DATOS: RED/AMBER | M2 funciona; hay incumplimientos | Trabajo operativo por área responsable (ver hallazgo) |
-| AUDITOR: STALE | Run > 7 días | Ejecutar nueva corrida (§1) |
-| AUDITOR: FAIL | Guardas técnicas fallaron | NO usar datos; revisar log del auditor; avisar a Sistemas |
-| AUDITOR: UNAVAILABLE | Sin run publicado / contrato inválido | Publicar run (§3) o revisar validación |
+| AUDITOR: PASS + DATOS: RED/AMBER | M2 funciona; incumplimientos reales | Trabajo operativo por área responsable |
+| ⚠ CORRIDA STALE (edad) | Run > 7 días | Correr §1 + §2 de nuevo |
+| "API apagada (flag)" | feature_disabled | Encender flag (S/N) |
+| "Sin fuente de datos" | backend sin deploy o sin runs | Completar §0 pasos 1-2 |
+| "Versión de contrato no soportada" | backend publicó schema nuevo | Actualizar PWA (coordinar M2_DATA_CONTRACT) |
+| Sesión expirada / sin permiso | auth | Login / revisar matriz de permisos |
 
-## 5. Rollback
+## 6. Rollback
 
-- **Superficie**: revertir el merge del PR de M2 (revert PR) — no hay estado en servidor ni datos
-  persistidos; el módulo es front-only.
-- **Datos**: no aplica — M2 no escribe. La corrida del auditor es READ ONLY con rollback interno
-  confirmado por contrato.
-- **Acceso**: quitar el módulo del registry o vaciar la allowlist de `access.js` (una línea) en un
-  PR de emergencia.
+- **Frontend**: revert del PR #68 (front-only, sin estado servidor).
+- **Backend**: apagar flag (inmediato) → desinstalar módulo si hiciera falta (sus tablas
+  son del observatorio; nada operativo depende de ellas).
+- **Datos ingeridos**: `unlink` de la corrida (cascade a findings) desde shell autorizado.
+- **Datos operativos**: no aplica — M2 jamás los toca.
 
-## 6. Higiene
+## 7. Retención e higiene
 
-- Nunca commitear el JSON del run real al repo (contiene métricas operativas; el fixture ya cubre
-  demo/tests con reconstrucción sanitizada).
-- Nunca poner credenciales en el run ni en la URL — el sanitizador del auditor y el de exportación
-  los rechazan/redactan, pero la política es no acercarlos.
+Sin poda automática v1 (1 run + ~16 findings por corrida ≈ KB); política de retención =
+decisión operativa posterior (el modelo lo soporta con unlink por fecha). Nunca commitear
+el JSON del run real a ningún repo; nunca publicarlo estático (test de blindaje).

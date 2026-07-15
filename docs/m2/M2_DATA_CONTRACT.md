@@ -1,81 +1,81 @@
-# M2 — Contrato de datos
+# M2 — Contrato de datos (v2: API autenticada)
 
-## 1. Contrato v1 vigente: `kold.tower.m2.run/1`
+## 1. Endpoints (backend `gf_kold_os_m2`, GrupoVeniu/GrupoFrio PR #201)
 
-Es **el JSON que ya emite el auditor** (`render_report` → `JSON_SUMMARY`) en
-`gf_route_compliance/tools/kold_tower_m2_audit_core.py` (GrupoVeniu/GrupoFrio, build
-`fb03840919cf5ee9cc9f939d88f0d7f5456187be`). La PWA lo valida con
-`src/modules/planeacion/m2/contract.js` (fail-closed: cualquier desviación ⇒ no se muestra).
+| Endpoint | Auth | Contenido |
+|---|---|---|
+| `GET /pwa-kold-os/m2/latest` | flag + `X-GF-Employee-Token` + acceso M2 | envelope completo (abajo) |
+| `GET /pwa-kold-os/m2/findings` | ídem | hallazgos paginados/filtrables |
 
-### run (metadatos)
-`status` PASS|FAIL · `transaction_read_only` · `write_blocked` · `rollback_confirmed` ·
-`environment` dev|staging|production · `manifest_sha256` · `evidence_sha256` · `run_id_sha256`
-(sha256 del run_id opaco) · `build_sha` (SHA del auditor) · `started_at`/`finished_at` (ISO UTC) ·
-`duration_ms` · `scope { aggregate_all_companies, company_ids[], branch_ids[], window_days }` ·
-`executed_queries[]` · `skipped_queries[{query_id, reason}]` · `findings[]` (del AUDITOR = queries
-omitidas, no hallazgos de negocio) · `production_contract {contract_satisfied, database_match,
-scope_exact}` (obligatorio 3/3 en producción).
+Errores: `503 feature_disabled · 401 missing_token/invalid_session · 403 forbidden ·
+404 no_run_available/run_not_found · 405 (verbos ≠ GET) · 500`. La PWA los mapea a estados
+de UI (m2Api.classifyM2Error) incluyendo `409 → schema_mismatch`.
 
-### metrics (13 queries del manifiesto cerrado)
-`module_status` · `schema_catalog` · `optimizer_configuration` (booleans, jamás valores) ·
-`scope_validation` · `forecast_metrics` · `history_metrics` · `snapshot_metrics` (por estado) ·
-`weekly_plan_metrics` (por estado) · `handoff_metrics` · `branch_resolution_metrics` (por fuente) ·
-`capacity_metrics` · `solver_evidence_metrics` (por status×fuente) ·
-`territory_load_handoff_metrics`.
+## 2. Envelope `kold.os.m2.api/1` (/latest)
 
-Garantías heredadas del auditor: SQL solo-SELECT con manifiesto validado, transacción READ ONLY,
-write-probe (sqlstate 25006), rollback final, claves sensibles prohibidas
-(password/token/…/display_name/employee_name), strings ≤ 512, sin credenciales.
+`ok` · **`schema_version`** (explícito; la UI NUNCA infiere por estructura) ·
+`capabilities { required_query_ids, optional_query_ids, granularities, features
+{history, findings_pagination, branch_dimension:false, entity_detail:false},
+stale_days, findings_max_page_size }` ·
+`run { run_id, status, technical_state, environment, build_sha, manifest_sha256,
+evidence_sha256, started_at, finished_at, duration_ms, scope, executed_queries,
+skipped_queries, transaction_read_only, write_blocked, rollback_confirmed, ingested_at }` ·
+**`stale`** + `age_days` · `metrics` (agregados del auditor, transparencia) ·
+`summary { overall_status, total_rules, rules_pass, rules_warning, rules_fail,
+rules_not_evaluable, total_incidences, unique_records_available:false }` ·
+`rule_results[24]` · `findings[]` (RED/AMBER con lifecycle) · `corrected[]` ·
+`history { runs_count, previous_finished_at, latest_finished_at }` ·
+`applied_scope { level }` · `read_only:true`.
 
-### Reglas de producción (espejadas en la PWA)
-DB exacta `grupofrio-grupofrio-31972140` · companies exactamente `[1,34,35,36]` · branch_ids `[]` ·
-window ≤ 90 · production_contract 3/3.
+### Versionado (B8)
+- Versión soportada → render. **Versión futura → error controlado** (`schema_mismatch`),
+  jamás adivinar. Campos ADICIONALES compatibles se ignoran (test).
+- Queries nuevas del auditor entran por `capabilities.optional_query_ids` sin romper el
+  run (`required_query_ids` = las 13 actuales).
 
-## 2. Estado técnico derivado (PWA)
+### Scope (B9)
+La PWA valida FORMA del scope (ids positivos, ventana 1..366), **no valores fijos**: nuevas
+compañías autorizadas, scope parcial, branch scope y ventana configurable pasan sin tocar
+la UI. El backend valida que el scope servido esté dentro del autorizado del usuario
+(fail-closed); las garantías duras de producción las impone el AUDITOR en origen.
 
-`technicalStateFor(run, now)`: **FAIL** si status≠PASS o guardas false · **STALE** si
-`finished_at` > 7 días (M2_STALE_DAYS) · **UNAVAILABLE** si no hay doc o no valida · **PASS** resto.
+## 3. Item de finding (`/findings` y `findings[]` de /latest)
 
-## 3. Contrato UI derivado: `kold.tower.m2.finding/1`
+`finding_id` (estable: rule+scope+entity/aggregate key) · `rule_code` · `category` ·
+`severity` · `status` · **`granularity`** (`aggregate` v1 — con ids nulos POR CONTRATO;
+la validación rechaza un aggregate con ids: mentir granularidad es error) · `title` ·
+`description` · `company_id/company_name` · `branch_id/code/name` · `entity_type` ·
+`entity_id` · `entity_reference` (sanitizada) · `observed_value` · `expected_rule` ·
+`numerator/denominator/pct` · **`incidences`** (afectaciones de la regla, NO entidades
+únicas) · `first_seen_at` · `last_seen_at` · `occurrence_count` · `lifecycle_status` ·
+`responsible_area` · `owner_status` (`unassigned` — sin dueños inventados) ·
+`recommended_action` · `evidence_reference {query_id, evidence_fields, evidence_sha256,
+manifest_sha256, build_sha}` · `source_model` · `source_timestamp`.
 
-Producido client-side por `deriveFindings.js` + `lifecycle.js` (nunca viaja por red):
+Parámetros de `/findings`: `run_id, company_id, branch_id, category, rule_code, severity,
+lifecycle_status, responsible_area, entity_type, date_from, date_to, search, page,
+page_size(≤100)`. Desconocidos ⇒ `rejected_params`. Respuesta: `total/page/pages/
+page_size/items/applied_scope/applied_filters/rejected_params`.
 
-`finding_id` estable (`rule_code::company:branch::entity`) · `rule_code` · `category` · `severity` ·
-`status` (RED/AMBER) · `title` · `description` · `company_id` (null v1) · `company_scope[]` ·
-`branch_id/branch_code/branch_name` (null v1) · `entity_type` · `entity_id` (null v1) ·
-`entity_reference` · `observed_value` · `expected_rule` · `numerator/denominator/pct` ·
-`first_seen_at` · `last_seen_at` · `occurrence_count` · `lifecycle_status`
-(new/persistent/corrected/recurrent) · `responsible_area` · `responsible_employee_id` (null salvo
-fuente autoritativa) · `owner_status` (unassigned) · `recommended_action` ·
-`evidence_reference {query_id, evidence_fields, evidence_sha256, manifest_sha256, build_sha}` ·
-`source_model` · `source_timestamp` · `drilldown_route` (null v1) · `auto_fix:false`.
+## 4. Contrato de ENTRADA (auditor → ingesta)
 
-## 4. Distribución del run (v1)
+El backend valida el `JSON_SUMMARY` del auditor (`gf_route_compliance` @ `fb03840`)
+fail-closed: guardas técnicas, hashes, manifiesto (13 requeridas cubiertas; extras no
+rompen), claves sensibles prohibidas, `production_contract` 3/3 en producción. Ingesta
+idempotente por `run_id` y `evidence_sha256` (constraints SQL). Ver
+`gf_kold_os_m2/README.md`.
 
-El loader (`loadM2Run.js`) solo consume la base allowlisted **`/m2/kold.tower.m2.run.latest.json`**.
-**HOY NO HAY NADA PUBLICADO AHÍ** ⇒ la superficie muestra UNAVAILABLE honesto. **PROHIBIDO** servir
-el run real como estático en `public/` (fuga de datos operativos sin auth; test de blindaje lo
-verifica). La publicación real requiere una fuente autenticada (ver §5 y M2_RUNBOOK).
+## 5. Extensión v1.1 (lado auditor/Odoo — Sebastián; NO en estos PRs)
 
-## 5. Extensión v1.1 PROPUESTA (lado auditor/Odoo — Sebastián)
+1. Dimensión compañía/sucursal (GROUP BY) → `granularity:'branch'`, scope por sucursal,
+   `branches_affected` y filtros company/branch con datos reales.
+2. Detalle por registro sanitizado y paginable (listas de IDs acotadas) →
+   `granularity:'record'`, "Detalle por registro" y apertura segura en Odoo.
+3. `capabilities.features` ya anuncia ambos en `false`: la PWA los descubre sin romperse.
 
-La salida v1 es solo agregada ⇒ para drill-down real se propone AMPLIAR el contrato read-only
-(sin tocar la operación):
+## 6. Prohibiciones vigentes
 
-1. **Dimensión sucursal**: mismas queries con `GROUP BY company_id, effective_branch_config_id`
-   (+ branch_code catálogo sin PII) ⇒ habilita atribución, scope por sucursal y
-   `branches_affected`.
-2. **Detalle sanitizado y paginable por regla**: para cada regla, lista de entidades afectadas
-   `{entity_id, entity_reference (name técnico p.ej. code del plan, NO partner), company_id,
-   branch_config_id, date}` con límite/página (p.ej. 200/regla por corrida) y las mismas garantías
-   del sanitizador. Habilita `drilldown_route` y "Abrir registro en Odoo"
-   (`/odoo/action-…` read-only por permisos estándar).
-3. **Endpoint autenticado** `GET /pwa-tower/m2-run` (patrón gf_tower_m1: flag OFF + token + rol +
-   scope) o publicación gateada equivalente. Decisión y ejecución = backend (Sebas) con su propio
-   gate; la PWA ya valida el contrato y renderiza los campos nuevos cuando existan.
-4. **Índice de historial** `kold.tower.m2.runs.index.json` (lista de runs con fecha+hashes) para
-   lifecycle multi-corrida sin datastore nuevo. Si se decide un datastore propio del observatorio,
-   va FUERA de tablas operativas Odoo (separación documentada) y con autorización propia.
-
-Nada de §5 se implementa en este PR: la UI ya soporta la parte que le toca (campos opcionales,
-lifecycle multi-run, filtros por sucursal cuando lleguen datos).
+Ningún JSON de M2 servible en `public/` (test de blindaje) · cero persistencia de
+evidencia en el navegador (test) · cero writes desde la PWA (test) · el fixture del
+envelope es **generado por código real** y jamás suplanta la evidencia productiva
+(hash real citado solo como referencia de procedencia; test).

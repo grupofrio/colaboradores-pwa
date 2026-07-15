@@ -1,51 +1,49 @@
-# M2 — Limitaciones conocidas (v1, declaradas)
+# M2 — Limitaciones conocidas (v2, declaradas)
 
-1. **Contrato agregado (la limitación madre).** El auditor v1 emite counts globales del scope
-   (sin GROUP BY compañía/sucursal, sin IDs de registro). Consecuencias directas y honestas en la
-   UI: "Sucursales: agregado global", `branches_affected: null`, `drilldown_route: null`, sin
-   botón "Abrir registro en Odoo". Solución: extensión v1.1 del contrato
-   (M2_DATA_CONTRACT §5) — lado auditor/Odoo, gate propio.
+1. **Contrato agregado (limitación madre, del AUDITOR).** Las 13 queries no traen
+   dimensión compañía/sucursal ni IDs de registro ⇒ `granularity:'aggregate'` con
+   company/branch/entity **null por contrato** (la validación rechaza un aggregate con
+   ids). Consecuencias honestas: "agregado del scope", sin "Detalle por registro", sin
+   apertura en Odoo, filtros company/branch aceptados pero sin efecto hasta v1.1.
+   Solución = extensión v1.1 del auditor (M2_DATA_CONTRACT §5), gate propio de Sebastián.
 
-2. **Sin fuente publicada del run.** La base `/m2` no tiene nada desplegado (deliberado: publicar
-   el run real como estático sin auth sería fuga de datos). Default = UNAVAILABLE honesto;
-   revisión visual vía `?demo=1` (reconstrucción sanitizada). Publicación real = runbook §3 con
-   autorización propia.
+2. **La cadena de despliegue no está corrida.** PR #201 sin merge/deploy, flag OFF, cero
+   runs ingeridos ⇒ producción mostraría hoy "Sin fuente de datos" (honesto). Los datos
+   reales aparecen tras runbook §0 (deploy → ingesta → flag S/N). La UI jamás finge.
 
-3. **Fixture = reconstrucción, no evidencia.** Reproduce exactamente los agregados REPORTADOS del
-   run real; los desgloses internos (por estado/fuente) son reconstruidos y así se declara en
-   `M2_FIXTURE_PROVENANCE` (con test que impide suplantar el hash de evidencia real).
+3. **Historial arranca en 1 corrida.** Persistencia/reincidencia/corregidos/tendencias
+   aparecen con la 2ª ingesta real; la UI lo dice y no muestra conteos sintéticos.
 
-4. **Historial de 1 corrida.** Lifecycle real (persistente/corregido/reincidente) y tendencias por
-   bloque aparecen a partir de la 2ª corrida publicada. El motor ya lo soporta (testeado con
-   historias sintéticas); falta el índice de corridas (v1.1 §5.4).
+4. **3 reglas NOT_EVALUABLE** (territorio inválido/inactivo, vehículo inactivo/fuera de
+   compañía): sin dato en el contrato v1; gris con razón explícita.
 
-5. **3 reglas NOT_EVALUABLE** (territorio inválido/inactivo, vehículo inactivo/fuera de compañía):
-   el contrato v1 no trae esos datos. Se muestran en gris con razón explícita — no se inventan.
+5. **Umbrales v1 por ratificar** (salvo 90/70 heredado de RI D-A). Cambiarlos = editar el
+   catálogo del BACKEND (una fuente), jamás la UI.
 
-6. **Umbrales v1 por ratificar.** 90/70 cobertura viene de la decisión D-A (RI); el resto
-   (confianza 0.85/0.70, actual_kg 80/50, final 95/80, 7d solver, 3d snapshot) son defaults
-   declarados pendientes de ratificación por dirección/planeación.
+6. **"Incidencias detectadas" ≠ entidades únicas** — declarado en KPI, tooltip, resumen y
+   contrato (`unique_records_available:false`). Dedupe real requiere IDs (v1.1).
 
-7. **Asimetría tarjeta/ruta para admin_plataforma puro.** La tarjeta es visible por x_job_key
-   (`direccion_general`); un `admin_plataforma` sin ese x_job_key entra por URL pero no ve tarjeta.
-   Unificación session-aware = después de que #67 (que introduce esa mecánica) esté en main.
+7. **Roles "planeación/operativos" sin fuente autoritativa** ⇒ sin acceso y sin dueños
+   nominales (`owner_status: unassigned`). Alta = S/N + una línea en ambas allowlists.
 
-8. **"Responsables de planeación/operativos" sin fuente autoritativa de rol** ⇒ no tienen acceso
-   ni aparecen como dueños nominales (`owner_status=unassigned`). Alta de roles = decisión S/N.
+8. **SLA no documentado** ⇒ no se muestra; se muestra antigüedad (first/last_seen).
 
-9. **SLA no mostrado**: no existe SLA documentado por área; se muestra antigüedad
-   (first_seen/last_seen) y quedará el hueco listo cuando se documente.
+9. **Sin notificaciones/tareas** (fuera de alcance v1; cualquier automatización = fase
+   aparte con gates).
 
-10. **Sin notificaciones/tareas** (explícitamente fuera de alcance v1): M2 no envía nada ni crea
-    actividades. Cualquier automatización futura = fase aparte con gates.
+10. **Timeout/abort del cliente**: el mecanismo canónico `api()` no acepta AbortSignal;
+    M2 usa timeout duro (30 s) + descarte de resultados tardíos al desmontar (mismo
+    patrón validado de Tower M1). Un AbortController de verdad exigiría tocar `api()`
+    global (fuera de alcance de este PR).
 
 ## Riesgos
 
-- **Conflicto trivial esperado en `registry.js` al convivir con #67** (ambos agregan un módulo).
-  Mitigado: secciones no adyacentes; resolución = conservar ambas entradas. Regla de orden:
-  **este PR se mergea DESPUÉS de #67**.
-- **Deriva del contrato del auditor**: si Sebas cambia el shape del run, la PWA lo rechaza
-  fail-closed (UNAVAILABLE) — comportamiento correcto pero visible; coordinar versiones vía
-  `M2_DATA_CONTRACT` y el manifest_sha256.
-- **Lectura del demo como dato vivo**: mitigado con banner DEMO permanente + procedencia + hash
-  sintético distinto del real.
+- **Rebase pendiente sobre main post-#67** (orden obligatorio): tocamos los mismos puntos
+  session-aware que #67 (navModel/roleContext-o-navModel/ScreenHome/registry) con los
+  MISMOS nombres de función a propósito — la resolución esperada es unión mecánica
+  (tower + m2 en las mismas funciones; `getModuleEntryDecisionForSession` queda en un
+  solo módulo y se reexporta). Plan detallado en el body del PR (Track F).
+- **Deriva de contrato backend↔frontend**: mitigada con `schema_version` + capabilities +
+  el fixture generado por el core real del backend como contract test compartido.
+- **Doble catálogo eliminado**: el catálogo vive SOLO en el backend; la UI presenta lo
+  que recibe (una fuente de verdad).

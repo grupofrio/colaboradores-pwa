@@ -1,12 +1,15 @@
-// ─── KOLD OS · M2 — Filtros y paginación del drill-down (puros) ──────────────
+// ─── KOLD OS · M2 — Filtros locales del drill-down (puros) ───────────────────
+// MISMA semántica de parámetros que GET /pwa-kold-os/m2/findings (backend
+// gf_kold_os_m2). En producción el filtrado/paginado es SERVER-SIDE; este
+// módulo se usa para el modo demo (fixture) y como referencia del contrato.
 
 export const M2_DEFAULT_FILTERS = Object.freeze({
-  category: 'all',
-  severity: 'all',
-  status: 'all',
-  lifecycle: 'all',
-  entity_type: 'all',
-  responsible_area: 'all',
+  category: '',
+  severity: '',
+  status: '',
+  lifecycle_status: '',
+  entity_type: '',
+  responsible_area: '',
   search: '',
   date_from: '',
   date_to: '',
@@ -29,18 +32,18 @@ const matchesDate = (value, from, to) => {
   return true
 }
 
-/** Aplica los filtros del drill-down sobre hallazgos (fail-safe: lista vacía). */
+/** Aplica los filtros del contrato sobre items de findings (fail-safe). */
 export function applyFindingFilters(findings = [], filters = M2_DEFAULT_FILTERS) {
   const f = { ...M2_DEFAULT_FILTERS, ...(filters || {}) }
   const search = String(f.search || '').trim().toLowerCase()
   return (Array.isArray(findings) ? findings : []).filter((finding) => {
     if (!finding) return false
-    if (f.category !== 'all' && finding.category !== f.category) return false
-    if (f.severity !== 'all' && finding.severity !== f.severity) return false
-    if (f.status !== 'all' && finding.status !== f.status) return false
-    if (f.lifecycle !== 'all' && finding.lifecycle_status !== f.lifecycle) return false
-    if (f.entity_type !== 'all' && finding.entity_type !== f.entity_type) return false
-    if (f.responsible_area !== 'all' && finding.responsible_area !== f.responsible_area) return false
+    if (f.category && finding.category !== f.category) return false
+    if (f.severity && finding.severity !== f.severity) return false
+    if (f.status && finding.status !== f.status) return false
+    if (f.lifecycle_status && finding.lifecycle_status !== f.lifecycle_status) return false
+    if (f.entity_type && finding.entity_type !== f.entity_type) return false
+    if (f.responsible_area && finding.responsible_area !== f.responsible_area) return false
     if (!matchesDate(finding.last_seen_at, f.date_from, f.date_to)) return false
     if (search) {
       const haystack = [
@@ -53,7 +56,7 @@ export function applyFindingFilters(findings = [], filters = M2_DEFAULT_FILTERS)
   })
 }
 
-/** Paginación defensiva: page se ajusta al rango válido. */
+/** Paginación defensiva (espejo del backend: clamps + total). */
 export function paginate(items = [], page = 1, pageSize = M2_PAGE_SIZE) {
   const list = Array.isArray(items) ? items : []
   const size = Number.isInteger(pageSize) && pageSize > 0 ? pageSize : M2_PAGE_SIZE

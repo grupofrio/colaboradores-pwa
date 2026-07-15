@@ -1,7 +1,9 @@
 # M2 — Catálogo canónico de reglas (v1)
 
-Versión: `kold.tower.m2.rules/1` · fuente ejecutable: `src/modules/planeacion/m2/ruleCatalog.js`
-(el código es la verdad; este doc explica). **auto_fix = false en todas** (verificado por test).
+Versión: `kold.tower.m2.rules/1` · **fuente ejecutable CANÓNICA: el backend**
+`gf_kold_os_m2/lib/kold_os_m2_core.py` (GrupoVeniu/GrupoFrio PR #201) — el frontend ya NO
+deriva reglas: recibe `rule_results`/`findings` por la API (una sola fuente de verdad).
+**auto_fix = false en todas** (verificado por test en ambos lados).
 
 ## Resultado del run real 2026-07-14 (producción, 484 planes / 90 días)
 
@@ -32,7 +34,7 @@ Versión: `kold.tower.m2.rules/1` · fuente ejecutable: `src/modules/planeacion/
 | M2-F-02 | Forecast sin marcar final | 41 372/42 372 = 97.64% | 🟢 |
 | M2-F-03 | Días sin forecast en la ventana | 92 días ≥ ventana 90 | 🟢 |
 
-**Totales**: 24 reglas · 21 evaluables · 12 🔴 · 4 🟠 · 5 🟢 · 3 ⚪.
+**Totales**: 24 reglas · 21 evaluables · 13 🔴 · 3 🟠 · 5 🟢 · 3 ⚪.
 
 ## Estructura de cada regla
 

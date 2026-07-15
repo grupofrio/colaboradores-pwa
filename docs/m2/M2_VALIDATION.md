@@ -1,61 +1,68 @@
-# M2 — Validación (evidencia de esta entrega)
+# M2 — Validación (evidencia de la entrega v2)
 
-Fecha: 2026-07-14 · rama `feat/kold-os-m2-planning-readiness` (desde main `3ed6fb8`).
+Fecha: 2026-07-14 · frontend `feat/kold-os-m2-planning-readiness` (PR #68, base main
+`3ed6fb8`) · backend `feat/kold-os-m2-observability-api` (GrupoVeniu/GrupoFrio PR #201,
+base `GrupoFrio` @ `fb03840`).
 
-## 1. Gates locales
+## 1. Gates
 
-| Gate | Resultado |
-|---|---|
-| `npm test` | **591/591 PASS** (main tenía 524; +67 tests M2 en 5 archivos) |
-| `npm run lint` | 0 errores / 0 warnings (max-warnings 0) |
-| `npm run build` | OK (vite; chunk M2 lazy separado) |
-| `node scripts/check_public_e1.mjs` | OK (blindaje E1 intacto) |
-| Blindaje M2 | test `m2Surface`: `public/` sin `kold.tower.m2.*.json` |
+| Gate | Frontend | Backend |
+|---|---|---|
+| Tests | **593/593** (node:test; 5 suites m2: contrato/api/acceso-filtros-export/superficie + resto de la app) | **30/30 puros locales** (`python gf_kold_os_m2/tests/test_kold_os_m2_core.py`) + TransactionCase para Odoo.sh CI (compilados: `py_compile` OK) |
+| Lint | 0 warnings (max-warnings 0) | n/a (estilo espejo de gf_tower_m1/gf_route_compliance) |
+| Build | vite OK (chunk M2 lazy) | n/a |
+| Blindajes | check_public_e1 OK · public/ sin JSON m2 (test) | manifiesto SQL del auditor intacto (no se toca) |
+| CI/Preview | GitHub Actions build + Vercel Preview del PR | Odoo.sh CI al abrir en revisión (Sebas) |
 
-## 2. Contratos validados contra el auditor real
+## 2. Cadena de contrato validada con CÓDIGO REAL (Track C)
 
-- El validador (`contract.js`) se escribió leyendo el **código fuente del auditor** en el build
-  mergeado `fb03840919cf…` (GrupoVeniu/GrupoFrio): 13 query_ids exactos, shape de filas por
-  `allowed_result_keys`, claves sensibles prohibidas (espejo del regex del auditor), reglas de
-  producción (DB/companies/branch/window/production_contract 3/3).
-- El run real de producción 2026-07-14 (13/13, 342 ms, exit 0, contrato 3/3) **prueba el contrato
-  en runtime**; NO se consultó producción desde esta sesión (mínimo privilegio — la evidencia del
-  auditor basta para validar el contrato v1).
+1. `contract_fixture_report.json` = salida del **core real del auditor**
+   (`kold_tower_m2_audit_core` @ `fb03840`) ejecutado offline con cursor scriptado que
+   devuelve los agregados REPORTADOS del run de producción 2026-07-14.
+   **Prueba independiente:** su `manifest_sha256` = `0fb967bd06eb…9204c`, idéntico al
+   reportado en producción (el manifiesto es propiedad determinista del código).
+2. `apiLatestFixture.js` = ese reporte pasado por el **core real del backend**
+   (`kold_os_m2_core.py`: derivación, lifecycle, capabilities, sanitización).
+3. El frontend valida ese envelope con su contrato (`validateM2Latest`) y los tests
+   asertan las cifras exactas — **contract test punta a punta contra output real
+   sanitizado**, sin reconstrucción manual.
+4. El fixture declara procedencia y NUNCA porta el `evidence_sha256` productivo (test).
 
-## 3. Cifras reales reproducidas por el fixture (tests `REPORTADO:`)
+No se consultó producción desde esta sesión (mínimo privilegio): el contrato quedó probado
+por el run real del auditor + la cadena de código real anterior.
 
-293/484 = 60.54% · 424/484 = 87.60% · 144/484 = 29.75% · 133/484 = 27.48% · 30 sobrecapacidad ·
-37/39 = 94.87% · 46 sin snapshot · 21 sin stops · 48 sin almacén · 10 sin snapshot semanal ·
-29 sobrecapacidad semanal · cobertura 56.82% · confianza 0.6667 · 2 202 fallback · 192 warnings ·
-7 026/42 421 = 16.56% · 42 372 forecasts / 92 días / 41 372 finales — **cada una con assert exacto**.
+## 3. Cifras reales asertadas (ambos lados)
 
-## 4. Cobertura de tests (67 asserts nuevos, 5 archivos)
+293/484=60.54% · 424/484=87.60% · 144/484=29.75% · 133/484=27.48% · 30 · 29 · 37/39=94.87%
+· 46 · 21 · 48 · 10 · 56.82% · 0.6667 · 2 202 · 192 · 7 026/42 421=16.56% · 42 372/92 días
+/ 41 372 finales · **summary: 13 RED · 3 AMBER · 3 NOT_EVALUABLE · 39 004 incidencias ·
+unique_records_available=false**.
 
-- `m2Contract` — contrato: fixture válido; rechazos (status, guardas, hashes, queries desconocidas/
-  duplicadas/incompletas, claves sensibles, no-escalares, scope, producción 3/3); técnico
-  PASS/FAIL/STALE/UNAVAILABLE.
-- `m2Rules` — catálogo íntegro (códigos únicos, 6 categorías, auto_fix=false); safePct div-cero/
-  nulls; TODAS las cifras reportadas; NOT_EVALUABLE honesto (manual, div-cero, métrica ausente);
-  summary técnico-vs-operativo (PASS + RED); bloques; findings sin dueño inventado; determinismo.
-- `m2Lifecycle` — id estable; matriz new/persistent/corrected/recurrent; orden de corridas
-  irrelevante; entradas corruptas fail-safe; integración fixture.
-- `m2AccessFilters` — matriz de acceso completa (incluye forjados y strict-case); scope sin fuga;
-  filtros (7 dimensiones + fechas + búsqueda); paginación con clamps; CSV/JSON/resumen;
-  sanitización de exportación (claves sensibles drop + credenciales [REDACTED]).
-- `m2Surface` — registry/tarjeta/nav por rol; `/planeacion` no nav-hidden; guard M2PlaneacionRoute
-  (text-scan del cableado real); Tower intacto; loader allowlist + 404/corrupto/roto/ok; read-only
-  duro (sin POST/PUT/PATCH/DELETE/execute_kw/setItem en todo el módulo); sin botones de escritura;
-  estados honestos en la pantalla; blindaje public/; procedencia del fixture (no suplanta el hash
-  real); ScreenHome intacto (cero solape con #67).
+## 4. Hallazgos Codex v1 → estado v2
 
-## 5. Validación visual (Preview)
+| # | Hallazgo | Estado |
+|---|---|---|
+| 1-4 | sin fuente productiva/endpoint | ✅ backend PR #201 (API autenticada GET) |
+| 2-3 | UNAVAILABLE/dep. demo | ✅ estados honestos + demo gateado DEV/Preview |
+| 5 | sin historial | ✅ datastore observatorio + ingesta idempotente |
+| 6 | sin detalle por dimensión | ✅ contrato granularity + capabilities (datos = v1.1 auditor, declarado) |
+| 7 | permisos tarjeta≠ruta | ✅ accessPolicy 'm2' + una autoridad (5 casos test) |
+| 8 | "registros" engañoso | ✅ "Incidencias detectadas" + unique_records_available:false + test 5-reglas-1-plan |
+| 9 | "drill-down" agregado | ✅ "Detalle de regla" + badges AGREGADO/SUCURSAL/REGISTRO |
+| 10 | lifecycle sintético | ✅ backend real al ingerir; UI gatea con ≥2 corridas |
+| 11 | CSV injection | ✅ neutralización `'` pre-escape + suite (=,+,-,@,tab,CRLF,comillas,unicode) |
+| 12 | demo en bundle prod | ✅ isM2DemoAllowed (DEV/VITE_ENABLE_M2_DEMO) + test prod-niega |
+| 13 | contrato rígido/sin versión | ✅ schema_version explícito + futura controlada + capabilities + scope flexible |
+| 14 | rebase tras #67 | ⏳ pendiente por ORDEN (no se rebasa sobre rama no mergeada); plan en Track F |
 
-- Ruta `/planeacion` detrás del guard (sin sesión → /login).
-- `?demo=1` muestra la superficie completa con la reconstrucción: banner DEMO + AUDITOR: PASS +
-  DATOS: RED + 6 bloques + drill-down + detalle + exports.
-- Sin fuente publicada (default): estado UNAVAILABLE honesto con instrucciones.
+## 5. Smoke local (dev server, sesiones sintéticas locales)
 
-## 6. Pendiente de validación humana (post-merge, tras #67)
+Guard sin sesión → /login · gerente → rebote a home sin tarjeta · dirección → tarjeta
+"Planeación" + `/planeacion` en estado honesto (sin backend: unavailable/error de red) ·
+`?demo=1` (DEV) → superficie completa con el envelope real-code + banner DEMO · consola
+sin errores. Ver bitácora del PR.
 
-Login real de dirección en Preview/producción: tarjeta "Planeación" visible, módulos de otros
-roles sin cambios, gerente/supervisor NO ven la tarjeta y URL directa los regresa al home.
+## 6. Pendiente de validación humana
+
+Sebastián: revisión de ambos PRs + CI Odoo.sh del backend. Post-deploy: smoke autenticado
+real (dirección) contra `/pwa-kold-os/m2/latest` con flag ON y un run ingerido.

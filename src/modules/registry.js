@@ -152,9 +152,12 @@ export const MODULES = [
 
   // ── KOLD OS · M2 — Planeación y readiness (observatorio read-only) ───────
   // Evidencia incumplimientos de planeación (territorio/solver/capacidad/
-  // carga/snapshots/resultado real) desde el auditor gf_route_compliance.
-  // La tarjeta es visible por x_job_key; la RUTA la gobierna M2PlaneacionRoute
-  // (direccion_general o tower_status admin_plataforma), fail-closed.
+  // carga/snapshots/resultado real) desde la API autenticada gf_kold_os_m2.
+  // accessPolicy 'm2': tarjeta, nav Y clic se deciden con readM2Access
+  // (direccion_general x_job_key o admin_plataforma tower_status — misma
+  // verdad, ver access.js), NUNCA por roles genéricos. `roles` queda SOLO
+  // como documentación; isModuleVisibleForRoles excluye módulos con política.
+  // M2PlaneacionRoute (App.jsx) revalida como autoridad final de la ruta.
   {
     id:     'planeacion',
     label:  'Planeación',
@@ -162,6 +165,7 @@ export const MODULES = [
     route:  '/planeacion',
     tone:   'steel',
     roles:  ['direccion_general'],
+    accessPolicy: 'm2',
     status: 'live',
     icon:   'supervision',
     navPriority: 13,
@@ -222,10 +226,10 @@ export const MODULES = [
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** ¿el módulo es visible para alguno de estos roles (x_job_key)? (fail-closed)
- *  Los módulos `towerGated` NUNCA son visibles por rol: su autoridad es el
- *  tower_status autoritativo (ver navModel.isModuleVisibleForSession). */
+ *  Los módulos `towerGated` o con `accessPolicy` NUNCA son visibles por rol
+ *  genérico: su autoridad vive en navModel.isModuleVisibleForSession. */
 export function isModuleVisibleForRoles(module, roles = []) {
-  if (!module || module.towerGated || !Array.isArray(module.roles)) return false
+  if (!module || module.towerGated || module.accessPolicy || !Array.isArray(module.roles)) return false
   return module.roles.includes('*') || roles.some((role) => module.roles.includes(role))
 }
 

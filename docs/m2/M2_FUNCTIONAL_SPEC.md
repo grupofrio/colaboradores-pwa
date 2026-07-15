@@ -1,95 +1,93 @@
-# M2 — Especificación funcional · "Planeación y readiness"
+# M2 — Especificación funcional · "Planeación y readiness" (v2)
 
-**KOLD OS · módulo Enterprise M2 (Demanda / planeación / optimización) · superficie v1 · 2026-07-14**
+**KOLD OS · módulo Enterprise M2 (Demanda / planeación / optimización) · 2026-07-14.**
+v2 responde al veredicto **RED de Codex** sobre la v1: ahora la superficie consume una
+**fuente autenticada REAL** (backend `gf_kold_os_m2`, GrupoVeniu/GrupoFrio **PR #201**) y el
+demo queda fuera de producción.
 
 ## 1. Propósito
 
-M2 **evidencia lo que no se está haciendo** en la planeación de rutas. No corrige datos, no "pone
-indicadores en verde", no ejecuta acciones. Responde:
+M2 **evidencia lo que no se está haciendo** en la planeación de rutas. No corrige datos, no
+"pone indicadores en verde", no ejecuta acciones (`auto_fix=false` en el 100% del catálogo,
+verificado por tests en ambos lados). Responde: qué regla se incumple, cuántas incidencias,
+en qué scope, desde cuándo, si persiste/corrigió/reincide, con qué evidencia y qué área
+debe atenderlo.
 
-1. **Qué** está mal (regla incumplida del catálogo canónico).
-2. **Cuántos** registros afecta (numerador/denominador/porcentaje).
-3. **Dónde** (compañías del scope; sucursal = extensión v1.1, ver §7).
-4. **Qué registros** (agregado v1; detalle por registro = extensión v1.1).
-5. **Desde cuándo** (first_seen_at por historial de corridas).
-6. **Evolución** (new / persistent / corrected / recurrent).
-7. **Qué regla** no se cumplió (código M2-X-NN + expectativa declarada).
-8. **Qué evidencia** lo respalda (query_id, campos, hashes del run).
-9. **Qué área** debe atenderlo (mapa explícito de responsabilidad, sin nombres inventados).
-10. **Si se corrigió** después (lifecycle corrected en corridas posteriores).
-
-## 2. Qué NO hace M2 (por contrato)
-
-No asigna territorios · no ejecuta el solver · no asigna vehículos · no completa capacidades ·
-no genera carga · no crea snapshots · no inventa actual_kg · no corrige datos · no actualiza planes ·
-no cierra hallazgos · no modifica producción. **auto_fix = false en el 100% del catálogo** y hay
-tests que verifican la ausencia de verbos de escritura y de botones de acción.
-
-## 3. Fuente de datos
-
-El **auditor read-only** `gf_route_compliance/tools/kold_tower_m2_audit_core.py` (repo
-GrupoVeniu/GrupoFrio, build `fb03840919cf…`): 13 consultas SQL en manifiesto cerrado, transacción
-`READ ONLY`, write-probe bloqueado, rollback confirmado, sanitizador de evidencia (sin PII, sin
-credenciales, solo agregados). El run de producción 2026-07-14: DB `grupofrio-grupofrio-31972140`,
-compañías 1/34/35/36, ventana 90 días, 342 ms, 13/13, exit 0, contrato producción 3/3.
-
-## 4. Arquitectura de la superficie (colaboradores-pwa)
+## 2. Arquitectura (dos repos, una sola verdad)
 
 ```
-src/modules/planeacion/
-├── ScreenPlaneacionM2.jsx      pantalla (ejecutiva + drill-down + export)
-└── m2/
-    ├── contract.js             validación estricta del run (fail-closed) + estado técnico
-    ├── ruleCatalog.js          catálogo canónico de reglas (6 categorías)
-    ├── deriveFindings.js       motor: métricas → resultados/bloques/hallazgos
-    ├── lifecycle.js            finding_id estable + new/persistent/corrected/recurrent
-    ├── filters.js              filtros + paginación (puros)
-    ├── exporters.js            CSV/JSON/resumen + sanitización defensa-en-profundidad
-    ├── access.js               contrato de acceso fail-closed
-    ├── loadM2Run.js            loader con base allowlisted /m2
-    └── fixtures/realRun20260714.js  reconstrucción sanitizada del run real
+GrupoVeniu/GrupoFrio (backend, PR #201)
+└── gf_kold_os_m2/
+    ├── lib/kold_os_m2_core.py     core PURO: contrato del auditor, catálogo
+    │                              CANÓNICO de 24 reglas, derivación, lifecycle,
+    │                              filtros, paginación, envelopes, sanitizador
+    ├── models/                    datastore del observatorio (runs+findings)
+    │                              + servicio fail-closed (flag→token→acceso)
+    ├── controllers/               GET /pwa-kold-os/m2/latest · /findings
+    └── tools/ingest_…py           ingesta manual idempotente (odoo-shell)
+
+grupofrio/colaboradores-pwa (frontend, PR #68)
+└── src/modules/planeacion/
+    ├── ScreenPlaneacionM2.jsx     ejecutiva + detalle de regla + export
+    └── m2/ contract.js (envelope kold.os.m2.api/1) · m2Api.js (cliente
+        canónico api(): timeout/errores/límite de tamaño/sin persistencia) ·
+        access.js (readM2Access) · demoGate.js (demo SOLO DEV/Preview) ·
+        exporters.js (CSV anti-inyección + STALE) · filters.js (demo) ·
+        m2Meta.js (labels) · fixtures/apiLatestFixture.js (generado por
+        CÓDIGO REAL: auditor @fb03840 + core backend)
 ```
 
-Todo el cómputo es **client-side, puro y determinista** sobre el run validado. La ruta `/planeacion`
-vive detrás de `M2PlaneacionRoute` (App.jsx) y el módulo `planeacion` está en el registry canónico
-(tarjeta + nav global). Cero endpoints nuevos, cero writes, cero cambios de backend.
+**El catálogo de reglas y el lifecycle son autoridad del BACKEND**; la PWA valida el
+contrato y presenta. El frontend ya no deriva reglas en producción (la v1 lo hacía
+client-side — eliminado).
 
-## 5. Estados honestos (separación dura)
+## 3. Fuente de datos y flujo
 
-| Plano | Estados | Significado |
-|---|---|---|
-| **Técnico (auditor)** | PASS / FAIL / STALE / UNAVAILABLE | ¿el run existe, validó su contrato y es reciente? |
-| **Operativo (datos)** | GREEN / AMBER / RED / NOT_EVALUABLE | ¿los datos de planeación cumplen las reglas? |
+1. El **auditor read-only** (`gf_route_compliance`, build `fb03840`, 13 queries en
+   manifiesto cerrado, transacción READ ONLY + write-probe + rollback) corre en producción
+   y emite su JSON (run real 2026-07-14: 342 ms, 13/13, contrato producción 3/3).
+2. Un operador autorizado **ingiere** ese JSON al datastore del observatorio
+   (idempotente por `run_id`/`evidence_sha256`; jamás tablas operativas).
+3. La PWA consulta `GET /pwa-kold-os/m2/latest` y `GET /pwa-kold-os/m2/findings`
+   (paginado server-side) vía el mecanismo canónico `api()` con
+   `X-GF-Employee-Token` — **cero archivos públicos** (test de blindaje).
 
-Estado actual real: **auditor PASS · datos RED** (incumplimientos masivos). La UI lo comunica
-explícitamente: *"M2 está funcionando y detectó incumplimientos"*. Un AMBER/RED de datos **no**
-bloquea el módulo. NOT_EVALUABLE (gris) jamás se disfraza de 0%.
+## 4. Estados honestos
 
-## 6. Vista ejecutiva y drill-down
+| Plano | Estados |
+|---|---|
+| Técnico (auditor) | PASS / FAIL / **STALE** (>7 días, warning prominente + edad + exports marcados) / UNAVAILABLE |
+| Fuente (cliente) | disabled (flag OFF) · unavailable (sin deploy/run) · session_expired · forbidden · schema_mismatch · invalid · error |
+| Operativo (datos) | GREEN / AMBER / RED / NOT_EVALUABLE |
 
-- **Encabezado**: título, corte, ventana, compañías, duración, 13/13, badges READ-ONLY + técnico +
-  operativo, hashes truncados (run/manifest/evidencia/build).
-- **KPIs**: planes evaluados, reglas evaluadas, rojos, ámbar, registros afectados, compañías,
-  persistentes, corregidos.
-- **6 bloques**: Territorio · Solver · Vehículo y capacidad · Carga y handoff · Snapshots y forecast ·
-  Resultado real — cada uno con conteo, %, semáforo, reglas, tendencia (a partir de la 2ª corrida)
-  y acceso al drill-down.
-- **Drill-down**: tabla paginada (10/pág.) con filtros por categoría, severidad, estado, ciclo de
-  vida, entidad, área responsable, rango de fechas y búsqueda. Cada fila abre el detalle: regla,
-  observado vs esperado, historial, evidencia, IDs técnicos, fuente, acción sugerida, "Copiar
-  referencia". Sin botones de escritura; "Abrir en Odoo" queda para v1.1 (requiere entity_id).
-- **Export**: CSV de hallazgos, JSON de evidencia, resumen ejecutivo imprimible (§M2_VALIDATION).
+Estado real hoy: **auditor PASS · datos RED** (13 rojas · 3 ámbar · 5 verdes · 3 no
+evaluables). La UI lo dice literal: *"M2 está funcionando y detectó incumplimientos"*.
 
-## 7. Limitación estructural v1 (declarada, no ocultada)
+## 5. Semántica (correcciones Codex)
 
-El contrato del auditor es **agregado** (counts por estado/fuente, sin GROUP BY compañía ni
-sucursal y sin IDs de registro). Por eso en v1: atribución por sucursal = "agregado global",
-drill-down a registros = no disponible, y los niveles de acceso por sucursal existen en el contrato
-pero no se emiten. La **extensión v1.1** del contrato (detalle sanitizado y paginable) está
-especificada en `M2_DATA_CONTRACT.md §5` y es del lado del auditor (Odoo/Sebastián).
+- KPI = **"Incidencias detectadas"** (no "registros afectados"): afectaciones acumuladas
+  por regla; una misma entidad puede violar varias reglas. `unique_records_available:false`
+  en el contrato; "registros únicos" exigirá IDs deduplicables (v1.1).
+- El detalle se llama **"Detalle de regla"** con badge de granularidad
+  (**AGREGADO** / SUCURSAL / REGISTRO). "Detalle por registro" solo cuando exista
+  `entity_id`; sin URL segura no hay enlace a Odoo.
+- **Lifecycle real**: `new/persistent/recurrent` los calcula el backend al ingerir contra
+  la cadena previa; `corrected` al servir. La UI solo muestra
+  persistencia/reincidencia/corregidos/tendencias con **≥ 2 corridas reales**; con 1
+  corrida: "new" + "sin historial" (nada sintético).
+- **Demo** (`?demo=1`): SOLO con `import.meta.env.DEV` o `VITE_ENABLE_M2_DEMO==='true'`
+  (Preview autorizado). Producción lo ignora (gate de código, no enlace oculto; con test).
+  Exports de demo marcados `_DEMO` en el nombre.
 
-## 8. Orden de liberación
+## 6. Permisos (B3: una sola autoridad)
 
-**MERGEAR DESPUÉS DE PR #67.** Dependencia de ORDEN, no técnica: M2 se construyó sobre main
-(post-#66) y no toca los archivos de la tarjeta Tower salvo `registry.js` (entrada nueva en sección
-propia, no adyacente — merge limpio esperado en ambos órdenes).
+`readM2Access(session)` decide **tarjeta, nav móvil, Más, rail, clic y ruta** (módulo con
+`accessPolicy:'m2'` en el registry + `isModuleVisibleForSession` /
+`getModuleEntryDecisionForSession` + guard `M2PlaneacionRoute`). El backend aplica el mismo
+contrato conceptual (`_access_for`). Ver M2_PERMISSIONS.md.
+
+## 7. Orden de liberación
+
+**1) PR #67 (Tower) → 2) PR backend GrupoVeniu/GrupoFrio#201 → 3) rebase de #68 sobre main
+post-#67 → 4) rerun completo → 5) revisión Sebastián → 6) merge #68.** Sin backend
+desplegado, la superficie muestra UNAVAILABLE honesto (jamás datos falsos).

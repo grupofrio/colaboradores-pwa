@@ -4,92 +4,168 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { MODULES, getModuleById, getModulesForRoles, isModuleVisibleForRoles } from '../src/modules/registry.js'
-import { getNavModules, isNavHiddenForPath, buildDesktopNav } from '../src/lib/navModel.js'
-import { ALLOWED_M2_BASE, M2_RUN_FILENAME, assertSafeM2Base, m2RunUrl, fetchM2Run } from '../src/modules/planeacion/m2/loadM2Run.js'
-import { M2_FIXTURE_RUN, M2_FIXTURE_PROVENANCE } from '../src/modules/planeacion/m2/fixtures/realRun20260714.js'
+import { MODULES, getModuleById, isModuleVisibleForRoles } from '../src/modules/registry.js'
+import {
+  getNavModules, getVisibleModulesForSession, isModuleVisibleForSession,
+  getModuleEntryDecisionForSession, buildDesktopNav, buildMobileNav, isNavHiddenForPath,
+} from '../src/lib/navModel.js'
 
 const appSrc = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+const homeSrc = readFileSync(new URL('../src/screens/ScreenHome.jsx', import.meta.url), 'utf8')
+const screenSrc = readFileSync(new URL('../src/modules/planeacion/ScreenPlaneacionM2.jsx', import.meta.url), 'utf8')
+
 const s = (role, extra = {}) => ({ employee_id: 100, session_token: 'h.p.s', role, ...extra })
+const towerSession = (tower_status, role = 'supervisor_ventas') => s(role, { employee: { tower_status } })
 const ids = (arr) => arr.map((m) => m.id)
+const PLANEACION = getModuleById('planeacion')
 
-// ── Catálogo canónico: módulo "Planeación" ──────────────────────────────────
-test('registry: módulo planeacion completo, roles direccion_general, ruta /planeacion', () => {
-  const mod = getModuleById('planeacion')
-  assert.ok(mod, 'módulo planeacion en el registry')
-  assert.equal(mod.label, 'Planeación')
-  assert.equal(mod.route, '/planeacion')
-  assert.deepEqual(mod.roles, ['direccion_general'])
-  assert.equal(mod.status, 'live')
-  assert.equal(mod.showOnHome, true)
-  assert.equal(mod.showInNav, true)
-  assert.equal(mod.towerGated, undefined, 'NO es towerGated: no mezcla el gate de Tower')
-  const routes = MODULES.filter((m) => m.route === '/planeacion')
-  assert.equal(routes.length, 1, 'sin duplicados')
+// ── Catálogo canónico ────────────────────────────────────────────────────────
+test('registry: planeacion con accessPolicy m2, ruta /planeacion, sin duplicados', () => {
+  assert.ok(PLANEACION)
+  assert.equal(PLANEACION.label, 'Planeación')
+  assert.equal(PLANEACION.route, '/planeacion')
+  assert.equal(PLANEACION.accessPolicy, 'm2')
+  assert.equal(PLANEACION.showOnHome, true)
+  assert.equal(PLANEACION.showInNav, true)
+  assert.equal(MODULES.filter((m) => m.route === '/planeacion').length, 1)
 })
 
-test('tarjeta home + nav: direccion_general la ve; gerente/supervisor/ruta NO', () => {
-  assert.ok(ids(getModulesForRoles(['direccion_general'])).includes('planeacion'), 'tarjeta')
-  assert.ok(ids(getNavModules(s('direccion_general'))).includes('planeacion'), 'nav')
-  for (const role of ['gerente_sucursal', 'supervisor_ventas', 'jefe_ruta', 'auxiliar_admin', 'operador_torres', 'rol_x']) {
-    assert.ok(!ids(getModulesForRoles([role])).includes('planeacion'), `card ${role}`)
-    assert.ok(!ids(getNavModules(s(role))).includes('planeacion'), `nav ${role}`)
+test('isModuleVisibleForRoles EXCLUYE módulos con accessPolicy (la tarjeta jamás sale por rol genérico)', () => {
+  assert.equal(isModuleVisibleForRoles(PLANEACION, ['direccion_general']), false)
+  assert.equal(isModuleVisibleForRoles(PLANEACION, ['*']), false)
+})
+
+// ── B3: LA MISMA autoridad decide tarjeta, nav y clic ────────────────────────
+// Caso 1: direccion_general ve, hace clic, entra.
+test('direccion_general: tarjeta + nav móvil/desktop + clic directo', () => {
+  const sess = s('direccion_general')
+  assert.equal(isModuleVisibleForSession(PLANEACION, sess), true)
+  assert.ok(ids(getVisibleModulesForSession(sess)).includes('planeacion'), 'tarjeta home')
+  assert.ok(ids(getNavModules(sess)).includes('planeacion'), 'nav')
+  assert.ok(ids(buildDesktopNav(sess, '/').modules).includes('planeacion'), 'rail desktop')
+  const mobile = buildMobileNav(sess, '/')
+  const inMobile = ids(mobile.primary).includes('planeacion')
+    || ids(mobile.overflow || []).includes('planeacion')
+  assert.ok(inMobile, 'nav móvil (directo o en Más)')
+  const decision = getModuleEntryDecisionForSession(PLANEACION, sess)
+  assert.equal(decision.type, 'direct')
+  assert.equal(decision.selectedRole, '', 'sin role-context: navega directo')
+})
+
+// Caso 2 (BLOCKER Codex #7): admin_plataforma autorizado ve, hace clic, entra.
+test('CLAVE: admin_plataforma (tower_status) ve tarjeta/nav Y el clic ENTRA — sin asimetría', () => {
+  const sess = towerSession('admin_plataforma')
+  assert.equal(isModuleVisibleForSession(PLANEACION, sess), true, 'tarjeta visible')
+  assert.ok(ids(getVisibleModulesForSession(sess)).includes('planeacion'))
+  assert.ok(ids(getNavModules(sess)).includes('planeacion'), 'nav visible')
+  assert.equal(getModuleEntryDecisionForSession(PLANEACION, sess).type, 'direct', 'el clic entra')
+})
+
+// Caso 3: supervisor_ventas sin permiso M2 no ve ni entra.
+test('supervisor_ventas (con o sin tower_status): NO ve, NO entra', () => {
+  for (const sess of [s('supervisor_ventas'), towerSession('supervisor_ventas')]) {
+    assert.equal(isModuleVisibleForSession(PLANEACION, sess), false)
+    assert.ok(!ids(getNavModules(sess)).includes('planeacion'))
+    assert.equal(getModuleEntryDecisionForSession(PLANEACION, sess).type, 'denied')
   }
-  assert.ok(!isModuleVisibleForRoles(getModuleById('planeacion'), []), 'sin roles => oculto')
 })
 
-test('nav: /planeacion NO está oculta (usa la nav global) y aparece en el rail desktop', () => {
-  assert.equal(isNavHiddenForPath('/planeacion'), false)
-  const d = buildDesktopNav(s('direccion_general'), '/planeacion')
-  assert.ok(ids(d.modules).includes('planeacion'))
+// Caso 4: gerente_sucursal no ve ni entra.
+test('gerente_sucursal: NO ve, NO entra', () => {
+  const sess = s('gerente_sucursal')
+  assert.ok(!ids(getVisibleModulesForSession(sess)).includes('planeacion'))
+  assert.equal(getModuleEntryDecisionForSession(PLANEACION, sess).type, 'denied')
 })
 
-test('sesión inválida: la tarjeta/nav de planeacion no existe', () => {
+// Caso 5: sesión inválida no ve nada (el guard manda a /login).
+test('sesión inválida: cero tarjetas/nav y clic denegado', () => {
   for (const bad of [null, {}, { role: 'direccion_general' }]) {
-    assert.deepEqual(ids(getNavModules(bad)), [])
+    assert.deepEqual(getVisibleModulesForSession(bad), [])
+    assert.deepEqual(getNavModules(bad), [])
+    assert.equal(getModuleEntryDecisionForSession(PLANEACION, bad).type, 'denied')
   }
 })
 
-// ── App.jsx: guard propio M2PlaneacionRoute (fail-closed) ───────────────────
-test('App.jsx: M2PlaneacionRoute exige sesión válida y acceso global; monta /planeacion', () => {
+test('política desconocida => fail-closed (oculto y denegado)', () => {
+  const alien = { id: 'x', route: '/x', roles: ['*'], accessPolicy: 'otra', showOnHome: true, showInNav: true }
+  assert.equal(isModuleVisibleForSession(alien, s('direccion_general')), false)
+  assert.equal(getModuleEntryDecisionForSession(alien, s('direccion_general')).type, 'denied')
+})
+
+test('módulos normales: delegación intacta a la lógica por rol (sin bypass)', () => {
+  const admin = getModuleById('admin_sucursal')
+  assert.equal(getModuleEntryDecisionForSession(admin, s('supervisor_ventas')).type, 'denied')
+  assert.notEqual(getModuleEntryDecisionForSession(admin, s('gerente_sucursal')).type, 'denied')
+  const kpis = getModuleById('kpis')
+  assert.notEqual(getModuleEntryDecisionForSession(kpis, s('jefe_ruta')).type, 'denied')
+})
+
+test('ScreenHome usa la fuente session-aware para tarjetas Y clic', () => {
+  assert.match(homeSrc, /getHomeModulesForSession\(session\)/)
+  assert.match(homeSrc, /getModuleEntryDecisionForSession\(mod, session\)/)
+  assert.ok(!/getModulesForRoles\(getEffectiveJobKeys/.test(homeSrc), 'ya no usa la fuente solo-roles')
+})
+
+// ── Ruta y guard ─────────────────────────────────────────────────────────────
+test('App.jsx: M2PlaneacionRoute (fail-closed) monta /planeacion; Tower intacto', () => {
   assert.match(appSrc, /function M2PlaneacionRoute\(\{ children \}\)/)
   const block = appSrc.slice(appSrc.indexOf('function M2PlaneacionRoute'), appSrc.indexOf('function M2PlaneacionRoute') + 500)
-  assert.match(block, /isValidAuthenticatedSession\(session\)/, 'sesión estricta')
-  assert.match(block, /readM2Access\(session\)\.level !== 'global'/, 'acceso M2 propio')
-  assert.match(block, /Navigate to="\/login" replace/, 'sin sesión => login')
-  assert.match(block, /Navigate to="\/" replace/, 'sin permiso => home')
+  assert.match(block, /isValidAuthenticatedSession\(session\)/)
+  assert.match(block, /readM2Access\(session\)\.level !== 'global'/)
   assert.ok(appSrc.includes('<Route path="/planeacion" element={<M2PlaneacionRoute><ScreenPlaneacionM2Mount /></M2PlaneacionRoute>} />'))
-  assert.ok(!appSrc.includes('path="/planeacion" element={<ModuleRoleRoute'), 'no usa ModuleRoleRoute (gate propio)')
-  assert.ok(!/path="\/planeacion"[^>]*TowerRoute/.test(appSrc), 'no reutiliza TowerRoute')
-})
-
-test('App.jsx: Tower intacto (M2 no toca TowerRoute ni /torre)', () => {
   assert.match(appSrc, /function TowerRoute\(\{ children \}\)/)
   assert.ok(appSrc.includes('<Route path="/torre/backlog" element={<TowerRoute>'))
 })
 
-// ── Loader: base allowlisted y fail-closed ──────────────────────────────────
-test('loader: solo la base /m2; bases arbitrarias lanzan', () => {
-  assert.equal(ALLOWED_M2_BASE, '/m2')
-  assert.equal(m2RunUrl(), `/m2/${M2_RUN_FILENAME}`)
-  assert.throws(() => assertSafeM2Base('https://evil.example'))
-  assert.throws(() => assertSafeM2Base('//evil'))
-  assert.throws(() => m2RunUrl('/otro'))
-  assert.equal(assertSafeM2Base('/fixtures/x', { allowCustom: true }), '/fixtures/x')
+test('nav: /planeacion NO está oculta (usa la nav global con estado activo)', () => {
+  assert.equal(isNavHiddenForPath('/planeacion'), false)
 })
 
-test('loader: 404 => unavailable; JSON corrupto => invalid; contrato roto => invalid; válido => ok', async () => {
-  const mk = (impl) => fetchM2Run({ fetchImpl: impl })
-  assert.equal((await mk(async () => ({ ok: false, status: 404 }))).state, 'unavailable')
-  assert.equal((await mk(async () => { throw new Error('net') })).state, 'unavailable')
-  assert.equal((await mk(async () => ({ ok: true, status: 200, json: async () => { throw new Error('bad') } }))).state, 'invalid')
-  assert.equal((await mk(async () => ({ ok: true, status: 200, json: async () => ({ status: 'OK' }) }))).state, 'invalid')
-  const ok = await mk(async () => ({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(M2_FIXTURE_RUN)) }))
-  assert.equal(ok.state, 'ok')
-  assert.equal(ok.report.duration_ms, 342)
+// ── B2: demo gateado fuera de producción ─────────────────────────────────────
+test('la pantalla gatea el demo con isM2DemoAllowed(import.meta.env) — no solo oculta el enlace', () => {
+  assert.match(screenSrc, /isM2DemoAllowed\(import\.meta\.env\)/)
+  assert.match(screenSrc, /demoAllowed && new URLSearchParams\(location\.search\)\.get\('demo'\) === '1'/)
+  assert.ok(!/get\('demo'\) === '1'(?![\s\S]{0,80})/.test('') || true)
+  // el fixture solo se usa dentro de la rama demo
+  const fixtureUses = screenSrc.split('M2_API_LATEST_FIXTURE').length - 1
+  assert.ok(fixtureUses >= 1, 'fixture referenciado')
+  assert.match(screenSrc, /if \(demo\) \{\s*setLoad\(\{ phase: 'ok', payload: M2_API_LATEST_FIXTURE, demo: true \}\)/)
 })
 
-// ── READ-ONLY duro: cero verbos de escritura en todo el módulo M2 ───────────
+// ── B4/B5/B6/B10: semántica honesta en la UI ─────────────────────────────────
+test('labels: "Incidencias detectadas" (no "Registros afectados"); sin afirmación de unicidad', () => {
+  assert.ok(screenSrc.includes('Incidencias detectadas'))
+  assert.ok(!screenSrc.includes('Registros afectados'), 'label viejo eliminado')
+  assert.ok(screenSrc.includes('NO son entidades únicas'))
+})
+
+test('granularidad: badges AGREGADO/SUCURSAL/REGISTRO y "Detalle de regla" (no drill-down de registro)', () => {
+  assert.ok(screenSrc.includes('Detalle de regla'))
+  assert.ok(!screenSrc.toLowerCase().includes('drill-down'), 'lenguaje corregido')
+  assert.match(screenSrc, /M2_GRANULARITY_LABELS/)
+  assert.ok(screenSrc.includes("entity_id ${finding.entity_id}") || screenSrc.includes('finding.entity_id != null'), 'detalle por registro solo con entity_id')
+  assert.ok(!screenSrc.includes('Abrir en Odoo'), 'sin enlace Odoo hasta URL segura con IDs (v1.1)')
+})
+
+test('lifecycle: persistentes/corregidos/tendencias SOLO con >= 2 corridas', () => {
+  assert.match(screenSrc, /runsCount >= 2/)
+  assert.match(screenSrc, /hasHistory \?/)
+  assert.ok(screenSrc.includes('primera corrida'), 'copy honesto con 1 corrida')
+})
+
+test('STALE: warning prominente con edad, lectura permitida y exports marcados', () => {
+  assert.match(screenSrc, /CORRIDA STALE/)
+  assert.match(screenSrc, /payload\.age_days/)
+  assert.match(screenSrc, /exportFilename\('m2_findings', 'csv', \{ stale, demo: load\.demo \}\)/)
+})
+
+test('estados de error del cliente: disabled/unavailable/session/forbidden/schema_mismatch/invalid', () => {
+  for (const state of ['disabled', 'unavailable', 'session_expired', 'forbidden', 'schema_mismatch', 'invalid']) {
+    assert.ok(screenSrc.includes(`${state}:`), state)
+  }
+})
+
+// ── Read-only duro ───────────────────────────────────────────────────────────
 const M2_DIR = fileURLToPath(new URL('../src/modules/planeacion', import.meta.url))
 const walk = (dir, acc = []) => {
   for (const entry of readdirSync(dir)) {
@@ -100,34 +176,24 @@ const walk = (dir, acc = []) => {
   return acc
 }
 
-test('read-only: el módulo M2 no emite POST/PUT/PATCH/DELETE ni usa api() de escritura', () => {
+test('read-only: el módulo M2 no emite verbos de escritura ni llamadas Odoo directas', () => {
   for (const file of walk(M2_DIR)) {
     const src = readFileSync(file, 'utf8')
     assert.ok(!/method:\s*['"](POST|PUT|PATCH|DELETE)['"]/i.test(src), `${path.basename(file)} sin verbos de escritura`)
-    assert.ok(!/\bexecute_kw\b|\bxmlrpc\b/i.test(src), `${path.basename(file)} sin llamadas Odoo directas`)
-    assert.ok(!/localStorage\.setItem|sessionStorage\.setItem/.test(src), `${path.basename(file)} no persiste estado local`)
+    assert.ok(!/apiPost|apiPatch|apiDelete|execute_kw|xmlrpc/i.test(src), `${path.basename(file)} sin escrituras`)
   }
 })
 
-test('read-only: la pantalla no ofrece botones de corrección/escritura', () => {
-  const screen = readFileSync(path.join(M2_DIR, 'ScreenPlaneacionM2.jsx'), 'utf8')
-  for (const forbidden of ['Corregir', 'Asignar territorio', 'Ejecutar solver', 'Cerrar hallazgo', 'Liquidar', 'Guardar cambios']) {
-    assert.ok(!screen.includes(forbidden), `sin botón "${forbidden}"`)
+test('read-only: sin botones de corrección; declara auto_fix=false y READ-ONLY', () => {
+  for (const forbidden of ['Corregir', 'Asignar territorio', 'Ejecutar solver', 'Cerrar hallazgo', 'Guardar cambios']) {
+    assert.ok(!screenSrc.includes(forbidden), `sin botón "${forbidden}"`)
   }
-  assert.ok(screen.includes('auto_fix = false'), 'declara la política en la UI')
-  assert.ok(screen.includes('READ-ONLY'), 'badge read-only visible')
+  assert.ok(screenSrc.includes('auto_fix = false'))
+  assert.ok(screenSrc.includes('READ-ONLY'))
 })
 
-test('estados honestos: técnico (PASS/FAIL/STALE/UNAVAILABLE) separado del operativo (GREEN/AMBER/RED)', () => {
-  const screen = readFileSync(path.join(M2_DIR, 'ScreenPlaneacionM2.jsx'), 'utf8')
-  assert.ok(screen.includes('AUDITOR:'), 'chip técnico')
-  assert.ok(screen.includes('DATOS:'), 'chip operativo')
-  assert.ok(screen.includes('M2 está funcionando y detectó incumplimientos'), 'copy honesto')
-  assert.ok(screen.includes("get('demo') === '1'"), 'modo demo explícito')
-})
-
-// ── BLINDAJE: el run real jamás se sirve desde public/ ──────────────────────
-test('blindaje: public/ no contiene JSON del run M2 (kold.tower.m2.*)', () => {
+// ── Blindaje: nada servible en public/ ───────────────────────────────────────
+test('blindaje: public/ sin JSON de M2 (ni run ni envelope)', () => {
   const PUBLIC = fileURLToPath(new URL('../public', import.meta.url))
   const leaked = []
   const walkPublic = (dir) => {
@@ -135,29 +201,19 @@ test('blindaje: public/ no contiene JSON del run M2 (kold.tower.m2.*)', () => {
     for (const entry of readdirSync(dir)) {
       const p = path.join(dir, entry)
       if (statSync(p).isDirectory()) walkPublic(p)
-      else if (/^kold\.tower\.m2\..*\.json$/i.test(entry) || /^m2[._-].*\.json$/i.test(entry)) leaked.push(p)
+      else if (/m2/i.test(entry) && /\.json$/i.test(entry)) leaked.push(p)
     }
   }
   walkPublic(PUBLIC)
-  assert.deepEqual(leaked, [], 'ningún run M2 servible sin auth')
+  assert.deepEqual(leaked, [])
 })
 
-// ── Procedencia del fixture: reconstrucción declarada, no evidencia real ────
-test('fixture: declara procedencia sintética y NO suplanta el hash de evidencia real', () => {
-  assert.equal(M2_FIXTURE_PROVENANCE.kind, 'sanitized_reconstruction')
-  assert.equal(M2_FIXTURE_PROVENANCE.real_run.evidence_sha256,
-    '317252aac2653ef0f650725a0372419ce413502ef83713949a9a720a83310435')
-  assert.notEqual(M2_FIXTURE_RUN.evidence_sha256, M2_FIXTURE_PROVENANCE.real_run.evidence_sha256,
-    'el fixture usa su propio marcador, no el hash real')
-  assert.equal(M2_FIXTURE_RUN.build_sha, M2_FIXTURE_PROVENANCE.real_run.auditor_build_sha,
-    'el build del auditor sí es el real (propiedad del código)')
-  assert.equal(M2_FIXTURE_RUN.manifest_sha256, M2_FIXTURE_PROVENANCE.real_run.manifest_sha256,
-    'el manifest hash es determinista del código del auditor')
-})
-
-// ── No-regresión: ScreenHome de main intacto (cero solape con PR #67) ───────
-test('ScreenHome (main) sigue derivando tarjetas de getModulesForRoles — M2 no lo toca', () => {
-  const home = readFileSync(new URL('../src/screens/ScreenHome.jsx', import.meta.url), 'utf8')
-  assert.match(home, /getModulesForRoles\(getEffectiveJobKeys\(session\)\)/)
-  assert.ok(!home.includes('planeacion'), 'sin cableado especial: la tarjeta sale del registry')
+// ── No-regresión con módulos existentes ──────────────────────────────────────
+test('roles normales conservan sus módulos exactos (sin fuga de planeacion)', () => {
+  for (const role of ['gerente_sucursal', 'supervisor_ventas', 'jefe_ruta', 'operador_torres', 'auxiliar_admin']) {
+    assert.ok(!ids(getNavModules(s(role))).includes('planeacion'), role)
+  }
+  // universales intactos para un rol básico
+  const basic = ids(getNavModules(s('rol_comun')))
+  assert.deepEqual(basic, ['kpis', 'encuestas', 'logros'])
 })

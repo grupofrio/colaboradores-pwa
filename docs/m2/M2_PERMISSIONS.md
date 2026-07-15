@@ -1,47 +1,57 @@
-# M2 — Permisos y acceso (v1)
+# M2 — Permisos y acceso (v2)
 
-Contrato ejecutable: `src/modules/planeacion/m2/access.js` + guard `M2PlaneacionRoute` (App.jsx).
-**Fail-closed**: todo lo no listado = sin acceso.
+**Una sola función canónica por lado, mismo contrato conceptual:**
+frontend `readM2Access(session)` (`src/modules/planeacion/m2/access.js`) · backend
+`_access_for(employee)` (`gf_kold_os_m2`). Fail-closed en ambos.
+
+## Decisión A4 (documentada, base factual)
+
+Server-side **`admin_plataforma` ES la proyección de `direccion_general`**
+(`PWA_TOWER_ROLE_STATUS_MAP` en `os_customer_zones`): no existe como puesto separado. Por
+eso el backend evalúa la **fuente primaria** (job keys efectivos incluyen
+`direccion_general` ⇒ GLOBAL) y el frontend acepta **ambas proyecciones de esa misma
+verdad** (x_job_key `direccion_general` O `session.employee.tower_status ===
+'admin_plataforma'`). Registrar `admin_plataforma` como "rol transversal KOLD OS" formal =
+ratificación S/N; mientras tanto esta equivalencia factual está documentada aquí y en el
+docstring del backend. **supervisor_ventas NO hereda de Tower** (test en ambos lados).
 
 ## Matriz v1
 
-| Principal | Fuente de verdad | Acceso |
-|---|---|---|
-| `direccion_general` | x_job_key efectivo (role + additional_job_keys) | **GLOBAL** (ejecutivo + drill-down + export) |
-| `admin_plataforma` | `session.employee.tower_status` (rol AUTORITATIVO servido por Odoo, strict-case) | **GLOBAL** |
-| `supervisor_ventas` con tower_status | — | **SIN ACCESO** (deliberado: NO se copian reglas de Tower; Tower autoriza su módulo, no M2) |
-| gerente_sucursal, jefes de ruta, auxiliares, operadores, roles desconocidos | — | **SIN ACCESO** |
-| Sesión inválida/expirada | `isValidAuthenticatedSession` | **SIN ACCESO** (→ /login) |
+| Principal | Acceso |
+|---|---|
+| `direccion_general` (job key efectivo, primario o adicional) | **GLOBAL** |
+| `admin_plataforma` (tower_status = proyección de direccion_general) | **GLOBAL** |
+| `supervisor_ventas` (con o sin tower_status) | none |
+| gerente/ruta/almacén/torres/desconocidos | none |
+| sesión inválida/expirada | none (→ /login) |
+| "responsables de planeación / operativos" | none — **sin fuente autoritativa de rol**; alta = S/N + una línea en AMBAS allowlists |
 
-## Capas de defensa
+## B3: la MISMA autoridad en toda la superficie
 
-1. **Tarjeta/nav**: módulo `planeacion` en registry con `roles: ['direccion_general']` → solo
-   dirección ve la entrada. (Nota: un `admin_plataforma` puro sin ese x_job_key no ve tarjeta pero
-   SÍ puede entrar por URL — asimetría v1 documentada; la visibilidad session-aware para
-   tower_status llega con la mecánica del PR #67 y puede unificarse en un PR posterior.)
-2. **Ruta**: `M2PlaneacionRoute` — sesión inválida → `/login`; `readM2Access(session).level !==
-   'global'` → `/`. Gate PROPIO: no reutiliza TowerRoute ni ModuleRoleRoute.
-3. **Datos**: `scopeFindingsForAccess` — acceso ≠ global ⇒ **cero** hallazgos (sin fuga
-   cross-company). El run además viene con scope de producción validado (1/34/35/36 exacto).
+El módulo `planeacion` declara **`accessPolicy: 'm2'`** en el registry (patrón equivalente
+a towerGated; `roles` queda solo como documentación y `isModuleVisibleForRoles` EXCLUYE
+módulos con política). Consumen `readM2Access`:
 
-## Niveles diferenciados (vista global vs sucursal)
+1. **Tarjeta home** — `getVisibleModulesForSession` (ScreenHome).
+2. **Nav móvil / Más / rail desktop** — `getNavModules` → `isModuleVisibleForSession`.
+3. **Clic desde home** — `getModuleEntryDecisionForSession`.
+4. **Route guard** — `M2PlaneacionRoute` (App.jsx): sesión inválida → /login; sin acceso → /.
+5. **Carga del endpoint** — el backend revalida flag+token+acceso server-side (la UI nunca
+   es la última línea).
 
-El contrato de acceso contempla `level: 'global' | 'none'` hoy. El nivel **por
-compañía/sucursal** queda especificado pero NO emitido en v1 porque el contrato de datos es
-agregado (darle a un gerente una "vista de su sucursal" sería teatro sin datos por sucursal). Se
-activa junto con la extensión v1.1 del contrato (M2_DATA_CONTRACT §5.1) y su propia decisión S/N.
+Blocker Codex #7 resuelto: `admin_plataforma` ve tarjeta/nav Y entra (test "CLAVE").
 
-## Responsables de planeación / operativos autorizados
+## Niveles global/company/branch
 
-Solicitados como audiencia mínima, pero HOY no existe fuente autoritativa de ese rol
-(ni x_job_key ni tower_status). **No se inventa**: agregar `planeacion_*` como job key o un rol
-autoritativo nuevo = decisión de dirección + cambio versionado en `access.js` (una línea en la
-allowlist) con S/N. Mientras tanto los hallazgos llevan `responsible_area` y
-`owner_status=unassigned`.
+El contrato contempla niveles company/branch pero **v1 solo emite global**: el contrato de
+datos es agregado, y un nivel "sucursal" sin datos por sucursal sería teatro. Se activan
+con la extensión v1.1 + S/N. `scopeFindingsForAccess` ya garantiza cero fuga con acceso
+`none` (test).
 
-## Tests que cubren esta matriz (tests/m2AccessFilters.test.mjs + m2Surface.test.mjs)
+## Cobertura de tests
 
-global autorizado (x_job_key y tower_status) · sucursal autorizada (n/a v1, scope global) ·
-usuario sin permisos · sesión inválida (incluye payloads forjados con rol privilegiado) ·
-scope de compañía (scopeFindingsForAccess) · URL directa (guard en App.jsx, text-scan) ·
-strict-case del tower_status · no-copia de reglas Tower.
+Frontend (`m2AccessFilters` + `m2Surface`): matriz completa (incluye sesiones forjadas,
+strict-case, proyección admin_plataforma, política desconocida ⇒ fail-closed, 5 casos B3,
+URL directa por text-scan del guard). Backend (`test_kold_os_m2_service`): flag OFF 503,
+401 (faltante/inválido/expirado), 403 fail-closed, global para dirección, granularidad sin
+IDs, no cross-scope (scope global único v1), endpoints sin writes.

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
-import { getHomeModulesForSession } from '../lib/navModel'
+import { getHomeModulesForSession, getModuleEntryDecisionForSession } from '../lib/navModel'
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
-import { getModuleEntryDecisionForSession, upsertModuleRoleContext } from '../lib/roleContext'
+import { upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
 
 /* ============================================================================
@@ -241,8 +241,8 @@ export default function ScreenHome() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  // Módulos visibles para esta SESIÓN (misma fuente única que la navegación
-  // global: roles x_job_key + towerGated por tower_status autoritativo).
+  // Módulos visibles para esta sesión: roles x_job_key, Tower por tower_status
+  // autoritativo y políticas propias como M2. Home conserva el orden histórico.
   const modules = useMemo(() =>
     getHomeModulesForSession(session),
   [session])

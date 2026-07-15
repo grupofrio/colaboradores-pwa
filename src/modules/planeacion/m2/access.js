@@ -1,15 +1,19 @@
 // ─── KOLD OS · M2 — Contrato de acceso (fail-closed) ─────────────────────────
 // Quién ve la superficie M2 "Planeación" (v1):
 //   · x_job_key `direccion_general`          → acceso GLOBAL (dirección autorizada)
-//   · tower_status `admin_plataforma`        → acceso GLOBAL (admin de plataforma,
-//     rol AUTORITATIVO servido por Odoo en session.employee.tower_status)
+//   · tower_status `admin_plataforma`        → acceso GLOBAL
 //   · todo lo demás                          → SIN ACCESO (fail-closed)
 //
-// DELIBERADO: NO se copian las reglas de Tower M1 (supervisor_ventas con
-// tower_status NO entra a M2 — Tower autoriza su propio módulo, no éste).
-// "Responsables de planeación / operativos autorizados" NO tienen fuente
-// autoritativa de rol hoy ⇒ quedan owner_status=unassigned y se documenta en
-// docs/m2/M2_PERMISSIONS.md (agregarlos = decisión S/N, no inferencia).
+// DECISIÓN A4 (alineada con el backend gf_kold_os_m2._access_for): server-side
+// `admin_plataforma` ES la PROYECCIÓN de `direccion_general`
+// (PWA_TOWER_ROLE_STATUS_MAP en os_customer_zones) — no existe como puesto
+// separado. El backend evalúa la fuente PRIMARIA (job keys efectivos); aquí se
+// aceptan AMBAS proyecciones de esa misma verdad, así que frontend y backend
+// jamás divergen. DELIBERADO: NO se copian las reglas de Tower M1
+// (supervisor_ventas con tower_status NO entra a M2 — Tower autoriza su
+// módulo, no éste). "Responsables de planeación / operativos" NO tienen fuente
+// autoritativa de rol hoy ⇒ agregarlos = decisión S/N + una línea en ambas
+// allowlists (ver docs/m2/M2_PERMISSIONS.md), no inferencia.
 //
 // El scope por compañía/sucursal existe en el contrato (`scopeFindingsForAccess`)
 // pero v1 solo emite nivel global: el contrato de datos es agregado (sin

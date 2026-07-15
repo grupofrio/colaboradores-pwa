@@ -2,121 +2,169 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  M2_QUERY_IDS, M2_STALE_DAYS, validateM2Report, technicalStateFor, metricRows,
+  M2_API_SCHEMA_VERSION, M2_SUPPORTED_SCHEMA_VERSIONS, classifySchemaVersion,
+  validateM2Latest, validateM2Findings, isRunStale, M2_STALE_DAYS,
 } from '../src/modules/planeacion/m2/contract.js'
-import { M2_FIXTURE_RUN } from '../src/modules/planeacion/m2/fixtures/realRun20260714.js'
+import { M2_API_LATEST_FIXTURE, M2_API_FIXTURE_PROVENANCE } from '../src/modules/planeacion/m2/fixtures/apiLatestFixture.js'
 
-const clone = () => JSON.parse(JSON.stringify(M2_FIXTURE_RUN))
+const clone = () => JSON.parse(JSON.stringify(M2_API_LATEST_FIXTURE))
+const ruleOf = (doc, code) => doc.rule_results.find((r) => r.rule_code === code)
 
-// ── Manifiesto cerrado: exactamente las 13 queries del auditor ──────────────
-test('el contrato conoce exactamente las 13 queries del manifiesto del auditor', () => {
-  assert.equal(M2_QUERY_IDS.length, 13)
-  assert.deepEqual([...M2_QUERY_IDS].sort(), [...new Set(M2_QUERY_IDS)].sort(), 'sin duplicados')
-  for (const id of ['scope_validation', 'capacity_metrics', 'solver_evidence_metrics',
-    'territory_load_handoff_metrics', 'weekly_plan_metrics', 'handoff_metrics',
-    'snapshot_metrics', 'forecast_metrics', 'history_metrics']) {
-    assert.ok(M2_QUERY_IDS.includes(id), id)
-  }
+// ── El fixture (generado por código REAL) valida el contrato completo ───────
+test('fixture del envelope: VALIDA el contrato kold.os.m2.api/1', () => {
+  const { ok, errors } = validateM2Latest(M2_API_LATEST_FIXTURE)
+  assert.deepEqual(errors, [])
+  assert.equal(ok, true)
+  assert.equal(M2_API_LATEST_FIXTURE.schema_version, M2_API_SCHEMA_VERSION)
 })
 
-test('el fixture de reconstrucción VALIDA el contrato completo', () => {
-  const { ok, errors } = validateM2Report(M2_FIXTURE_RUN)
+test('procedencia: generado por código real; manifest = hash de producción; NO es evidencia productiva', () => {
+  assert.equal(M2_API_FIXTURE_PROVENANCE.kind, 'real_code_generated')
+  assert.equal(M2_API_FIXTURE_PROVENANCE.production_manifest_sha256_match, true)
+  assert.equal(M2_API_LATEST_FIXTURE.run.manifest_sha256,
+    '0fb967bd06eb56c5886ba86c1009f9e5f359c5bab5df00cbc7820b2315a9204c')
+  assert.equal(M2_API_FIXTURE_PROVENANCE.is_production_evidence, false)
+  assert.notEqual(M2_API_LATEST_FIXTURE.run.evidence_sha256,
+    M2_API_FIXTURE_PROVENANCE.production_evidence_sha256, 'jamás suplanta el hash real')
+})
+
+// ── Cifras REPORTADAS del run real (derivadas por el core backend) ──────────
+test('REPORTADO en el envelope: territorio 293/484=60.54% · solver 424/484=87.6% · capacidad 144 · vehículo 133', () => {
+  const doc = M2_API_LATEST_FIXTURE
+  const territory = ruleOf(doc, 'M2-A-01')
+  assert.equal(territory.numerator, 293); assert.equal(territory.denominator, 484)
+  assert.equal(territory.pct, 60.54); assert.equal(territory.status, 'RED')
+  const solver = ruleOf(doc, 'M2-B-01')
+  assert.equal(solver.numerator, 424); assert.equal(solver.pct, 87.6); assert.equal(solver.status, 'RED')
+  assert.equal(ruleOf(doc, 'M2-C-02').numerator, 144)
+  assert.equal(ruleOf(doc, 'M2-C-01').numerator, 133)
+  assert.equal(ruleOf(doc, 'M2-C-03').numerator, 30)
+  assert.equal(ruleOf(doc, 'M2-C-04').numerator, 29)
+})
+
+test('REPORTADO: 37/39=94.87% sin carga · 46 sin snapshot · 21 sin stops · 48 sin almacén · 10 semanal', () => {
+  const doc = M2_API_LATEST_FIXTURE
+  const load = ruleOf(doc, 'M2-D-01')
+  assert.equal(load.numerator, 37); assert.equal(load.denominator, 39); assert.equal(load.pct, 94.87)
+  assert.equal(ruleOf(doc, 'M2-D-02').numerator, 46)
+  assert.equal(ruleOf(doc, 'M2-D-03').numerator, 21)
+  assert.equal(ruleOf(doc, 'M2-D-04').numerator, 48)
+  assert.equal(ruleOf(doc, 'M2-D-05').numerator, 10)
+})
+
+test('REPORTADO: cobertura 56.82% RED · confianza 0.6667 RED · 2202 fallback · 192 warnings · actual_kg 16.56%', () => {
+  const doc = M2_API_LATEST_FIXTURE
+  assert.equal(ruleOf(doc, 'M2-E-01').pct, 56.82)
+  assert.equal(ruleOf(doc, 'M2-E-01').status, 'RED')
+  assert.equal(ruleOf(doc, 'M2-E-02').pct, 0.6667)
+  assert.equal(ruleOf(doc, 'M2-E-02').status, 'RED')
+  assert.equal(ruleOf(doc, 'M2-E-03').numerator, 2202)
+  assert.equal(ruleOf(doc, 'M2-E-04').numerator, 192)
+  const actual = ruleOf(doc, 'M2-F-01')
+  assert.equal(actual.numerator, 7026); assert.equal(actual.denominator, 42421); assert.equal(actual.pct, 16.56)
+})
+
+test('summary del backend: RED operativo con auditor PASS · 13 rojas · 3 ámbar · incidencias ≠ registros únicos', () => {
+  const { run, summary } = M2_API_LATEST_FIXTURE
+  assert.equal(run.status, 'PASS')
+  assert.equal(run.technical_state, 'PASS')
+  assert.equal(summary.overall_status, 'RED')
+  assert.equal(summary.rules_fail, 13)
+  assert.equal(summary.rules_warning, 3)
+  assert.equal(summary.rules_not_evaluable, 3)
+  assert.equal(summary.total_incidences, 39004)
+  assert.equal(summary.unique_records_available, false, 'el contrato declara que NO hay entidades únicas')
+})
+
+test('granularidad honesta: todos los hallazgos v1 son aggregate y SIN ids', () => {
+  for (const finding of M2_API_LATEST_FIXTURE.findings) {
+    assert.equal(finding.granularity, 'aggregate')
+    assert.equal(finding.company_id, null)
+    assert.equal(finding.branch_id, null)
+    assert.equal(finding.entity_id, null)
+    assert.equal(finding.owner_status, 'unassigned')
+  }
+  assert.equal(M2_API_LATEST_FIXTURE.capabilities.features.branch_dimension, false)
+  assert.equal(M2_API_LATEST_FIXTURE.capabilities.features.entity_detail, false)
+})
+
+// ── schema_version explícito (B8) ────────────────────────────────────────────
+test('schema_version: soportada / futura => error CONTROLADO / ausente', () => {
+  assert.deepEqual([...M2_SUPPORTED_SCHEMA_VERSIONS], ['kold.os.m2.api/1'])
+  assert.equal(classifySchemaVersion(M2_API_LATEST_FIXTURE), 'supported')
+  const future = clone(); future.schema_version = 'kold.os.m2.api/9'
+  assert.equal(classifySchemaVersion(future), 'unsupported')
+  const res = validateM2Latest(future)
+  assert.equal(res.ok, false)
+  assert.equal(res.schema, 'unsupported', 'la UI distingue versión futura de payload corrupto')
+  const missing = clone(); delete missing.schema_version
+  assert.equal(classifySchemaVersion(missing), 'missing')
+})
+
+test('campos adicionales compatibles NO rompen; queries nuevas llegan por capabilities', () => {
+  const extended = clone()
+  extended.future_field = { anything: true }
+  extended.run.future_run_field = 'x'
+  extended.capabilities.optional_query_ids = ['future_query_x']
+  const { ok, errors } = validateM2Latest(extended)
   assert.deepEqual(errors, [])
   assert.equal(ok, true)
 })
 
-test('fixture: 13/13 ejecutadas, 0 omitidas, contrato producción 3/3', () => {
-  assert.equal(M2_FIXTURE_RUN.executed_queries.length, 13)
-  assert.deepEqual(M2_FIXTURE_RUN.skipped_queries, [])
-  assert.equal(M2_FIXTURE_RUN.duration_ms, 342)
-  assert.deepEqual(M2_FIXTURE_RUN.production_contract,
-    { contract_satisfied: true, database_match: true, scope_exact: true })
-  assert.deepEqual(M2_FIXTURE_RUN.scope.company_ids, [1, 34, 35, 36])
-  assert.equal(M2_FIXTURE_RUN.scope.window_days, 90)
-})
-
 // ── Rechazos fail-closed ─────────────────────────────────────────────────────
-test('rechaza: no-objeto, status inválido, guardas no booleanas', () => {
-  assert.equal(validateM2Report(null).ok, false)
-  assert.equal(validateM2Report([]).ok, false)
-  assert.equal(validateM2Report('x').ok, false)
-  const badStatus = clone(); badStatus.status = 'OK'
-  assert.equal(validateM2Report(badStatus).ok, false)
-  const badGuard = clone(); badGuard.write_blocked = 'true'
-  assert.equal(validateM2Report(badGuard).ok, false)
+test('rechaza: no-objeto, ok!=true, run/summary/findings malformados', () => {
+  assert.equal(validateM2Latest(null).ok, false)
+  assert.equal(validateM2Latest([]).ok, false)
+  const notOk = clone(); notOk.ok = false
+  assert.equal(validateM2Latest(notOk).ok, false)
+  const badRun = clone(); badRun.run.status = 'MAYBE'
+  assert.equal(validateM2Latest(badRun).ok, false)
+  const badHash = clone(); badHash.run.evidence_sha256 = 'zz'
+  assert.equal(validateM2Latest(badHash).ok, false)
+  const badSummary = clone(); badSummary.summary.total_incidences = -1
+  assert.equal(validateM2Latest(badSummary).ok, false)
+  const uniqueLie = clone(); uniqueLie.summary.unique_records_available = true
+  assert.equal(validateM2Latest(uniqueLie).ok, false, 'v1 no puede afirmar registros únicos')
 })
 
-test('rechaza hashes malformados y build_sha inválido', () => {
-  for (const key of ['manifest_sha256', 'evidence_sha256', 'run_id_sha256']) {
-    const doc = clone(); doc[key] = 'ZZZ'
-    assert.equal(validateM2Report(doc).ok, false, key)
+test('rechaza hallazgo aggregate CON ids (mentira de granularidad) y claves sensibles', () => {
+  const lying = clone()
+  lying.findings[0].entity_id = 12345
+  assert.equal(validateM2Latest(lying).ok, false)
+  const leaky = clone()
+  leaky.findings[0].partner_name = 'X'
+  assert.equal(validateM2Latest(leaky).ok, false)
+})
+
+// ── B9: scope flexible ────────────────────────────────────────────────────────
+test('scope flexible: otras compañías autorizadas validan (no se fija 1,34,35,36)', () => {
+  const other = clone()
+  other.run.scope.company_ids = [7, 42]
+  assert.equal(validateM2Latest(other).ok, true)
+  const badIds = clone()
+  badIds.run.scope.company_ids = [0]
+  assert.equal(validateM2Latest(badIds).ok, false, 'forma sí se valida')
+})
+
+// ── /findings ────────────────────────────────────────────────────────────────
+test('validateM2Findings: acepta respuesta bien formada y rechaza malformadas', () => {
+  const good = {
+    ok: true, schema_version: M2_API_SCHEMA_VERSION, run_id: 'r', total: 2, page: 1,
+    pages: 1, page_size: 25, items: [], applied_scope: { level: 'global' },
+    applied_filters: {}, rejected_params: [], read_only: true,
   }
-  const doc = clone(); doc.build_sha = 'xyz'
-  assert.equal(validateM2Report(doc).ok, false)
+  assert.equal(validateM2Findings(good).ok, true)
+  assert.equal(validateM2Findings({ ...good, schema_version: 'kold.os.m2.api/9' }).schema, 'unsupported')
+  assert.equal(validateM2Findings({ ...good, total: -1 }).ok, false)
+  assert.equal(validateM2Findings({ ...good, items: 'x' }).ok, false)
+  assert.equal(validateM2Findings({ ...good, rejected_params: 'x' }).ok, false)
 })
 
-test('rechaza queries desconocidas, duplicadas o manifiesto incompleto', () => {
-  const unknown = clone(); unknown.executed_queries = [...unknown.executed_queries, 'evil_query']
-  assert.equal(validateM2Report(unknown).ok, false)
-  const dup = clone(); dup.executed_queries = [...dup.executed_queries, 'capacity_metrics']
-  assert.equal(validateM2Report(dup).ok, false)
-  const missing = clone(); missing.executed_queries = missing.executed_queries.slice(0, 5)
-  assert.equal(validateM2Report(missing).ok, false, 'las 13 deben estar ejecutadas u omitidas')
-  const skipped = clone()
-  skipped.executed_queries = skipped.executed_queries.slice(0, 12)
-  skipped.skipped_queries = [{ query_id: skipped.executed_queries.includes('territory_load_handoff_metrics') ? 'capacity_metrics' : 'territory_load_handoff_metrics', reason: 'required_schema_unavailable' }]
-  // cobertura completa ejecutadas+omitidas => puede validar (si la omitida es la que falta)
-  const cover = new Set([...skipped.executed_queries, ...skipped.skipped_queries.map((s) => s.query_id)])
-  assert.equal(validateM2Report(skipped).ok, cover.size === 13)
-})
-
-test('rechaza métricas con claves sensibles (espejo del sanitizador del auditor)', () => {
-  const doc = clone()
-  doc.metrics.capacity_metrics = [{ ...doc.metrics.capacity_metrics[0], employee_name: 'X' }]
-  assert.equal(validateM2Report(doc).ok, false)
-  const doc2 = clone()
-  doc2.metrics.capacity_metrics = [{ ...doc2.metrics.capacity_metrics[0], api_key: 'k' }]
-  assert.equal(validateM2Report(doc2).ok, false)
-})
-
-test('rechaza métricas no escalares y scope malformado', () => {
-  const doc = clone()
-  doc.metrics.capacity_metrics = [{ plan_count: { nested: true } }]
-  assert.equal(validateM2Report(doc).ok, false)
-  const badScope = clone(); badScope.scope.company_ids = [0]
-  assert.equal(validateM2Report(badScope).ok, false)
-  const badWindow = clone(); badWindow.scope.window_days = 0
-  assert.equal(validateM2Report(badWindow).ok, false)
-})
-
-test('producción exige contrato 3/3 y scope exacto 1,34,35,36', () => {
-  const noPc = clone(); delete noPc.production_contract
-  assert.equal(validateM2Report(noPc).ok, false)
-  const badPc = clone(); badPc.production_contract.scope_exact = false
-  assert.equal(validateM2Report(badPc).ok, false)
-  const badCompanies = clone(); badCompanies.scope.company_ids = [1, 34]
-  assert.equal(validateM2Report(badCompanies).ok, false)
-  const badBranches = clone(); badBranches.scope.branch_ids = [29]
-  assert.equal(validateM2Report(badBranches).ok, false)
-  const badWindow = clone(); badWindow.scope.window_days = 120
-  assert.equal(validateM2Report(badWindow).ok, false)
-})
-
-// ── Estado técnico: PASS / FAIL / STALE / UNAVAILABLE ───────────────────────
-test('estado técnico: PASS reciente, STALE viejo, FAIL con guardas rotas, UNAVAILABLE sin doc', () => {
-  assert.equal(technicalStateFor(M2_FIXTURE_RUN, '2026-07-15T00:00:00Z'), 'PASS')
-  const staleDate = new Date(Date.parse(M2_FIXTURE_RUN.finished_at) + (M2_STALE_DAYS + 1) * 86400000).toISOString()
-  assert.equal(technicalStateFor(M2_FIXTURE_RUN, staleDate), 'STALE')
-  const failed = clone(); failed.status = 'FAIL'
-  assert.equal(technicalStateFor(failed, '2026-07-15T00:00:00Z'), 'FAIL')
-  const noRollback = clone(); noRollback.rollback_confirmed = false
-  assert.equal(technicalStateFor(noRollback, '2026-07-15T00:00:00Z'), 'FAIL')
-  assert.equal(technicalStateFor(null, '2026-07-15T00:00:00Z'), 'UNAVAILABLE')
-  assert.equal(technicalStateFor({ garbage: true }, '2026-07-15T00:00:00Z'), 'UNAVAILABLE')
-})
-
-test('metricRows: devuelve filas o null (nunca lanza)', () => {
-  assert.equal(metricRows(M2_FIXTURE_RUN, 'capacity_metrics').length, 1)
-  assert.equal(metricRows(M2_FIXTURE_RUN, 'no_existe'), null)
-  assert.equal(metricRows(null, 'capacity_metrics'), null)
+// ── STALE (B10) ──────────────────────────────────────────────────────────────
+test('stale: recomputación defensiva client-side coincide con el umbral', () => {
+  const run = M2_API_LATEST_FIXTURE.run
+  assert.equal(isRunStale(run, '2026-07-15T00:00:00Z'), false)
+  const staleDate = new Date(Date.parse(run.finished_at) + (M2_STALE_DAYS + 1) * 86400000).toISOString()
+  assert.equal(isRunStale(run, staleDate), true)
+  assert.equal(M2_API_LATEST_FIXTURE.stale, false, 'el fixture llega vigente')
 })
