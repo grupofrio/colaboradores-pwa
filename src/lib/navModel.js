@@ -11,42 +11,13 @@
 // tower_status admin_plataforma/supervisor_ventas. Ver src/modules/registry.js.
 
 import { MODULES, isModuleVisibleForRoles } from '../modules/registry.js'
-import { getEffectiveJobKeys } from './roleContext.js'
+import {
+  getEffectiveJobKeys,
+  getModuleEntryDecisionForSession as getRoleAwareModuleEntryDecision,
+} from './roleContext.js'
 import { isValidAuthenticatedSession } from './session.js'
 import { readAuthoritativeTowerStatus } from '../modules/torre/e1/loadTowerStatus.js'
-
-// Visibilidad de un módulo para una SESIÓN concreta (misma autoridad que la
-// tarjeta del home, la nav y — vía TowerRoute/ModuleRoleRoute — la ruta):
-//   towerGated  → rol AUTORITATIVO tower_status (readAuthoritativeTowerStatus,
-//                 allowlist admin_plataforma/supervisor_ventas). NUNCA por
-//                 x_job_key: un gerente/auxiliar/chofer sin tower_status NO lo ve.
-//   normal      → roles x_job_key (isModuleVisibleForRoles).
-// Fail-closed: sin sesión válida => nada.
-export function isModuleVisibleForSession(module, session) {
-  if (!module) return false
-  if (!isValidAuthenticatedSession(session)) return false
-  if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
-  return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
-}
-
-// Módulos visibles para la sesión en el orden canónico del registry.
-// Cada superficie aplica después su metadata propia (showOnHome/showInNav).
-// Fail-closed => [].
-export function getVisibleModulesForSession(session = null) {
-  if (!isValidAuthenticatedSession(session)) return []
-  const seen = new Set()
-  return MODULES
-    .filter((module) => {
-      if (seen.has(module.id) || !isModuleVisibleForSession(module, session)) return false
-      seen.add(module.id)
-      return true
-    })
-}
-
-// Home conserva el orden histórico del registry y respeta su flag de superficie.
-export function getHomeModulesForSession(session = null) {
-  return getVisibleModulesForSession(session).filter((m) => m.showOnHome !== false)
-}
+import { readM2Access } from '../modules/planeacion/m2/access.js'
 
 // Anclas fijas (no son módulos del registry). Siempre presentes con sesión:
 // todos pueden ir a su Inicio y a su perfil.
@@ -128,13 +99,66 @@ function navPriorityOf(module) {
   return Number.isFinite(module?.navPriority) ? module.navPriority : 100
 }
 
+// ── Visibilidad SESSION-AWARE (fuente única para tarjeta + nav + clic) ───────
+// Un módulo con accessPolicy declara que su autoridad NO es x_job_key genérico
+// sino un contrato propio (B3: la MISMA función decide tarjeta, nav, Más, rail
+// y clic; el route guard revalida). Hoy: accessPolicy 'm2' => readM2Access.
+// FAIL-CLOSED: sesión inválida => nada; política desconocida => oculto.
+// (Mismos nombres/firmas que la mecánica towerGated del PR #67 para que el
+// rebase post-#67 sea una unión mecánica de ramas en la misma función.)
+export function isModuleVisibleForSession(module, session) {
+  if (!module) return false
+  if (module.showInNav === false && module.showOnHome === false) return false
+  if (!isValidAuthenticatedSession(session)) return false
+  if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
+  if (module.accessPolicy === 'm2') return readM2Access(session).level === 'global'
+  if (module.accessPolicy) return false // política desconocida => fail-closed
+  return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
+}
+
+// Módulos visibles para la sesión en el orden canónico del registry.
+export function getVisibleModulesForSession(session = null) {
+  if (!isValidAuthenticatedSession(session)) return []
+  const seen = new Set()
+  return MODULES
+    .filter((module) => {
+      if (seen.has(module.id) || !isModuleVisibleForSession(module, session)) return false
+      seen.add(module.id)
+      return true
+    })
+}
+
+// Home conserva el orden histórico del registry y respeta su flag de superficie.
+export function getHomeModulesForSession(session = null) {
+  return getVisibleModulesForSession(session).filter((module) => module.showOnHome !== false)
+}
+
+// Decisión de ENTRADA (clic del home) con la MISMA autoridad que la
+// visibilidad (B3): módulos accessPolicy entran/deniegan por su contrato
+// (navegan directo, sin role-context); el resto delega en la lógica por rol.
+// El route guard (App.jsx) sigue siendo la autoridad final.
+// Nota de rebase: el PR #67 define una función homónima (towerGated) en
+// roleContext.js; al rebasar #68 sobre main post-#67 se unifican en una sola.
+export function getModuleEntryDecisionForSession(module, session) {
+  if (!isValidAuthenticatedSession(session)) {
+    return { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  if (module?.accessPolicy === 'm2') {
+    return readM2Access(session).level === 'global'
+      ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
+      : { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  if (module?.accessPolicy) {
+    return { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  return getRoleAwareModuleEntryDecision(module, session)
+}
+
 // Módulos del registry visibles en navegación para la sesión, ordenados por
 // navPriority asc y, a igualdad, por su orden en el registry.
 // FAIL-CLOSED (BLOCKER 1): sesión inválida (null/{}/token vacío/expirada/
 // corrupta) => []. Sesión válida sin roles especiales => solo universales.
 export function getNavModules(session = null) {
-  // Nav = módulos visibles para la sesión con showInNav !== false.
-  // (Incluye torre_operativa cuando la sesión tiene tower_status autorizado.)
   return getVisibleModulesForSession(session)
     .filter((m) => m.showInNav !== false)
     .map((module, index) => ({ module, index }))
