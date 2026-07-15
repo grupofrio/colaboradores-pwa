@@ -503,6 +503,60 @@ test('pos customer search includes IGU34 branch customers after branch migration
   assert.equal(result.data[0].id, 77)
 })
 
+test('supervisor customer search includes IGU34 and legacy IGU customers after branch migration', async () => {
+  setSession({ role: 'supervisor_ventas' })
+
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    const params = payload?.params || {}
+    if (params.model === 'account.analytic.account') {
+      const domain = params.domain || []
+      const codeTerm = domain.find((term) => Array.isArray(term) && term[0] === 'code')
+      const nameTerm = domain.find((term) => Array.isArray(term) && term[0] === 'name')
+      if (codeTerm?.[2] === 'IGU34' || nameTerm?.[2] === 'IGU34') {
+        return createJsonResponse(200, {
+          result: { response: [{ id: 301, name: '[IGU34] Iguala 34', code: 'IGU34' }] },
+        })
+      }
+      if (codeTerm?.[2] === 'IGU' || nameTerm?.[2] === 'Iguala') {
+        return createJsonResponse(200, {
+          result: { response: [{ id: 201, name: '[IGU] Iguala', code: 'IGU' }] },
+        })
+      }
+      return createJsonResponse(200, { result: { response: [] } })
+    }
+
+    assert.equal(params.model, 'res.partner')
+    const analyticTerm = params.domain.find((term) => Array.isArray(term) && term[0] === 'x_analytic_un_id')
+    assert.deepEqual(
+      analyticTerm,
+      ['x_analytic_un_id', 'in', [301, 201]],
+      'supervisor customer search did not include IGU34 and IGU analytic units',
+    )
+
+    const hasNameSearch = params.domain.some((term) => (
+      Array.isArray(term) && term[0] === 'name' && term[1] === 'ilike' && term[2] === 'migrado'
+    ))
+    return createJsonResponse(200, {
+      result: {
+        response: hasNameSearch
+          ? [{ id: 77, name: 'Cliente Migrado IGU34', x_analytic_un_id: [301, '[IGU34] Iguala 34'] }]
+          : [],
+      },
+    })
+  }
+
+  const result = await api('GET', '/pwa-supv/customers?q=migrado')
+
+  assert.equal(result.data.customers.length, 1)
+  assert.equal(result.data.customers[0].id, 77)
+})
+
 test('pos customer search includes new contacts without customer_rank', async () => {
   setSession()
 

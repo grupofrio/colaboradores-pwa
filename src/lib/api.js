@@ -1132,8 +1132,8 @@ async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 20
   const safeLimit = Math.min(Number(limit || 200) || 200, 500)
   // Use the plan_id=2 analytic account directly. The session/employee analytic account
   // is the CEDIS account (different plan), not the Unidad de Negocio used in x_analytic_un_id.
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomain = buildSupervisorCustomerDomains(analyticUnitId)
+  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+  const baseDomain = buildSupervisorCustomerDomains(analyticUnitIds)
   const query = String(q || '').trim()
   const rows = []
 
@@ -8384,8 +8384,8 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, status: 'error', code: 'customer_id_required', message: 'customer_id requerido.' }
     }
 
-    const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitId), ['id', '=', customerId]]
+    const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitIds), ['id', '=', customerId]]
     const customer = (await readSupervisorCustomerRows(customerDomain, 1))[0] || null
     if (!customer?.id) {
       return { ok: false, status: 'error', code: 'customer_not_found', message: 'Cliente fuera de tu sucursal o no encontrado.' }
