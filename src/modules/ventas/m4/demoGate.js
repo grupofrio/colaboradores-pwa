@@ -1,6 +1,6 @@
 // ─── KOLD OS · M4 — Gate del modo demo (JAMÁS en producción) ─────────────────
-// El demo (?demo=1 con fixture PROVISIONAL emitido por el core real del backend
-// congelado 978994c4) SOLO existe cuando:
+// El demo (?demo=1 con fixture emitido por el core real del backend del
+// PR #205) SOLO existe cuando:
 //   · build de desarrollo (import.meta.env.DEV === true), o
 //   · Preview explícitamente autorizado vía VITE_ENABLE_M4_DEMO === 'true'
 //     (variable de Vercel SOLO en Preview; producción no la define).

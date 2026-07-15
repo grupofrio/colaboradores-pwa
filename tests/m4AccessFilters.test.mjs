@@ -29,7 +29,7 @@ test('direccion_general: GLOBAL (primario y vía additional_job_keys)', () => {
   assert.equal(readM4Access(s('gerente_sucursal', { additional_job_keys: ['direccion_general'] })).level, 'global')
 })
 
-test('admin_plataforma (tower_status): GLOBAL — proyección aceptada por el backend congelado', () => {
+test('admin_plataforma (tower_status): GLOBAL — proyeccion aceptada por el backend', () => {
   assert.deepEqual(readM4Access(tower('admin_plataforma')),
     { level: 'global', reason: 'tower_admin_plataforma' })
 })

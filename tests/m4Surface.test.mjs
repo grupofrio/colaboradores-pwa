@@ -127,13 +127,25 @@ test('la UI muestra veredictos y el copy de lectura', () => {
   assert.match(screenSrc, /M4_CLASSIFICATION_LABELS/)
 })
 
-test('KPIs con universo/caveat; frontera M5/M8 declarada; sin números hardcodeados', () => {
-  assert.match(screenSrc, /universe=/)
-  assert.match(screenSrc, /caveat=/)
-  assert.match(screenSrc, /frontera M5/)
+test('KPIs del backend con su contrato; frontera M5/M6/M7/M8; sin números hardcodeados', () => {
+  // Los KPIs NO se derivan en la pantalla: se leen de payload.kpis, cada uno
+  // con universo/fuente/cobertura/salvedad/corte emitidos por el backend.
+  assert.match(screenSrc, /const kpis = payload\?\.kpis \|\| \{\}/)
+  assert.match(screenSrc, /kpi\.universe/)
+  assert.match(screenSrc, /kpi\.caveat/)
+  assert.match(screenSrc, /kpi\.source_model/)
+  assert.match(screenSrc, /kpi\.coverage/)
+  assert.match(screenSrc, /kpi\.data_as_of/)
+  // Las capabilities gobiernan: lo no evaluable se muestra "—", nunca 0.
+  assert.match(screenSrc, /const caps = payload\?\.capabilities\?\.features \|\| \{\}/)
+  assert.match(screenSrc, /NotEvaluableTile/)
+  assert.match(screenSrc, /La verdad de entrega e inventario es de M5/)
+  assert.match(screenSrc, /La verdad financiera es de M6/)
+  assert.match(screenSrc, /La rentabilidad es de M7/)
   assert.match(screenSrc, /NO ejecuta campañas ni automatización \(eso es M8\)/)
-  // Los totales reales del fixture NO aparecen literales en la pantalla:
-  for (const n of ['14078', '14,078', '6848', '6,848', '7224', '7,224', '12606', '12,606']) {
+  // Ninguna cifra del fixture vive literal en la pantalla (ni la vieja ni la nueva).
+  for (const n of ['14078', '14,078', '12158', '12,158', '6537', '6,537',
+    '5621', '5,621', '12606', '12,606', '584', '78']) {
     assert.ok(!screenSrc.includes(n), `número hardcodeado en la pantalla: ${n}`)
   }
 })
@@ -156,7 +168,9 @@ test('estados de error honestos: disabled/unavailable/forbidden/schema_mismatch/
   for (const state of ['disabled', 'unavailable', 'session_expired', 'forbidden', 'schema_mismatch', 'invalid', 'error']) {
     assert.ok(screenSrc.includes(`${state}:`), state)
   }
-  assert.match(screenSrc, /CONGELADO \(978994c4\)/)
+  // El estado "unavailable" nombra el gate REAL (PR sin mergear/desplegar),
+  // no inventa una causa ni promete datos que no existen.
+  assert.match(screenSrc, /GrupoVeniu\/GrupoFrio#205 \(DRAFT\)/)
 })
 
 test('el fixture del demo NO se declara corrida formal', () => {

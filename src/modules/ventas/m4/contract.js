@@ -1,12 +1,13 @@
-// ─── KOLD OS · M4 — contrato del envelope `kold.os.m4.api/1` (PROVISIONAL) ───
-// El backend está CONGELADO en GrupoVeniu/GrupoFrio `978994c4` bajo auditoría
-// de Codex. Este validador refleja ESE contrato; si el veredicto lo cambia,
-// se ajusta AQUÍ (y en koldOsM4Route.js) sin reescribir la pantalla.
+// ─── KOLD OS · M4 — contrato del envelope `kold.os.m4.api/1` ─────────────────
+// Espejo del backend: GrupoVeniu/GrupoFrio PR #205 (el commit `978994c4` que
+// auditó Codex, ya corregido). Si el contrato del backend cambia, se ajusta
+// AQUÍ (y en koldOsM4Route.js) sin reescribir la pantalla.
 //
 // FAIL-CLOSED. El frontend IMPONE la honestidad del backend: rechaza un
-// envelope que afirme más de lo que declara poder probar, que traiga PII, o
-// cuyos totales no cuadren. Molde: m2/contract.js (mergeado) + contrato
-// epistémico y metadata de evidencia del backend M4.
+// envelope que afirme más de lo que declara poder probar, que traiga PII, que
+// arrastre residuos de M3, cuyos KPIs no declaren su universo, o cuyos totales
+// no cuadren. Molde: m2/contract.js (mergeado) + contrato epistémico y
+// metadata de evidencia del backend M4.
 
 export const M4_API_SCHEMA_VERSION = 'kold.os.m4.api/1'
 export const M4_SUPPORTED_SCHEMA_VERSIONS = Object.freeze([M4_API_SCHEMA_VERSION])
@@ -15,6 +16,17 @@ export const M4_STALE_DAYS = 7
 // Detector de claves sensibles (PII). Un envelope con CUALQUIERA de estas
 // claves se RECHAZA: ocultar una columna no elimina el dato del browser.
 export const M4_FORBIDDEN_KEY_RE = /(?:password|passwd|api[_-]?key|token|secret|email|phone|mobile|display_name|partner_name|employee_name|customer_name|salesperson_name|contact_name|street|address|city_name|zip_code|vat_number|rfc|raw_value|free_text|notes)/i
+
+// Residuos de M3 (rutas/visitas/planes) en un envelope M4. Codex encontró que
+// `execution_kpis()` seguía calculando métricas de M3 que M4 jamás produce: el
+// objeto `kpis` salía entero en null. Si vuelven a aparecer, el envelope se
+// RECHAZA — un KPI de rutas dentro de M4 no es un dato, es un bug.
+export const M4_FORBIDDEN_M3_KPI_KEYS = Object.freeze([
+  'visit_compliance', 'plans_started_overdue_open', 'plans_started', 'plans_closed',
+  'stops_total', 'stops_visited', 'stops_pending', 'closure_compliance',
+  'routes_without_closure', 'boxes_open', 'offline_pending', 'plan_start_metrics',
+  'closure_metrics', 'stop_universe_metrics',
+])
 
 export const M4_CLASSIFICATIONS = Object.freeze(
   ['definitive', 'caveated', 'exploratory', 'not_evaluable', 'invalid'])
@@ -33,7 +45,7 @@ const SHA_RE = /^[0-9a-f]{7,64}$/
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-// Enums cerrados de evidencia (espejo del backend congelado). Cerrados a
+// Enums cerrados de evidencia (espejo del backend). Cerrados a
 // propósito: texto libre permitiría que una evidencia se auto-describa.
 const EVIDENCE_SOURCES = ['odoo_shell_production_run', 'xml_rpc_read_only_measurements']
 const EVIDENCE_CLASSIFICATIONS = ['formal_production_run', 'pre_deployment_semantic_validation']
@@ -188,6 +200,94 @@ function validateRuleResults(doc, errors) {
   }
 }
 
+// Cada KPI debe declarar su contrato completo. Un número sin universo ni fuente
+// es una afirmación sin respaldo: se rechaza el envelope entero, no se muestra
+// "por si acaso". `coverage`/`caveat` son opcionales (no todo KPI tiene
+// denominador ni salvedad); el resto es obligatorio.
+function validateKpis(doc, errors) {
+  const kpis = doc.kpis
+  if (!kpis || typeof kpis !== 'object' || Array.isArray(kpis)) {
+    errors.push('kpis: objeto requerido')
+    return
+  }
+  for (const key of M4_FORBIDDEN_M3_KPI_KEYS) {
+    if (key in kpis) errors.push(`kpis.${key}: residuo de M3 — M4 no mide rutas/visitas/planes`)
+  }
+  for (const [key, kpi] of Object.entries(kpis)) {
+    if (kpi === null || kpi === undefined) {
+      errors.push(`kpis.${key}: null — un KPI sin fuente NO se emite (se omite la clave)`)
+      continue
+    }
+    if (typeof kpi !== 'object' || Array.isArray(kpi)) {
+      errors.push(`kpis.${key}: objeto con contrato requerido (no un número suelto)`)
+      continue
+    }
+    if (!Number.isFinite(Number(kpi.value))) errors.push(`kpis.${key}.value: número finito requerido`)
+    if (typeof kpi.universe !== 'string' || !kpi.universe.trim()) {
+      errors.push(`kpis.${key}.universe: requerido (un número sin universo no significa nada)`)
+    }
+    if (typeof kpi.source_model !== 'string' || !kpi.source_model.trim()) {
+      errors.push(`kpis.${key}.source_model: requerido`)
+    }
+    if (!Array.isArray(kpi.source_fields) || !kpi.source_fields.length) {
+      errors.push(`kpis.${key}.source_fields: lista no vacía requerida`)
+    }
+    if (!isIso(kpi.data_as_of)) errors.push(`kpis.${key}.data_as_of: ISO requerido`)
+    if (kpi.coverage != null && !Number.isFinite(Number(kpi.coverage))) {
+      errors.push(`kpis.${key}.coverage: número o null`)
+    }
+  }
+}
+
+// Las capabilities gobiernan la UI: si el backend declara que NO puede medir
+// algo, la pantalla muestra "—", nunca un 0. Aquí se exige que las declare.
+function validateCapabilities(doc, errors) {
+  const caps = doc.capabilities
+  if (!caps || typeof caps !== 'object') {
+    errors.push('capabilities: objeto requerido')
+    return
+  }
+  if (!Array.isArray(caps.required_query_ids)) errors.push('capabilities.required_query_ids: requerido')
+  if (!Array.isArray(caps.granularities) || !caps.granularities.length) {
+    errors.push('capabilities.granularities: lista no vacía requerida')
+  } else if (!caps.granularities.every((g) => GRANULARITY_SET.has(g))) {
+    errors.push('capabilities.granularities: valor fuera del enum')
+  }
+  if (!caps.features || typeof caps.features !== 'object') {
+    errors.push('capabilities.features: objeto requerido (qué puede y qué NO puede medir M4)')
+    return
+  }
+  // Fronteras que M4 v1 NO cruza. Declararlas en `true` sería afirmar de más:
+  // la verdad de entrega es de M5, la financiera de M6, el margen de M7.
+  for (const feature of ['delivered_orders', 'invoiced_orders', 'paid_orders', 'margin']) {
+    if (caps.features[feature] === true) {
+      errors.push(`capabilities.features.${feature}: M4 v1 no mide esto — es de otro módulo`)
+    }
+  }
+  // Las dimensiones viven en `features` (espejo de core.capabilities()).
+  for (const dim of ['aggregate', 'branch_dimension', 'company_dimension', 'entity_detail']) {
+    if (!isBool(caps.features[dim])) errors.push(`capabilities.features.${dim}: booleano requerido`)
+  }
+}
+
+// La granularidad declarada por un finding no puede exceder lo que las
+// capabilities dicen que el auditor sabe producir.
+function validateGranularityCoherence(doc, errors) {
+  const caps = doc.capabilities
+  const declared = Array.isArray(caps?.granularities) ? new Set(caps.granularities) : null
+  if (!declared) return
+  for (const finding of doc.findings || []) {
+    if (finding?.granularity && !declared.has(finding.granularity)) {
+      errors.push(`findings: granularidad ${finding.granularity} no declarada en capabilities.granularities`)
+      break
+    }
+  }
+  if (caps.features?.branch_dimension === false
+    && (doc.findings || []).some((f) => f?.granularity === 'branch' || f?.branch_id != null)) {
+    errors.push('findings: hay dimensión de sucursal pero capabilities.features.branch_dimension=false')
+  }
+}
+
 function validateSummary(doc, errors) {
   const summary = doc.summary
   if (!summary || typeof summary !== 'object') {
@@ -294,22 +394,19 @@ export function validateM4Latest(doc) {
   if (doc.age_days != null && (!isInt(doc.age_days) || doc.age_days < 0)) {
     errors.push('age_days: entero >= 0 o null')
   }
-  if (!doc.kpis || typeof doc.kpis !== 'object') errors.push('kpis: objeto requerido')
   if (!doc.metrics || typeof doc.metrics !== 'object') errors.push('metrics: objeto requerido')
 
+  validateKpis(doc, errors)
   validateSummary(doc, errors)
   validateRuleResults(doc, errors)
   validateFindings(doc, errors)
+  validateCapabilities(doc, errors)
+  validateGranularityCoherence(doc, errors)
 
   if (!Array.isArray(doc.corrected)) errors.push('corrected: arreglo requerido')
   const history = doc.history
   if (!history || typeof history !== 'object' || !isInt(history.runs_count) || history.runs_count < 0) {
     errors.push('history.runs_count: entero >= 0 requerido')
-  }
-  const caps = doc.capabilities
-  if (!caps || typeof caps !== 'object'
-    || !Array.isArray(caps.required_query_ids)) {
-    errors.push('capabilities.required_query_ids: requerido')
   }
   if (!doc.applied_scope || typeof doc.applied_scope !== 'object' || !doc.applied_scope.level) {
     errors.push('applied_scope.level: requerido')

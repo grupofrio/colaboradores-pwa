@@ -35,6 +35,47 @@ test('rutas M4: paths exactos + allowlist sin PII + filtro fail-safe', () => {
   assert.deepEqual(filtered, { category: 'recurrencia', page: 2 })
 })
 
+// Detector de deriva entre repos. La allowlist del frontend debe ser el espejo
+// EXACTO de core.FINDINGS_FILTER_PARAMS (gf_kold_os_m4). Los dos modos de
+// fallar son silenciosos y opuestos:
+//   · parámetro de más → el backend lo mete en `rejected_params` y devuelve la
+//     lista SIN filtrar: la UI muestra "Incumplimiento" y lista anomalías.
+//   · parámetro de menos → se descarta antes de salir: el selector no hace nada.
+// Ninguno lanza un error, por eso se fija aquí.
+test('allowlist /findings: espejo exacto del backend gf_kold_os_m4 (PR #205)', () => {
+  const BACKEND_FINDINGS_FILTER_PARAMS = [
+    'run_id', 'company_id', 'branch_id',
+    'category', 'rule_code', 'classification', 'verdict', 'severity',
+    'lifecycle_status', 'responsible_area',
+    'granularity', 'entity_type', 'date_from', 'date_to',
+    'search', 'page', 'page_size',
+  ]
+  assert.deepEqual(
+    [...KOLD_OS_M4_FINDINGS_PARAMS].sort(),
+    [...BACKEND_FINDINGS_FILTER_PARAMS].sort(),
+    'la allowlist derivó del contrato del backend',
+  )
+  // El contrato epistémico DEBE poder filtrarse: es la razón de ser de M4.
+  for (const key of ['verdict', 'classification', 'responsible_area']) {
+    assert.ok(KOLD_OS_M4_FINDINGS_PARAMS.includes(key), `${key} debe llegar al backend`)
+  }
+  // Dimensiones que el contrato v1 NO tiene: pedirlas sería afirmar de más.
+  for (const banned of ['route_id', 'plan_id', 'vehicle_id', 'channel', 'customer_segment', 'product_id']) {
+    assert.ok(!KOLD_OS_M4_FINDINGS_PARAMS.includes(banned), `${banned} no existe en el contrato v1`)
+  }
+})
+
+// Todo filtro que la pantalla ofrece tiene que sobrevivir el viaje al backend.
+// Un selector que se ve pero no viaja es peor que no tener el selector.
+test('los filtros de la pantalla sobreviven filterKoldOsM4Params', async () => {
+  const { M4_DEFAULT_FILTERS } = await import('../src/modules/ventas/m4/filters.js')
+  const sent = Object.fromEntries(Object.keys(M4_DEFAULT_FILTERS).map((k) => [k, 'x']))
+  const survived = filterKoldOsM4Params(sent)
+  for (const key of Object.keys(M4_DEFAULT_FILTERS)) {
+    assert.ok(key in survived, `el filtro ${key} de la UI se descarta antes de salir`)
+  }
+})
+
 test('fetchM4Latest: envelope válido => ok con payload', async () => {
   const result = await fetchM4Latest({ apiImpl: async () => JSON.parse(JSON.stringify(M4_API_LATEST_FIXTURE)) })
   assert.equal(result.state, 'ok')

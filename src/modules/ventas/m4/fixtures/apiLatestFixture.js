@@ -1,27 +1,31 @@
-// Fixture PROVISIONAL del DEMO de M4 — emitido por el CÓDIGO REAL del backend
-// CONGELADO (GrupoVeniu/GrupoFrio commit 978994c4, bajo auditoría de Codex):
+// Fixture del DEMO de M4 — emitido por el CODIGO REAL del backend
+// (GrupoVeniu/GrupoFrio PR #205, rama feat/kold-os-m4-sales-customer-observability):
 // kold_os_m4_audit_core (manifiesto/sanitizador/hashes) + kold_os_m4_core
-// (37 reglas/veredictos/findings), alimentado con AGREGADOS REALES medidos por
-// XML-RPC read-only contra producción (ventana [2026-01-16, 2026-07-15)).
+// (37 reglas, contrato epistemico, commercial_kpis), alimentado con AGREGADOS
+// REALES medidos por XML-RPC read-only contra produccion, ventana acotada
+// [2026-01-16, 2026-07-15), universo canonico = raiz comercial con historial.
 //
-// ⚠ PROVISIONAL: si la auditoría de Codex cambia el contrato del backend, este
-// fixture se REGENERA desde el core corregido — no es fuente de verdad.
-// ⚠ is_production_shell_run = FALSE: NO es la corrida odoo-shell de producción
-// (bloqueada: sin llave SSH en Odoo.sh + módulo sin desplegar). Los NÚMEROS son
+// LINAJE: `measuring_commit` es el codigo que produjo ESTAS mediciones, y es el
+// mismo valor que `run.auditor_build_sha` del envelope (hay test). NO se fija el
+// head de la rama: el head avanza con cada commit y no responde la pregunta que
+// importa ("que codigo emitio estos numeros"). El ancestro auditado por Codex
+// (978994c4) queda registrado aparte. Declarar un SHA que no corresponde al
+// codigo que emitio la evidencia fue el hallazgo A8; no se repite.
+//
+// ⚠ is_production_shell_run = FALSE: NO es la corrida odoo-shell de produccion
+// (bloqueada: sin llave SSH en Odoo.sh + modulo sin desplegar). Los NUMEROS son
 // reales; la CORRIDA FORMAL no. La UI lo declara con un banner no ambiguo.
-// ⚠ auditor_build_sha = placeholder (40 ceros): el backend congelado se generó
-// antes de conocer su propio SHA; se estampa el real al descongelar. El commit
-// backend auditado es 978994c4 (ver provenance).
-// JAMÁS fuente productiva: solo DEV / Preview con VITE_ENABLE_M4_DEMO.
+// ⚠ JAMAS fuente productiva: solo DEV / Preview con VITE_ENABLE_M4_DEMO.
 
 export const M4_API_FIXTURE_PROVENANCE = Object.freeze({
   kind: 'real_code_generated_measured_aggregates',
-  provisional: true,
-  backend_frozen_commit: '978994c49baefac9da010580667ae89a8f7251d5',
-  auditor_core: 'gf_kold_os_m4/lib/kold_os_m4_audit_core.py (rama feat/kold-os-m4-sales-customer-observability)',
-  backend_core: 'gf_kold_os_m4/lib/kold_os_m4_core.py (misma rama, SIN PR: bajo auditoría de Codex)',
+  backend_pr: 'GrupoVeniu/GrupoFrio#205',
+  measuring_commit: 'f0894765a3d7517bd74ac4f0d1ff90ee8900fc59',
+  audited_ancestor: '978994c49baefac9da010580667ae89a8f7251d5',
+  auditor_core: 'gf_kold_os_m4/lib/kold_os_m4_audit_core.py',
+  backend_core: 'gf_kold_os_m4/lib/kold_os_m4_core.py',
   measurement_channel: 'xmlrpc_readonly (search_count/read_group) — cero writes, cero PII',
-  business_numbers: 'REALES — producción 2026-07-15, ventana [2026-01-16, 2026-07-15)',
+  business_numbers: 'REALES — produccion 2026-07-15, ventana [2026-01-16, 2026-07-15)',
   is_production_shell_run: false,
   production_shell_run_blocked_by: Object.freeze([
     'ssh_key_not_registered', 'module_not_deployed', 'production_shell_unavailable',
@@ -44,19 +48,30 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "invalid"
     ],
     "features": {
-      "branch_dimension": true,
+      "aggregate": true,
+      "branch_dimension": false,
+      "campaign_execution": false,
+      "channel_dimension": false,
+      "company_dimension": false,
+      "confirmed_orders": true,
+      "customer_dimension": false,
+      "delivered_orders": false,
       "entity_detail": false,
       "findings_pagination": true,
+      "historical_order_channel": false,
       "history": true,
-      "map_view": false,
-      "offline_telemetry": false,
-      "route_dimension": false,
-      "stop_dimension": false
+      "invoiced_orders": false,
+      "margin": false,
+      "order_dimension": false,
+      "paid_orders": false,
+      "pos_sales": false,
+      "pricelist_evaluation": false,
+      "product_dimension": false,
+      "returns": false
     },
     "findings_max_page_size": 100,
     "granularities": [
-      "aggregate",
-      "branch"
+      "aggregate"
     ],
     "optional_query_ids": [],
     "required_query_ids": [
@@ -91,24 +106,24 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "caveated",
       "company_id": null,
       "confidence": "high",
-      "denominator": 2333,
-      "description": "Clientes (customer_rank>0) sin channel_id.",
+      "denominator": 584,
+      "description": "Clientes del universo comercial cuyo res.partner.channel_id está vacío HOY.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
       "evidence_limitations": "El campo no es obligatorio por constraint: 176 sin canal puede incluir contactos legítimos sin canal asignado aún.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_channel_count",
           "customer_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Todo cliente comercial debería declarar su canal.",
@@ -116,26 +131,23 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
-      "incidences": 176,
+      "incidences": 39,
       "last_seen_at": "2026-07-15T09:00:00.400000Z",
       "lifecycle_status": "new",
-      "numerator": 176,
-      "observed_value": "176 de 2333 (7.54%)",
+      "numerator": 39,
+      "observed_value": "39 de 584 (6.68%)",
       "occurrence_count": 1,
       "owner_status": "unassigned",
-      "pct": 7.54,
-      "plan_id": null,
+      "pct": 6.68,
       "recommended_action": "Clasificar el canal del cliente en el maestro.",
       "responsible_area": "Comercial / Administración de datos maestros",
-      "route_id": null,
       "rule_code": "M4-A-01",
       "severity": "high",
       "source_model": "res.partner",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "RED",
-      "stop_id": null,
       "threshold_source": "Cobertura observada del maestro (no umbral aprobado de negocio).",
-      "title": "Cliente comercial sin canal",
+      "title": "Cliente comercial actualmente sin canal clasificado",
       "universe": "res.partner con customer_rank>0 de las compañías del scope.",
       "verdict": "riesgo"
     },
@@ -148,24 +160,24 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "caveated",
       "company_id": null,
       "confidence": "medium",
-      "denominator": 2333,
+      "denominator": 584,
       "description": "Clientes sin partner_latitude.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
       "evidence_limitations": "La geo mide geocódigo, no conducta comercial; algunos clientes de mostrador no requieren coordenada.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_geo_count",
           "customer_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Un cliente comercial debería tener coordenadas para ruteo/planeación.",
@@ -173,24 +185,21 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
-      "incidences": 265,
+      "incidences": 97,
       "last_seen_at": "2026-07-15T09:00:00.400000Z",
       "lifecycle_status": "new",
-      "numerator": 265,
-      "observed_value": "265 de 2333 (11.36%)",
+      "numerator": 97,
+      "observed_value": "97 de 584 (16.61%)",
       "occurrence_count": 1,
       "owner_status": "unassigned",
-      "pct": 11.36,
-      "plan_id": null,
+      "pct": 16.61,
       "recommended_action": "Geocodificar el cliente.",
       "responsible_area": "Comercial / Administración de datos maestros",
-      "route_id": null,
       "rule_code": "M4-A-02",
       "severity": "medium",
       "source_model": "res.partner",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "AMBER",
-      "stop_id": null,
       "threshold_source": "Cobertura observada (no umbral aprobado).",
       "title": "Cliente comercial sin geolocalización",
       "universe": "res.partner con customer_rank>0 del scope.",
@@ -205,24 +214,24 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "caveated",
       "company_id": null,
       "confidence": "medium",
-      "denominator": 2333,
+      "denominator": 584,
       "description": "Clientes sin country_id.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
       "evidence_limitations": "Campo no obligatorio; señal de calidad de datos.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_country_count",
           "customer_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Higiene mínima del maestro geográfico.",
@@ -230,24 +239,21 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
-      "incidences": 174,
+      "incidences": 95,
       "last_seen_at": "2026-07-15T09:00:00.400000Z",
       "lifecycle_status": "new",
-      "numerator": 174,
-      "observed_value": "174 de 2333 (7.46%)",
+      "numerator": 95,
+      "observed_value": "95 de 584 (16.27%)",
       "occurrence_count": 1,
       "owner_status": "unassigned",
-      "pct": 7.46,
-      "plan_id": null,
+      "pct": 16.27,
       "recommended_action": "Completar país en el maestro.",
       "responsible_area": "Comercial / Administración de datos maestros",
-      "route_id": null,
       "rule_code": "M4-A-03",
       "severity": "low",
       "source_model": "res.partner",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "AMBER",
-      "stop_id": null,
       "threshold_source": "Cobertura observada (no umbral aprobado).",
       "title": "Cliente comercial sin país",
       "universe": "res.partner con customer_rank>0 del scope.",
@@ -262,24 +268,24 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "caveated",
       "company_id": null,
       "confidence": "medium",
-      "denominator": 2333,
+      "denominator": 584,
       "description": "Clientes con active=False pero customer_rank>0.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
       "evidence_limitations": "El archivado puede ser una depuración legítima; no hay motivo estructurado obligatorio.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "archived_with_sales_count",
           "customer_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Un cliente con ventas no debería quedar archivado sin traza.",
@@ -287,26 +293,23 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
-      "incidences": 100,
+      "incidences": 168,
       "last_seen_at": "2026-07-15T09:00:00.400000Z",
       "lifecycle_status": "new",
-      "numerator": 100,
-      "observed_value": "100 de 2333 (4.29%)",
+      "numerator": 168,
+      "observed_value": "168 de 584 (28.77%)",
       "occurrence_count": 1,
       "owner_status": "unassigned",
-      "pct": 4.29,
-      "plan_id": null,
+      "pct": 28.77,
       "recommended_action": "Revisar si el archivado es intencional o una pérdida no clasificada.",
       "responsible_area": "Comercial / Administración de datos maestros",
-      "route_id": null,
       "rule_code": "M4-A-04",
       "severity": "medium",
       "source_model": "res.partner",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "AMBER",
-      "stop_id": null,
       "threshold_source": "Modelo (active + customer_rank), sin política de archivado aprobada.",
-      "title": "Cliente archivado con historial de ventas",
+      "title": "Cliente archivado con historial de pedidos confirmados",
       "universe": "res.partner con customer_rank>0 y active=False del scope.",
       "verdict": "riesgo"
     },
@@ -314,32 +317,32 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "approved_threshold": false,
       "branch_code": null,
       "branch_id": null,
-      "business_assumption": "El canal del pedido se deriva de partner_id.channel_id (verificado: el pedido no tiene canal propio).",
+      "business_assumption": "sale.order NO tiene channel_id (verificado): el canal se deriva del cliente.",
       "category": "clasificacion_canal",
       "classification": "caveated",
       "company_id": null,
       "confidence": "high",
       "denominator": 12606,
-      "description": "Pedidos confirmados cuyo partner_id.channel_id está vacío.",
+      "description": "Pedidos confirmados cuyo partner_id.channel_id está vacío AL MOMENTO de la auditoría.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "order",
-      "evidence_limitations": "176 clientes sin canal arrastran 368 pedidos; puede ser captura pendiente, no venta mal clasificada.",
+      "evidence_limitations": "CANAL ACTUAL, NO HISTÓRICO (Codex A4): channel_id refleja la clasificación de HOY del cliente, no un snapshot del momento del pedido. Un cliente reclasificado o clasificado después cambia este conteo retroactivamente ⇒ NO se puede afirmar 'el pedido se originó sin canal'. Sin snapshot histórico (capability historical_order_channel=false) esto es cobertura del maestro proyectada sobre pedidos, no un hecho del pedido.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_channel_customer_count",
           "confirmed_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "order_metrics"
       },
-      "expected_rule": "Toda venta debería poder atribuirse a un canal (vía el cliente).",
+      "expected_rule": "Un pedido confirmado debería poder atribuirse a un canal vía su cliente.",
       "finding_id": "M4-B-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::order:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
@@ -352,51 +355,48 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "occurrence_count": 1,
       "owner_status": "unassigned",
       "pct": 2.92,
-      "plan_id": null,
-      "recommended_action": "Clasificar el canal del cliente antes de facturar.",
+      "recommended_action": "Clasificar el canal del cliente en el maestro.",
       "responsible_area": "Comercial / Dirección de canal",
-      "route_id": null,
       "rule_code": "M4-B-01",
       "severity": "high",
       "source_model": "sale.order",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "RED",
-      "stop_id": null,
-      "threshold_source": "Cobertura observada del canal en el maestro (no umbral aprobado).",
-      "title": "Venta de cliente sin canal clasificado",
-      "universe": "sale.order state=sale en [window_start, window_end_exclusive) del scope; canal derivado del cliente (sale.order NO tiene channel_id).",
+      "threshold_source": "Cobertura ACTUAL del canal en el maestro (no umbral aprobado).",
+      "title": "Pedido confirmado cuyo cliente actualmente no tiene canal clasificado",
+      "universe": "Pedidos state='sale', company_id en scope, date_order en [window_start, window_end_exclusive); el canal se lee de partner_id.channel_id.",
       "verdict": "riesgo"
     },
     {
       "approved_threshold": false,
       "branch_code": null,
       "branch_id": null,
-      "business_assumption": "El vendedor es la unidad de atribución comercial.",
+      "business_assumption": "sale.order.user_id es el ÚNICO campo de vendedor medido por este auditor.",
       "category": "pedidos_ventas",
       "classification": "caveated",
       "company_id": null,
       "confidence": "high",
       "denominator": 12606,
-      "description": "sale.order state=sale sin user_id.",
+      "description": "Pedidos confirmados (state='sale') cuyo campo sale.order.user_id está vacío.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "order",
-      "evidence_limitations": "43.5% (5488/12606) sin vendedor: incluye mostrador y PWA B2C que legítimamente no tienen vendedor individual; sin umbral aprobado de cobertura.",
+      "evidence_limitations": "MIDE SOLO sale.order.user_id (Codex A3). NO evalúa res.partner.user_id, crm.team, vendedor de ruta, campos custom de empleado, POS, ecommerce ni integraciones ⇒ este número NO es 'ownership comercial total': un pedido sin user_id puede tener responsable por otra vía. Además incluye mostrador y PWA B2C, que legítimamente no tienen vendedor individual. Sin umbral de cobertura aprobado.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_salesperson_count",
           "confirmed_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "order_metrics"
       },
-      "expected_rule": "Toda venta debería tener vendedor atribuible.",
+      "expected_rule": "Un pedido confirmado debería declarar su vendedor en sale.order.user_id.",
       "finding_id": "M4-D-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::order:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
@@ -409,19 +409,16 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "occurrence_count": 1,
       "owner_status": "unassigned",
       "pct": 43.53,
-      "plan_id": null,
-      "recommended_action": "Asignar vendedor o documentar el canal sin vendedor individual (mostrador/PWA).",
+      "recommended_action": "Asignar user_id, o documentar los flujos que legítimamente no lo llevan (mostrador, PWA B2C) y excluirlos del universo en v1.1.",
       "responsible_area": "Comercial / Ventas",
-      "route_id": null,
       "rule_code": "M4-D-01",
       "severity": "high",
       "source_model": "sale.order",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "RED",
-      "stop_id": null,
-      "threshold_source": "Cobertura observada (no umbral aprobado).",
-      "title": "Venta confirmada sin vendedor",
-      "universe": "sale.order state=sale en la ventana del scope.",
+      "threshold_source": "Cobertura observada de un ÚNICO campo (no umbral aprobado).",
+      "title": "Pedido confirmado sin vendedor asignado en sale.order.user_id",
+      "universe": "Pedidos con state='sale', company_id en el scope y date_order en [window_start, window_end_exclusive).",
       "verdict": "riesgo"
     },
     {
@@ -440,17 +437,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "order",
       "evidence_limitations": "El modelo permite la venta; no hay constraint que lo prohíba (143 casos).",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "non_customer_count",
           "confirmed_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "order_metrics"
       },
       "expected_rule": "Una venta comercial debería ser a un cliente comercial (customer_rank>0).",
@@ -466,18 +463,15 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "occurrence_count": 1,
       "owner_status": "unassigned",
       "pct": 1.13,
-      "plan_id": null,
       "recommended_action": "Marcar el partner como cliente o corregir el pedido.",
       "responsible_area": "Comercial / Ventas",
-      "route_id": null,
       "rule_code": "M4-D-02",
       "severity": "high",
       "source_model": "sale.order",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "RED",
-      "stop_id": null,
       "threshold_source": "Modelo (customer_rank), sin constraint de bloqueo.",
-      "title": "Venta a contacto no-cliente comercial",
+      "title": "Pedido confirmado a contacto no-cliente comercial",
       "universe": "sale.order state=sale con partner_id.customer_rank<=0.",
       "verdict": "riesgo"
     },
@@ -497,17 +491,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "order",
       "evidence_limitations": "134 sin plaza; puede ser captura pendiente.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_analytic_count",
           "confirmed_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "order_metrics"
       },
       "expected_rule": "Toda venta debería atribuirse a una plaza (analytic).",
@@ -523,77 +517,71 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "occurrence_count": 1,
       "owner_status": "unassigned",
       "pct": 1.06,
-      "plan_id": null,
       "recommended_action": "Asignar la cuenta analítica de plaza.",
       "responsible_area": "Comercial / Ventas",
-      "route_id": null,
       "rule_code": "M4-D-03",
       "severity": "medium",
       "source_model": "sale.order",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "AMBER",
-      "stop_id": null,
       "threshold_source": "Cobertura observada (no umbral aprobado).",
-      "title": "Venta sin plaza / cuenta analítica",
+      "title": "Pedido confirmado sin plaza / cuenta analítica",
       "universe": "sale.order state=sale del scope.",
       "verdict": "riesgo"
     },
     {
-      "approved_threshold": true,
+      "approved_threshold": false,
       "branch_code": null,
       "branch_id": null,
-      "business_assumption": "Cantidad <=0 en una venta confirmada es aritméticamente inválido.",
+      "business_assumption": "Una línea de producto con cantidad cero no aporta al pedido y suele ser un residuo de captura.",
       "category": "pedidos_ventas",
-      "classification": "definitive",
+      "classification": "caveated",
       "company_id": null,
-      "confidence": "high",
+      "confidence": "medium",
       "denominator": 13778,
-      "description": "sale.order.line de ventas confirmadas con product_uom_qty<=0.",
+      "description": "sale.order.line de PRODUCTO (display_type vacío) de pedidos confirmados con product_uom_qty<=0.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "line",
-      "evidence_limitations": "Ninguna: es aritmética dura sobre el modelo.",
+      "evidence_limitations": "INSPECCIÓN A6 (read-only, sanitizada) de los casos reales: TODAS son qty=0 EXACTA (ninguna negativa), con qty_delivered=0 y qty_invoiced=0 (no afectan entrega ni facturación), sobre productos consu vendibles. Odoo NO lo prohíbe: no hay constraint ni política que exija qty>0 ⇒ es una anomalía de captura sin efecto operativo, NO un incumplimiento definitivo. La medición previa (6) incluía una línea display_type='line_section' (encabezado de sección), que por definición tiene qty=0 y NO es una línea de producto.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "qty_le_zero_count",
           "product_line_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "order_line_metrics"
       },
-      "expected_rule": "Una línea de venta confirmada no puede tener cantidad nula o negativa.",
+      "expected_rule": "Una línea de producto de un pedido confirmado debería tener cantidad > 0.",
       "finding_id": "M4-D-04::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::line:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
-      "incidences": 6,
+      "incidences": 5,
       "last_seen_at": "2026-07-15T09:00:00.400000Z",
       "lifecycle_status": "new",
-      "numerator": 6,
-      "observed_value": "6 de 13778 (0.04%)",
+      "numerator": 5,
+      "observed_value": "5 de 13778 (0.04%)",
       "occurrence_count": 1,
       "owner_status": "unassigned",
       "pct": 0.04,
-      "plan_id": null,
-      "recommended_action": "Corregir o anular la línea.",
+      "recommended_action": "Revisar si son residuos de captura; depurarlas o documentar el flujo que las crea.",
       "responsible_area": "Comercial / Ventas",
-      "route_id": null,
       "rule_code": "M4-D-04",
-      "severity": "high",
+      "severity": "medium",
       "source_model": "sale.order.line",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
-      "status": "RED",
-      "stop_id": null,
-      "threshold_source": "Aritmética del modelo (cantidad de una venta confirmada).",
-      "title": "Línea de venta con cantidad <= 0",
-      "universe": "sale.order.line con display_type vacío de ventas state=sale en la ventana.",
-      "verdict": "incumplimiento"
+      "status": "AMBER",
+      "threshold_source": "Modelo (product_uom_qty), SIN constraint ni política aprobada de cantidad mínima.",
+      "title": "Línea de pedido confirmado con cantidad <= 0",
+      "universe": "sale.order.line con display_type VACÍO (excluye secciones/notas) de pedidos state='sale' en [window_start, window_end_exclusive).",
+      "verdict": "riesgo"
     },
     {
       "approved_threshold": false,
@@ -611,17 +599,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "line",
       "evidence_limitations": "37.6% de líneas con descuento; sin política de descuento aprobada no hay umbral.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "discount_gt0_count",
           "product_line_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Observación del uso de descuento.",
@@ -637,16 +625,13 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "occurrence_count": 1,
       "owner_status": "unassigned",
       "pct": 37.6,
-      "plan_id": null,
       "recommended_action": "Ratificar una política de descuento (dirección de precios).",
       "responsible_area": "Comercial / Dirección de precios",
-      "route_id": null,
       "rule_code": "M4-E-01",
       "severity": "low",
       "source_model": "sale.order.line",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "AMBER",
-      "stop_id": null,
       "threshold_source": "Umbral NO aprobado (pendiente dirección de precios).",
       "title": "Líneas con descuento aplicado",
       "universe": "sale.order.line de producto de ventas confirmadas.",
@@ -668,17 +653,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "line",
       "evidence_limitations": "166 líneas; el umbral 50% es un default del observatorio, NO aprobado.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "discount_ge50_count",
           "product_line_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Descuentos altos deberían tener autorización.",
@@ -694,16 +679,13 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "occurrence_count": 1,
       "owner_status": "unassigned",
       "pct": 1.2,
-      "plan_id": null,
       "recommended_action": "Definir umbral y flujo de autorización de descuento.",
       "responsible_area": "Comercial / Dirección de precios",
-      "route_id": null,
       "rule_code": "M4-E-02",
       "severity": "medium",
       "source_model": "sale.order.line",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "AMBER",
-      "stop_id": null,
       "threshold_source": "Umbral NO aprobado (50% es default).",
       "title": "Descuento >= 50%",
       "universe": "sale.order.line de producto de ventas confirmadas.",
@@ -725,17 +707,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "line",
       "evidence_limitations": "3 líneas; umbral 90% es default del observatorio, NO aprobado.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "discount_ge90_count",
           "product_line_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Un descuento casi total suele ser un error o un caso especial.",
@@ -751,16 +733,13 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "occurrence_count": 1,
       "owner_status": "unassigned",
       "pct": 0.02,
-      "plan_id": null,
       "recommended_action": "Revisar caso por caso; definir umbral de bloqueo.",
       "responsible_area": "Comercial / Dirección de precios",
-      "route_id": null,
       "rule_code": "M4-E-03",
       "severity": "high",
       "source_model": "sale.order.line",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "RED",
-      "stop_id": null,
       "threshold_source": "Umbral NO aprobado (90% es default).",
       "title": "Descuento >= 90%",
       "universe": "sale.order.line de producto de ventas confirmadas.",
@@ -775,24 +754,24 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "exploratory",
       "company_id": null,
       "confidence": "medium",
-      "denominator": 2333,
-      "description": "Clientes comerciales sin ninguna venta confirmada en la ventana.",
+      "denominator": 584,
+      "description": "Clientes del universo sin ningún pedido confirmado en la ventana.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
       "evidence_limitations": "1620/2333 (69%) sin compra en 180d; 'dormido' NO tiene definición aprobada de ventana.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "dormant_count",
           "customer_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "recurrence_metrics"
       },
       "expected_rule": "Un cliente comercial activo debería comprar dentro de la ventana.",
@@ -800,26 +779,23 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
-      "incidences": 1620,
+      "incidences": 78,
       "last_seen_at": "2026-07-15T09:00:00.400000Z",
       "lifecycle_status": "new",
-      "numerator": 1620,
-      "observed_value": "1620 de 2333 (69.44%)",
+      "numerator": 78,
+      "observed_value": "78 de 584 (13.36%)",
       "occurrence_count": 1,
       "owner_status": "unassigned",
-      "pct": 69.44,
-      "plan_id": null,
+      "pct": 13.36,
       "recommended_action": "Definir la ventana de 'dormido' con dirección comercial.",
       "responsible_area": "Comercial / Desarrollo de clientes",
-      "route_id": null,
       "rule_code": "M4-F-01",
       "severity": "medium",
       "source_model": "res.partner",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "AMBER",
-      "stop_id": null,
       "threshold_source": "Ventana de dormido NO aprobada (180d es default).",
-      "title": "Clientes sin compra en la ventana (dormidos)",
+      "title": "Clientes sin pedido confirmado en la ventana (dormidos)",
       "universe": "res.partner customer_rank>0 sin sale.order state=sale en [window_start, window_end_exclusive).",
       "verdict": "anomalia"
     },
@@ -832,24 +808,24 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "exploratory",
       "company_id": null,
       "confidence": "medium",
-      "denominator": 245,
+      "denominator": 319,
       "description": "Clientes creados en la ventana con exactamente 1 pedido.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
       "evidence_limitations": "245 nuevos con orden, 73 con >=2; sin objetivo aprobado de 2ª compra.",
       "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
+        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "new_without_second_count",
           "new_with_order_count"
         ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
         "query_id": "recurrence_metrics"
       },
       "expected_rule": "Un cliente nuevo debería repetir compra.",
@@ -857,84 +833,24 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
-      "incidences": 172,
+      "incidences": 193,
       "last_seen_at": "2026-07-15T09:00:00.400000Z",
       "lifecycle_status": "new",
-      "numerator": 172,
-      "observed_value": "172 de 245 (70.2%)",
+      "numerator": 193,
+      "observed_value": "193 de 319 (60.5%)",
       "occurrence_count": 1,
       "owner_status": "unassigned",
-      "pct": 70.2,
-      "plan_id": null,
+      "pct": 60.5,
       "recommended_action": "Definir el objetivo de segunda compra (desarrollo de clientes).",
       "responsible_area": "Comercial / Desarrollo de clientes",
-      "route_id": null,
       "rule_code": "M4-F-02",
       "severity": "medium",
       "source_model": "res.partner",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "AMBER",
-      "stop_id": null,
       "threshold_source": "Objetivo NO aprobado.",
       "title": "Clientes nuevos sin segunda compra",
       "universe": "res.partner creados en la ventana con >=1 pedido confirmado, sin 2ª compra.",
-      "verdict": "anomalia"
-    },
-    {
-      "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
-      "business_assumption": "La caída de recurrencia es la señal más accionable de pérdida.",
-      "category": "recurrencia",
-      "classification": "exploratory",
-      "company_id": null,
-      "confidence": "medium",
-      "denominator": 2333,
-      "description": "Clientes con compra en 365d pero no en los últimos 180d.",
-      "entity_id": null,
-      "entity_reference": "AGREGADO (scope completo, contrato v1)",
-      "entity_type": "customer",
-      "evidence_limitations": "82 candidatos; 'perdido' NO tiene definición aprobada.",
-      "evidence_reference": {
-        "auditor_build_sha": "0000000000000000000000000000000000000000",
-        "contract_build_sha": null,
-        "evidence_classification": "pre_deployment_semantic_validation",
-        "evidence_fields": [
-          "lost_180_365_count",
-          "customer_count"
-        ],
-        "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
-        "evidence_source": "xml_rpc_read_only_measurements",
-        "is_production_shell_run": false,
-        "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
-        "query_id": "recurrence_metrics"
-      },
-      "expected_rule": "Un cliente que compraba y dejó de comprar es candidato a pérdida.",
-      "finding_id": "M4-F-03::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::customer:aggregate",
-      "first_seen_at": "2026-07-15T09:00:00.400000Z",
-      "granularity": "aggregate",
-      "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
-      "incidences": 82,
-      "last_seen_at": "2026-07-15T09:00:00.400000Z",
-      "lifecycle_status": "new",
-      "numerator": 82,
-      "observed_value": "82 de 2333 (3.51%)",
-      "occurrence_count": 1,
-      "owner_status": "unassigned",
-      "pct": 3.51,
-      "plan_id": null,
-      "recommended_action": "Definir 'perdido' con dirección comercial y activar reactivación (M8).",
-      "responsible_area": "Comercial / Desarrollo de clientes",
-      "route_id": null,
-      "rule_code": "M4-F-03",
-      "severity": "high",
-      "source_model": "res.partner",
-      "source_timestamp": "2026-07-15T09:00:00.400000Z",
-      "status": "RED",
-      "stop_id": null,
-      "threshold_source": "Definición de pérdida NO aprobada.",
-      "title": "Candidatos a pérdida (activos 365d, no 180d)",
-      "universe": "res.partner con sale.order en [today-365, window_start) pero no en la ventana (query declara ventana 365d propia).",
       "verdict": "anomalia"
     }
   ],
@@ -944,61 +860,305 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     "runs_count": 1
   },
   "kpis": {
-    "coverage": {
-      "checklist_applicable_pct": null,
-      "departure_km_pct": null,
-      "expected_distance_pct": null,
-      "km_pair_pct": null,
-      "note": "Cobertura del DATO, no cumplimiento: una cobertura baja invalida cualquier conclusión de la regla que dependa de ese campo.",
-      "vehicle_pct": null
+    "active_leads_in_scope": {
+      "caveat": "Sin ventana temporal: es el pipeline vigente, no un flujo del periodo.",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "company_id"
+      ],
+      "source_model": "crm.lead",
+      "universe": "crm.lead de las companias del scope",
+      "value": 1952
     },
-    "incidents_reported": null,
-    "no_sale_without_structured_reason": null,
-    "no_sales_count": null,
-    "offline_events_note": "Sin telemetría server-side: la cola offline vive en la app de campo.",
-    "offline_events_pending": null,
-    "offroute_visits_total": 0,
-    "offroute_visits_with_sale": null,
-    "plans_closed": null,
-    "plans_in_progress": null,
-    "plans_operational": null,
-    "plans_published_pending": null,
-    "plans_started_overdue_open": null,
-    "reconciliations_draft_on_closed_route": null,
-    "sales_count": null,
-    "stops_active_all": null,
-    "stops_done_all": null,
-    "visit_compliance": {
-      "denominator": null,
-      "excluded": {
-        "draft_route_stops": null,
-        "note": "Paradas de planes en borrador: fuera de todos los universos."
-      },
-      "numerator": null,
-      "rationale": "Es el universo que la operación se comprometió a ejecutar. Incluir paradas de planes nunca publicados/iniciados mide planeación no ejecutada, no cumplimiento de campo.",
-      "sensitivity": {
-        "all_active_stops": {
-          "denominator": null,
-          "note": "Incluye paradas de planes draft/published nunca iniciados (subestima).",
-          "numerator": null,
-          "value_pct": null
-        },
-        "closed_routes": {
-          "denominator": null,
-          "note": "Solo rutas cerradas (jornada terminada).",
-          "numerator": null,
-          "value_pct": null
-        },
-        "published_plus": {
-          "denominator": null,
-          "note": "Paradas de planes publicados o posteriores.",
-          "numerator": null,
-          "value_pct": null
-        }
-      },
-      "universe": "started_routes",
-      "universe_label": "Paradas activas de rutas que iniciaron (in_progress/closed/reconciled)",
-      "value_pct": null
+    "archived_customers_with_order_history": {
+      "caveat": "Archivar puede ser depuracion legitima; no hay motivo estructurado.",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "active",
+        "customer_rank"
+      ],
+      "source_model": "res.partner",
+      "universe": "Raices comerciales (commercial_partner_id = id) con al menos un pedido confirmado historico en las companias del scope. El maestro NO es scopeable por compania (438 partners con company_id vacio son compartidos entre companias), por eso el universo se DERIVA de los pedidos del scope.",
+      "value": 168
+    },
+    "cancelled_orders": {
+      "caveat": "Observacion cruda: sin politica de cancelacion aprobada.",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "state",
+        "date_order"
+      ],
+      "source_model": "sale.order",
+      "universe": "sale.order state='cancel', date_order en [2026-01-16, 2026-07-15)",
+      "value": 77
+    },
+    "commercial_customers_in_scope": {
+      "caveat": "Universo derivado de pedidos: NO incluye clientes sin historial de compra.",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "commercial_partner_id",
+        "customer_rank"
+      ],
+      "source_model": "res.partner",
+      "universe": "Raices comerciales (commercial_partner_id = id) con al menos un pedido confirmado historico en las companias del scope. El maestro NO es scopeable por compania (438 partners con company_id vacio son compartidos entre companias), por eso el universo se DERIVA de los pedidos del scope.",
+      "value": 584
+    },
+    "compliant_rule_count": {
+      "caveat": null,
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "verdict",
+        "classification"
+      ],
+      "source_model": "gf.kold.os.m4.finding (derivado del catalogo)",
+      "universe": "Catalogo de reglas M4 evaluadas en esta corrida",
+      "value": 8
+    },
+    "confirmed_order_lines": {
+      "caveat": "Excluye secciones y notas (display_type no vacio).",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "display_type"
+      ],
+      "source_model": "sale.order.line",
+      "universe": "Lineas de PRODUCTO (display_type vacio) de pedidos confirmados en [2026-01-16, 2026-07-15)",
+      "value": 13778
+    },
+    "confirmed_order_lines_with_discount": {
+      "caveat": "Sin politica de descuento aprobada: observacion, no incumplimiento.",
+      "coverage": 37.6,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "discount"
+      ],
+      "source_model": "sale.order.line",
+      "universe": "Lineas de PRODUCTO de pedidos confirmados en [2026-01-16, 2026-07-15)",
+      "value": 5181
+    },
+    "confirmed_order_lines_with_nonpositive_qty": {
+      "caveat": "Inspeccion A6: qty=0 exacta, sin entregar ni facturar; Odoo no lo prohibe => residuo de captura (RIESGO), NO incumplimiento.",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "product_uom_qty"
+      ],
+      "source_model": "sale.order.line",
+      "universe": "Lineas de PRODUCTO de pedidos confirmados en [2026-01-16, 2026-07-15)",
+      "value": 5
+    },
+    "confirmed_orders": {
+      "caveat": "Pedido CONFIRMADO. NO implica entregado/facturado/cobrado/pagado (M5/M6).",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "state",
+        "date_order",
+        "company_id"
+      ],
+      "source_model": "sale.order",
+      "universe": "sale.order state='sale', company_id en scope, date_order en [2026-01-16, 2026-07-15)",
+      "value": 12606
+    },
+    "confirmed_orders_to_non_commercial_partner": {
+      "caveat": "El modelo permite vender a un partner con customer_rank<=0.",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "partner_id.customer_rank"
+      ],
+      "source_model": "sale.order -> res.partner",
+      "universe": "Pedidos confirmados del scope en [2026-01-16, 2026-07-15)",
+      "value": 143
+    },
+    "confirmed_orders_whose_customer_currently_has_no_channel": {
+      "caveat": "Canal ACTUAL del cliente al momento de la auditoria (A4), NO snapshot del pedido.",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "partner_id.channel_id"
+      ],
+      "source_model": "sale.order -> res.partner",
+      "universe": "Pedidos confirmados del scope en [2026-01-16, 2026-07-15)",
+      "value": 368
+    },
+    "confirmed_orders_without_analytic_account": {
+      "caveat": null,
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "x_analytic_account_id"
+      ],
+      "source_model": "sale.order",
+      "universe": "Pedidos confirmados del scope en [2026-01-16, 2026-07-15)",
+      "value": 134
+    },
+    "confirmed_orders_without_sale_order_user_id": {
+      "caveat": "Mide SOLO sale.order.user_id (A3). NO evalua res.partner.user_id, crm.team, vendedor de ruta, POS ni integraciones: NO es ownership comercial total.",
+      "coverage": 56.47,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "user_id"
+      ],
+      "source_model": "sale.order",
+      "universe": "Pedidos confirmados del scope en [2026-01-16, 2026-07-15)",
+      "value": 5488
+    },
+    "customer_vat_duplicate_groups": {
+      "caveat": "Conteo sanitizado de grupos con VAT repetido; el valor jamas se expone.",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "vat"
+      ],
+      "source_model": "res.partner",
+      "universe": "Raices comerciales (commercial_partner_id = id) con al menos un pedido confirmado historico en las companias del scope. El maestro NO es scopeable por compania (438 partners con company_id vacio son compartidos entre companias), por eso el universo se DERIVA de los pedidos del scope.",
+      "value": 0
+    },
+    "customers_currently_without_channel": {
+      "caveat": "Canal ACTUAL del cliente (A4), NO el canal historico del pedido.",
+      "coverage": 93.32,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "channel_id"
+      ],
+      "source_model": "res.partner",
+      "universe": "Raices comerciales (commercial_partner_id = id) con al menos un pedido confirmado historico en las companias del scope. El maestro NO es scopeable por compania (438 partners con company_id vacio son compartidos entre companias), por eso el universo se DERIVA de los pedidos del scope.",
+      "value": 39
+    },
+    "customers_lost_prior_window": {
+      "caveat": "'Perdido' NO tiene definicion aprobada (exploratorio).",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "commercial_partner_id",
+        "date_order"
+      ],
+      "source_model": "sale.order -> res.partner",
+      "universe": "Raices con pedido en la ventana previa de igual longitud pero no en [2026-01-16, 2026-07-15)",
+      "value": 78
+    },
+    "customers_with_confirmed_orders": {
+      "caveat": null,
+      "coverage": 86.64,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "commercial_partner_id",
+        "date_order"
+      ],
+      "source_model": "sale.order -> res.partner",
+      "universe": "Raices del universo con >=1 pedido confirmado en [2026-01-16, 2026-07-15)",
+      "value": 506
+    },
+    "customers_without_geolocation": {
+      "caveat": "Mide geocodificacion del maestro, no conducta comercial.",
+      "coverage": 83.39,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "partner_latitude"
+      ],
+      "source_model": "res.partner",
+      "universe": "Raices comerciales (commercial_partner_id = id) con al menos un pedido confirmado historico en las companias del scope. El maestro NO es scopeable por compania (438 partners con company_id vacio son compartidos entre companias), por eso el universo se DERIVA de los pedidos del scope.",
+      "value": 97
+    },
+    "customers_without_orders_in_window": {
+      "caveat": "'Dormido' NO tiene definicion de ventana aprobada (exploratorio).",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "commercial_partner_id",
+        "date_order"
+      ],
+      "source_model": "sale.order -> res.partner",
+      "universe": "Universo (raices con historial) sin pedido confirmado en [2026-01-16, 2026-07-15)",
+      "value": 78
+    },
+    "definitive_incident_count": {
+      "caveat": null,
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "verdict",
+        "classification"
+      ],
+      "source_model": "gf.kold.os.m4.finding (derivado del catalogo)",
+      "universe": "Catalogo de reglas M4 evaluadas en esta corrida",
+      "value": 0
+    },
+    "exploratory_signal_count": {
+      "caveat": null,
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "verdict",
+        "classification"
+      ],
+      "source_model": "gf.kold.os.m4.finding (derivado del catalogo)",
+      "universe": "Catalogo de reglas M4 evaluadas en esta corrida",
+      "value": 5621
+    },
+    "new_customers_first_order_in_window": {
+      "caveat": null,
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "commercial_partner_id",
+        "date_order"
+      ],
+      "source_model": "sale.order -> res.partner",
+      "universe": "Raices cuyo primer pedido del historial cae en [2026-01-16, 2026-07-15)",
+      "value": 319
+    },
+    "new_customers_without_second_order": {
+      "caveat": "Objetivo de 2a compra NO aprobado (exploratorio).",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "commercial_partner_id"
+      ],
+      "source_model": "sale.order -> res.partner",
+      "universe": "Raices con primer pedido en [2026-01-16, 2026-07-15) y exactamente 1 pedido",
+      "value": 193
+    },
+    "not_evaluable_rule_count": {
+      "caveat": null,
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "verdict",
+        "classification"
+      ],
+      "source_model": "gf.kold.os.m4.finding (derivado del catalogo)",
+      "universe": "Catalogo de reglas M4 evaluadas en esta corrida",
+      "value": 15
+    },
+    "recurrent_customers": {
+      "caveat": "Umbral >=2 para 'recurrente' NO ratificado por direccion comercial.",
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "commercial_partner_id"
+      ],
+      "source_model": "sale.order -> res.partner",
+      "universe": "Raices con >=2 pedidos confirmados en [2026-01-16, 2026-07-15)",
+      "value": 305
+    },
+    "warning_count": {
+      "caveat": null,
+      "coverage": null,
+      "data_as_of": "2026-07-15T09:00:00.400000Z",
+      "source_fields": [
+        "verdict",
+        "classification"
+      ],
+      "source_model": "gf.kold.os.m4.finding (derivado del catalogo)",
+      "universe": "Catalogo de reglas M4 evaluadas en esta corrida",
+      "value": 6537
     }
   },
   "metrics": {
@@ -1018,12 +1178,12 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     ],
     "customer_master_metrics": [
       {
-        "archived_with_sales_count": 100,
-        "customer_count": 2333,
-        "no_channel_count": 176,
-        "no_company_count": 0,
-        "no_country_count": 174,
-        "no_geo_count": 265
+        "archived_with_sales_count": 168,
+        "customer_count": 584,
+        "no_channel_count": 39,
+        "no_country_count": 95,
+        "no_geo_count": 97,
+        "non_commercial_rank_count": 18
       }
     ],
     "module_status": [
@@ -1052,7 +1212,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "price_lt_zero_count": 0,
         "price_zero_count": 0,
         "product_line_count": 13778,
-        "qty_le_zero_count": 6
+        "qty_le_zero_count": 5
       }
     ],
     "order_metrics": [
@@ -1066,27 +1226,27 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     ],
     "order_state_metrics": [
       {
+        "order_count": 77,
+        "state": "cancel"
+      },
+      {
         "order_count": 2562,
         "state": "draft"
       },
       {
         "order_count": 12606,
         "state": "sale"
-      },
-      {
-        "order_count": 77,
-        "state": "cancel"
       }
     ],
     "recurrence_metrics": [
       {
-        "active_in_window_count": 713,
-        "customer_count": 2333,
-        "dormant_count": 1620,
-        "lost_180_365_count": 82,
-        "new_with_order_count": 245,
-        "new_without_second_count": 172,
-        "recurrent_count": 491
+        "active_in_window_count": 506,
+        "customer_count": 584,
+        "dormant_count": 78,
+        "lost_prior_window_count": 78,
+        "new_with_order_count": 319,
+        "new_without_second_count": 193,
+        "recurrent_count": 305
       }
     ],
     "schema_catalog": [
@@ -1128,6 +1288,10 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       },
       {
         "column_name": "create_date",
+        "table_name": "res_partner"
+      },
+      {
+        "column_name": "commercial_partner_id",
         "table_name": "res_partner"
       },
       {
@@ -1205,7 +1369,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     ],
     "scope_validation": [
       {
-        "customer_count": 2333
+        "customer_count": 584
       }
     ]
   },
@@ -1218,15 +1382,15 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "maestro_clientes",
       "classification": "caveated",
       "confidence": "high",
-      "denominator": 2333,
+      "denominator": 584,
       "evidence_limitations": "El campo no es obligatorio por constraint: 176 sin canal puede incluir contactos legítimos sin canal asignado aún.",
       "granularity": "aggregate",
-      "incidences": 176,
-      "name": "Cliente comercial sin canal",
+      "incidences": 39,
+      "name": "Cliente comercial actualmente sin canal clasificado",
       "not_evaluable_reason": null,
-      "numerator": 176,
-      "observed_value": "176 de 2333 (7.54%)",
-      "pct": 7.54,
+      "numerator": 39,
+      "observed_value": "39 de 584 (6.68%)",
+      "pct": 6.68,
       "rule_code": "M4-A-01",
       "severity": "high",
       "status": "RED",
@@ -1240,15 +1404,15 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "maestro_clientes",
       "classification": "caveated",
       "confidence": "medium",
-      "denominator": 2333,
+      "denominator": 584,
       "evidence_limitations": "La geo mide geocódigo, no conducta comercial; algunos clientes de mostrador no requieren coordenada.",
       "granularity": "aggregate",
-      "incidences": 265,
+      "incidences": 97,
       "name": "Cliente comercial sin geolocalización",
       "not_evaluable_reason": null,
-      "numerator": 265,
-      "observed_value": "265 de 2333 (11.36%)",
-      "pct": 11.36,
+      "numerator": 97,
+      "observed_value": "97 de 584 (16.61%)",
+      "pct": 16.61,
       "rule_code": "M4-A-02",
       "severity": "medium",
       "status": "AMBER",
@@ -1262,15 +1426,15 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "maestro_clientes",
       "classification": "caveated",
       "confidence": "medium",
-      "denominator": 2333,
+      "denominator": 584,
       "evidence_limitations": "Campo no obligatorio; señal de calidad de datos.",
       "granularity": "aggregate",
-      "incidences": 174,
+      "incidences": 95,
       "name": "Cliente comercial sin país",
       "not_evaluable_reason": null,
-      "numerator": 174,
-      "observed_value": "174 de 2333 (7.46%)",
-      "pct": 7.46,
+      "numerator": 95,
+      "observed_value": "95 de 584 (16.27%)",
+      "pct": 16.27,
       "rule_code": "M4-A-03",
       "severity": "low",
       "status": "AMBER",
@@ -1284,15 +1448,15 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "maestro_clientes",
       "classification": "caveated",
       "confidence": "medium",
-      "denominator": 2333,
+      "denominator": 584,
       "evidence_limitations": "El archivado puede ser una depuración legítima; no hay motivo estructurado obligatorio.",
       "granularity": "aggregate",
-      "incidences": 100,
-      "name": "Cliente archivado con historial de ventas",
+      "incidences": 168,
+      "name": "Cliente archivado con historial de pedidos confirmados",
       "not_evaluable_reason": null,
-      "numerator": 100,
-      "observed_value": "100 de 2333 (4.29%)",
-      "pct": 4.29,
+      "numerator": 168,
+      "observed_value": "168 de 584 (28.77%)",
+      "pct": 28.77,
       "rule_code": "M4-A-04",
       "severity": "medium",
       "status": "AMBER",
@@ -1307,7 +1471,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "not_evaluable",
       "confidence": "n/a",
       "denominator": null,
-      "evidence_limitations": "GOTCHA verificado: el property field no es filtrable por dominio; medirlo aquí sería inventar un número.",
+      "evidence_limitations": "GOTCHA verificado (Codex A7): property_product_pricelist es un campo company-dependent (ir.property): el mismo dominio devuelve el MISMO conteo con !=False y con =False, así que medirlo por dominio sería inventar un número. NO es imposible de evaluar: se puede con ORM with_company()/ir.property, pero eso está FUERA del alcance del auditor v1 (capability pricelist_evaluation=false).",
       "granularity": "aggregate",
       "incidences": null,
       "name": "Cobertura de lista de precios del cliente",
@@ -1318,7 +1482,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "rule_code": "M4-A-05",
       "severity": "medium",
       "status": "NOT_EVALUABLE",
-      "threshold_source": "n/a (no medible en v1).",
+      "threshold_source": "n/a (fuera del alcance del auditor v1, no imposible).",
       "universe": "res.partner con customer_rank>0.",
       "verdict": "no_evaluable"
     },
@@ -1372,33 +1536,33 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "maestro_clientes",
       "classification": "definitive",
       "confidence": "high",
-      "denominator": 2333,
+      "denominator": null,
       "evidence_limitations": "Ninguna: el scope se define por company_id, el campo está o no.",
       "granularity": "aggregate",
       "incidences": null,
       "name": "Cliente comercial sin compañía",
-      "not_evaluable_reason": null,
-      "numerator": 0,
-      "observed_value": "0 de 2333 (0.0%)",
-      "pct": 0.0,
+      "not_evaluable_reason": "métrica no disponible / denominador cero",
+      "numerator": null,
+      "observed_value": "Métrica no disponible o denominador cero",
+      "pct": null,
       "rule_code": "M4-A-08",
       "severity": "high",
-      "status": "GREEN",
+      "status": "NOT_EVALUABLE",
       "threshold_source": "Modelo (company_id como eje de scope multiempresa).",
       "universe": "res.partner con customer_rank>0 del scope.",
-      "verdict": "cumple"
+      "verdict": "no_evaluable"
     },
     {
       "approved_threshold": false,
-      "business_assumption": "El canal del pedido se deriva de partner_id.channel_id (verificado: el pedido no tiene canal propio).",
+      "business_assumption": "sale.order NO tiene channel_id (verificado): el canal se deriva del cliente.",
       "category": "clasificacion_canal",
       "classification": "caveated",
       "confidence": "high",
       "denominator": 12606,
-      "evidence_limitations": "176 clientes sin canal arrastran 368 pedidos; puede ser captura pendiente, no venta mal clasificada.",
+      "evidence_limitations": "CANAL ACTUAL, NO HISTÓRICO (Codex A4): channel_id refleja la clasificación de HOY del cliente, no un snapshot del momento del pedido. Un cliente reclasificado o clasificado después cambia este conteo retroactivamente ⇒ NO se puede afirmar 'el pedido se originó sin canal'. Sin snapshot histórico (capability historical_order_channel=false) esto es cobertura del maestro proyectada sobre pedidos, no un hecho del pedido.",
       "granularity": "aggregate",
       "incidences": 368,
-      "name": "Venta de cliente sin canal clasificado",
+      "name": "Pedido confirmado cuyo cliente actualmente no tiene canal clasificado",
       "not_evaluable_reason": null,
       "numerator": 368,
       "observed_value": "368 de 12606 (2.92%)",
@@ -1406,8 +1570,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "rule_code": "M4-B-01",
       "severity": "high",
       "status": "RED",
-      "threshold_source": "Cobertura observada del canal en el maestro (no umbral aprobado).",
-      "universe": "sale.order state=sale en [window_start, window_end_exclusive) del scope; canal derivado del cliente (sale.order NO tiene channel_id).",
+      "threshold_source": "Cobertura ACTUAL del canal en el maestro (no umbral aprobado).",
+      "universe": "Pedidos state='sale', company_id en scope, date_order en [window_start, window_end_exclusive); el canal se lee de partner_id.channel_id.",
       "verdict": "riesgo"
     },
     {
@@ -1420,7 +1584,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "evidence_limitations": "No agregado en v1; los 5 canales medidos están activos.",
       "granularity": "aggregate",
       "incidences": null,
-      "name": "Canal inactivo con ventas recientes",
+      "name": "Canal inactivo con pedidos confirmados recientes",
       "not_evaluable_reason": "Requiere join canal.active ↔ ventas; el catálogo v1 no lo agrega.",
       "numerator": null,
       "observed_value": "No evaluable en el contrato v1",
@@ -1442,7 +1606,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "evidence_limitations": "Sin portafolio-por-canal aprobado, cualquier conteo sería arbitrario.",
       "granularity": "aggregate",
       "incidences": null,
-      "name": "Venta fuera del portafolio del canal",
+      "name": "Pedido confirmado fuera del portafolio del canal",
       "not_evaluable_reason": "No existe un portafolio-por-canal aprobado contra el cual comparar.",
       "numerator": null,
       "observed_value": "No evaluable en el contrato v1",
@@ -1544,15 +1708,15 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "business_assumption": "El vendedor es la unidad de atribución comercial.",
+      "business_assumption": "sale.order.user_id es el ÚNICO campo de vendedor medido por este auditor.",
       "category": "pedidos_ventas",
       "classification": "caveated",
       "confidence": "high",
       "denominator": 12606,
-      "evidence_limitations": "43.5% (5488/12606) sin vendedor: incluye mostrador y PWA B2C que legítimamente no tienen vendedor individual; sin umbral aprobado de cobertura.",
+      "evidence_limitations": "MIDE SOLO sale.order.user_id (Codex A3). NO evalúa res.partner.user_id, crm.team, vendedor de ruta, campos custom de empleado, POS, ecommerce ni integraciones ⇒ este número NO es 'ownership comercial total': un pedido sin user_id puede tener responsable por otra vía. Además incluye mostrador y PWA B2C, que legítimamente no tienen vendedor individual. Sin umbral de cobertura aprobado.",
       "granularity": "aggregate",
       "incidences": 5488,
-      "name": "Venta confirmada sin vendedor",
+      "name": "Pedido confirmado sin vendedor asignado en sale.order.user_id",
       "not_evaluable_reason": null,
       "numerator": 5488,
       "observed_value": "5488 de 12606 (43.53%)",
@@ -1560,8 +1724,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "rule_code": "M4-D-01",
       "severity": "high",
       "status": "RED",
-      "threshold_source": "Cobertura observada (no umbral aprobado).",
-      "universe": "sale.order state=sale en la ventana del scope.",
+      "threshold_source": "Cobertura observada de un ÚNICO campo (no umbral aprobado).",
+      "universe": "Pedidos con state='sale', company_id en el scope y date_order en [window_start, window_end_exclusive).",
       "verdict": "riesgo"
     },
     {
@@ -1574,7 +1738,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "evidence_limitations": "El modelo permite la venta; no hay constraint que lo prohíba (143 casos).",
       "granularity": "aggregate",
       "incidences": 143,
-      "name": "Venta a contacto no-cliente comercial",
+      "name": "Pedido confirmado a contacto no-cliente comercial",
       "not_evaluable_reason": null,
       "numerator": 143,
       "observed_value": "143 de 12606 (1.13%)",
@@ -1596,7 +1760,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "evidence_limitations": "134 sin plaza; puede ser captura pendiente.",
       "granularity": "aggregate",
       "incidences": 134,
-      "name": "Venta sin plaza / cuenta analítica",
+      "name": "Pedido confirmado sin plaza / cuenta analítica",
       "not_evaluable_reason": null,
       "numerator": 134,
       "observed_value": "134 de 12606 (1.06%)",
@@ -1609,26 +1773,26 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "verdict": "riesgo"
     },
     {
-      "approved_threshold": true,
-      "business_assumption": "Cantidad <=0 en una venta confirmada es aritméticamente inválido.",
+      "approved_threshold": false,
+      "business_assumption": "Una línea de producto con cantidad cero no aporta al pedido y suele ser un residuo de captura.",
       "category": "pedidos_ventas",
-      "classification": "definitive",
-      "confidence": "high",
+      "classification": "caveated",
+      "confidence": "medium",
       "denominator": 13778,
-      "evidence_limitations": "Ninguna: es aritmética dura sobre el modelo.",
+      "evidence_limitations": "INSPECCIÓN A6 (read-only, sanitizada) de los casos reales: TODAS son qty=0 EXACTA (ninguna negativa), con qty_delivered=0 y qty_invoiced=0 (no afectan entrega ni facturación), sobre productos consu vendibles. Odoo NO lo prohíbe: no hay constraint ni política que exija qty>0 ⇒ es una anomalía de captura sin efecto operativo, NO un incumplimiento definitivo. La medición previa (6) incluía una línea display_type='line_section' (encabezado de sección), que por definición tiene qty=0 y NO es una línea de producto.",
       "granularity": "aggregate",
-      "incidences": 6,
-      "name": "Línea de venta con cantidad <= 0",
+      "incidences": 5,
+      "name": "Línea de pedido confirmado con cantidad <= 0",
       "not_evaluable_reason": null,
-      "numerator": 6,
-      "observed_value": "6 de 13778 (0.04%)",
+      "numerator": 5,
+      "observed_value": "5 de 13778 (0.04%)",
       "pct": 0.04,
       "rule_code": "M4-D-04",
-      "severity": "high",
-      "status": "RED",
-      "threshold_source": "Aritmética del modelo (cantidad de una venta confirmada).",
-      "universe": "sale.order.line con display_type vacío de ventas state=sale en la ventana.",
-      "verdict": "incumplimiento"
+      "severity": "medium",
+      "status": "AMBER",
+      "threshold_source": "Modelo (product_uom_qty), SIN constraint ni política aprobada de cantidad mínima.",
+      "universe": "sale.order.line con display_type VACÍO (excluye secciones/notas) de pedidos state='sale' en [window_start, window_end_exclusive).",
+      "verdict": "riesgo"
     },
     {
       "approved_threshold": true,
@@ -1640,7 +1804,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "evidence_limitations": "Ninguna: aritmética dura (0 casos medidos).",
       "granularity": "aggregate",
       "incidences": null,
-      "name": "Línea de venta con precio unitario negativo",
+      "name": "Línea de pedido confirmado con precio unitario negativo",
       "not_evaluable_reason": null,
       "numerator": 0,
       "observed_value": "0 de 13778 (0.0%)",
@@ -1662,7 +1826,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "evidence_limitations": "Ninguna: el modelo distingue línea de producto (display_type vacío) de nota.",
       "granularity": "aggregate",
       "incidences": null,
-      "name": "Línea de venta sin producto",
+      "name": "Línea de pedido confirmado sin producto",
       "not_evaluable_reason": null,
       "numerator": 0,
       "observed_value": "0 de 13778 (0.0%)",
@@ -1684,7 +1848,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "evidence_limitations": "La verdad de entrega es M5; M4 no la evalúa.",
       "granularity": "aggregate",
       "incidences": null,
-      "name": "Venta confirmada pendiente de entrega (señal)",
+      "name": "Pedido confirmado pendiente de entrega (señal)",
       "not_evaluable_reason": "La verdad de entrega/inventario pertenece a M5; aquí es solo señal cruda.",
       "numerator": null,
       "observed_value": "No evaluable en el contrato v1",
@@ -1812,15 +1976,15 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "recurrencia",
       "classification": "exploratory",
       "confidence": "medium",
-      "denominator": 2333,
+      "denominator": 584,
       "evidence_limitations": "1620/2333 (69%) sin compra en 180d; 'dormido' NO tiene definición aprobada de ventana.",
       "granularity": "aggregate",
-      "incidences": 1620,
-      "name": "Clientes sin compra en la ventana (dormidos)",
+      "incidences": 78,
+      "name": "Clientes sin pedido confirmado en la ventana (dormidos)",
       "not_evaluable_reason": null,
-      "numerator": 1620,
-      "observed_value": "1620 de 2333 (69.44%)",
-      "pct": 69.44,
+      "numerator": 78,
+      "observed_value": "78 de 584 (13.36%)",
+      "pct": 13.36,
       "rule_code": "M4-F-01",
       "severity": "medium",
       "status": "AMBER",
@@ -1834,15 +1998,15 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "recurrencia",
       "classification": "exploratory",
       "confidence": "medium",
-      "denominator": 245,
+      "denominator": 319,
       "evidence_limitations": "245 nuevos con orden, 73 con >=2; sin objetivo aprobado de 2ª compra.",
       "granularity": "aggregate",
-      "incidences": 172,
+      "incidences": 193,
       "name": "Clientes nuevos sin segunda compra",
       "not_evaluable_reason": null,
-      "numerator": 172,
-      "observed_value": "172 de 245 (70.2%)",
-      "pct": 70.2,
+      "numerator": 193,
+      "observed_value": "193 de 319 (60.5%)",
+      "pct": 60.5,
       "rule_code": "M4-F-02",
       "severity": "medium",
       "status": "AMBER",
@@ -1856,21 +2020,21 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "recurrencia",
       "classification": "exploratory",
       "confidence": "medium",
-      "denominator": 2333,
+      "denominator": null,
       "evidence_limitations": "82 candidatos; 'perdido' NO tiene definición aprobada.",
       "granularity": "aggregate",
-      "incidences": 82,
+      "incidences": null,
       "name": "Candidatos a pérdida (activos 365d, no 180d)",
-      "not_evaluable_reason": null,
-      "numerator": 82,
-      "observed_value": "82 de 2333 (3.51%)",
-      "pct": 3.51,
+      "not_evaluable_reason": "métrica no disponible / denominador cero",
+      "numerator": null,
+      "observed_value": "Métrica no disponible o denominador cero",
+      "pct": null,
       "rule_code": "M4-F-03",
       "severity": "high",
-      "status": "RED",
+      "status": "NOT_EVALUABLE",
       "threshold_source": "Definición de pérdida NO aprobada.",
       "universe": "res.partner con sale.order en [today-365, window_start) pero no en la ventana (query declara ventana 365d propia).",
-      "verdict": "anomalia"
+      "verdict": "no_evaluable"
     },
     {
       "approved_threshold": false,
@@ -2028,36 +2192,36 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     }
   ],
   "run": {
-    "auditor_build_sha": "0000000000000000000000000000000000000000",
+    "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
     "contract_build_sha": null,
     "duration_ms": 400,
     "environment": "dev",
     "evidence_classification": "pre_deployment_semantic_validation",
-    "evidence_sha256": "ffd021e00e4f24d17230e1dd8b7f2a7a18257f1565b7ce811f090ed0da12a5ab",
+    "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
     "evidence_source": "xml_rpc_read_only_measurements",
     "executed_queries": [
-      "module_status",
-      "schema_catalog",
-      "scope_validation",
-      "customer_master_metrics",
+      "crm_metrics",
       "customer_dup_metrics",
+      "customer_master_metrics",
+      "module_status",
+      "order_line_metrics",
       "order_metrics",
       "order_state_metrics",
-      "order_line_metrics",
-      "crm_metrics",
-      "recurrence_metrics"
+      "recurrence_metrics",
+      "schema_catalog",
+      "scope_validation"
     ],
     "finished_at": "2026-07-15T09:00:00.400000Z",
     "ingested_at": null,
     "is_production_shell_run": false,
-    "manifest_sha256": "461ac6e2bc84f3e006647d23896e3ea2e951ceec57c5987dd478e8242407793c",
+    "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
     "production_shell_run_blocked_by": [
       "ssh_key_not_registered",
       "module_not_deployed",
       "production_shell_unavailable"
     ],
     "rollback_confirmed": true,
-    "run_id": "ac907397f120013cd269ec2fb0c9b15313a10ef4181f0fe81a0be53f0c2a6d29",
+    "run_id": "79beb5ead9d75ae44559b1aa1b7bbb08046b6b0fb535c88716cf423831bb368c",
     "scope": {
       "company_ids": [
         1,
@@ -2081,21 +2245,21 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
   "stale": false,
   "summary": {
     "branches_with_findings": [],
-    "compliant_rule_count": 9,
-    "definitive_incident_count": 6,
-    "definitive_incident_rule_count": 1,
-    "exploratory_signal_count": 7224,
-    "exploratory_signal_rule_count": 6,
-    "not_evaluable_rule_count": 13,
-    "overall_status": "RED",
-    "rules_fail": 1,
-    "rules_not_evaluable": 13,
-    "rules_pass": 9,
+    "compliant_rule_count": 8,
+    "definitive_incident_count": 0,
+    "definitive_incident_rule_count": 0,
+    "exploratory_signal_count": 5621,
+    "exploratory_signal_rule_count": 5,
+    "not_evaluable_rule_count": 15,
+    "overall_status": "AMBER",
+    "rules_fail": 0,
+    "rules_not_evaluable": 15,
+    "rules_pass": 8,
     "rules_warning": 14,
-    "total_incidences": 14078,
+    "total_incidences": 12158,
     "total_rules": 37,
     "unique_records_available": false,
-    "warning_count": 6848,
-    "warning_rule_count": 8
+    "warning_count": 6537,
+    "warning_rule_count": 9
   }
 })

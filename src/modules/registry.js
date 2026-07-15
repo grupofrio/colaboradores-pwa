@@ -196,9 +196,9 @@ export const MODULES = [
 
   // ── KOLD OS · M4 — Ventas y clientes (observatorio read-only) ────────────
   // Evidencia de la operación comercial (maestro de clientes, canal, leads,
-  // pedidos, precio/descuento, recurrencia, portafolio, pérdida/recompra,
-  // señal M4→M2) desde la API autenticada gf_kold_os_m4 (backend CONGELADO
-  // 978994c4 bajo auditoría de Codex; contrato provisional).
+  // pedidos confirmados, precio/descuento, recurrencia, portafolio,
+  // pérdida/recompra, señal M4→M2) desde la API autenticada gf_kold_os_m4
+  // (GrupoVeniu/GrupoFrio PR #205, aún sin mergear ni desplegar).
   // accessPolicy 'm4': tarjeta, nav Y clic se deciden con readM4Access
   // (misma mecánica que M2 — dispatch inline en navModel), NUNCA por roles
   // genéricos. `roles` queda SOLO como documentación. M4VentasRoute (App.jsx)

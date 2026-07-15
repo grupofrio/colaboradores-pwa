@@ -1,19 +1,30 @@
 # M4 — Spec funcional (frontend "Ventas y clientes")
 
-**Estado: backend CONGELADO (978994c4) bajo auditoría de Codex · contrato
-PROVISIONAL · evidencia NO formal · cero PII · sin campañas (M8 LOCK) · cero
-writes · PR DRAFT, no Ready.**
+**Estado: backend GrupoVeniu/GrupoFrio PR #205 (DRAFT, `4e195a92`) · evidencia
+NO formal · cero PII · sin campañas (M8 LOCK) · cero writes · PR DRAFT, no
+Ready.**
 
 ## Qué es
 Observatorio READ-ONLY de la operación comercial: 9 bloques (maestro de
-clientes, clasificación/canal, leads, pedidos/ventas, precio/descuento,
+clientes, clasificación/canal, leads, pedidos confirmados, precio/descuento,
 recurrencia, portafolio, pérdida/recompra, señal M4→M2) alimentados por la API
 autenticada `gf_kold_os_m4` (GET /pwa-kold-os/m4/{latest,findings,runs}).
+
+## Definiciones que la UI respeta al pie de la letra
+- **Pedido confirmado** = `sale.order` `state='sale'` en el scope y la ventana.
+  **Nunca "venta"**: no implica entregado (M5) / facturado / cobrado (M6) /
+  margen (M7) / POS / devoluciones.
+- **Vendedor** = SOLO `sale.order.user_id` (no es ownership comercial total).
+- **Canal** = `res.partner.channel_id` **ACTUAL** del cliente (el pedido no
+  tiene canal propio) ⇒ "actualmente sin canal clasificado", no "se vendió sin
+  canal".
+- **Cliente** = raíz comercial (`commercial_partner_id = id`) con historial de
+  pedido confirmado en el scope.
 
 ## Autoridad y acceso (v1, fail-closed)
 - `direccion_general` (x_job_key efectivo) → GLOBAL.
 - `admin_plataforma` (tower_status autoritativo, proyección server-side de
-  direccion_general — el backend congelado la acepta en `_access_for`) → GLOBAL.
+  direccion_general — el backend la acepta en `_access_for`) → GLOBAL.
 - gerente_sucursal / supervisor_ventas / vendedor / chofer / jefe_ruta → SIN
   ACCESO (no existe rol comercial autoritativo por sucursal; autorizarlos “por
   nombre” = decisión S/N futura en AMBAS allowlists).
@@ -23,8 +34,10 @@ autenticada `gf_kold_os_m4` (GET /pwa-kold-os/m4/{latest,findings,runs}).
 
 ## Flujo
 1. `/latest` → valida contrato → header + banners (DEMO/no-formal/STALE) +
-   veredictos + KPIs (derivados de `metrics`) + 9 bloques.
-2. `/findings` → tabla paginada SERVER-side con filtros del contrato.
+   veredictos + **KPIs emitidos por el backend** (cada uno con universo/fuente/
+   cobertura/salvedad/corte) + 9 bloques. Las `capabilities` gobiernan: lo que
+   el contrato no puede evaluar se muestra "—" con su razón, **nunca 0**.
+2. `/findings` → tabla paginada SERVER-side con los filtros del contrato.
 3. Panel de detalle por hallazgo: observado/esperado/universo/cobertura/
    supuesto/limitaciones/umbral+fuente/linaje/lifecycle.
 4. Exports client-side: CSV, JSON evidencia, resumen ejecutivo, recurrencia,
@@ -33,4 +46,5 @@ autenticada `gf_kold_os_m4` (GET /pwa-kold-os/m4/{latest,findings,runs}).
 ## Qué NO hace
 No edita clientes/pedidos/precios/canales; no crea ni cancela pedidos; no envía
 WhatsApp/email/push (M8); no muestra PII; no persiste nada en el navegador; no
-consume archivos públicos; sin fallback n8n.
+consume archivos públicos; sin fallback n8n. **No deriva KPIs**: si el backend
+no lo emite, la pantalla no lo inventa.

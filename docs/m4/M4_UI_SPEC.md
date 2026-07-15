@@ -5,14 +5,21 @@
 1. **Encabezado**: título + pills READ-ONLY / AUDITOR / DATOS / EVIDENCIA
    FORMAL·NO FORMAL / DEMO + línea de contexto (corte, ventana absoluta, scope,
    nº consultas, linaje auditor_build_sha, manifest/evidence sha, fuente).
-2. **Banners**: MODO DEMO (provisional + commit congelado) · EVIDENCIA NO FORMAL
-   (por el DATO `!run.is_production_shell_run`, con bloqueadores y build) ·
-   STALE (edad + umbral) · copy "Lee los veredictos…" + frontera M8.
+2. **Banners**: MODO DEMO (PR + head del backend que emitió el fixture) ·
+   EVIDENCIA NO FORMAL (por el DATO `!run.is_production_shell_run`, con
+   bloqueadores y build) · STALE (edad + umbral) · copy "Lee los veredictos…" +
+   frontera M8.
 3. **Qué prueba la evidencia**: 5 VerdictTile (incumplimiento/riesgo/anomalía/
    cumple/no evaluable) con reglas e incidencias; nota total = suma exacta.
-4. **Señal comercial**: 16 KpiTile derivados de `metrics`, cada uno con universo
-   visible y caveat en tooltip; corte en el título de la sección. "Reactivados"
-   y "Entregados" = "—" con frontera declarada (definición pendiente / M5).
+4. **Señal comercial**: KpiTile **emitidos por el backend** (`payload.kpis`),
+   agrupados en Clientes / Maestro y canal / Pedidos confirmados. La pantalla NO
+   los deriva: cada tile presenta el `value` del backend con su `universe`
+   visible y `source_model`/`source_fields`/`coverage`/`caveat`/`data_as_of` en
+   el tooltip. **Si el backend no emite un KPI, el tile no se renderiza.**
+   Bloque "Fuera del contrato v1": las capabilities en `false` se muestran como
+   NotEvaluableTile ("—" + razón: M5 entrega, M6 financiero, M7 margen, POS y
+   devoluciones no auditados), **nunca como 0**. "Reactivados" = "—" (sin
+   definición aprobada ni 2ª corrida).
 5. **9 bloques comerciales**: peor veredicto del bloque como pill, conteo por
    veredicto, reglas con "umbral no aprobado" cuando aplica, granularidad, CTA
    que filtra el detalle.

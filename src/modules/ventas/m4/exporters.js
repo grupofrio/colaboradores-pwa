@@ -101,7 +101,7 @@ export function executiveSummaryText(payload, { demo = false } = {}) {
   const lines = [
     'KOLD OS · M4 — VENTAS, CLIENTES Y CANALES (resumen ejecutivo)',
     '=============================================================',
-    demo ? '⚠ ORIGEN: MODO DEMO (fixture PROVISIONAL emitido por el core real del backend congelado 978994c4; NO evidencia en vivo)' : 'ORIGEN: API autenticada gf_kold_os_m4',
+    demo ? '⚠ ORIGEN: MODO DEMO (fixture emitido por el core real del backend GrupoVeniu/GrupoFrio#205; numeros reales medidos por XML-RPC, NO evidencia en vivo)' : 'ORIGEN: API autenticada gf_kold_os_m4',
     payload?.stale ? `⚠ CORRIDA STALE: ${payload?.age_days ?? '?'} días de antigüedad (no vigente)` : 'Corrida vigente',
     nonformal
       ? `⚠ EVIDENCIA NO FORMAL: no es corrida odoo-shell de producción. Bloqueada por: ${(run.production_shell_run_blocked_by || []).join(' · ') || '—'}`
@@ -147,7 +147,7 @@ export function recurrenceText(payload, { demo = false } = {}) {
   const lines = [
     'KOLD OS · M4 — RECURRENCIA DE CLIENTES',
     '======================================',
-    demo ? '⚠ MODO DEMO (fixture provisional; NO evidencia en vivo)' : 'API autenticada gf_kold_os_m4',
+    demo ? '⚠ MODO DEMO (fixture del core real del backend; NO evidencia en vivo)' : 'API autenticada gf_kold_os_m4',
     run.is_production_shell_run !== true ? '⚠ EVIDENCIA NO FORMAL (sin corrida odoo-shell)' : 'EVIDENCIA FORMAL',
     `Ventana: [${run.scope?.window_start || '—'}, ${run.scope?.window_end_exclusive || '—'}) · corte ${run.finished_at || '—'}`,
     '',

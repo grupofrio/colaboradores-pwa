@@ -1,20 +1,28 @@
 // ─── ScreenVentasM4 — KOLD OS · M4 "Ventas y clientes" ──────────────────────
 // Observatorio READ-ONLY de la operación comercial (maestro de clientes, canal,
-// leads, pedidos, precio/descuento, recurrencia, portafolio, pérdida/recompra y
-// señal M4→M2). Consume EXCLUSIVAMENTE la API autenticada de gf_kold_os_m4
-// (GET /pwa-kold-os/m4/{latest,findings,runs}) vía api() — cero writes, cero
-// botones de acción (auto_fix=false por contrato). M4 define segmento/motivo/
-// oferta de recompra; NO ejecuta campañas/opt-in/automatización (M8, LOCK).
+// leads, pedidos confirmados, precio/descuento, recurrencia, portafolio,
+// pérdida/recompra y señal M4→M2). Consume EXCLUSIVAMENTE la API autenticada de
+// gf_kold_os_m4 (GET /pwa-kold-os/m4/{latest,findings,runs}) vía api() — cero
+// writes, cero botones de acción (auto_fix=false por contrato).
 //
-// CONTRATO PROVISIONAL: el backend está CONGELADO (978994c4) bajo auditoría de
-// Codex. Los KPIs comerciales se derivan de `metrics` (el agregado real del
-// contrato); el objeto `kpis` del backend congelado aún tiene forma M3 y emite
-// None — gap DECLARADO para la corrección post-auditoría (M4_KNOWN_LIMITATIONS).
+// DEFINICIONES CANÓNICAS del backend (PR GrupoVeniu/GrupoFrio#205) — la UI las
+// respeta al pie de la letra:
+//   · "pedido confirmado" = sale.order state='sale' en el scope y la ventana.
+//     NUNCA "venta": no implica entregado (M5) / facturado / cobrado (M6) /
+//     margen (M7) / POS / devoluciones.
+//   · vendedor = SOLO sale.order.user_id (no es ownership comercial total).
+//   · canal = res.partner.channel_id ACTUAL (el pedido no tiene canal propio).
+//   · cliente = raíz comercial con historial de pedido confirmado en el scope.
+//   · M4 define segmento/motivo/oferta de recompra; NO ejecuta campañas (M8 LOCK).
 //
-// La UI muestra VEREDICTOS, no solo colores: solo los INCUMPLIMIENTOS tienen
-// umbral aprobado + supuesto verificado; las ANOMALÍAS señalan dónde mirar.
-// El banner de evidencia se decide por el DATO (!run.is_production_shell_run),
-// no por el modo de entrega.
+// Los KPIs los emite el BACKEND (commercial_kpis) con su propio contrato:
+// value/universe/source_model/source_fields/coverage/caveat/data_as_of. La UI
+// NO los deriva ni los inventa: si el backend no emite un KPI, no se muestra.
+// Las capabilities gobiernan qué existe: capability=false ⇒ "—" + explicación,
+// JAMÁS un 0.
+//
+// La UI muestra VEREDICTOS, no solo colores. El banner de evidencia se decide
+// por el DATO (!run.is_production_shell_run), no por el modo de entrega.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
@@ -80,17 +88,47 @@ function VerdictTile({ verdict, rules, incidences }) {
   )
 }
 
-// KPI con universo/caveat obligatorios: sin contexto un número miente.
-function KpiTile({ label, value, tone, universe, caveat }) {
-  const note = [universe ? `Universo: ${universe}` : '', caveat || ''].filter(Boolean).join(' · ')
+// KpiTile: presenta un KPI del BACKEND con su contrato completo. `kpi` es el
+// objeto {value, universe, source_model, source_fields, coverage, caveat,
+// data_as_of}. Si es undefined (el backend no lo emitió) el tile no se renderiza.
+function KpiTile({ label, kpi, tone, format = fmtInt }) {
+  if (!kpi) return null
+  const note = [
+    `Universo: ${kpi.universe}`,
+    `Fuente: ${kpi.source_model} (${(kpi.source_fields || []).join(', ')})`,
+    kpi.coverage != null ? `Cobertura: ${kpi.coverage}%` : '',
+    kpi.caveat ? `⚠ ${kpi.caveat}` : '',
+    `Corte: ${fmtDateTime(kpi.data_as_of)}`,
+  ].filter(Boolean).join('\n')
   return (
-    <div style={{
+    <div title={note} style={{
       background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg,
-      padding: '10px 12px', minWidth: 118, flex: '1 1 118px',
-    }} title={note || undefined}>
-      <div style={{ fontSize: 20, fontWeight: 800, color: tone || C.text }}>{value}</div>
+      padding: '10px 12px', minWidth: 132, flex: '1 1 132px',
+    }}>
+      <div style={{ fontSize: 20, fontWeight: 800, color: tone || C.text }}>{format(kpi.value)}</div>
       <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>{label}</div>
-      {universe && <div style={{ fontSize: 9.5, color: C.textLow, marginTop: 2 }}>{universe}</div>}
+      <div style={{ fontSize: 9.5, color: C.textLow, marginTop: 2, lineHeight: 1.3 }}>
+        {String(kpi.universe).slice(0, 64)}{String(kpi.universe).length > 64 ? '…' : ''}
+      </div>
+      {kpi.coverage != null && (
+        <div style={{ fontSize: 9.5, color: C.textLow }}>cobertura {kpi.coverage}%</div>
+      )}
+      {kpi.caveat && <div style={{ fontSize: 9.5, color: '#fbbf24', marginTop: 2 }}>⚠ con salvedad</div>}
+    </div>
+  )
+}
+
+// Lo que el contrato declara FUERA de alcance: se muestra "—" con su razón,
+// JAMÁS un 0 (capability=false no es un cero).
+function NotEvaluableTile({ label, reason }) {
+  return (
+    <div title={reason} style={{
+      background: C.surfaceSoft, border: `1px dashed ${C.border}`, borderRadius: TOKENS.radius.lg,
+      padding: '10px 12px', minWidth: 132, flex: '1 1 132px',
+    }}>
+      <div style={{ fontSize: 20, fontWeight: 800, color: C.textLow }}>—</div>
+      <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: 9.5, color: C.textLow, marginTop: 2, lineHeight: 1.3 }}>{reason}</div>
     </div>
   )
 }
@@ -228,18 +266,11 @@ export default function ScreenVentasM4({ session }) {
     [table.items, openFindingId],
   )
 
-  // KPIs comerciales derivados de metrics (el agregado REAL del contrato) —
-  // el objeto `kpis` del backend congelado tiene forma M3 y emite None (gap
-  // declarado). Cada tile porta universo + caveat; el corte va en el header.
-  const kpi = useMemo(() => {
-    const first = (id) => (payload?.metrics?.[id] || [])[0] || {}
-    const master = first('customer_master_metrics')
-    const orders = first('order_metrics')
-    const rec = first('recurrence_metrics')
-    const states = Object.fromEntries((payload?.metrics?.order_state_metrics || [])
-      .filter((r) => r && typeof r === 'object').map((r) => [r.state, r.order_count]))
-    return { master, orders, rec, states }
-  }, [payload])
+  // Los KPIs los emite el backend con su contrato (value/universe/source_model/
+  // source_fields/coverage/caveat/data_as_of). La UI solo los presenta: si el
+  // backend no emitió un KPI (fuente inexistente), aquí no aparece.
+  const kpis = payload?.kpis || {}
+  const caps = payload?.capabilities?.features || {}
 
   const wrap = { maxWidth: 1200, margin: '0 auto', padding: '18px 16px 90px', color: C.text }
   const typo = getTypo ? getTypo() : {}
@@ -252,7 +283,7 @@ export default function ScreenVentasM4({ session }) {
   if (!payload) {
     const copy = {
       disabled: ['La API de M4 está apagada (flag)', 'El backend gf_kold_os_m4 responde feature_disabled: el flag gf_kold_os.m4.enabled sigue en "0". Encenderlo requiere S/N.'],
-      unavailable: ['Sin fuente de datos disponible', 'La API autenticada de M4 (gf_kold_os_m4) aún no está desplegada o no tiene corridas ingeridas. El backend está CONGELADO (978994c4) bajo auditoría de Codex; el despliegue y la ingesta son gates posteriores.'],
+      unavailable: ['Sin fuente de datos disponible', 'La API autenticada de M4 (gf_kold_os_m4) aún no está desplegada o no tiene corridas ingeridas. El módulo vive en el PR GrupoVeniu/GrupoFrio#205 (DRAFT); el merge, el despliegue y la ingesta son gates posteriores con S/N.'],
       session_expired: ['Sesión expirada', 'Vuelve a iniciar sesión para consultar M4.'],
       forbidden: ['Sin permiso M4', 'Tu sesión no tiene acceso M4 (direccion_general / admin_plataforma). El acceso es fail-closed.'],
       schema_mismatch: ['Versión de contrato no soportada', 'El backend publica una versión de kold.os.m4.api que esta UI no soporta. Actualiza la PWA (no se intenta adivinar la estructura).'],
@@ -267,7 +298,7 @@ export default function ScreenVentasM4({ session }) {
           <p style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.55, marginTop: 8 }}>{copy[1]}</p>
           {demoAllowed && (
             <p style={{ fontSize: 12, color: C.textLow, marginTop: 6 }}>
-              Modo demostración (solo este entorno): <code>?demo=1</code> — fixture PROVISIONAL generado por el core real del backend congelado, no evidencia en vivo.
+              Modo demostración (solo este entorno): <code>?demo=1</code> — fixture generado por el core real del backend del PR #205, no evidencia en vivo.
             </p>
           )}
         </div>
@@ -289,10 +320,10 @@ export default function ScreenVentasM4({ session }) {
           marginTop: 10, padding: '8px 12px', borderRadius: 10, fontSize: 11.5,
           background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)', color: '#fbbf24',
         }}>
-          MODO DEMO ({M4_API_FIXTURE_PROVENANCE.kind}, PROVISIONAL) — envelope generado por el core real del backend
-          CONGELADO (GrupoVeniu/GrupoFrio {M4_API_FIXTURE_PROVENANCE.backend_frozen_commit.slice(0, 8)}, bajo auditoría
-          de Codex) con los NÚMEROS REALES medidos en producción (XML-RPC read-only 2026-07-15). NO es una corrida
-          odoo-shell, NO existe en producción y se regenera si la auditoría cambia el contrato.
+          MODO DEMO ({M4_API_FIXTURE_PROVENANCE.kind}) — envelope generado por el core real del backend
+          ({M4_API_FIXTURE_PROVENANCE.backend_pr}, midió {M4_API_FIXTURE_PROVENANCE.measuring_commit.slice(0, 8)}) con
+          los NÚMEROS REALES medidos en producción (XML-RPC read-only 2026-07-15). NO es una corrida odoo-shell, NO
+          existe en producción y se regenera si el contrato del backend cambia.
         </div>
       )}
 
@@ -347,36 +378,61 @@ export default function ScreenVentasM4({ session }) {
         Historial: {runsCount} corrida(s){hasHistory ? '' : ' — tendencias y persistencia aparecen con la segunda'}.
       </div>
 
-      {/* KPIs comerciales (derivados de metrics; universo declarado por tile) */}
-      <h2 style={{ ...typo.h3, fontSize: 15, marginTop: 20 }}>Señal comercial — corte {fmtDateTime(run.finished_at)}</h2>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
-        <KpiTile label="Clientes comerciales" value={fmtInt(kpi.rec.customer_count)} universe="customer_rank>0 activos del scope" />
-        <KpiTile label="Con compra en ventana" value={fmtInt(kpi.rec.active_in_window_count)} tone={STATUS_COLORS.GREEN} universe="≥1 pedido confirmado en la ventana" />
-        <KpiTile label="Recurrentes (≥2 pedidos)" value={fmtInt(kpi.rec.recurrent_count)} universe="pedidos confirmados en ventana" />
-        <KpiTile label="Sin compra en ventana" value={fmtInt(kpi.rec.dormant_count)} tone={STATUS_COLORS.AMBER}
-          universe="clientes activos del scope" caveat='Definición de "dormido" NO aprobada (exploratorio)' />
-        <KpiTile label="Nuevos con pedido" value={fmtInt(kpi.rec.new_with_order_count)} universe="creados en la ventana" />
-        <KpiTile label="Nuevos sin 2ª compra" value={fmtInt(kpi.rec.new_without_second_count)} tone={STATUS_COLORS.AMBER}
-          universe="nuevos con exactamente 1 pedido" caveat="Objetivo de 2ª compra NO aprobado" />
-        <KpiTile label="Candidatos a pérdida" value={fmtInt(kpi.rec.lost_180_365_count)} tone={STATUS_COLORS.AMBER}
-          universe="compraron en 365d, no en 180d" caveat='Definición de "perdido" NO aprobada' />
-        <KpiTile label="Reactivados" value="—" universe="sin definición aprobada" caveat="Requiere definición + historial (v1.1)" />
+      {/* KPIs COMERCIALES emitidos por el backend (cada uno con su contrato) */}
+      <h2 style={{ ...typo.h3, fontSize: 15, marginTop: 20 }}>
+        Señal comercial — corte {fmtDateTime(run.finished_at)}
+      </h2>
+      <div style={{ fontSize: 10.5, color: C.textLow, marginTop: 4, marginBottom: 8 }}>
+        Cada indicador declara su universo, su fuente y su salvedad (pasa el cursor por encima).
+        <b> "Pedido confirmado" = sale.order en estado <code>sale</code></b>: no implica entregado,
+        facturado ni cobrado. Lo que el contrato v1 no puede evaluar se muestra como “—”, nunca como 0.
       </div>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
-        <KpiTile label="Pedidos confirmados" value={fmtInt(kpi.orders.confirmed_count)} universe="state=sale en la ventana" />
-        <KpiTile label="Cancelados" value={fmtInt(kpi.states.cancel)} universe="state=cancel en la ventana"
-          caveat="Sin política de cancelación aprobada (observación)" />
-        <KpiTile label="Entregados" value="—" universe="frontera M5" caveat="La verdad de entrega/inventario pertenece a M5" />
-        <KpiTile label="Sin vendedor" value={fmtInt(kpi.orders.no_salesperson_count)} tone={STATUS_COLORS.AMBER}
-          universe="pedidos confirmados" caveat="Incluye mostrador/PWA sin vendedor individual (riesgo, no incumplimiento)" />
-        <KpiTile label="Venta a no-cliente" value={fmtInt(kpi.orders.non_customer_count)} tone={STATUS_COLORS.AMBER}
-          universe="partner con customer_rank≤0" />
-        <KpiTile label="Clientes sin canal" value={fmtInt(kpi.master.no_channel_count)} tone={STATUS_COLORS.AMBER}
-          universe="clientes activos del scope" caveat="El canal vive en el CLIENTE (el pedido no tiene canal propio)" />
-        <KpiTile label="Pedidos de clientes sin canal" value={fmtInt(kpi.orders.no_channel_customer_count)}
-          universe="confirmados en la ventana" />
-        <KpiTile label="Archivados con ventas" value={fmtInt(kpi.master.archived_with_sales_count)}
-          universe="customer_rank>0, active=false" caveat="Posible pérdida no clasificada" />
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.textSoft, marginTop: 6 }}>Clientes</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
+        <KpiTile label="Clientes comerciales" kpi={kpis.commercial_customers_in_scope} />
+        <KpiTile label="Con pedido confirmado" kpi={kpis.customers_with_confirmed_orders} tone={STATUS_COLORS.GREEN} />
+        <KpiTile label="Recurrentes" kpi={kpis.recurrent_customers} />
+        <KpiTile label="Sin pedido en la ventana" kpi={kpis.customers_without_orders_in_window} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="Dejaron de comprar" kpi={kpis.customers_lost_prior_window} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="Primer pedido en la ventana" kpi={kpis.new_customers_first_order_in_window} />
+        <KpiTile label="Nuevos sin 2ª compra" kpi={kpis.new_customers_without_second_order} tone={STATUS_COLORS.AMBER} />
+        <NotEvaluableTile label="Reactivados" reason="Sin definición aprobada ni 2ª corrida: el contrato v1 no lo evalúa" />
+      </div>
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.textSoft, marginTop: 12 }}>Maestro y canal</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
+        <KpiTile label="Actualmente sin canal" kpi={kpis.customers_currently_without_channel} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="Sin geolocalización" kpi={kpis.customers_without_geolocation} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="Archivados con historial" kpi={kpis.archived_customers_with_order_history} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="Grupos de RFC duplicado" kpi={kpis.customer_vat_duplicate_groups} />
+        <KpiTile label="Leads en pipeline" kpi={kpis.active_leads_in_scope} />
+      </div>
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.textSoft, marginTop: 12 }}>Pedidos confirmados</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
+        <KpiTile label="Pedidos confirmados" kpi={kpis.confirmed_orders} />
+        <KpiTile label="Líneas de pedido" kpi={kpis.confirmed_order_lines} />
+        <KpiTile label="Cancelados" kpi={kpis.cancelled_orders} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="Sin vendedor en el pedido" kpi={kpis.confirmed_orders_without_sale_order_user_id} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="De cliente actualmente sin canal" kpi={kpis.confirmed_orders_whose_customer_currently_has_no_channel} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="A partner no comercial" kpi={kpis.confirmed_orders_to_non_commercial_partner} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="Sin cuenta analítica" kpi={kpis.confirmed_orders_without_analytic_account} />
+        <KpiTile label="Líneas con cantidad ≤ 0" kpi={kpis.confirmed_order_lines_with_nonpositive_qty} tone={STATUS_COLORS.AMBER} />
+        <KpiTile label="Líneas con descuento" kpi={kpis.confirmed_order_lines_with_discount} />
+      </div>
+
+      {/* Fronteras del contrato: NO se convierten en 0 (B4) */}
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.textSoft, marginTop: 12 }}>
+        Fuera del contrato v1 (otros módulos)
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
+        {!caps.delivered_orders && <NotEvaluableTile label="Entregados" reason="La verdad de entrega e inventario es de M5" />}
+        {!caps.invoiced_orders && <NotEvaluableTile label="Facturados" reason="La verdad financiera es de M6" />}
+        {!caps.paid_orders && <NotEvaluableTile label="Cobrados" reason="La verdad financiera es de M6" />}
+        {!caps.returns && <NotEvaluableTile label="Devoluciones" reason="No auditado por el contrato v1" />}
+        {!caps.pos_sales && <NotEvaluableTile label="POS" reason="No auditado por el contrato v1" />}
+        {!caps.margin && <NotEvaluableTile label="Margen" reason="La rentabilidad es de M7" />}
       </div>
 
       {/* Bloques comerciales */}

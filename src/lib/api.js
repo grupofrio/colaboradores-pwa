@@ -9343,7 +9343,7 @@ async function directKoldOsM3(method, path) {
 }
 
 // ── KOLD OS M4 (gf_kold_os_m4) ── Odoo directo; PROHIBIDO fallback n8n ─────
-// Backend CONGELADO (978994c4) bajo auditoría de Codex: contrato provisional.
+// Backend: gf_kold_os_m4 (GrupoVeniu/GrupoFrio PR #205), aún sin desplegar.
 async function directKoldOsM4(method, path) {
   const query = new URLSearchParams(path.split('?')[1] || '')
   const cleanPath = path.split('?')[0]

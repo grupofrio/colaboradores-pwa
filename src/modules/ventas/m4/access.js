@@ -4,12 +4,12 @@
 //   · tower_status `admin_plataforma` → acceso GLOBAL
 //   · todo lo demás                   → SIN ACCESO (fail-closed)
 //
-// Alineado con el backend CONGELADO (gf_kold_os_m4._access_for @ 978994c4):
+// Espejo del backend (gf_kold_os_m4._access_for @ PR #205):
 // acepta job key `direccion_general` O tower_status `admin_plataforma`
 // (la PROYECCIÓN server-side de direccion_general vía
 // resolve_employee_pwa_tower_status) — misma verdad, cero divergencia.
-// PROVISIONAL: si la auditoría de Codex cambia el contrato de permisos del
-// backend, esta allowlist se ajusta en el MISMO PR (una línea aquí + tests).
+// Si el contrato de permisos del backend cambia, esta allowlist se ajusta en el
+// MISMO PR (una línea aquí + tests).
 //
 // DELIBERADO (Fase 10): gerente_sucursal / supervisor_ventas / vendedor /
 // chofer / jefe_ruta NO tienen acceso v1 — no existe fuente autoritativa de rol

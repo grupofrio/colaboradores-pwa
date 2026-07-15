@@ -1,4 +1,4 @@
-// KOLD OS · M4 — contrato del envelope (PROVISIONAL: backend congelado 978994c4).
+// KOLD OS · M4 — contrato del envelope (backend GrupoVeniu/GrupoFrio#205).
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -10,20 +10,34 @@ import { M4_API_LATEST_FIXTURE, M4_API_FIXTURE_PROVENANCE } from '../src/modules
 
 const clone = () => JSON.parse(JSON.stringify(M4_API_LATEST_FIXTURE))
 
-test('fixture PROVISIONAL valida el contrato kold.os.m4.api/1', () => {
+test('fixture valida el contrato kold.os.m4.api/1', () => {
   const r = validateM4Latest(M4_API_LATEST_FIXTURE)
   assert.equal(r.ok, true, JSON.stringify(r.errors))
   assert.equal(M4_API_LATEST_FIXTURE.schema_version, M4_API_SCHEMA_VERSION)
 })
 
-test('procedencia: provisional, backend congelado declarado, NO corrida formal', () => {
-  assert.equal(M4_API_FIXTURE_PROVENANCE.provisional, true)
-  assert.equal(M4_API_FIXTURE_PROVENANCE.backend_frozen_commit,
+test('procedencia: linaje al backend real, NO corrida formal', () => {
+  assert.equal(M4_API_FIXTURE_PROVENANCE.backend_pr, 'GrupoVeniu/GrupoFrio#205')
+  // El commit que Codex auditó queda registrado como ancestro, no como origen.
+  assert.equal(M4_API_FIXTURE_PROVENANCE.audited_ancestor,
     '978994c49baefac9da010580667ae89a8f7251d5')
   assert.equal(M4_API_FIXTURE_PROVENANCE.is_production_shell_run, false)
   assert.equal(M4_API_LATEST_FIXTURE.run.is_production_shell_run, false)
   assert.equal(M4_API_LATEST_FIXTURE.run.evidence_classification,
     'pre_deployment_semantic_validation')
+})
+
+// Invariante A8: el SHA que la procedencia declara como "el código que midió"
+// DEBE ser el mismo que el envelope reporta en run.auditor_build_sha. Si alguien
+// regenera el fixture con otro build y olvida la procedencia (o al revés), el
+// linaje queda mintiendo en silencio. Se compara, no se confía.
+test('linaje coherente: measuring_commit === run.auditor_build_sha', () => {
+  const declared = M4_API_FIXTURE_PROVENANCE.measuring_commit
+  assert.match(declared, /^[0-9a-f]{40}$/, 'measuring_commit debe ser un SHA completo')
+  assert.equal(M4_API_LATEST_FIXTURE.run.auditor_build_sha, declared,
+    'la procedencia declara un build distinto al que emitió el envelope')
+  assert.notEqual(declared, M4_API_FIXTURE_PROVENANCE.audited_ancestor,
+    'el ancestro auditado no es el que produjo estas mediciones')
 })
 
 test('metadata de evidencia obligatoria: ausente o null => inválido', () => {
@@ -79,9 +93,16 @@ test('contrato epistémico en rule_results: invariantes fail-closed', () => {
   rr.verdict = 'incumplimiento'
   assert.equal(validateM4Latest(exploratoryAsIncumplimiento).ok, false)
 
+  // El fixture real tiene CERO incumplimientos (tras la inspección A6 ninguna
+  // regla puede afirmarlo con esta evidencia), así que el invariante se prueba
+  // FABRICANDO uno: un incumplimiento sin umbral aprobado debe rechazarse
+  // aunque el backend hoy no emita ninguno.
+  assert.equal(clone().rule_results.filter((r) => r.verdict === 'incumplimiento').length, 0,
+    'la evidencia v1 no prueba ningún incumplimiento definitivo')
   const sinUmbral = clone()
-  const def = sinUmbral.rule_results.find((r) => r.verdict === 'incumplimiento')
-  def.approved_threshold = false
+  const rule = sinUmbral.rule_results.find((r) => r.classification === 'definitive')
+  rule.verdict = 'incumplimiento'
+  rule.approved_threshold = false
   assert.equal(validateM4Latest(sinUmbral).ok, false)
 
   const noEvalConIncidencias = clone()
@@ -178,7 +199,7 @@ test('STALE se recomputa client-side (no se confía ciegamente en el server)', (
 })
 
 test('los números NO se afirman en el contrato: solo coherencia interna', () => {
-  // El validador no fija los totales actuales (14078 etc.): otro run con otros
+  // El validador no fija los totales actuales: otro run con otros
   // números pero coherente DEBE validar. (No hardcodear resultados.)
   const doc = clone()
   for (const r of doc.rule_results) {

@@ -1,93 +1,125 @@
-# M4 — Limitaciones conocidas (frontend v1, backend CONGELADO bajo auditoría)
+# M4 — Limitaciones conocidas (frontend v1)
 
-## 0. La limitación que gobierna todo: el contrato es PROVISIONAL
+Backend: **GrupoVeniu/GrupoFrio PR #205** (DRAFT, head `4e195a92`) — el commit
+`978994c4` que auditó Codex, ya corregido. Puntos de ajuste si el contrato
+cambia: `src/lib/koldOsM4Route.js` + `m4/contract.js` + regenerar el fixture.
+La pantalla no se reescribe.
 
-El backend está **CONGELADO en GrupoVeniu/GrupoFrio `978994c4`** (rama
-`feat/kold-os-m4-sales-customer-observability`, **sin PR**) mientras Codex lo
-audita. Este frontend consume ESE contrato tal cual; si el veredicto lo cambia,
-los puntos de ajuste son `src/lib/koldOsM4Route.js` + `m4/contract.js` +
-regenerar el fixture — la pantalla no se reescribe. **Nada de M4 está terminado
-hasta el dictamen.**
+## 0. La limitación que gobierna todo: qué prueba realmente la evidencia
 
-## 1. Qué NO prueba este observatorio (contrato epistémico)
+De 37 reglas, **CERO producen incumplimiento afirmable**: 9 riesgos (supuesto
+declarado, no verificado) · 5 anomalías exploratorias · 8 cumplen · 15 no
+evaluables · **12,158 incidencias**. Las 3 reglas `definitive` que sobreviven
+midieron 0 ⇒ cumplen.
 
-De 37 reglas, **solo 1 produce INCUMPLIMIENTO afirmable** con los datos medidos
-(M4-D-04: 6 líneas de venta confirmada con cantidad ≤ 0 — aritmética dura). Las
-demás: 8 riesgos (supuesto declarado, no verificado) · 6 anomalías exploratorias
-· 9 cumplen · 13 no evaluables. La UI y los exports lo muestran desglosado; el
-contrato lo IMPONE (exploratory ≠ incumplimiento; incumplimiento exige umbral
-aprobado; total = suma exacta).
+Esto es un cambio de conclusión, no de números: la ronda anterior afirmaba 1
+incumplimiento (M4-D-04, "6 líneas con cantidad ≤ 0, aritméticamente inválido").
+La inspección read-only mostró que las 6 son qty=**0 exacta** (ninguna negativa),
+ninguna entregada ni facturada, y **una era `display_type='line_section'`**
+(un encabezado, no una línea de producto) ⇒ el número real es **5** y Odoo **no
+prohíbe** qty=0. Sin constraint que lo prohíba no hay incumplimiento: la regla
+bajó a `caveated`/RIESGO. **Era una afirmación de más.**
 
-## 2. `kpis` del backend congelado tiene forma M3 (gap DECLARADO)
+La UI y los exports muestran el desglose; el contrato lo IMPONE (exploratory ≠
+incumplimiento; incumplimiento exige umbral aprobado; total = suma exacta
+recomputada desde `rule_results`).
 
-`execution_kpis()` del backend congelado aún lee métricas de RUTAS (M3) que no
-existen en el reporte M4 ⇒ el objeto `kpis` llega con `None` en todo. **El
-frontend deriva los KPIs comerciales de `metrics`** (el agregado real del
-contrato: customer_master/order/order_state/order_line/crm/recurrence). Este gap
-está flagueado para la corrección backend post-auditoría (reescribir
-`execution_kpis` → `commercial_kpis`). El contrato exige `kpis` presente pero no
-consume su contenido M3.
+## 1. El universo de clientes se DERIVA de los pedidos (no del maestro)
 
-## 3. `auditor_build_sha` del fixture es placeholder (40 ceros)
+`res.partner` **no es scopeable por compañía**: 438 partners tienen `company_id`
+vacío (compartidos entre compañías), y **410 de los 713 que compran vivían fuera**
+del universo `company_id IN scope`. Universo canónico v1 = **raíz comercial
+(`commercial_partner_id = id`) con historial de pedido confirmado en el scope**.
+Además **1,510 de 12,606 pedidos** apuntan a una dirección (no raíz) ⇒ todo
+agrupa por `commercial_partner_id`.
 
-El backend congelado generó su fixture ANTES de conocer su propio SHA de commit.
-El fixture frontend lo hereda y lo declara; la provenance registra el commit
-congelado real (`978994c4`). Se estampa el SHA real al descongelar (backend, no
-aquí). La UI muestra el placeholder tal cual — no finge un linaje que no existe.
+**Consecuencia:** el universo NO incluye clientes sin historial de compra. Un
+cliente dado de alta que nunca compró no existe para M4 v1.
 
-## 4. Corrida productiva por odoo-shell: NO EJECUTADA (bloqueada)
+## 2. Los KPIs los emite el backend, no los deriva la pantalla
+
+`commercial_kpis()` emite **26 KPIs**, cada uno con `value` / `universe` /
+`source_model` / `source_fields` / `coverage` / `caveat` / `data_as_of`. **Si la
+fuente no existe, el KPI no se emite** (jamás un cero falso). La UI solo los
+presenta: no calcula, no infiere, no rellena.
+
+El contrato **rechaza** el envelope si un KPI llega sin universo/fuente, si llega
+en `null`, o si aparece una clave de M3 (`visit_compliance`,
+`plans_started_overdue_open`, …). La ronda anterior tenía `execution_kpis()`
+leyendo métricas de RUTAS que M4 nunca produce ⇒ el objeto salía entero en
+`None`; por eso hoy hay un test que lo prohíbe.
+
+## 3. Corrida productiva por odoo-shell: NO EJECUTADA (bloqueada)
 
 `is_production_shell_run=false` con los 3 bloqueadores declarados
 (`ssh_key_not_registered` · `module_not_deployed` · `production_shell_unavailable`).
 Los NÚMEROS son reales (XML-RPC read-only, ventana `[2026-01-16, 2026-07-15)`);
 la corrida formal no. El banner de la UI se decide por el DATO
-(`!run.is_production_shell_run`), no por el modo demo.
+(`!run.is_production_shell_run`), **no** por el modo demo: datos reales entregados
+por la API real seguirían mostrando el banner mientras la corrida no sea formal.
 
-## 5. Definiciones comerciales NO aprobadas ⇒ exploratorias por contrato
+**El SQL del manifiesto nunca ha corrido.** Está modelado 1:1 sobre los dominios
+ORM verificados, pero su primera ejecución real será la de Sebastián; el runbook
+exige comparar conteos antes de ingerir.
+
+## 4. Definiciones comerciales NO aprobadas ⇒ exploratorias por contrato
 
 "Dormido" (180d), "perdido" (365→180), objetivo de 2ª compra, umbrales de
-descuento (50/90%), deduplicación de identidades. Ratificarlas = decisión de
-dirección comercial + cambio en el catálogo del BACKEND (fuente única). El KPI
-"Reactivados" muestra "—" (sin definición ni historial).
+descuento (50/90%), recurrente (≥2), deduplicación de identidades. Ratificarlas =
+decisión de dirección comercial + cambio en el catálogo del BACKEND (fuente
+única). El KPI "Reactivados" muestra "—" (sin definición aprobada ni 2ª corrida).
 
-## 6. Fronteras respetadas (y visibles en la UI)
+## 5. Qué significa "pedido confirmado" (y qué NO)
 
-- **Entregados** = "—" (verdad de inventario/entrega = **M5**).
-- Facturación/cobranza = **M6**; margen = **M7**.
+`sale.order` con `state='sale'` en el scope y la ventana. **Nunca "venta".** No
+implica entregado (**M5**) · facturado / cobrado (**M6**) · margen (**M7**) · POS
+· devoluciones. Las capabilities lo declaran en `false` y la UI muestra "—" con
+la razón, **nunca 0**.
+
+- **Vendedor** = SOLO `sale.order.user_id`. No evalúa `res.partner.user_id`,
+  `crm.team`, vendedor de ruta, POS ni integraciones ⇒ **no es ownership
+  comercial total**.
+- **Canal** = `res.partner.channel_id` **ACTUAL** del cliente. El pedido no tiene
+  canal propio: no hay snapshot histórico. Por eso la regla dice "actualmente sin
+  canal clasificado", no "se vendió sin canal".
 - M4 define segmento/motivo/oferta de recompra pero **NO ejecuta** campañas,
   opt-in ni automatización (**M8, LOCK**) — sin botones de acción.
-- Señal M4→M2: solo OBSERVADA (las 2 reglas del bloque I son not_evaluable v1:
-  el join con el forecast de M2 no está en el contrato).
+- Señal M4→M2: solo OBSERVADA (las 2 reglas del bloque I son `not_evaluable` en
+  v1: el join con el forecast de M2 no está en el contrato).
 
-## 7. Granularidad v1 = AGREGADO
+## 6. Granularidad v1 = AGREGADO
 
-Sin dimensión cliente/canal/producto en findings (cero PII por diseño): sin
-drill-down a clientes, filtros channel/segment/product existen en la allowlist
-del contrato pero el agregado v1 no los ejercita. La UI ofrece solo los filtros
-con efecto real (categoría/veredicto/clasificación/severidad/ciclo/entidad/área/
-búsqueda). Paginación server-side.
+`capabilities.granularities = ["aggregate"]` y `features.branch_dimension =
+false`. Sin dimensión cliente/canal/producto/sucursal en findings (cero PII por
+diseño): sin drill-down a clientes. **La allowlist de `/findings` contiene solo
+los filtros que el backend ejercita de verdad** — un parámetro de más caería en
+`rejected_params` y la pantalla mostraría el filtro puesto con la lista sin
+filtrar (mentira silenciosa); uno de menos se descartaría antes de salir y el
+selector no haría nada. Hay un test que fija la allowlist contra el contrato del
+backend. Paginación server-side.
 
-## 8. PII: el contrato RECHAZA, no oculta
+## 7. PII: el contrato RECHAZA, no oculta
 
 `scanForbiddenKeys` recorre el envelope completo: una clave sensible
 (customer_name/phone/email/rfc/address/salesperson_name/…) en CUALQUIER nivel
 rechaza el payload entero. Ocultar una columna no elimina el dato del browser;
-por eso el rechazo es previo al render. Exports: drop de claves + credenciales
-en valores → `[REDACTED]` + neutralización de fórmulas + sufijos
+por eso el rechazo es previo al render. Los duplicados viajan como **conteo de
+grupos**: el RFC/teléfono jamás sale. Exports: drop de claves + credenciales en
+valores → `[REDACTED]` + neutralización de fórmulas + sufijos
 `_DEMO`/`_STALE`/`_NONFORMAL`.
 
-## 9. Historial arranca en 1 corrida
+## 8. Historial arranca en 1 corrida
 
 Lifecycle/persistencia/corregidos/tendencias con la 2ª ingesta real. El filtro
 de ciclo de vida está deshabilitado hasta entonces (no simula historial).
 
-## 10. AbortController
+## 9. AbortController
 
 `api()` canónico no acepta AbortSignal ⇒ timeout duro (30 s) + alive-flag que
 descarta resultados tardíos al desmontar (patrón M1/M2). Cambiar `api()` global
 está fuera del alcance de este PR.
 
-## 11. M3 NO está en main
+## 10. M3 NO está en main
 
 `#71` sigue OPEN/DRAFT. Esta rama NO copia la arquitectura de M3 sin integrar
 (p. ej. su `ACCESS_POLICY_RESOLVERS`): usa el patrón inline mergeado de main
