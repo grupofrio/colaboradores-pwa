@@ -618,7 +618,9 @@ const IGUALA_COMPANY_ID = 35
 const UNIT_UOM_ID = 1
 const POS_CUSTOMER_ANALYTIC_PLAN_ID = 2
 const POS_CUSTOMER_ANALYTIC_CODE = 'IGU'
+const POS_CUSTOMER_ANALYTIC_CODES = ['IGU34', POS_CUSTOMER_ANALYTIC_CODE]
 const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
+const POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES = ['IGU34', POS_CUSTOMER_ANALYTIC_NAME]
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
 const ANGELICA_JAIMES_NAME_PARTS = ['angelica', 'jaimes']
 
@@ -997,9 +999,33 @@ async function resolveAngelicaJaimesSalesScope() {
 }
 
 async function resolvePosCustomerAnalyticUnitId() {
+  const ids = await resolvePosCustomerAnalyticUnitIds()
+  return ids[0] || 0
+}
+
+async function resolvePosCustomerAnalyticUnitIds() {
+  const ids = []
+  const addId = (id) => {
+    const numericId = Number(id || 0)
+    if (numericId && !ids.includes(numericId)) ids.push(numericId)
+  }
+
+  for (const code of POS_CUSTOMER_ANALYTIC_CODES) {
+    const rows = pickListResponse(await readModelSorted('account.analytic.account', {
+      fields: ['id', 'name', 'code'],
+      domain: [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['code', '=', code]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 10,
+      sudo: 1,
+    }))
+    for (const row of rows) addId(row?.id)
+  }
+
   const domains = [
-    [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['code', '=', POS_CUSTOMER_ANALYTIC_CODE]],
-    [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['name', 'ilike', POS_CUSTOMER_ANALYTIC_NAME]],
+    ...POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES.map((name) => (
+      [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['name', 'ilike', name]]
+    )),
   ]
   for (const domain of domains) {
     const rows = pickListResponse(await readModelSorted('account.analytic.account', {
@@ -1007,26 +1033,36 @@ async function resolvePosCustomerAnalyticUnitId() {
       domain,
       sort_column: 'id',
       sort_desc: false,
-      limit: 1,
+      limit: 10,
       sudo: 1,
     }))
-    const analyticUnitId = Number(rows[0]?.id || 0)
-    if (analyticUnitId) return analyticUnitId
+    for (const row of rows) {
+      const code = normalizeScopeText(row?.code)
+      const name = normalizeScopeText(row?.name)
+      const isIgualaUnit = POS_CUSTOMER_ANALYTIC_CODES.some((candidate) => normalizeScopeText(candidate) === code)
+        || name.includes('igu34')
+        || (name.includes('igu') && name.includes('iguala'))
+      if (isIgualaUnit) addId(row?.id)
+    }
   }
-  return 0
+  return ids
 }
 
-function posCustomerAnalyticDomain(analyticUnitId) {
-  const resolvedAnalyticUnitId = Number(analyticUnitId || 0)
-  return resolvedAnalyticUnitId
-    ? [[POS_CUSTOMER_ANALYTIC_FIELD, '=', resolvedAnalyticUnitId]]
+function posCustomerAnalyticDomain(analyticUnitIds) {
+  const ids = (Array.isArray(analyticUnitIds) ? analyticUnitIds : [analyticUnitIds])
+    .map((id) => Number(id || 0))
+    .filter((id, index, list) => id > 0 && list.indexOf(id) === index)
+
+  if (ids.length > 1) return [[POS_CUSTOMER_ANALYTIC_FIELD, 'in', ids]]
+  return ids.length === 1
+    ? [[POS_CUSTOMER_ANALYTIC_FIELD, '=', ids[0]]]
     : [['id', '=', 0]]
 }
 
-function buildPosCustomerBaseDomains(companyId, analyticUnitId) {
+function buildPosCustomerBaseDomains(companyId, analyticUnitIds) {
   const baseDomain = [
     ['active', '=', true],
-    ...posCustomerAnalyticDomain(analyticUnitId),
+    ...posCustomerAnalyticDomain(analyticUnitIds),
   ]
   return companyId
     ? [
@@ -1036,10 +1072,10 @@ function buildPosCustomerBaseDomains(companyId, analyticUnitId) {
     : [baseDomain]
 }
 
-function buildPosCustomerIdBaseDomains(companyId, analyticUnitId) {
+function buildPosCustomerIdBaseDomains(companyId, analyticUnitIds) {
   const baseDomain = [
     ['active', '=', true],
-    ...posCustomerAnalyticDomain(analyticUnitId),
+    ...posCustomerAnalyticDomain(analyticUnitIds),
   ]
   return companyId
     ? [
@@ -1126,8 +1162,8 @@ async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 20
 
 async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = {}) {
   const safeLimit = Math.min(Number(limit || 30) || 30, 100)
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0), analyticUnitId)
+  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0), analyticUnitIds)
   const query = String(q || '').trim()
   const rows = []
 
@@ -1139,7 +1175,7 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
   } else {
     const exactId = parsePosCustomerIdQuery(query)
     if (exactId) {
-      const idBaseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0), analyticUnitId)
+      const idBaseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0), analyticUnitIds)
       for (const baseDomain of idBaseDomains) {
         if (rows.length >= safeLimit) break
         addUniquePosCustomers(
@@ -1171,8 +1207,8 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
 
 async function getDefaultPosCustomerFromModels(companyId) {
   const baseCompanyId = Number(companyId || 0)
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomains = buildPosCustomerBaseDomains(baseCompanyId, analyticUnitId)
+  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+  const baseDomains = buildPosCustomerBaseDomains(baseCompanyId, analyticUnitIds)
   let partner = null
   for (const baseDomain of baseDomains) {
     const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', 'VENTA PUBLICO IGUALA']], 1)

@@ -445,6 +445,64 @@ test('pos customer search filters customers to the Iguala analytic unit', async 
   assert.equal(result.data[0].id, 44)
 })
 
+test('pos customer search includes IGU34 branch customers after branch migration', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, payload })
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    const params = payload?.params || {}
+    if (params.model === 'account.analytic.account') {
+      const domain = params.domain || []
+      const codeTerm = domain.find((term) => Array.isArray(term) && term[0] === 'code')
+      const nameTerm = domain.find((term) => Array.isArray(term) && term[0] === 'name')
+      if (codeTerm?.[2] === 'IGU34' || nameTerm?.[2] === 'IGU34') {
+        return createJsonResponse(200, {
+          result: { response: [{ id: 301, name: '[IGU34] Iguala 34', code: 'IGU34' }] },
+        })
+      }
+      if (codeTerm?.[2] === 'IGU' || nameTerm?.[2] === 'Iguala') {
+        return createJsonResponse(200, {
+          result: { response: [{ id: 201, name: '[IGU] Iguala', code: 'IGU' }] },
+        })
+      }
+      return createJsonResponse(200, { result: { response: [] } })
+    }
+
+    assert.equal(params.model, 'res.partner')
+    assert.equal(params.domain.includes('|'), false, 'customer search used an OR domain')
+
+    const analyticTerm = params.domain.find((term) => Array.isArray(term) && term[0] === 'x_analytic_un_id')
+    assert.deepEqual(
+      analyticTerm,
+      ['x_analytic_un_id', 'in', [301, 201]],
+      'customer search did not include IGU34 and IGU analytic units',
+    )
+
+    const hasNameSearch = params.domain.some((term) => (
+      Array.isArray(term) && term[0] === 'name' && term[1] === 'ilike' && term[2] === 'migrado'
+    ))
+    return createJsonResponse(200, {
+      result: {
+        response: hasNameSearch
+          ? [{ id: 77, name: 'Cliente Migrado IGU34', x_analytic_un_id: [301, '[IGU34] Iguala 34'] }]
+          : [],
+      },
+    })
+  }
+
+  const result = await api('GET', '/pwa-admin/customers?q=migrado&company_id=34')
+
+  assert.equal(result.data.length, 1)
+  assert.equal(result.data[0].id, 77)
+})
+
 test('pos customer search includes new contacts without customer_rank', async () => {
   setSession()
 
