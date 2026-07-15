@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
-import { getVisibleModulesForSession } from '../lib/navModel'
+import { getHomeModulesForSession } from '../lib/navModel'
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
 import { getModuleEntryDecisionForSession, upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
@@ -244,7 +244,7 @@ export default function ScreenHome() {
   // Módulos visibles para esta SESIÓN (misma fuente única que la navegación
   // global: roles x_job_key + towerGated por tower_status autoritativo).
   const modules = useMemo(() =>
-    getVisibleModulesForSession(session),
+    getHomeModulesForSession(session),
   [session])
 
   const firstName = session?.name?.split(' ')[0] ?? 'Colaborador'
@@ -472,4 +472,3 @@ function Chip({ label, color }) {
     </span>
   )
 }
-

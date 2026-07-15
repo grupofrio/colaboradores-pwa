@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import {
-  getNavModules, getVisibleModulesForSession, isModuleVisibleForSession,
+  getHomeModulesForSession, getNavModules, getVisibleModulesForSession,
+  isModuleVisibleForSession,
   buildMobileNav, buildDesktopNav, isNavHiddenForPath, resolveActiveId,
   HOME_ANCHOR, PROFILE_ANCHOR,
 } from '../src/lib/navModel.js'
@@ -37,6 +38,24 @@ test('Aida (tower_status supervisor_ventas): ve la tarjeta Torre', () => {
   assert.ok(isModuleVisibleForSession(TOWER, sess))
   assert.ok(ids(getVisibleModulesForSession(sess)).includes('torre_operativa'), 'tarjeta en home')
   assert.ok(ids(getNavModules(sess)).includes('torre_operativa'), 'entrada en nav')
+})
+
+test('Home conserva el orden histórico del registry y agrega Torre al final', () => {
+  assert.deepEqual(ids(getHomeModulesForSession(towerSession('supervisor_ventas'))), [
+    'kpis', 'encuestas', 'logros', 'supervisor_ventas', 'torre_operativa',
+  ])
+})
+
+test('Home respeta showOnHome:false sin ocultar el módulo de la navegación', () => {
+  const previous = TOWER.showOnHome
+  TOWER.showOnHome = false
+  try {
+    const sess = towerSession('supervisor_ventas')
+    assert.ok(!ids(getHomeModulesForSession(sess)).includes('torre_operativa'))
+    assert.ok(ids(getNavModules(sess)).includes('torre_operativa'))
+  } finally {
+    TOWER.showOnHome = previous
+  }
 })
 
 test('admin_plataforma (tower_status): ve la tarjeta Torre', () => {
@@ -181,10 +200,10 @@ test('/torre/backlog sigue oculto para la nav global (pantalla full-screen)', ()
   assert.equal(isNavHiddenForPath('/torre'), true)
 })
 
-// ── ScreenHome usa la fuente única session-aware ────────────────────────────
-test('ScreenHome deriva las tarjetas de getVisibleModulesForSession', () => {
+// ── ScreenHome usa la fuente única session-aware de Home ────────────────────
+test('ScreenHome deriva las tarjetas de getHomeModulesForSession', () => {
   const home = readFileSync(new URL('../src/screens/ScreenHome.jsx', import.meta.url), 'utf8')
-  assert.match(home, /getVisibleModulesForSession\(session\)/, 'home usa la fuente session-aware')
+  assert.match(home, /getHomeModulesForSession\(session\)/, 'home usa la fuente session-aware')
   assert.ok(!/getModulesForRoles\(getEffectiveJobKeys/.test(home), 'ya no usa la fuente solo-roles')
 })
 

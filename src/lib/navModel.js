@@ -23,26 +23,29 @@ import { readAuthoritativeTowerStatus } from '../modules/torre/e1/loadTowerStatu
 //   normal      → roles x_job_key (isModuleVisibleForRoles).
 // Fail-closed: sin sesión válida => nada.
 export function isModuleVisibleForSession(module, session) {
-  if (!module || module.showInNav === false && module.showOnHome === false) return false
+  if (!module) return false
   if (!isValidAuthenticatedSession(session)) return false
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
 }
 
-// Módulos visibles para la sesión (home + nav comparten esta fuente única),
-// ordenados por navPriority y orden del registry. Fail-closed => [].
+// Módulos visibles para la sesión en el orden canónico del registry.
+// Cada superficie aplica después su metadata propia (showOnHome/showInNav).
+// Fail-closed => [].
 export function getVisibleModulesForSession(session = null) {
   if (!isValidAuthenticatedSession(session)) return []
   const seen = new Set()
   return MODULES
-    .map((module, index) => ({ module, index }))
-    .filter(({ module }) => {
+    .filter((module) => {
       if (seen.has(module.id) || !isModuleVisibleForSession(module, session)) return false
       seen.add(module.id)
       return true
     })
-    .sort((a, b) => (navPriorityOf(a.module) - navPriorityOf(b.module)) || (a.index - b.index))
-    .map(({ module }) => module)
+}
+
+// Home conserva el orden histórico del registry y respeta su flag de superficie.
+export function getHomeModulesForSession(session = null) {
+  return getVisibleModulesForSession(session).filter((m) => m.showOnHome !== false)
 }
 
 // Anclas fijas (no son módulos del registry). Siempre presentes con sesión:
@@ -132,7 +135,11 @@ function navPriorityOf(module) {
 export function getNavModules(session = null) {
   // Nav = módulos visibles para la sesión con showInNav !== false.
   // (Incluye torre_operativa cuando la sesión tiene tower_status autorizado.)
-  return getVisibleModulesForSession(session).filter((m) => m.showInNav !== false)
+  return getVisibleModulesForSession(session)
+    .filter((m) => m.showInNav !== false)
+    .map((module, index) => ({ module, index }))
+    .sort((a, b) => (navPriorityOf(a.module) - navPriorityOf(b.module)) || (a.index - b.index))
+    .map(({ module }) => module)
 }
 
 // ¿la ruta del item corresponde a la ubicación actual? (soporta subrutas)
