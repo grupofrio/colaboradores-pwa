@@ -150,6 +150,25 @@ export const MODULES = [
     navPriority: 10,
   },
 
+  // ── KOLD OS · M2 — Planeación y readiness (observatorio read-only) ───────
+  // Evidencia incumplimientos de planeación (territorio/solver/capacidad/
+  // carga/snapshots/resultado real) desde el auditor gf_route_compliance.
+  // La tarjeta es visible por x_job_key; la RUTA la gobierna M2PlaneacionRoute
+  // (direccion_general o tower_status admin_plataforma), fail-closed.
+  {
+    id:     'planeacion',
+    label:  'Planeación',
+    shortLabel: 'Planeación',
+    route:  '/planeacion',
+    tone:   'steel',
+    roles:  ['direccion_general'],
+    status: 'live',
+    icon:   'supervision',
+    navPriority: 13,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',
