@@ -75,8 +75,15 @@ test('filtros: verdict/classification/category filtran; desconocidos no', () => 
   assert.ok(porVerdicto.every((f) => f.verdict === 'riesgo'))
   const porClasificacion = applyFindingFilters(FINDINGS, { ...M5_DEFAULT_FILTERS, classification: 'exploratory' })
   assert.ok(porClasificacion.every((f) => f.classification === 'exploratory'))
-  const porCategoria = applyFindingFilters(FINDINGS, { ...M5_DEFAULT_FILTERS, category: 'recurrencia' })
-  assert.ok(porCategoria.every((f) => f.category === 'recurrencia'))
+  // 'recurrencia' era una categoría de M4 que en M5 NO existe: el filtro
+  // devolvía [] y `every()` sobre [] es true, así que el test PASABA sin
+  // verificar nada. Un test vacuo es peor que ninguno: da falsa cobertura.
+  const porCategoria = applyFindingFilters(FINDINGS, { ...M5_DEFAULT_FILTERS, category: 'mermas_diferencias' })
+  assert.ok(porCategoria.length > 0, 'la categoría debe existir de verdad en el fixture')
+  assert.ok(porCategoria.every((f) => f.category === 'mermas_diferencias'))
+  // Y una categoría ajena no puede colar la lista completa (mentira silenciosa).
+  assert.equal(applyFindingFilters(FINDINGS, { ...M5_DEFAULT_FILTERS, category: 'recurrencia' }).length, 0,
+    'una categoría de otro módulo no filtra: devuelve vacío, jamás la lista entera')
 })
 
 // El caso que Codex pidió confirmar: con CERO incumplimientos, pedir "solo
