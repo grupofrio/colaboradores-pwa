@@ -198,7 +198,7 @@ export const MODULES = [
   // Evidencia de la operación comercial (maestro de clientes, canal, leads,
   // pedidos confirmados, precio/descuento, recurrencia, portafolio,
   // pérdida/recompra, señal M4→M2) desde la API autenticada gf_kold_os_m4
-  // (GrupoVeniu/GrupoFrio PR #205, aún sin mergear ni desplegar).
+  // (aún sin instalación ni validación runtime).
   // accessPolicy 'm4': tarjeta, nav Y clic se deciden con readM4Access
   // mediante ACCESS_POLICY_RESOLVERS en navModel, NUNCA por roles
   // genéricos. `roles` queda SOLO como documentación. M4VentasRoute (App.jsx)
@@ -232,6 +232,36 @@ export const MODULES = [
     status: 'live',
     icon:   'kpis',
     navPriority: 16,
+
+  // ── KOLD OS · M6 — Caja y conciliación (observatorio read-only) ───────────
+  // Señales del ESTADO FINANCIERO/ADMINISTRATIVO de caja: facturación y cuentas
+  // por cobrar, pagos, caja de ruta, cierre de caja, cierre administrativo,
+  // conciliación, cartera y aging. M6 NO afirma un cuadre: presenta señales
+  // reportadas, cobertura de instrumentación y capacidades no disponibles.
+  //
+  // ⚠️ El backend (gf_kold_os_m6) está construido en LOCAL y AÚN NO PUBLICADO:
+  // el repo Odoo migra de GrupoVeniu/GrupoFrio a grupofrio/gf. Sin backend
+  // desplegado la pantalla resuelve `unavailable` en producción. Sin número de
+  // PR aquí: un número en runtime envejece y miente.
+  //
+  // accessPolicy 'm6': tarjeta, nav Y clic se deciden con readM6Access (misma
+  // mecánica inline que M2), NUNCA por roles genéricos. `roles` queda SOLO como
+  // documentación. M6CajaRoute (App.jsx) revalida como autoridad final.
+  //
+  // OJO — a diferencia de M2, M6 NO acepta `admin_plataforma`: su backend sólo
+  // valida el job key `direccion_general`. Aceptarlo aquí mostraría la tarjeta a
+  // quien el backend responde 403 (el bug de M1).
+  {
+    id:     'cash-reconciliation',
+    label:  'Caja y conciliación',
+    shortLabel: 'Caja',
+    route:  '/caja-conciliacion',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm6',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 17,
     showOnHome: true,
     showInNav:  true,
   },
