@@ -32,7 +32,7 @@ test('identidad: NO reutiliza el id de ningún otro módulo', () => {
   // getModuleById resuelve POR id, dos módulos habrían colisionado al mergear.
   for (const foreign of ['ventas-clientes', 'inventario-flujo', 'ejecucion',
     'recurrencia', 'backlog']) {
-    assert.equal(getModuleById(foreign), undefined, `id ajeno vivo: ${foreign}`)
+    assert.notEqual(M6.id, foreign, `M6 reutiliza el id ajeno: ${foreign}`)
   }
   const all = MODULES.map((m) => m.id)
   assert.equal(new Set(all).size, all.length, 'ningún id duplicado en el registry')
@@ -108,17 +108,13 @@ test('App.jsx: la ruta está protegida por su propio guard', () => {
     'el guard de M6 no acepta tower_status: el backend sólo valida job key')
 })
 
-test('navModel: el dispatch inline sigue el patrón de main (no un resolver nuevo)', () => {
+test('navModel: M6 usa el registro canónico de políticas (sin dispatch inline)', () => {
   const nav = read('../src/lib/navModel.js')
-  assert.ok(nav.includes("if (module.accessPolicy === 'm6') return readM6Access(session).level === 'global'"))
-  assert.ok(nav.includes("if (module?.accessPolicy === 'm6')"))
-  // main NO tiene el mapa ACCESS_POLICY_RESOLVERS (lo introduce M3 (#71), que
-  // sigue DRAFT): M6 no lo inventa ni crea un segundo resolver. Se prohíbe la
-  // DEFINICIÓN del mapa, no la palabra — el comentario de rebase la nombra a
-  // propósito para explicar por qué no está.
-  assert.ok(!/(const|let|var)\s+ACCESS_POLICY_RESOLVERS/.test(nav),
-    'M6 no crea un segundo resolver: usa el dispatch inline de main')
-  assert.ok(nav.includes('M6_REBASE_PLAN'), 'el rebase futuro queda documentado en el código')
-  // La línea fail-closed sigue viva DESPUÉS de los dispatch conocidos.
-  assert.ok(nav.includes('if (module.accessPolicy) return false'))
+  assert.ok(nav.includes('m6: readM6Access'), 'M6 está registrado con su autoridad propia')
+  assert.ok(nav.includes('return resolveAccessPolicy(module.accessPolicy, session)'),
+    'visibilidad usa el resolver canónico')
+  assert.ok(nav.includes('if (typeof resolver !== \'function\') return false'),
+    'política desconocida permanece fail-closed')
+  assert.ok(!nav.includes("if (module.accessPolicy === 'm6')"),
+    'M6 no reintroduce dispatch inline paralelo')
 })

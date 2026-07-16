@@ -45,8 +45,8 @@ const surfaces = (sess) => {
 const entersInto = (mod, sess) => getModuleEntryDecisionForSession(mod, sess).type !== 'denied'
 
 // ── El registro de políticas ─────────────────────────────────────────────────
-test('ACCESS_POLICY_RESOLVERS registra m2, m3, m4 y m5; Tower NO entra al registro', () => {
-  assert.deepEqual(Object.keys(ACCESS_POLICY_RESOLVERS).sort(), ['m2', 'm3', 'm4', 'm5'])
+test('ACCESS_POLICY_RESOLVERS registra M2-M6; Tower NO entra al registro', () => {
+  assert.deepEqual(Object.keys(ACCESS_POLICY_RESOLVERS).sort(), ['m2', 'm3', 'm4', 'm5', 'm6'])
   // Tower conserva su propia autoridad (towerGated + tower_status), no se
   // convierte a accessPolicy ni a x_job_key.
   assert.equal(TOWER.accessPolicy, undefined)

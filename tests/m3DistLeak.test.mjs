@@ -35,7 +35,7 @@ test('scanner no confunde procedencia genérica de otro módulo con fixture M3',
   const root = mkdtempSync(path.join(tmpdir(), 'm3-other-module-'))
   mkdirSync(path.join(root, 'assets'))
   writeFileSync(
-    path.join(root, 'assets', 'm5.js'),
+    path.join(root, 'assets', 'other-module.js'),
     'const provenance = { kind: "real_code_generated_measured_aggregates" }',
   )
 
