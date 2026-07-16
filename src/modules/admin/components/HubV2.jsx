@@ -1,16 +1,12 @@
 // ─── HubV2 — panel principal del Auxiliar Administrativo ───────────────────
 // Vive dentro de <AdminShell> como children. Muestra:
 //   - Tira de KPIs del día (filtrados por razón social activa)
-//   - Atajos a módulos operativos (live vs pending_backend)
-//   - Pendientes destacados
+//   - Actividad del día en el flujo principal
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
-import { useSession } from '../../../App'
-import { getEffectiveJobKeys } from '../../../lib/roleContext'
 import { getDashboardData } from '../adminService'
-import { navItemsForRoles } from './AdminShell'
+import ActivityFeed from './ActivityFeed'
 
 const POLL_MS = 60_000
 
@@ -18,18 +14,9 @@ const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))
 
 export default function HubV2() {
   const { warehouseId, companyId, companyLabel } = useAdmin()
-  const { session } = useSession()
-  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
-
-  // Atajos visibles: mismo filtro por rol que el sidenav — si no se filtra aquí,
-  // auxiliar_admin vería "Validar materiales", "Aprobar gastos", etc. (bug 2026-04-18)
-  const visibleNavItems = useMemo(
-    () => navItemsForRoles(getEffectiveJobKeys(session)).filter(i => i.id !== 'hub'),
-    [session],
-  )
 
   useEffect(() => {
     let alive = true
@@ -133,66 +120,7 @@ export default function HubV2() {
         ))}
       </div>
 
-      {/* Atajos a módulos */}
-      <p style={{
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
-        color: TOKENS.colors.textLow, margin: '0 0 12px',
-      }}>
-        ACCIONES OPERATIVAS
-      </p>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: 12,
-      }}>
-        {visibleNavItems.map(item => {
-          const locked = item.status === 'pending_backend'
-          return (
-            <button
-              key={item.id}
-              disabled={locked}
-              onClick={() => !locked && item.route && navigate(item.route)}
-              style={{
-                padding: '16px 18px', borderRadius: TOKENS.radius.lg,
-                background: TOKENS.glass.panel,
-                border: `1px solid ${TOKENS.colors.border}`,
-                textAlign: 'left', cursor: locked ? 'not-allowed' : 'pointer',
-                opacity: locked ? 0.45 : 1,
-                fontFamily: "'DM Sans', sans-serif",
-                transition: 'transform 180ms ease, border-color 180ms ease',
-              }}
-              onMouseEnter={(e) => { if (!locked) e.currentTarget.style.borderColor = TOKENS.colors.blue2 }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = TOKENS.colors.border }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <p style={{
-                  fontSize: 14, fontWeight: 700, color: TOKENS.colors.text, margin: 0,
-                }}>
-                  {item.label}
-                </p>
-                {locked ? (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-                    padding: '3px 7px', borderRadius: 4,
-                    background: TOKENS.colors.warningSoft, color: TOKENS.colors.warning,
-                  }}>
-                    PRONTO
-                  </span>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textLow} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 18l6-6-6-6"/>
-                  </svg>
-                )}
-              </div>
-              <p style={{
-                fontSize: 11, color: TOKENS.colors.textMuted, margin: 0,
-              }}>
-                {locked ? 'Pendiente de integración con backend' : 'Abrir módulo'}
-              </p>
-            </button>
-          )
-        })}
-      </div>
+      <ActivityFeed moduleId="hub" variant="embedded" />
 
       <div style={{ height: 40 }} />
     </div>
