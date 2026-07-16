@@ -171,6 +171,16 @@ test('AdminShell no compone triple panel en 1024–1365', () => {
   assert.match(shell, /\{showActivityFeed && <ActivityFeed/)
 })
 
+test('Admin hub embeds today activity in the main content instead of action cards', () => {
+  const screen = readFileSync(new URL('../src/modules/admin/ScreenAdminPanel.jsx', import.meta.url), 'utf8')
+  const hub = readFileSync(new URL('../src/modules/admin/components/HubV2.jsx', import.meta.url), 'utf8')
+
+  assert.match(screen, /<AdminShell activeBlock="hub" title="Administración de sucursal" hideActivityFeed>/)
+  assert.match(hub, /import ActivityFeed from '\.\/ActivityFeed'/)
+  assert.match(hub, /<ActivityFeed moduleId="hub" variant="embedded" \/>/)
+  assert.doesNotMatch(hub, /ACCIONES OPERATIVAS/)
+})
+
 // ── Registry sano: todo módulo con ruta y roles no-vacíos ────────────────────
 const isTowerRoute = (r) => r === '/torre' || String(r).startsWith('/torre/')
 test('registry: módulos completos; el único /torre es torre_operativa (towerGated)', () => {

@@ -14,11 +14,12 @@ function normalizeList(payload) {
   return []
 }
 
-export default function ActivityFeed({ moduleId = 'hub' }) {
+export default function ActivityFeed({ moduleId = 'hub', variant = 'sidebar' }) {
   const { warehouseId, companyId } = useAdmin()
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [lastFetch, setLastFetch] = useState(null)
+  const embedded = variant === 'embedded'
 
   useEffect(() => {
     let alive = true
@@ -52,13 +53,23 @@ export default function ActivityFeed({ moduleId = 'hub' }) {
 
   const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
+  const Container = embedded ? 'section' : 'aside'
+  const containerStyle = embedded
+    ? {
+        marginTop: 0,
+      }
+    : {
+        position: 'sticky',
+        top: 0,
+        height: '100dvh',
+        padding: '20px 16px',
+        overflowY: 'auto',
+        background: TOKENS.glass.panelSoft,
+        borderLeft: `1px solid ${TOKENS.colors.border}`,
+      }
+
   return (
-    <aside style={{
-      position: 'sticky', top: 0, height: '100dvh',
-      padding: '20px 16px', overflowY: 'auto',
-      background: TOKENS.glass.panelSoft,
-      borderLeft: `1px solid ${TOKENS.colors.border}`,
-    }}>
+    <Container style={containerStyle}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <p style={{
           fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
@@ -95,7 +106,12 @@ export default function ActivityFeed({ moduleId = 'hub' }) {
           </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{
+          display: embedded ? 'grid' : 'flex',
+          gridTemplateColumns: embedded ? 'repeat(auto-fit, minmax(260px, 1fr))' : undefined,
+          flexDirection: embedded ? undefined : 'column',
+          gap: 8,
+        }}>
           {events.map((ev) => {
             const color = ev.type === 'sale'
               ? TOKENS.colors.success
@@ -145,6 +161,6 @@ export default function ActivityFeed({ moduleId = 'hub' }) {
           Actualizado {lastFetch.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
         </p>
       )}
-    </aside>
+    </Container>
   )
 }
