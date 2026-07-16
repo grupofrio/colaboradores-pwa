@@ -73,7 +73,7 @@ test('C. direccion_general SIN tower_status: NO ve Tower, SÍ ve M2/M3/M4', () =
   assert.ok(enters(M2, sess) && enters(M3, sess) && enters(M4, sess))
 })
 
-test('D. gerente_sucursal: no ve ni entra a ninguno de los tres (v1)', () => {
+test('D. gerente_sucursal: no ve ni entra a ningún módulo KOLD OS (v1)', () => {
   const sess = s('gerente_sucursal')
   const v = surfaces(sess)
   for (const id of KOLD_IDS) {
@@ -84,7 +84,7 @@ test('D. gerente_sucursal: no ve ni entra a ninguno de los tres (v1)', () => {
   for (const mod of [TOWER, M2, M3, M4]) assert.equal(enters(mod, sess), false)
 })
 
-test('E. sesión inválida: cero módulos y clic denegado en los tres', () => {
+test('E. sesión inválida: cero módulos y clic denegado en los cuatro', () => {
   for (const bad of [null, undefined, {}, { employee_id: 100 }, { session_token: 'h.p.s' }]) {
     assert.deepEqual(getVisibleModulesForSession(bad), [])
     assert.deepEqual(getHomeModulesForSession(bad), [])

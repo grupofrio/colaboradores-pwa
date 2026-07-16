@@ -26,8 +26,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
+import { createLatestRequestGate } from '../../lib/latestRequestGate'
+import { demoFixtureAvailable, loadM4DemoFixture } from 'virtual:m4-demo-fixture'
 import { fetchM4Latest, fetchM4Findings } from './m4/m4Api'
 import { isM4DemoAllowed } from './m4/demoGate'
+import { buildM4EffectivePayload, startM4StaleMonitor } from './m4/staleClock'
 import { applyFindingFilters, paginate, M4_DEFAULT_FILTERS, M4_PAGE_SIZE } from './m4/filters'
 import {
   findingsToCsv, evidenceJson, executiveSummaryText, recurrenceText,
@@ -39,7 +42,6 @@ import {
   M4_VERDICT_HELP, M4_CLASSIFICATION_LABELS, M4_EVIDENCE_SOURCE_LABELS,
   M4_SHELL_BLOCKER_LABELS, categoryLabel,
 } from './m4/m4Meta'
-import { M4_API_FIXTURE_PROVENANCE, M4_API_LATEST_FIXTURE } from './m4/fixtures/apiLatestFixture'
 
 const C = TOKENS.colors
 const STATUS_COLORS = {
@@ -182,7 +184,7 @@ function Header({ demo, technical, payload }) {
 
 export default function ScreenVentasM4({ session }) {
   const location = useLocation()
-  const demoAllowed = isM4DemoAllowed(import.meta.env)
+  const demoAllowed = demoFixtureAvailable && isM4DemoAllowed(import.meta.env)
   const demo = useMemo(
     () => demoAllowed && new URLSearchParams(location.search).get('demo') === '1',
     [demoAllowed, location.search],
@@ -193,6 +195,7 @@ export default function ScreenVentasM4({ session }) {
   const [table, setTable] = useState({ phase: 'idle', items: [], total: 0, pages: 1 })
   const [openFindingId, setOpenFindingId] = useState(null)
   const aliveRef = useRef(true)
+  const tableRequestGate = useRef(createLatestRequestGate())
 
   useEffect(() => {
     aliveRef.current = true
@@ -201,38 +204,69 @@ export default function ScreenVentasM4({ session }) {
 
   // ── /latest ────────────────────────────────────────────────────────────────
   useEffect(() => {
+    let current = true
     if (demo) {
-      setLoad({ phase: 'ok', payload: M4_API_LATEST_FIXTURE, demo: true })
-      return
+      setLoad({ phase: 'loading' })
+      loadM4DemoFixture().then((fixture) => {
+        if (!current || !aliveRef.current) return
+        if (fixture?.payload && fixture?.provenance) {
+          setLoad({
+            phase: 'ok', payload: fixture.payload, provenance: fixture.provenance, demo: true,
+          })
+        } else {
+          setLoad({ phase: 'unavailable' })
+        }
+      })
+      return () => { current = false }
     }
     setLoad({ phase: 'loading' })
     fetchM4Latest().then((result) => {
-      if (!aliveRef.current) return
+      if (!current || !aliveRef.current) return
       if (result.state === 'ok') setLoad({ phase: 'ok', payload: result.payload, demo: false })
       else setLoad({ phase: result.state, errors: result.errors || [] })
     })
+    return () => { current = false }
   }, [demo])
 
   const payload = load.phase === 'ok' ? load.payload : null
   const runsCount = payload?.history?.runs_count ?? 0
   const hasHistory = runsCount >= 2
-  const stale = payload?.stale === true
+  const [staleState, setStaleState] = useState({ stale: false, ageDays: null })
+
+  useEffect(() => {
+    if (!payload) {
+      setStaleState({ stale: false, ageDays: null })
+      return undefined
+    }
+    return startM4StaleMonitor(payload, { onChange: setStaleState })
+  }, [payload])
+
+  const stale = staleState.stale
 
   // ── /findings (server-side en real; local en demo) ────────────────────────
   const loadTable = useCallback(async () => {
+    const requestId = tableRequestGate.current.begin()
     if (!payload) return
     if (demo) {
       const filtered = applyFindingFilters(payload.findings, filters)
       const local = paginate(filtered, page, M4_PAGE_SIZE)
-      setTable({ phase: 'ok', items: local.items, total: local.total, pages: local.pages })
+      if (aliveRef.current && tableRequestGate.current.isLatest(requestId)) {
+        setTable({ phase: 'ok', items: local.items, total: local.total, pages: local.pages })
+      }
       return
     }
-    setTable((prev) => ({ ...prev, phase: 'loading' }))
-    const params = { page, page_size: M4_PAGE_SIZE }
+    if (tableRequestGate.current.isLatest(requestId)) {
+      setTable({ phase: 'loading', items: [], total: 0, pages: 1, rejected: [] })
+    }
+    const params = { run_id: payload.run.run_id, page, page_size: M4_PAGE_SIZE }
     for (const [key, value] of Object.entries(filters)) if (value) params[key] = value
-    const result = await fetchM4Findings(params)
-    if (!aliveRef.current) return
+    const result = await fetchM4Findings(params, {
+      ruleResults: payload.rule_results,
+      run: payload.run,
+    })
+    if (!aliveRef.current || !tableRequestGate.current.isLatest(requestId)) return
     if (result.state === 'ok') {
+      if (result.payload.page !== page) setPage(result.payload.page)
       setTable({
         phase: 'ok', items: result.payload.items, total: result.payload.total,
         pages: result.payload.pages,
@@ -318,6 +352,7 @@ export default function ScreenVentasM4({ session }) {
   const summary = payload.summary
   const run = payload.run
   const nonformal = run.is_production_shell_run !== true
+  const effectivePayload = buildM4EffectivePayload(payload, staleState)
   const exportMarks = { stale, demo: !!load.demo, nonformal }
 
   return (
@@ -329,8 +364,8 @@ export default function ScreenVentasM4({ session }) {
           marginTop: 10, padding: '8px 12px', borderRadius: 10, fontSize: 11.5,
           background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)', color: '#fbbf24',
         }}>
-          MODO DEMO ({M4_API_FIXTURE_PROVENANCE.kind}) — envelope generado por el core real del backend
-          ({M4_API_FIXTURE_PROVENANCE.backend_pr}, midió {M4_API_FIXTURE_PROVENANCE.measuring_commit.slice(0, 8)}) con
+          MODO DEMO ({load.provenance.kind}) — envelope generado por el core real del backend
+          ({load.provenance.backend_pr}, midió {load.provenance.measuring_commit.slice(0, 8)}) con
           los NÚMEROS REALES medidos en producción (XML-RPC read-only 2026-07-15). NO es una corrida odoo-shell, NO
           existe en producción y se regenera si el contrato del backend cambia.
         </div>
@@ -358,7 +393,7 @@ export default function ScreenVentasM4({ session }) {
           marginTop: 10, padding: '10px 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
           background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.5)', color: '#fbbf24',
         }}>
-          ⚠ CORRIDA STALE — la auditoría tiene {payload.age_days ?? '?'} días (umbral: {payload.capabilities?.stale_days ?? 7}).
+          ⚠ CORRIDA STALE — la auditoría tiene {staleState.ageDays == null ? (payload.age_days ?? '?') : staleState.ageDays.toFixed(2)} días (umbral: {payload.capabilities?.stale_days ?? 7}).
           Se puede leer, pero NO representa el estado vigente; los exports quedan marcados STALE.
         </div>
       )}
@@ -647,19 +682,19 @@ export default function ScreenVentasM4({ session }) {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
         <button style={exportBtn} onClick={() => downloadTextFile(
           exportFilename('kold_os_m4_hallazgos', 'csv', exportMarks),
-          findingsToCsv(payload.findings), 'text/csv')}>CSV de hallazgos</button>
+          findingsToCsv(effectivePayload.findings, effectivePayload.rule_results, effectivePayload.run), 'text/csv')}>CSV de hallazgos</button>
         <button style={exportBtn} onClick={() => downloadTextFile(
           exportFilename('kold_os_m4_evidencia', 'json', exportMarks),
-          evidenceJson(payload, load.demo ? { fixture_provenance: M4_API_FIXTURE_PROVENANCE } : {}), 'application/json')}>JSON de evidencia</button>
+          evidenceJson(effectivePayload, load.demo ? { fixture_provenance: load.provenance } : {}), 'application/json')}>JSON de evidencia</button>
         <button style={exportBtn} onClick={() => downloadTextFile(
           exportFilename('kold_os_m4_resumen', 'txt', exportMarks),
-          executiveSummaryText(payload, { demo: !!load.demo }))}>Resumen ejecutivo</button>
+          executiveSummaryText(effectivePayload, { demo: !!load.demo }))}>Resumen ejecutivo</button>
         <button style={exportBtn} onClick={() => downloadTextFile(
           exportFilename('kold_os_m4_recurrencia', 'txt', exportMarks),
-          recurrenceText(payload, { demo: !!load.demo }))}>Recurrencia</button>
+          recurrenceText(effectivePayload, { demo: !!load.demo }))}>Recurrencia</button>
         <button style={exportBtn} onClick={() => downloadTextFile(
           exportFilename('kold_os_m4_handoff_m2', 'txt', exportMarks),
-          handoffM4M2Text(payload, { demo: !!load.demo }))}>Handoff M4→M2</button>
+          handoffM4M2Text(effectivePayload, { demo: !!load.demo }))}>Handoff M4→M2</button>
       </div>
       <div style={{ fontSize: 10.5, color: C.textLow, marginTop: 6 }}>
         Los archivos marcan DEMO / STALE / NONFORMAL en el nombre. Sin PII; celdas neutralizadas contra formula injection.

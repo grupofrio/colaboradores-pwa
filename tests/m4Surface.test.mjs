@@ -110,6 +110,8 @@ test('nav: /ventas-clientes NO está oculta (usa la nav global)', () => {
 test('demo: la pantalla gatea con isM4DemoAllowed(import.meta.env)', () => {
   assert.match(screenSrc, /isM4DemoAllowed\(import\.meta\.env\)/)
   assert.match(screenSrc, /demoAllowed && new URLSearchParams\(location\.search\)\.get\('demo'\) === '1'/)
+  assert.doesNotMatch(screenSrc, /from ['"]\.\/m4\/fixtures\/apiLatestFixture/)
+  assert.match(screenSrc, /loadM4DemoFixture/)
 })
 
 test('banner de evidencia NO FORMAL se decide por el DATO, no por el modo demo', () => {
@@ -159,6 +161,29 @@ test('rejected_params: la pantalla lo hace visible, no lo ignora', () => {
   assert.match(screenSrc, /role="alert"/)
   // page/page_size no son filtros del usuario: no deben alarmar.
   assert.match(screenSrc, /p !== 'page' && p !== 'page_size'/)
+})
+
+test('tabla M4 aplica loading, éxito y error solo para la petición vigente', () => {
+  assert.match(screenSrc, /createLatestRequestGate/)
+  assert.match(screenSrc, /tableRequestGate\.current\.begin\(\)/)
+  assert.match(screenSrc, /tableRequestGate\.current\.isLatest\(requestId\)/)
+  assert.match(screenSrc, /!aliveRef\.current\s*\|\|\s*!tableRequestGate\.current\.isLatest\(requestId\)/)
+  assert.match(screenSrc, /ruleResults:\s*payload\.rule_results/)
+  assert.match(screenSrc, /run:\s*payload\.run/)
+})
+
+test('findings queda fijado al run_id y todos los exports usan payload STALE efectivo', () => {
+  assert.match(screenSrc, /run_id:\s*payload\.run\.run_id/)
+  assert.match(screenSrc, /setTable\(\{\s*phase:\s*'loading',\s*items:\s*\[\],\s*total:\s*0,\s*pages:\s*1/,
+    'un latest nuevo debe vaciar filas del snapshot anterior mientras carga')
+  assert.match(screenSrc, /buildM4EffectivePayload\(payload, staleState\)/)
+  for (const exporter of ['findingsToCsv', 'evidenceJson', 'executiveSummaryText', 'recurrenceText', 'handoffM4M2Text']) {
+    assert.match(screenSrc, new RegExp(`${exporter}\\(effectivePayload`), `${exporter} no usa effectivePayload`)
+  }
+})
+
+test('la tabla adopta la página efectiva devuelta por Odoo', () => {
+  assert.match(screenSrc, /setPage\(result\.payload\.page\)/)
 })
 
 test('sin botones de acción comercial (read-only estricto)', () => {

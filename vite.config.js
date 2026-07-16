@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const demoFixtureLoader = fileURLToPath(new URL(
+    mode === 'development' || mode === 'test'
+      ? './src/modules/ventas/m4/demoFixtureLoader.dev.js'
+      : './src/modules/ventas/m4/demoFixtureLoader.prod.js',
+    import.meta.url,
+  ))
 
   return {
     resolve: {
@@ -16,6 +22,7 @@ export default defineConfig(({ mode }) => {
             : './src/modules/ejecucion/m3/fixtures/apiLatestFixture.js',
           import.meta.url,
         )),
+        'virtual:m4-demo-fixture': demoFixtureLoader,
       },
     },
     plugins: [

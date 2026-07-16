@@ -6,15 +6,17 @@
 // Política de datos (B1): la evidencia NO se cachea ni se persiste en ningún
 // almacenamiento del navegador (hay test que escanea la ausencia de esas
 // APIs); timeout duro; respuestas acotadas por tamaño; contrato validado antes
-// de entregar a la UI; el desmontaje descarta resultados tardíos (patrón
-// alive-flag de M1 — el mecanismo canónico api() no acepta AbortSignal; el
-// resultado tardío se tira).
+// de entregar a la UI. ScreenVentasM4 combina alive-flag para desmontaje con
+// latest-request-wins para filtros/paginación; api() no acepta AbortSignal.
 
 import {
   KOLD_OS_M4_LATEST_PATH, KOLD_OS_M4_FINDINGS_PATH, KOLD_OS_M4_RUNS_PATH,
   KOLD_OS_M4_FINDINGS_PARAMS,
 } from '../../../lib/koldOsM4Route.js'
-import { validateM4Latest, validateM4Findings, validateM4Runs } from './contract.js'
+import {
+  canonicalizeM4Findings, canonicalizeM4Latest, canonicalizeM4Runs,
+  validateM4Latest, validateM4Findings, validateM4Runs,
+} from './contract.js'
 
 // api() se resuelve LAZY: mantiene este módulo puro para tests (node) y solo
 // carga el cliente canónico completo en el navegador cuando de verdad se usa.
@@ -24,9 +26,30 @@ async function defaultApi(method, path) {
 }
 
 export const M4_TIMEOUT_MS = 30000
+const PYTHON_DECIMAL_INT_RE = /^[+-]?\d+$/
 // Techo defensivo del payload parseado (~2 MB serializado). El backend pagina
 // (page_size <= 100), así que esto solo ataja respuestas anómalas.
 export const M4_MAX_PAYLOAD_CHARS = 2_000_000
+
+export function normalizeM4FindingsRequest(params, runId) {
+  const normalized = { run_id: runId, page: 1, page_size: 25 }
+  for (const key of KOLD_OS_M4_FINDINGS_PARAMS) {
+    if (key === 'run_id') continue
+    const value = params?.[key]
+    if (value === undefined || value === null || value === '') continue
+    const text = String(value).trim()
+    if (!text) continue
+    if (key === 'page' || key === 'page_size') {
+      const number = Number(text)
+      if (!PYTHON_DECIMAL_INT_RE.test(text) || !Number.isSafeInteger(number)) return null
+      normalized[key] = number
+    } else {
+      if (text.length > 120) return null
+      normalized[key] = text
+    }
+  }
+  return normalized
+}
 
 export function withTimeout(promise, ms = M4_TIMEOUT_MS) {
   let timer
@@ -82,14 +105,23 @@ export async function fetchM4Latest({ timeoutMs = M4_TIMEOUT_MS, apiImpl = defau
       ? { state: 'schema_mismatch', errors }
       : { state: 'invalid', errors }
   }
-  return { state: 'ok', payload }
+  const canonical = canonicalizeM4Latest(payload)
+  return canonical
+    ? { state: 'ok', payload: canonical }
+    : { state: 'invalid', errors: ['canonicalización M4 falló'] }
 }
 
 /** GET /pwa-kold-os/m4/findings con filtros del contrato (paginado server-side). */
-export async function fetchM4Findings(params = {}, { timeoutMs = M4_TIMEOUT_MS, apiImpl = defaultApi } = {}) {
+export async function fetchM4Findings(params = {}, {
+  timeoutMs = M4_TIMEOUT_MS, apiImpl = defaultApi, ruleResults = null, run = null,
+} = {}) {
+  const runId = typeof run?.run_id === 'string' ? run.run_id : ''
+  if (!runId) return { state: 'invalid', errors: ['run.run_id: requerido para fijar snapshot'] }
+  const requestContext = normalizeM4FindingsRequest(params, runId)
+  if (!requestContext) return { state: 'invalid', errors: ['parámetros /findings inválidos'] }
   const query = new URLSearchParams()
   for (const key of KOLD_OS_M4_FINDINGS_PARAMS) {
-    const value = params?.[key]
+    const value = requestContext[key]
     if (value !== undefined && value !== null && value !== '') query.set(key, String(value))
   }
   const suffix = query.toString() ? `?${query.toString()}` : ''
@@ -99,13 +131,18 @@ export async function fetchM4Findings(params = {}, { timeoutMs = M4_TIMEOUT_MS, 
   } catch (err) {
     return { ...classifyM4Error(err), errors: [String(err?.code || err?.message || 'error')] }
   }
-  const { ok, errors, schema } = validateM4Findings(payload)
+  const { ok, errors, schema } = validateM4Findings(payload, {
+    ruleResults, run, requestContext,
+  })
   if (!ok) {
     return schema === 'unsupported'
       ? { state: 'schema_mismatch', errors }
       : { state: 'invalid', errors }
   }
-  return { state: 'ok', payload }
+  const canonical = canonicalizeM4Findings(payload, { ruleResults, run, requestContext })
+  return canonical
+    ? { state: 'ok', payload: canonical }
+    : { state: 'invalid', errors: ['canonicalización M4 findings falló'] }
 }
 
 /** GET /pwa-kold-os/m4/runs → historial de corridas ingeridas (metadatos). */
@@ -122,5 +159,8 @@ export async function fetchM4Runs({ timeoutMs = M4_TIMEOUT_MS, apiImpl = default
       ? { state: 'schema_mismatch', errors }
       : { state: 'invalid', errors }
   }
-  return { state: 'ok', payload }
+  const canonical = canonicalizeM4Runs(payload)
+  return canonical
+    ? { state: 'ok', payload: canonical }
+    : { state: 'invalid', errors: ['canonicalización M4 runs falló'] }
 }

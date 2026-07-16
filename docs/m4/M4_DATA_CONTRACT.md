@@ -107,5 +107,5 @@ que afirme medir entregado/facturado/cobrado/margen · schema desconocida.
 
 ok · disabled(503/flag) · session_expired(401) · forbidden(403) ·
 unavailable(404) · schema_mismatch(409/versión) · invalid(contrato) ·
-error(timeout/red/payload>2MB). Timeout 30 s; alive-flag (api() sin
+error(timeout/red/payload>2MB). Timeout 30 s; alive-flag + latest-request-wins (api() sin
 AbortSignal); cero persistencia local.

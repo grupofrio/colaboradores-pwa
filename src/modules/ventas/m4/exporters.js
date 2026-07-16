@@ -7,7 +7,10 @@
 //   · STALE (B10): el nombre del archivo y la metadata lo marcan — una
 //     corrida vieja jamás se exporta como si fuera vigente.
 
-import { M4_FORBIDDEN_KEY_RE } from './contract.js'
+import {
+  M4_API_SCHEMA_VERSION, M4_FORBIDDEN_KEY_RE, canonicalizeM4Findings, canonicalizeM4Latest,
+  validateM4Findings,
+} from './contract.js'
 
 export const CREDENTIAL_VALUE_RE = /(?:\bBearer\s+\S+|\b(?:password|passwd|api[_-]?key|token|secret)\s*[=:]\s*\S+|\b(?:sk-|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]+)/i
 
@@ -52,8 +55,7 @@ export const M4_CSV_COLUMNS = Object.freeze([
   // Contrato epistémico: el veredicto es la lectura autoritativa, no el color.
   'verdict', 'classification', 'approved_threshold',
   // `universe_id` viaja junto a la etiqueta: quien abra el CSV en una hoja de
-  // cálculo puede agrupar por universo sin parsear prosa, y sabe que "168 de
-  // 752" y "39 de 584" NO comparten población.
+  // cálculo puede agrupar por universo sin parsear prosa ni mezclar poblaciones.
   'universe_id', 'universe',
   'status', 'granularity', 'lifecycle_status', 'title', 'entity_type',
   'entity_reference', 'observed_value', 'expected_rule', 'numerator',
@@ -64,11 +66,37 @@ export const M4_CSV_COLUMNS = Object.freeze([
   'occurrence_count', 'source_model', 'source_timestamp',
 ])
 
+const blockedExportText = () => 'KOLD OS · M4\nEXPORT BLOQUEADO: payload inválido'
+
 /** CSV de hallazgos (RFC-4180 básico + neutralización anti-fórmulas). */
-export function findingsToCsv(findings = []) {
+export function findingsToCsv(findings = [], ruleResults = null, run = null) {
   const rows = [M4_CSV_COLUMNS.join(',')]
-  for (const raw of Array.isArray(findings) ? findings : []) {
-    const finding = sanitizeForExport(raw)
+  const items = Array.isArray(findings) ? findings : []
+  const page = {
+    ok: true,
+    schema_version: M4_API_SCHEMA_VERSION,
+    run_id: run?.run_id || '0'.repeat(64),
+    total: items.length,
+    page: 1,
+    pages: 1,
+    page_size: Math.max(items.length, 1),
+    items,
+    applied_scope: { level: 'global' },
+    applied_filters: {},
+    rejected_params: [],
+    read_only: true,
+  }
+  const options = {
+    ruleResults,
+    run,
+    allowCatalogOnly: !Array.isArray(ruleResults) || !ruleResults.length,
+  }
+  const validation = validateM4Findings(page, options)
+  if (!validation.ok) return rows.join('\n')
+  const canonical = canonicalizeM4Findings(page, options)
+  if (!canonical) return rows.join('\n')
+  for (const item of canonical.items) {
+    const finding = sanitizeForExport(item)
     rows.push(M4_CSV_COLUMNS.map((col) => {
       const value = finding?.[col]
       return csvCell(Array.isArray(value) ? value.join('|') : value)
@@ -87,22 +115,34 @@ export function exportFilename(base, ext, { stale = false, demo = false, nonform
 
 /** JSON de evidencia: envelope completo + metadata de exportación. */
 export function evidenceJson(payload, extra = {}) {
+  const canonical = canonicalizeM4Latest(payload)
+  if (!canonical) {
+    return JSON.stringify({
+      exported_schema: 'kold.os.m4.export/1',
+      export_meta: { invalid_payload: true },
+      envelope: null,
+    }, null, 2)
+  }
+  const fixture = extra?.fixture === true || extra?.fixture_provenance != null
   return JSON.stringify(sanitizeForExport({
     exported_schema: 'kold.os.m4.export/1',
     export_meta: {
       stale: payload?.stale === true,
       age_days: payload?.age_days ?? null,
       technical_state: payload?.run?.technical_state || null,
-      ...extra,
+      ...(fixture ? { fixture: true } : {}),
     },
-    envelope: payload,
+    envelope: canonical,
   }), null, 2)
 }
 
 /** Resumen ejecutivo imprimible (texto plano) — desglosado por VEREDICTO. */
 export function executiveSummaryText(payload, { demo = false } = {}) {
-  const run = payload?.run || {}
-  const summary = payload?.summary || {}
+  const canonical = canonicalizeM4Latest(payload)
+  if (!canonical) return blockedExportText()
+  payload = canonical
+  const run = canonical.run || {}
+  const summary = canonical.summary || {}
   const nonformal = run.is_production_shell_run !== true
   const lines = [
     'KOLD OS · M4 — VENTAS, CLIENTES Y CANALES (resumen ejecutivo)',
@@ -147,9 +187,11 @@ export function executiveSummaryText(payload, { demo = false } = {}) {
 
 /** Export de RECURRENCIA: el bloque F en texto plano, con universos declarados. */
 export function recurrenceText(payload, { demo = false } = {}) {
-  const run = payload?.run || {}
-  const rec = (payload?.metrics?.recurrence_metrics || [])[0] || {}
-  const rules = (payload?.rule_results || []).filter((r) => r.category === 'recurrencia')
+  const canonical = canonicalizeM4Latest(payload)
+  if (!canonical) return blockedExportText()
+  const run = canonical.run || {}
+  const rec = (canonical.metrics?.recurrence_metrics || [])[0] || {}
+  const rules = (canonical.rule_results || []).filter((r) => r.category === 'recurrencia')
   const lines = [
     'KOLD OS · M4 — RECURRENCIA DE CLIENTES',
     '======================================',
@@ -179,11 +221,13 @@ export function recurrenceText(payload, { demo = false } = {}) {
 /** Export del HANDOFF M4→M2: la señal comercial que planeación debe consumir.
  *  M4 solo OBSERVA el handoff; jamás escribe en M2. */
 export function handoffM4M2Text(payload, { demo = false } = {}) {
-  const run = payload?.run || {}
-  const rec = (payload?.metrics?.recurrence_metrics || [])[0] || {}
-  const orders = (payload?.metrics?.order_metrics || [])[0] || {}
-  const master = (payload?.metrics?.customer_master_metrics || [])[0] || {}
-  const rules = (payload?.rule_results || []).filter((r) => r.category === 'senal_m4_m2')
+  const canonical = canonicalizeM4Latest(payload)
+  if (!canonical) return blockedExportText()
+  const run = canonical.run || {}
+  const rec = (canonical.metrics?.recurrence_metrics || [])[0] || {}
+  const orders = (canonical.metrics?.order_metrics || [])[0] || {}
+  const master = (canonical.metrics?.customer_master_metrics || [])[0] || {}
+  const rules = (canonical.rule_results || []).filter((r) => r.category === 'senal_m4_m2')
   const lines = [
     'KOLD OS · M4 → M2 — SEÑAL COMERCIAL PARA PLANEACIÓN (handoff observado)',
     '=======================================================================',

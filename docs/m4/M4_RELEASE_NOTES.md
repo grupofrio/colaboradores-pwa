@@ -7,12 +7,13 @@ primero.**
 - Módulo **"Ventas y clientes"** (`/ventas-clientes`, accessPolicy `m4`):
   observatorio read-only comercial con 9 bloques, veredictos epistémicos, KPIs
   **emitidos por el backend** (universo/fuente/cobertura/salvedad/corte),
-  detalle server-side, 5 exports seguros y demo gateado (DEV/Preview;
-  producción ignora `?demo=1`).
+  detalle server-side, 5 exports seguros y demo exclusivo de DEV. Preview y
+  producción excluyen físicamente el fixture del bundle.
 - Cliente API GET-only (`m4Api`) + contrato fail-closed (`m4/contract.js`) +
   handler directo sin fallback n8n (`directKoldOsM4`).
 - Permisos v1: direccion_general / admin_plataforma → global; resto sin acceso.
-- 79 tests M4 (**700/700** total), lint 0, build OK, blindaje public/ OK.
+- Suite completa **830/830**, lint 0, build OK, blindaje public/ y scanner de
+  fuga del fixture OK.
 
 ## Cambios de esta vuelta (adaptación al contrato definitivo)
 - **La conclusión cambió**: de "1 incumplimiento" a **CERO**. La UI ya no puede

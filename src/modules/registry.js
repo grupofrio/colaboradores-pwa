@@ -200,7 +200,7 @@ export const MODULES = [
   // pérdida/recompra, señal M4→M2) desde la API autenticada gf_kold_os_m4
   // (GrupoVeniu/GrupoFrio PR #205, aún sin mergear ni desplegar).
   // accessPolicy 'm4': tarjeta, nav Y clic se deciden con readM4Access
-  // (misma mecánica que M2 — dispatch inline en navModel), NUNCA por roles
+  // mediante ACCESS_POLICY_RESOLVERS en navModel, NUNCA por roles
   // genéricos. `roles` queda SOLO como documentación. M4VentasRoute (App.jsx)
   // revalida como autoridad final de la ruta.
   {

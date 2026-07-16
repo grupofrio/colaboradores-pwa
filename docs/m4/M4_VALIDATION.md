@@ -35,7 +35,7 @@ GrupoVeniu/GrupoFrio PR #205 (midió `3eeffd88`).**
   de error; blindaje public/.
 - `koldOsM4Coexistence.test.mjs` (13): matriz A–M — Aida/admin/dirección/gerente/
   inválida/fuga-por-rol/política desconocida/orden Home vs navPriority/M1 y M2
-  intactos/orden del dispatch inline/rutas únicas.
+  intactos/registro canónico de políticas m2/m3/m4/rutas únicas.
 
 ## Smoke en runtime (sesión LOCAL de prueba, eliminada al final)
 
@@ -45,7 +45,7 @@ total 14,078, que ya no existen).
 
 | Caso | Resultado |
 |---|---|
-| B. `admin_plataforma` | `/ventas-clientes?demo=1` renderiza: header con `midió: 3eeffd889b…` · banners DEMO + EVIDENCIA NO FORMAL (3 bloqueadores) · tiles **0 / 9 / 5 / 8 / 15** · total **12,158** = suma exacta · KPIs con universo, cobertura y salvedad visibles · **4 tiles "—"** en "Fuera del contrato v1" (Entregados/Facturados/Cobrados/Margen) · bloques con "umbral no aprobado" · **ninguna aparición de "venta" sin calificar** |
+| B. `admin_plataforma` (solo servidor DEV) | `/ventas-clientes?demo=1` renderiza: header con `midió: 3eeffd889b…` · banners DEMO + EVIDENCIA NO FORMAL (3 bloqueadores) · tiles **0 / 9 / 5 / 8 / 15** · total **12,158** = suma exacta · KPIs con universo, cobertura y salvedad visibles · **4 tiles "—"** en "Fuera del contrato v1" (Entregados/Facturados/Cobrados/Margen) · bloques con "umbral no aprobado" · **ninguna aparición de "venta" sin calificar**. Preview/prod no contienen el fixture. |
 | A. `supervisor_ventas` (Aida) | URL directa `/ventas-clientes` → **expulsada a `/`** |
 | D. `gerente_sucursal` | URL directa → **expulsado a `/`** |
 | E. sesión inválida (sin token) | URL directa → **`/login`** |

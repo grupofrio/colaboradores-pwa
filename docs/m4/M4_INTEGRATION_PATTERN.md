@@ -116,7 +116,7 @@ Molde `m2Api.js`. `classifyM4Error(err)`: 503/feature_disabled→disabled(retrya
 401/no_session→session_expired; 403→forbidden; 404→unavailable(retryable);
 409/schema_mismatch→schema_mismatch; timeout→error(retryable); resto→error.
 `M4_TIMEOUT_MS=30000`, `M4_MAX_PAYLOAD_CHARS=2_000_000`, `withTimeout`, `guardSize`,
-import LAZY de `api()`, alive-flag (sin AbortSignal, sin persistencia).
+import LAZY de `api()`, alive-flag + latest-request-wins (sin AbortSignal, sin persistencia).
 
 ## 7. Protección de URL
 
@@ -125,8 +125,10 @@ Doble barrera: (a) `M4VentasRoute` en App.jsx revalida `readM4Access`; (b)
 
 ## 8. Demo — `src/modules/ventas/m4/demoGate.js`
 
-`isM4DemoAllowed(env)`: `env.DEV===true` → true; `env.VITE_ENABLE_M4_DEMO==='true'`
-→ true; else false. Producción ignora `?demo=1` (gate de código, hay test).
+`isM4DemoAllowed(env)`: solo `env.DEV===true` → true. Vite resuelve el loader
+del fixture en build-time: DEV usa `demoFixtureLoader.dev.js`; Preview y
+producción usan `demoFixtureLoader.prod.js`, que no importa el fixture. El build
+termina con `check_m4_fixture_leak.mjs`, que busca sus SHAs exclusivos en `dist/`.
 
 ## 9. Exports — `src/modules/ventas/m4/exporters.js`
 

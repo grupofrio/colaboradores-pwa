@@ -60,9 +60,9 @@ test('scope: none => cero hallazgos; global => todos', () => {
 })
 
 // ── Demo gate ────────────────────────────────────────────────────────────────
-test('demo gate: DEV sí · Preview con VITE_ENABLE_M4_DEMO sí · producción NO', () => {
+test('demo gate: solo DEV; Preview y producción fallan cerrado', () => {
   assert.equal(isM4DemoAllowed({ DEV: true }), true)
-  assert.equal(isM4DemoAllowed({ DEV: false, VITE_ENABLE_M4_DEMO: 'true' }), true)
+  assert.equal(isM4DemoAllowed({ DEV: false, VITE_ENABLE_M4_DEMO: 'true' }), false)
   assert.equal(isM4DemoAllowed({ DEV: false }), false)
   assert.equal(isM4DemoAllowed({ DEV: false, VITE_ENABLE_M4_DEMO: 'false' }), false)
   assert.equal(isM4DemoAllowed(null), false)
@@ -232,4 +232,48 @@ test('evidenceJson exporta el envelope sanitizado con metadata', () => {
   assert.equal(json.exported_schema, 'kold.os.m4.export/1')
   assert.equal(json.export_meta.fixture, true)
   assert.equal(json.envelope.schema_version, 'kold.os.m4.api/1')
+})
+
+test('evidenceJson no propaga metadata extra arbitraria del caller', () => {
+  const output = evidenceJson(M4_API_LATEST_FIXTURE, {
+    reviewer: 'Juan Pérez',
+    note: 'persona@example.com',
+    fixture: true,
+  })
+  const json = JSON.parse(output)
+  assert.equal(json.export_meta.fixture, true)
+  assert.equal('reviewer' in json.export_meta, false)
+  assert.equal('note' in json.export_meta, false)
+  assert.ok(!output.includes('Juan Pérez') && !output.includes('persona@example.com'))
+})
+
+test('evidenceJson nunca exporta campos desconocidos del envelope crudo', () => {
+  for (const mutate of [
+    (doc) => { doc.comment = 'Juan Pérez' },
+    (doc) => { doc.metrics.comment = { customer_note: 'María Hernández' } },
+    (doc) => { doc.rule_results[0].comment = 'Carlos Ruiz' },
+    (doc) => { doc.history.comment = 'Ana López' },
+    (doc) => { doc.run.comment = 'Pedro García' },
+  ]) {
+    const dirty = JSON.parse(JSON.stringify(M4_API_LATEST_FIXTURE))
+    mutate(dirty)
+    const output = evidenceJson(dirty)
+    assert.equal(JSON.parse(output).envelope, null)
+    for (const name of ['Juan Pérez', 'María Hernández', 'Carlos Ruiz', 'Ana López', 'Pedro García']) {
+      assert.ok(!output.includes(name), name)
+    }
+  }
+})
+
+test('exports bloquean findings con copy arbitrario aunque se invoquen directamente', () => {
+  const dirty = JSON.parse(JSON.stringify(M4_API_LATEST_FIXTURE))
+  dirty.findings[0].title = 'Juan Pérez'
+  dirty.findings[0].description = 'Cuenta personal de María Hernández'
+  const csv = findingsToCsv(dirty.findings, dirty.rule_results, dirty.run)
+  assert.ok(!csv.includes('Juan Pérez'))
+  assert.equal(csv.trim(), M4_CSV_COLUMNS.join(','), 'CSV inválido solo conserva encabezado')
+  const json = evidenceJson(dirty, { reviewer: 'Juan Pérez' })
+  assert.ok(!json.includes('Juan Pérez') && !json.includes('María Hernández'))
+  assert.equal(JSON.parse(json).envelope, null)
+  assert.ok(!executiveSummaryText(dirty).includes('Juan Pérez'))
 })

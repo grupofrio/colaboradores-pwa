@@ -7,10 +7,10 @@ contra el código, no contra los PR bodies antiguos.
 
 ## Correcciones a mis propias premisas (lo que el código dijo, no mi memoria)
 
-1. **`ACCESS_POLICY_RESOLVERS` NO existe en main.** Es invención mía en la rama M3
-   (`#71`, sin mergear). El patrón canónico MERGEADO es **dispatch inline**
-   `if (module.accessPolicy === 'm2')` en `navModel.js:114`. **M4 hereda el patrón
-   inline**, no el registro — o crearía una tercera arquitectura.
+1. En la base histórica auditada, **`ACCESS_POLICY_RESOLVERS` no existía en
+   main**. Tras el rebase semántico de M4 sobre el head corregido de `#71`, la
+   arquitectura integrada sí usa el registro canónico `{m2,m3,m4}` y mantiene
+   Tower M1 fuera de él. M4 hereda ese registro; ya no usa dispatch inline.
 2. **M2 no tiene contrato epistémico** (`classification`/`verdict`/`universe`/
    `approved_threshold`). Eso nació en M3. **M4 lo hereda de M3, no de M2.**
 3. **M2 usa ventana RELATIVA** (`window_days`, SQL `current_date - N`). La ventana
@@ -19,8 +19,8 @@ contra el código, no contra los PR bodies antiguos.
    `is_production_shell_run` de M3. **M4 usa el esquema más rico de M3.**
 5. **El auditor M2 vive FUERA del módulo** (`gf_route_compliance/tools/`). **M3 lo
    puso dentro** (`gf_kold_os_m3/lib/`). **M4 sigue a M3: auditor dentro del módulo.**
-6. **El core M2 lleva el hardening de Sebastián** (commit `53b8fa38`) que M3 NO
-   tiene: `scope_fingerprint` en `stable_finding_key`, `is_chronological_append`,
+6. **El core M2 lleva el hardening de Sebastián** (commit `53b8fa38`) que M4
+   heredó: `scope_fingerprint` en `stable_finding_key`, `is_chronological_append`,
    `run_id == run_id_sha256`, rechazo de floats no finitos, conflicto de identidad,
    `_history_presence` filtrado por scope. **M4 lo hereda desde el inicio.**
 
@@ -41,7 +41,7 @@ lifecycle de Sebastián.** Es la mejor síntesis de los tres.
 | 8 | **API directa sin fallback n8n** | M1: riesgo de fallback a n8n en 404 | Handler directo GET-only que corta el fallback | `directKoldOsM2` (`api.js:9307`), 405 en no-GET, NO_DIRECT si no matchea | `directKoldOsM4` GET-only, registrado en `directHandlers` | `m4Api`: directKoldOsM4 GET-only, sin fallback n8n |
 | 9 | **GET-only** | contrato read-only | Controller `methods=["GET"]` → framework 405 | `controllers/main.py` M2 (2 rutas GET) | Endpoints M4 solo GET; POST → 405 | backend HttpCase: POST /latest → 404/405 |
 | 10 | **Fixture vs evidencia real** | riesgo de leer el demo como corrida formal | Procedencia explícita + hashes diferenciados | `M2_API_FIXTURE_PROVENANCE.is_production_evidence:false`; M3: `is_production_shell_run:false` | Fixture M4 declara metadata M3-style completa; nunca suplanta corrida formal | `m4Contract`: fixture no formal con metadata completa → válido |
-| 11 | **Demo fuera de producción** | `?demo=1` no debe existir en prod | Gate de código, no enlace oculto | `isM2DemoAllowed(env)`: DEV o `VITE_ENABLE_M2_DEMO` | `isM4DemoAllowed`; prod ignora `?demo=1` | `m4Surface`: gate niega en build productivo |
+| 11 | **Demo fuera de builds públicos** | El fixture no debe existir en Preview/prod | Gate de código + exclusión build-time | `isM2DemoAllowed(env)`: DEV o `VITE_ENABLE_M2_DEMO` | M4: solo DEV; loader productivo vacío + scanner de `dist/` | `m4ProductionBuild`: SHAs exclusivos ausentes del bundle |
 | 12 | **Datos agregados vs drill-down** | Codex M3: drill-down falso sin datos por registro | Solo dimensión con datos reales; resto aggregate | M2 v1 = aggregate; M3 = +branch real | M4 declara granularidad por regla; sin dimensión → aggregate + ids null | backend: aggregate no trae branch/entity ids |
 | 13 | **"Incidencias" vs registros únicos** | Codex M2: total heterogéneo | `unique_records_available:false`; total = suma exacta | `summarize` (`kold_os_m2_core.py:1010`) | M4: total = suma exacta por veredicto; incidencias ≠ entidades | backend: invariante `summary.count == suma(rule_results)` |
 | 14 | **Lifecycle real vs motor preparado** | M2: lifecycle solo con ≥2 corridas | `apply_lifecycle` con historia real | `apply_lifecycle(findings, history, current_scope_key)` | M4 gatea persistencia/tendencias a ≥2 corridas | backend: lifecycle new→persistent→corrected→recurrent |
@@ -54,13 +54,14 @@ lifecycle de Sebastián.** Es la mejor síntesis de los tres.
 | 21 | **Contratos demasiado rígidos** | Codex M2: no fijar 1/34/35/36 en el validador | Contrato valida forma, no valores de scope | `validate_report` B9 (`:140`) | M4: valida estructura; los ids de cía no se hardcodean en el validador | `m4Contract`: otras compañías validan |
 | 22 | **Pruebas unitarias vs Odoo reales** | no reportar GREEN sin runtime | Trío: puro + TransactionCase + HttpCase (Sebastián) | M2: 3 archivos de test; HttpCase nuevo `53b8fa38` | M4: puros ejecutados; TransactionCase/HttpCase PREPARADOS (sin runtime local) | separar "ejecutado" de "preparado" en el body |
 | 23 | **Documentación honesta** | bodies más optimistas que el código | Docs declaran lo que NO se logró | M3 `M3_EVIDENCE_STATUS.md` (Track A bloqueado) | M4: docs encabezan con lo bloqueado (corrida formal, TransactionCase) | doc `M4_EVIDENCE_STATUS.md` declara bloqueos |
-| 24 | **Merge/rebase con módulos existentes** | #71 quedó CONFLICTING tras #67/#68 | Resolver semánticamente, sin ours/theirs | rebase M3 sobre `b2b1472` (5 conflictos a mano) | M4 rama de main; el `if` de m4 convive con el de m2; documentar orden con M3 | `koldOsAccessPolicy`: m2 y m4 coexisten |
-| 25 | **Preservación de M1/M2 al agregar módulos** | riesgo de romper Tower/M2 | matriz de convivencia probada | `m2Surface` matriz admin/supervisor/gerente | M4 no toca M1/M2/M3; matriz A–G prueba los tres intactos | `koldOsAccessPolicy`: M1+M2+M4 conviven, cada uno su gate |
+| 24 | **Merge/rebase con módulos existentes** | #71 quedó CONFLICTING tras #67/#68 | Resolver semánticamente, sin ours/theirs | rebase M3 sobre `b2b1472` (5 conflictos a mano) | M4 se rebasa sobre #71 y se registra junto a m2/m3; Tower queda separado | `koldOsAccessPolicy`: m2/m3/m4 coexisten |
+| 25 | **Preservación de M1/M2/M3 al agregar módulos** | riesgo de romper Tower/M2/M3 | matriz de convivencia probada | `m2Surface` matriz admin/supervisor/gerente | M4 no altera M1/M2/M3; matriz A–G prueba los cuatro | `koldOsAccessPolicy`: M1+M2+M3+M4 conviven, cada uno con su autoridad |
 
 ## Lecciones de rigor de Sebastián (M2 `53b8fa38`) — obligatorias en M4
 
 - **`scope_fingerprint(scope)`** hasheado dentro de `stable_finding_key`: dos
-  corridas de scopes distintos NO mezclan lifecycle. (M3 NO lo tiene; M4 sí.)
+  corridas de scopes distintos NO mezclan lifecycle. M3 y M4 ya aíslan el
+  historial por scope en sus ramas corregidas.
 - **`is_chronological_append`**: la ingesta rechaza una corrida cuyo `finished_at`
   no sea posterior a la última — no se corrompe el lifecycle con orden inverso.
 - **`run_id == run_id_sha256`**: `validate_report` lo exige; la identidad es el hash.

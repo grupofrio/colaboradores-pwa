@@ -150,15 +150,16 @@ de ciclo de vida está deshabilitado hasta entonces (no simula historial).
 
 ## 9. AbortController
 
-`api()` canónico no acepta AbortSignal ⇒ timeout duro (30 s) + alive-flag que
-descarta resultados tardíos al desmontar (patrón M1/M2). Cambiar `api()` global
-está fuera del alcance de este PR.
+`api()` canónico no acepta AbortSignal. M4 usa timeout duro (30 s), alive-flag
+para descartar resultados después del desmontaje y un gate latest-request-wins
+para impedir que respuestas anteriores sobrescriban filtros, página, datos,
+error o loading vigentes. Cambiar `api()` global está fuera del alcance.
 
-## 10. M3 NO está en main
+## 10. Dependencia de M3 mientras #71 no esté en main
 
-`#71` sigue OPEN/DRAFT. Esta rama NO copia la arquitectura de M3 sin integrar
-(p. ej. su `ACCESS_POLICY_RESOLVERS`): usa el patrón inline mergeado de main
-(`if accessPolicy === 'm2'` → `+ 'm4'`). **Rebase futuro**: cuando M3 mergee,
-quien rebase funde los `if` de m2/m3/m4 (o adopta el registro si M3 lo trae) —
-conflicto esperado en `navModel.js`/`registry.js`/`App.jsx`/`api.js`, resolución
-semántica, no mecánica.
+Esta rama ya fue rebasada semánticamente sobre el head corregido de `#71` y
+usa su `ACCESS_POLICY_RESOLVERS` canónico con `m2`, `m3` y `m4`. Tower M1 sigue
+fuera del registro con `towerGated`. Mientras `#71` no esté en main, `#72` debe
+integrarse después de `#71` o conservar esta relación de commits; separar M4 de
+esa base reintroduciría los conflictos de `navModel.js`, `registry.js`,
+`App.jsx` y `api.js`.
