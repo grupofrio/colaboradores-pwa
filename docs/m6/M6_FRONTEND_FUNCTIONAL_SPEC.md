@@ -35,7 +35,8 @@ Ruta `/caja-conciliacion` · id de registry `cash-reconciliation` ·
 
 ## Estado del backend — leer antes de nada
 
-El backend `gf_kold_os_m6` esta construido en **LOCAL y NO PUBLICADO**: el repo
+El backend `gf_kold_os_m6` tiene un **PR temporal pre-migracion** (#210, DRAFT,
+que **no se mergea**) y **no esta desplegado**: el repo
 Odoo migra de `GrupoVeniu/GrupoFrio` a `grupofrio/gf`. **No existe endpoint
 desplegado** ⇒ en produccion la pantalla resuelve `unavailable`. La **API real
 JAMAS ha sido probada**. El demo (fixture del core real) solo vive en DEV/Preview.

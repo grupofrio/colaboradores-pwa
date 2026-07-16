@@ -6,7 +6,7 @@
 > **PR DRAFT · no Ready · no merge · no deploy · cero writes.**
 
 **Evidencia: XML-RPC read-only contra produccion, ventana `[2026-04-16, 2026-07-15)`,
-cias 1, 34, 35, 36, monedas 1, 33. Auditor que midio: `fe53d564`. NO es corrida formal.**
+cias 1, 34, 35, 36, monedas 1, 33. Auditor que midio: `fe53d564` (el backend sello `9c23d5d2` tras rebasar: divergencia esperada, ver M6_LINEAGE_GATE.md). NO es corrida formal.**
 
 ## Gates
 
@@ -39,7 +39,7 @@ cias 1, 34, 35, 36, monedas 1, 33. Auditor que midio: `fe53d564`. NO es corrida 
 | 14 | **cero errores de consola** | ✅ pestaña limpia |
 
 Extra verificado en el smoke: ejes separados visibles · evidencia NO formal
-declarada · backend LOCAL_ONLY_NOT_PUBLISHED declarado · linaje `fe53d564` visible ·
+declarada · backend TEMP_PR_OPEN_NOT_DEPLOYED declarado · linaje `fe53d564` visible (divergente del sello del backend `9c23d5d2`: expected_pre_migration_lineage_mismatch, contrato 35/36) ·
 cajas abiertas CAVEATED · pagos sin conciliar CAVEATED · aging del snapshot ·
 cero residuos de M4/M5.
 

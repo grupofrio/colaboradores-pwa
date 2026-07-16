@@ -59,12 +59,27 @@ export const M6_SEVERITY_LABELS = Object.freeze({
 })
 
 // ── EJE 4 · LIFECYCLE (cómo evoluciona entre corridas del MISMO scope) ──────
+// Espejo de core.LIFECYCLE_STATES: los estados que el backend EMITE.
+// `corrected` NO está: ofrecerlo daría un filtro que siempre devuelve 0, y un 0
+// se lee como "no hubo ninguna corrección" — que es distinto de "M6 no puede
+// saberlo". El backend lo rechaza en rejected_params. Ver M6_LIFECYCLE_UNAVAILABLE.
 export const M6_LIFECYCLE_ORDER = Object.freeze(
-  ['new', 'persistent', 'corrected', 'recurrent'])
+  ['new', 'persistent', 'recurrent'])
 export const M6_LIFECYCLE_LABELS = Object.freeze({
-  new: 'Nuevo', persistent: 'Persistente', corrected: 'Corregido',
-  recurrent: 'Reincidente',
+  new: 'Nuevo', persistent: 'Persistente', recurrent: 'Reincidente',
 })
+
+// Se muestra en la UI como capacidad NO disponible, con su razón: el usuario
+// debe saber que "corregido" no es que no haya, es que no se mide.
+export const M6_LIFECYCLE_UNAVAILABLE = Object.freeze([
+  {
+    key: 'corrected',
+    label: 'Corregido',
+    reason: 'M6 v1 no puede probar una corrección: un hallazgo ausente no trae '
+      + 'sus cuatro ejes y la historia no registra qué reglas se evaluaron. '
+      + 'Ausencia ≠ corrección. Backend: lifecycle_corrected_detection=false.',
+  },
+])
 
 // M6 v1 emite UNA sola granularidad: capabilities.granularities == ['aggregate'].
 export const M6_GRANULARITY_LABELS = Object.freeze({ aggregate: 'AGREGADO' })

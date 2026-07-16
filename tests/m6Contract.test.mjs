@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import {
   validateM6Latest, validateM6Findings, validateM6Runs, scanPii,
   M6_CLASSIFICATIONS, M6_VERDICTS, M6_SEVERITIES, M6_LIFECYCLE_STATES,
-  M6_GRANULARITIES, M6_UNIVERSE_IDS,
+  M6_GRANULARITIES, M6_UNIVERSE_IDS, M6_LIFECYCLE_STATES_UNSUPPORTED,
 } from '../src/modules/caja-conciliacion/m6/contract.js'
 import {
   M6_API_LATEST_FIXTURE, M6_API_FIXTURE_PROVENANCE,
@@ -18,8 +18,16 @@ test('el fixture valida el contrato kold.os.m6.api/1', () => {
   assert.equal(r.ok, true, `errores: ${(r.errors || []).join(' · ')}`)
 })
 
-test('procedencia: linaje al backend LOCAL, NO publicado, API real NO probada', () => {
-  assert.equal(M6_API_FIXTURE_PROVENANCE.backend_status, 'LOCAL_ONLY_NOT_PUBLISHED')
+// "PR existe" ≠ "backend desplegado" ≠ "API real probada" ≠ "runtime validado".
+// Codex marcó que el body de #75 las confundía: decir "el backend no existe"
+// cuando SÍ existe #210 es tan falso como decir que ya está listo. Sólo la
+// primera es cierta hoy, y cada una se afirma por separado.
+test('procedencia: el PR temporal EXISTE, pero nada más', () => {
+  assert.equal(M6_API_FIXTURE_PROVENANCE.backend_status, 'TEMP_PR_OPEN_NOT_DEPLOYED')
+  assert.match(M6_API_FIXTURE_PROVENANCE.backend_temp_pr, /GrupoFrio#210/)
+  assert.match(M6_API_FIXTURE_PROVENANCE.backend_temp_pr, /no se mergea/)
+  assert.equal(M6_API_FIXTURE_PROVENANCE.backend_deployed, false,
+    'el PR existe; el backend NO está desplegado')
   assert.equal(M6_API_FIXTURE_PROVENANCE.real_api_tested, false,
     'la API real jamás ha sido probada: no existe endpoint desplegado')
   assert.equal(M6_API_FIXTURE_PROVENANCE.is_production_shell_run, false)
@@ -27,9 +35,24 @@ test('procedencia: linaje al backend LOCAL, NO publicado, API real NO probada', 
   assert.ok(M6_API_FIXTURE_PROVENANCE.production_shell_run_blocked_by.length > 0)
 })
 
-test('linaje coherente: measuring_commit === run.auditor_build_sha', () => {
+test('linaje coherente CONSIGO MISMO: measuring_commit === run.auditor_build_sha', () => {
   assert.equal(M6_API_FIXTURE_PROVENANCE.measuring_commit, F.run.auditor_build_sha)
   assert.match(F.run.auditor_build_sha, /^[0-9a-f]{7,64}$/)
+})
+
+// La divergencia con el backend es ESPERADA y está declarada. No se persigue: el
+// sello del backend volverá a cambiar al portar a grupofrio/gf, y alinearlo hoy
+// daría una falsa sensación de cierre. Lo que NO se acepta es que quede tácita.
+test('linaje divergente del backend: DECLARADO, no escondido', () => {
+  const p = M6_API_FIXTURE_PROVENANCE
+  assert.equal(p.lineage_status, 'expected_pre_migration_lineage_mismatch')
+  assert.match(p.backend_current_seal, /^[0-9a-f]{7,64}$/)
+  assert.notEqual(p.measuring_commit, p.backend_current_seal,
+    'si coincidieran, el estado ya no sería "mismatch" y habría que reclasificarlo')
+  assert.equal(p.lineage_resync_required_before_ready, true,
+    'la divergencia NO bloquea la auditoría, pero SÍ bloquea Ready final')
+  assert.match(p.contract_crosscheck, /35\/36/,
+    'el contrato es 35/36 mientras el linaje no se resincronice: nunca 36/36')
 })
 
 test('evidencia NO formal declarada EN EL DATO (no en la prosa)', () => {
@@ -234,4 +257,64 @@ test('schema desconocida => schema_mismatch, no se renderiza', () => {
 test('granularidad v1: sólo aggregate', () => {
   assert.deepEqual([...M6_GRANULARITIES], ['aggregate'])
   assert.deepEqual(F.capabilities.granularities, ['aggregate'])
+})
+
+// ─── El fixture ESPEJA el contrato (hueco de cobertura que costó caro) ───────
+//
+// Al recortar `corrected` del enum, la suite siguió en verde con el fixture
+// declarando `["new","persistent","corrected","recurrent"]`: NADA cruzaba
+// capabilities contra las constantes del contrato. Un fixture que envejece en
+// silencio es un demo que miente sobre el backend. Esto lo impide.
+
+test('el fixture espeja EXACTAMENTE los cuatro ejes del contrato', () => {
+  const pares = [
+    ['classifications', M6_CLASSIFICATIONS],
+    ['verdicts', M6_VERDICTS],
+    ['severities', M6_SEVERITIES],
+    ['lifecycle_states', M6_LIFECYCLE_STATES],
+  ]
+  assert.equal(pares.length, 4)
+  for (const [clave, esperado] of pares) {
+    assert.deepEqual(F.capabilities[clave], [...esperado],
+      `capabilities.${clave} del fixture no espeja el contrato: el fixture envejeció`)
+  }
+})
+
+test('el fixture espeja el catálogo de universos', () => {
+  const usados = [...new Set((F.findings || []).map((f) => f.universe_id))]
+  assert.ok(usados.length > 0, 'sin universos no hay nada que verificar: test vacuo')
+  for (const u of usados) assert.ok(M6_UNIVERSE_IDS.includes(u), `universo desconocido: ${u}`)
+})
+
+test('corrected: el fixture lo declara NO soportado, con razón', () => {
+  assert.ok(!('corrected' in F), 'el payload NO debe traer la clave `corrected`')
+  assert.equal(F.capabilities.features.lifecycle_corrected_detection, false)
+  assert.ok(!F.capabilities.lifecycle_states.includes('corrected'))
+  const razon = F.capabilities.lifecycle_states_unsupported?.corrected
+  assert.ok(razon && razon.length > 40, 'debe declarar POR QUÉ no se soporta')
+  assert.match(razon, /Ausencia/)
+})
+
+test('corrected: el contrato del frontend espeja la ausencia declarada', () => {
+  assert.ok(!M6_LIFECYCLE_STATES.includes('corrected'))
+  assert.ok('corrected' in M6_LIFECYCLE_STATES_UNSUPPORTED)
+  assert.deepEqual(
+    Object.keys(M6_LIFECYCLE_STATES_UNSUPPORTED).sort(),
+    Object.keys(F.capabilities.lifecycle_states_unsupported).sort(),
+    'lo que el frontend cree no soportado debe ser lo que el backend declara')
+})
+
+test('los estados emitidos + los no soportados no se solapan', () => {
+  for (const estado of Object.keys(M6_LIFECYCLE_STATES_UNSUPPORTED)) {
+    assert.ok(!M6_LIFECYCLE_STATES.includes(estado),
+      `${estado} no puede estar a la vez emitido y no soportado`)
+  }
+})
+
+test('ningún hallazgo del fixture se declara corrected', () => {
+  assert.ok(F.findings.length > 0, 'sin hallazgos el test sería vacuo')
+  for (const f of F.findings) {
+    assert.ok(M6_LIFECYCLE_STATES.includes(f.lifecycle_status),
+      `lifecycle_status fuera del enum: ${f.lifecycle_status}`)
+  }
 })

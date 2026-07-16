@@ -5,10 +5,16 @@
 > este doc discrepa del envelope, es que alguien lo edito en vez de regenerarlo.
 > **PR DRAFT · no Ready · no merge · no deploy · cero writes.**
 
-## 1. El backend no existe desplegado
+## 1. El backend tiene PR temporal, pero NO esta desplegado
 
-`gf_kold_os_m6` esta construido en **LOCAL** y **no publicado**: el repo Odoo
-migra de `GrupoVeniu/GrupoFrio` a `grupofrio/gf`. **No hay PR del backend.**
+`gf_kold_os_m6` esta publicado como **PR DRAFT temporal**
+([GrupoVeniu/GrupoFrio#210](https://github.com/GrupoVeniu/GrupoFrio/pull/210),
+**no se mergea**, se cierra sin merge, abierto solo para la auditoria conjunta de
+Codex) y **no esta desplegado**: el repo Odoo migra de `GrupoVeniu/GrupoFrio` a
+`grupofrio/gf`, donde se abrira el PR definitivo.
+
+**Cuatro cosas distintas — solo la primera es cierta:** PR existe **SI** ·
+backend desplegado **NO** · API real probada **NO** · runtime validado **NO**.
 
 ⇒ **La API real JAMAS ha sido probada.** El cliente esta escrito contra el
 contrato del backend local, pero ninguna request ha viajado. En produccion la

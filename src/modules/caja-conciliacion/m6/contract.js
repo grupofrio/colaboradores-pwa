@@ -13,8 +13,20 @@ export const M6_VERDICTS = Object.freeze(
   ['incumplimiento', 'riesgo', 'anomalia', 'cumple', 'no_evaluable'])
 export const M6_SEVERITIES = Object.freeze(
   ['critical', 'high', 'medium', 'low', 'informational'])
+
+// Espejo EXACTO de core.LIFECYCLE_STATES: los estados que el backend EMITE.
+// `corrected` NO está — no es un olvido, ver M6_LIFECYCLE_STATES_UNSUPPORTED.
 export const M6_LIFECYCLE_STATES = Object.freeze(
-  ['new', 'persistent', 'corrected', 'recurrent'])
+  ['new', 'persistent', 'recurrent'])
+
+// Espejo de core.LIFECYCLE_STATES_UNSUPPORTED. La UI debe mostrar estos estados
+// como NO DISPONIBLES con su razón, jamás como un filtro que siempre da 0:
+// el backend rechaza `?lifecycle_status=corrected` en rejected_params.
+export const M6_LIFECYCLE_STATES_UNSUPPORTED = Object.freeze({
+  corrected: 'M6 v1 no puede probar una corrección: un hallazgo ausente no trae '
+    + 'sus cuatro ejes y la historia no registra qué reglas se evaluaron. '
+    + 'Ausencia ≠ corrección.',
+})
 
 // v1 es AGREGADO: el backend declara granularities == ['aggregate'].
 export const M6_GRANULARITIES = Object.freeze(['aggregate'])
@@ -74,6 +86,98 @@ export function scanPii(value, path = 'root', out = []) {
     }
   }
   return out
+}
+
+// ─── Resolución de métricas: seis estados, ningún silencio ───────────────────
+// Antes, el tile hacía:
+//     if (!row || row[field] == null) return null
+// y TRES fallas distintas desaparecían en el mismo silencio: la query no vino,
+// el campo no existe (contrato roto) y el campo es null (legítimamente no
+// evaluable). Un tile que se esfuma se lee como "aquí no había nada que ver".
+//
+// Esta función es la ÚNICA autoridad: el componente no vuelve a interpretar el
+// payload por su cuenta (no hay un segundo validador). Devuelve un estado
+// discriminado y el tile sólo elige cómo pintarlo.
+export const M6_METRIC_STATES = Object.freeze([
+  'ok',                   // hay valor (incluido 0, que es un dato, no un vacío)
+  'capability_disabled',  // el backend declara que no puede: "—" + razón
+  'metric_unavailable',   // la query no vino: cobertura parcial
+  'not_evaluable',        // el campo vino null y se DECLARÓ nullable
+  'contract_error',       // el campo requerido no existe: ERROR VISIBLE
+  'malformed_metric',     // el valor existe pero no es del tipo declarado
+  'backend_unavailable',  // no hay payload
+])
+
+/**
+ * Resuelve UNA métrica del envelope contra su declaración.
+ *
+ * @param {object|null} payload  envelope de /latest (null ⇒ backend_unavailable)
+ * @param {object} spec
+ *   @param {string} spec.query      id de la query en payload.metrics
+ *   @param {string} spec.field      campo dentro de la fila
+ *   @param {string} [spec.capability]  feature que debe estar en true
+ *   @param {boolean} [spec.nullable=false]  si null es un valor legítimo
+ *   @param {string} [spec.type='number']
+ * @returns {{state: string, value: *, reason: string}}
+ */
+export function resolveM6Metric(payload, spec) {
+  const { query, field, capability, nullable = false, type = 'number' } = spec || {}
+  if (!query || !field) {
+    return { state: 'contract_error', value: null,
+      reason: 'tile mal declarado: falta query o field' }
+  }
+  if (!isObj(payload)) {
+    return { state: 'backend_unavailable', value: null,
+      reason: 'sin datos del backend' }
+  }
+  if (capability) {
+    const feats = payload.capabilities?.features
+    if (!isObj(feats) || !(capability in feats)) {
+      return { state: 'contract_error', value: null,
+        reason: `la capability \`${capability}\` no existe en el contrato` }
+    }
+    if (feats[capability] !== true) {
+      return { state: 'capability_disabled', value: null,
+        reason: `el backend declara \`${capability}\` = false` }
+    }
+  }
+  const metrics = payload.metrics
+  if (!isObj(metrics) || !(query in metrics)) {
+    return { state: 'metric_unavailable', value: null,
+      reason: `la corrida no trae la query \`${query}\` (cobertura parcial)` }
+  }
+  const rows = metrics[query]
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { state: 'metric_unavailable', value: null,
+      reason: `la query \`${query}\` no devolvió filas` }
+  }
+  const row = rows[0]
+  if (!isObj(row)) {
+    return { state: 'malformed_metric', value: null,
+      reason: `la query \`${query}\` no devolvió un objeto` }
+  }
+  // La distinción que importa: ¿la CLAVE existe?
+  if (!(field in row)) {
+    return { state: 'contract_error', value: null,
+      reason: `el backend no emite \`${query}.${field}\`: el contrato cambió y `
+        + 'esta tarjeta ya no mide lo que dice medir' }
+  }
+  const value = row[field]
+  if (value === null || value === undefined) {
+    if (nullable) {
+      return { state: 'not_evaluable', value: null,
+        reason: `\`${query}.${field}\` vino sin valor (declarado nullable)` }
+    }
+    return { state: 'contract_error', value: null,
+      reason: `\`${query}.${field}\` es requerido y vino null` }
+  }
+  if (type === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) {
+    return { state: 'malformed_metric', value,
+      reason: `\`${query}.${field}\` debía ser un número finito y llegó `
+        + `${typeof value}: ${JSON.stringify(value)}` }
+  }
+  // 0 es un VALOR. Jamás se confunde con vacío.
+  return { state: 'ok', value, reason: '' }
 }
 
 /** Valida el envelope de /latest. Devuelve {ok, errors, schema}. */

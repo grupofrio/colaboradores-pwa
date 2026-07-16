@@ -9,9 +9,24 @@
 
 **DRAFT.** No Ready · no merge · no deploy · cero writes · sin reviewers.
 
-Backend: `gf_kold_os_m6` **construido en LOCAL, no publicado** (el repo Odoo migra
-a `grupofrio/gf`). El numero de PR del backend no existe todavia y **no se fija en
-runtime**: un numero de PR en el codigo envejece y miente (M5 cito el PR de M4).
+Backend: `gf_kold_os_m6` con **PR DRAFT temporal
+[#210](https://github.com/GrupoVeniu/GrupoFrio/pull/210) que NO se mergea** — se
+cierra sin merge; el repo Odoo migra a `grupofrio/gf`, donde se abrira el PR
+definitivo. El numero **no se fija en runtime**: un PR citado en el codigo
+envejece y miente (M5 cito el #205, que era el PR de M4).
+
+**Cuatro cosas distintas — solo la primera es cierta:**
+
+| | |
+|---|---|
+| PR existe | **SI** — #210, DRAFT, temporal, no se mergea |
+| Backend desplegado | **NO** |
+| API real probada | **NO** — no existe endpoint desplegado |
+| Runtime validado | **NO** — el SQL del manifiesto nunca ha corrido |
+
+Linaje: divergencia **esperada y declarada**
+(`expected_pre_migration_lineage_mismatch`); contrato **35/36**. Se resincroniza
+tras el portado — ver [M6_LINEAGE_GATE.md](M6_LINEAGE_GATE.md).
 
 ## Que trae
 

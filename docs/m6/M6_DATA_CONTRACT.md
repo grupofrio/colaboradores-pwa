@@ -12,7 +12,7 @@
 | `classification` | definitive · caveated · exploratory · not_evaluable · invalid | que tan solida es la evidencia | etiqueta; nunca color solo |
 | `verdict` | incumplimiento · riesgo · anomalia · cumple · no_evaluable | que se concluye | pill con nombre + tooltip |
 | `severity` | critical · high · medium · low · informational | que tan grave si es real | etiqueta |
-| `lifecycle_status` | new · persistent · corrected · recurrent | como evoluciona entre corridas del MISMO scope | etiqueta |
+| `lifecycle_status` | new · persistent · recurrent | como evoluciona entre corridas del MISMO scope | etiqueta |
 
 **`status=RED` NO es `incumplimiento`** (bug 4 de M3). En esta corrida los tres
 ejes DIFIEREN: veredicto (0/13/2/8/6) ≠ clasificacion (caveated 13 · definitive 0 · exploratory 11 · invalid 0 · not_evaluable 5) ≠

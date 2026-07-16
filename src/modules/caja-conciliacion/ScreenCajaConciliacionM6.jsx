@@ -8,10 +8,13 @@
 // decir "todo cuadra", "no cuadra", "faltante", "pérdida", "fraude" o "dinero
 // desaparecido" — ninguna regla v1 tiene umbral aprobado que lo soporte.
 //
-// ⚠️ EL BACKEND M6 NO EXISTE DESPLEGADO: está construido en LOCAL y aún no
-// publicado (el repo Odoo migra a grupofrio/gf). En producción esta pantalla
-// resuelve `unavailable`; el demo (fixture del core real) SOLO vive en DEV o
-// Preview con VITE_ENABLE_M6_DEMO. La API real NUNCA ha sido probada.
+// ⚠️ EL BACKEND M6 NO ESTÁ DESPLEGADO. Existe un PR temporal pre-migración
+// (GrupoVeniu/GrupoFrio#210, DRAFT) abierto SÓLO para la auditoría estática
+// conjunta de Codex: no se mergea y será reemplazado por un PR en grupofrio/gf.
+// PR existe ≠ backend desplegado ≠ API real probada ≠ runtime validado: las
+// cuatro cosas son distintas y sólo la primera es cierta hoy. En producción esta
+// pantalla resuelve `unavailable`; el demo (fixture del core real) SOLO vive en
+// DEV o Preview con VITE_ENABLE_M6_DEMO.
 //
 // Las cifras las MIDE el auditor y viajan en `run.metrics` (filas crudas del
 // manifiesto cerrado): cada tile declara su query y su campo de origen. La UI no
@@ -38,8 +41,10 @@ import {
   M6_VERDICT_ORDER, M6_VERDICT_LABELS, M6_VERDICT_COLORS, M6_VERDICT_HELP,
   M6_CLASSIFICATION_LABELS, M6_SEVERITY_LABELS, M6_LIFECYCLE_LABELS,
   M6_CATEGORY_ORDER, M6_EVIDENCE_SOURCE_LABELS, M6_SHELL_BLOCKER_LABELS,
+  M6_LIFECYCLE_UNAVAILABLE,
   categoryLabel,
 } from './m6/m6Meta'
+import { resolveM6Metric } from './m6/contract'
 import { M6_API_FIXTURE_PROVENANCE, M6_API_LATEST_FIXTURE } from './m6/fixtures/apiLatestFixture'
 
 const C = TOKENS.colors
@@ -93,11 +98,68 @@ function VerdictTile({ verdict, rules, incidences }) {
 // declara. Cerrar esa brecha (un `kpis` con contrato completo) es trabajo del
 // backend v1.1; ver docs/m6/M6_KNOWN_LIMITATIONS.md.
 //
-// Ausencia ≠ cero: si la query no está en el payload, el tile NO se renderiza.
-function MetricTile({ label, metrics, query, field, universe, unit, tone, coverage, caveat }) {
-  const row = (metrics?.[query] || [])[0]
-  if (!row || row[field] === undefined || row[field] === null) return null
-  const value = row[field]
+// Ausencia ≠ cero — y las ausencias NO son todas iguales.
+//
+// Antes este tile hacía `if (!row || row[field] == null) return null`, y TRES
+// fallas distintas se desvanecían en el mismo silencio: la query no vino, el
+// campo no existe (contrato roto) y el campo vino null. Un tile que desaparece
+// se lee como "aquí no había nada que ver", que es justo lo que un contrato roto
+// necesita para pasar inadvertido. Codex lo marcó como riesgo y tenía razón.
+//
+// Seis estados, ninguno silencioso:
+//   ok                  → hay valor. 0 incluido: 0 es un dato, no un vacío.
+//   capability_disabled → el backend declara que no puede: "—" + razón.
+//   metric_unavailable  → la query no vino: cobertura parcial declarada.
+//   not_evaluable       → campo null DECLARADO nullable: "—" + razón.
+//   contract_error      → campo requerido ausente: ERROR VISIBLE, en rojo.
+//   malformed_metric    → el tipo no es el declarado: ERROR VISIBLE.
+//
+// Ahora la decisión NO vive aquí: `resolveM6Metric` (contract.js) es la única
+// autoridad — el mismo módulo que valida el envelope, no un segundo validador
+// paralelo que pueda derivar. El tile sólo elige cómo pintar cada estado.
+const METRIC_STATE_UI = {
+  capability_disabled: { glyph: '—', color: C.textLow, badge: 'no disponible', border: 'dashed' },
+  metric_unavailable: { glyph: '—', color: C.textLow, badge: 'cobertura parcial', border: 'dashed' },
+  not_evaluable: { glyph: '—', color: C.textLow, badge: 'no evaluable', border: 'dashed' },
+  contract_error: { glyph: '!', color: STATUS_COLORS.RED, badge: 'ERROR DE CONTRATO', border: 'solid' },
+  malformed_metric: { glyph: '!', color: STATUS_COLORS.RED, badge: 'MÉTRICA MALFORMADA', border: 'solid' },
+  backend_unavailable: { glyph: '—', color: C.textLow, badge: 'sin backend', border: 'dashed' },
+}
+
+function MetricTile({ label, payload, query, field, universe, unit, tone, coverage,
+                     caveat, capability, nullable }) {
+  const res = resolveM6Metric(payload, { query, field, capability, nullable })
+  const base = {
+    background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg,
+    padding: '10px 12px', minWidth: 138, flex: '1 1 138px',
+  }
+
+  if (res.state !== 'ok') {
+    const ui = METRIC_STATE_UI[res.state]
+    const roto = res.state === 'contract_error' || res.state === 'malformed_metric'
+    return (
+      <div title={`${res.reason}\nUniverso: ${universe}\nFuente: query \`${query}\` → campo \`${field}\``}
+        data-testid="metric-tile" data-state={res.state} data-query={query} data-field={field}
+        style={{
+          ...base,
+          background: roto ? 'rgba(239,68,68,0.08)' : C.surfaceSoft,
+          border: `1px ${ui.border} ${roto ? STATUS_COLORS.RED : C.border}`,
+        }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: ui.color }}>{ui.glyph}</div>
+        <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>{label}</div>
+        <div style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: 0.3, marginTop: 3,
+          color: roto ? STATUS_COLORS.RED : C.textLow,
+        }}>{ui.badge}</div>
+        <div style={{ fontSize: 9.5, color: C.textLow, marginTop: 2, lineHeight: 1.3 }}>
+          {res.reason}
+        </div>
+      </div>
+    )
+  }
+
+  // 0 es un VALOR medido, no un vacío: se pinta como cualquier otra cifra.
+  const row = payload.metrics[query][0]
   const cov = typeof coverage === 'function' ? coverage(row) : coverage
   const note = [
     `Universo: ${universe}`,
@@ -107,11 +169,9 @@ function MetricTile({ label, metrics, query, field, universe, unit, tone, covera
     caveat ? `⚠ ${caveat}` : '',
   ].filter(Boolean).join('\n')
   return (
-    <div title={note} style={{
-      background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg,
-      padding: '10px 12px', minWidth: 138, flex: '1 1 138px',
-    }}>
-      <div style={{ fontSize: 20, fontWeight: 800, color: tone || C.text }}>{fmtInt(value)}</div>
+    <div title={note} data-testid="metric-tile" data-state="ok"
+      data-query={query} data-field={field} style={base}>
+      <div style={{ fontSize: 20, fontWeight: 800, color: tone || C.text }}>{fmtInt(res.value)}</div>
       <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>
         {label}{unit ? <span style={{ color: C.textLow }}> · {unit}</span> : null}
       </div>
@@ -327,7 +387,6 @@ export default function ScreenCajaConciliacionM6({ session }) {
   }
 
   const s = payload.summary || {}
-  const metrics = payload.metrics || {}
   const rules = payload.rule_results || []
 
   // Etiquetas de universo DERIVADAS del propio payload: el frontend no las
@@ -420,75 +479,75 @@ export default function ScreenCajaConciliacionM6({ session }) {
       </div>
 
       <Block title="1 · Facturación y cuentas por cobrar">
-        <MetricTile label="Facturas publicadas" unit="documentos" metrics={metrics}
+        <MetricTile label="Facturas publicadas" unit="documentos" payload={payload}
           query="invoice_metrics" field="invoice_count" universe={U.posted_customer_invoices_in_scope} />
-        <MetricTile label="Abiertas (por cobrar)" unit="documentos" metrics={metrics} tone={STATUS_COLORS.AMBER}
+        <MetricTile label="Abiertas (por cobrar)" unit="documentos" payload={payload} tone={STATUS_COLORS.AMBER}
           query="invoice_metrics" field="open_count" universe={U.open_receivables_in_scope}
           coverage={(r) => pct(r.open_count, r.invoice_count)} />
-        <MetricTile label="Vencidas y abiertas" unit="documentos" metrics={metrics} tone={STATUS_COLORS.RED}
+        <MetricTile label="Vencidas y abiertas" unit="documentos" payload={payload} tone={STATUS_COLORS.RED}
           query="invoice_metrics" field="overdue_count" universe={U.open_receivables_in_scope}
           coverage={(r) => pct(r.overdue_count, r.open_count)}
           caveat="Vencida = due date anterior al cierre de la ventana. La cartera canónica por cliente vive en el snapshot (bloque 7)." />
-        <MetricTile label="Pagadas con residual" unit="documentos" metrics={metrics} tone={STATUS_COLORS.AMBER}
+        <MetricTile label="Pagadas con residual" unit="documentos" payload={payload} tone={STATUS_COLORS.AMBER}
           query="invoice_metrics" field="paid_with_residual_count" universe={U.posted_customer_invoices_in_scope}
           caveat="Puede ser redondeo, multi-moneda o conciliación parcial. Señal, no faltante probado." />
-        <MetricTile label="Sin fecha de vencimiento" unit="documentos" metrics={metrics}
+        <MetricTile label="Sin fecha de vencimiento" unit="documentos" payload={payload}
           query="invoice_metrics" field="no_due_date_count" universe={U.posted_customer_invoices_in_scope}
           caveat="Sin due date esa factura NO entra al aging: hueco de cobertura." />
       </Block>
 
       <Block title="2 · Pagos"
         note="Un pago sin conciliación identificada NO es un faltante ni un pago perdido: puede ser anticipo, pago no aplicado, conciliación parcial, pago reversado, flujo contable alternativo o cobertura del propio modelo.">
-        <MetricTile label="Pagos entrantes" unit="pagos" metrics={metrics}
+        <MetricTile label="Pagos entrantes" unit="pagos" payload={payload}
           query="payment_metrics" field="payment_count" universe={U.posted_inbound_payments_in_window} />
-        <MetricTile label="Sin conciliación identificada" unit="pagos" metrics={metrics} tone={STATUS_COLORS.AMBER}
+        <MetricTile label="Sin conciliación identificada" unit="pagos" payload={payload} tone={STATUS_COLORS.AMBER}
           query="payment_metrics" field="unreconciled_count" universe={U.posted_inbound_payments_in_window}
           coverage={(r) => pct(r.unreconciled_count, r.payment_count)}
           caveat="Señal de COBERTURA de conciliación, no de dinero perdido. Sin SLA aprobado no es incumplimiento." />
-        <MetricTile label="Sin journal" unit="pagos" metrics={metrics}
+        <MetricTile label="Sin journal" unit="pagos" payload={payload}
           query="payment_metrics" field="no_journal_count" universe={U.posted_inbound_payments_in_window} />
-        <MetricTile label="Monto no positivo" unit="pagos" metrics={metrics}
+        <MetricTile label="Monto no positivo" unit="pagos" payload={payload}
           query="payment_metrics" field="non_positive_count" universe={U.posted_inbound_payments_in_window}
           caveat="Puede ser reverso o ajuste." />
       </Block>
 
       <Block title="3 · Caja de ruta"
         note="“Estado abierto” es lo que la fuente REPORTA. Puede representar una caja operativa permanente o una sesión sin cierre: requiere validación funcional. NO son cajas abandonadas ni un faltante: no existe política de cierre aprobada contra la cual medirlo.">
-        <MetricTile label="Cajas de vendedor" unit="cajas" metrics={metrics}
+        <MetricTile label="Cajas de vendedor" unit="cajas" payload={payload}
           query="seller_cashbox_metrics" field="cashbox_count" universe={U.route_cash_boxes_in_window} />
-        <MetricTile label="Con estado abierto" unit="cajas" metrics={metrics} tone={STATUS_COLORS.AMBER}
+        <MetricTile label="Con estado abierto" unit="cajas" payload={payload} tone={STATUS_COLORS.AMBER}
           query="seller_cashbox_metrics" field="still_open_count" universe={U.route_cash_boxes_in_window}
           coverage={(r) => pct(r.still_open_count, r.cashbox_count)}
           caveat="Estado abierto en la fuente observada; requiere validación funcional." />
-        <MetricTile label="Con estado cerrado" unit="cajas" metrics={metrics}
+        <MetricTile label="Con estado cerrado" unit="cajas" payload={payload}
           query="seller_cashbox_metrics" field="closed_count" universe={U.route_cash_boxes_in_window} />
-        <MetricTile label="Sin ruta vinculada" unit="cajas" metrics={metrics}
+        <MetricTile label="Sin ruta vinculada" unit="cajas" payload={payload}
           query="seller_cashbox_metrics" field="no_route_count" universe={U.route_cash_boxes_in_window}
           caveat="Sin route_plan no se puede atribuir el efectivo a una ruta." />
       </Block>
 
       <Block title="4 · Corte y liquidación">
-        <MetricTile label="Cierres de caja" unit="cierres" metrics={metrics}
+        <MetricTile label="Cierres de caja" unit="cierres" payload={payload}
           query="cash_closing_metrics" field="closing_count" universe={U.cash_closings_in_window}
           caveat="Cobertura del modelo baja: pocos registros en la ventana." />
-        <MetricTile label="Con diferencia reportada" unit="cierres" metrics={metrics} tone={STATUS_COLORS.RED}
+        <MetricTile label="Con diferencia reportada" unit="cierres" payload={payload} tone={STATUS_COLORS.RED}
           query="cash_closing_metrics" field="with_difference_count" universe={U.cash_closings_in_window}
           coverage={(r) => pct(r.with_difference_count, r.closing_count)}
           caveat="Diferencia FINANCIERA que el arqueo declara — distinta de la diferencia FÍSICA de M5. Sin umbral aprobado." />
-        <MetricTile label="Cierres de sucursal" unit="cierres" metrics={metrics}
+        <MetricTile label="Cierres de sucursal" unit="cierres" payload={payload}
           query="branch_close_metrics" field="close_count" universe={U.branch_daily_closes_in_window} />
-        <MetricTile label="Cerrados" unit="cierres" metrics={metrics}
+        <MetricTile label="Cerrados" unit="cierres" payload={payload}
           query="branch_close_metrics" field="closed_count" universe={U.branch_daily_closes_in_window}
           coverage={(r) => pct(r.closed_count, r.close_count)} />
-        <MetricTile label="Sin arrancar" unit="cierres" metrics={metrics} tone={STATUS_COLORS.AMBER}
+        <MetricTile label="Sin arrancar" unit="cierres" payload={payload} tone={STATUS_COLORS.AMBER}
           query="branch_close_metrics" field="not_started_count" universe={U.branch_daily_closes_in_window} />
-        <MetricTile label="Bajo revisión" unit="cierres" metrics={metrics}
+        <MetricTile label="Bajo revisión" unit="cierres" payload={payload}
           query="branch_close_metrics" field="under_review_count" universe={U.branch_daily_closes_in_window} />
       </Block>
 
       <Block title="5 · Depósitos"
         note="No existe una fuente canónica ratificada de “depósito”: account.bank.statement.line es un candidato, no autoridad.">
-        <MetricTile label="Líneas bancarias" unit="líneas" metrics={metrics}
+        <MetricTile label="Líneas bancarias" unit="líneas" payload={payload}
           query="bank_statement_metrics" field="statement_line_count" universe={U.bank_statement_lines_in_window} />
         {features.deposit_model === false && (
           <UnavailableTile label="Depósitos conciliados"
@@ -497,9 +556,9 @@ export default function ScreenCajaConciliacionM6({ session }) {
       </Block>
 
       <Block title="6 · Conciliación">
-        <MetricTile label="Apuntes de CxC" unit="apuntes" metrics={metrics}
+        <MetricTile label="Apuntes de CxC" unit="apuntes" payload={payload}
           query="reconciliation_metrics" field="receivable_line_count" universe={U.open_receivable_move_lines_in_window} />
-        <MetricTile label="Abiertos sin conciliar" unit="apuntes" metrics={metrics} tone={STATUS_COLORS.AMBER}
+        <MetricTile label="Abiertos sin conciliar" unit="apuntes" payload={payload} tone={STATUS_COLORS.AMBER}
           query="reconciliation_metrics" field="unreconciled_open_count" universe={U.open_receivable_move_lines_in_window}
           coverage={(r) => pct(r.unreconciled_open_count, r.receivable_line_count)}
           caveat="El residual abierto es esperado hasta el cobro: es cobertura, no faltante." />
@@ -507,19 +566,19 @@ export default function ScreenCajaConciliacionM6({ session }) {
 
       <Block title="7 · Cartera y aging"
         note="Fuente canónica: gf.ar.customer.snapshot — el aging lo computa el snapshot. El frontend NO lo recalcula por fecha ni suma monedas. Son conteos de CLIENTES, no importes. Sin identidad del cliente (PII fuera del observatorio).">
-        <MetricTile label="Clientes con snapshot" unit="clientes" metrics={metrics}
+        <MetricTile label="Clientes con snapshot" unit="clientes" payload={payload}
           query="ar_aging_metrics" field="snapshot_count" universe={U.ar_customer_snapshots_in_scope} />
-        <MetricTile label="Con saldo vencido" unit="clientes" metrics={metrics} tone={STATUS_COLORS.AMBER}
+        <MetricTile label="Con saldo vencido" unit="clientes" payload={payload} tone={STATUS_COLORS.AMBER}
           query="ar_aging_metrics" field="overdue_count" universe={U.ar_customer_snapshots_in_scope}
           coverage={(r) => pct(r.overdue_count, r.snapshot_count)} />
-        <MetricTile label="Atraso > 30 días" unit="clientes" metrics={metrics}
+        <MetricTile label="Atraso > 30 días" unit="clientes" payload={payload}
           query="ar_aging_metrics" field="over_30_count" universe={U.ar_customer_snapshots_in_scope} />
-        <MetricTile label="Atraso > 60 días" unit="clientes" metrics={metrics} tone={STATUS_COLORS.AMBER}
+        <MetricTile label="Atraso > 60 días" unit="clientes" payload={payload} tone={STATUS_COLORS.AMBER}
           query="ar_aging_metrics" field="over_60_count" universe={U.ar_customer_snapshots_in_scope} />
-        <MetricTile label="Atraso > 90 días" unit="clientes" metrics={metrics} tone={STATUS_COLORS.RED}
+        <MetricTile label="Atraso > 90 días" unit="clientes" payload={payload} tone={STATUS_COLORS.RED}
           query="ar_aging_metrics" field="over_90_count" universe={U.ar_customer_snapshots_in_scope}
           caveat="Candidato a incobrable; el write-off no es evaluable sin política aprobada." />
-        <MetricTile label="Saldo sin vencimiento" unit="clientes" metrics={metrics}
+        <MetricTile label="Saldo sin vencimiento" unit="clientes" payload={payload}
           query="ar_aging_metrics" field="pending_without_due_count" universe={U.ar_customer_snapshots_in_scope}
           caveat="Sin oldest_due_date el aging de ese cliente NO es evaluable por dato faltante." />
         <UnavailableTile label="Importe de cartera por bucket"
@@ -562,7 +621,27 @@ export default function ScreenCajaConciliacionM6({ session }) {
           una cifra falsa.
         </div>
       )}
+      {features.lifecycle_corrected_detection === false && (
+        <div style={{
+          background: '#a78bfa14', border: '1px solid #a78bfa40', borderRadius: TOKENS.radius.lg,
+          padding: '8px 10px', marginBottom: 8, fontSize: 11.5, color: C.textSoft, lineHeight: 1.5,
+        }}>
+          <b>“Corregido” no se mide:</b> el ciclo de vida distingue nuevo, persistente y
+          reincidente, pero <b>no</b> puede afirmar que algo se corrigió. Que un hallazgo
+          desaparezca no prueba una corrección — pudo cambiar el alcance, faltar la fuente o
+          no haberse evaluado la regla. Por eso no aparece como filtro: daría cero siempre,
+          y ese cero se leería como “no hubo correcciones”.
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {/* Se lee del contrato del backend (capabilities.lifecycle_states_unsupported),
+            no de una lista escrita a mano que pueda envejecer sin avisar. */}
+        {Object.entries(payload.capabilities?.lifecycle_states_unsupported || {}).map(
+          ([estado, razon]) => (
+            <UnavailableTile key={estado}
+              label={`Ciclo de vida: ${M6_LIFECYCLE_UNAVAILABLE.find((x) => x.key === estado)?.label || estado}`}
+              reason={razon} />
+          ))}
         {features.consolidated_global_total === false && (
           <UnavailableTile label="Total consolidado global"
             reason="varias monedas sin normalización autorizada" />

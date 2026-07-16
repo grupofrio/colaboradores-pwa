@@ -13,7 +13,7 @@
    `scope_key`, fuente de medicion.
 2. **Banner de evidencia no formal** — cuando `is_production_shell_run=false`,
    con sus bloqueadores. Se decide por el **DATO**, no por el modo de entrega.
-3. **Banner de demo** — declara backend LOCAL_ONLY_NOT_PUBLISHED y que la API
+3. **Banner de demo** — declara backend TEMP_PR_OPEN_NOT_DEPLOYED y que la API
    real nunca fue probada.
 4. **Nivel 1 · Estado financiero reportado** — tiles por veredicto + las mismas
    reglas por clasificacion y por severidad.
