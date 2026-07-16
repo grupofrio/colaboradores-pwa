@@ -22,8 +22,9 @@ codigo runtime: un numero de PR en runtime envejece y miente).
 ## Cambios de esta vuelta
 
 - Comentario del cliente API sin numero de PR (citaba el PR de M4).
-- Docs **derivados del fixture**, no escritos a mano: dejan de declarar 36 reglas,
-  9,056 incidencias, sello `e32abcea`, 715/715 y "¿cuadra? — NO".
+- Docs **derivados del fixture**, no escritos a mano (antes se escribian literales
+  y se pudrieron en una vuelta).
+- DEFECTO HISTORICO corregido — cifras OBSOLETAS de la v1 que dejan de aparecer: `36 reglas` OBSOLETO · `9,056 incidencias` OBSOLETO · sello `e32abcea` OBSOLETO · `715/715` OBSOLETO · `"¿cuadra? — NO"` OBSOLETO. Ninguna sigue vigente; las vigentes estan abajo.
 - Tests con `category: 'recurrencia'` (categoria de M4, inexistente en M5)
   eliminados; los tests vacuos ahora exigen `length > 0` antes de evaluar su
   invariante.
