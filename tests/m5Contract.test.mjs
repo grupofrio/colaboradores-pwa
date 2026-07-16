@@ -243,8 +243,38 @@ test('summary: total DEBE ser la suma exacta recomputada de rule_results', () =>
   doc.summary.total_incidences += 2 // el 7541-style drift se rechaza
   assert.equal(validateM5Latest(doc).ok, false)
   const doc2 = clone()
-  doc2.summary.exploratory_signal_count += 1
+  doc2.summary.anomaly_count += 1
   assert.equal(validateM5Latest(doc2).ok, false)
+})
+
+test('summary: los dos ejes se publican por separado y ninguno se colapsa', () => {
+  // El campo se llamaba `exploratory_signal_rule_count` pero contaba VEREDICTOS
+  // (anomalia). "exploratory" es una CLASIFICACIÓN: una regla exploratoria cuya
+  // condición no se cumple queda en `cumple`, así que los conteos DIFIEREN
+  // (M5-G-06). Un solo campo no podía significar las dos cosas.
+  const s = M5_API_LATEST_FIXTURE.summary
+  assert.ok(!('exploratory_signal_rule_count' in s), 'nombre de clasificación sobre veredictos')
+  assert.ok(!('exploratory_signal_count' in s))
+  assert.ok(s.classification_rule_counts, 'debe publicarse el eje de clasificación')
+
+  const rr = M5_API_LATEST_FIXTURE.rule_results
+  const porVeredicto = rr.filter((r) => r.verdict === 'anomalia').length
+  const porClasificacion = rr.filter((r) => r.classification === 'exploratory').length
+  assert.equal(s.anomaly_rule_count, porVeredicto)
+  assert.equal(s.classification_rule_counts.exploratory, porClasificacion)
+  assert.notEqual(porVeredicto, porClasificacion,
+    'en esta corrida DIFIEREN: por eso no pueden compartir un campo')
+
+  // Ambos ejes son lecturas COMPLETAS de las mismas reglas, no dos mitades.
+  const sumaClas = Object.values(s.classification_rule_counts).reduce((a, b) => a + b, 0)
+  assert.equal(sumaClas, s.total_rules)
+  assert.equal(
+    s.definitive_incident_rule_count + s.warning_rule_count + s.anomaly_rule_count
+    + s.compliant_rule_count + s.not_evaluable_rule_count, s.total_rules)
+
+  const g06 = rr.find((r) => r.rule_code === 'M5-G-06')
+  assert.equal(g06.classification, 'exploratory')
+  assert.equal(g06.verdict, 'cumple')
 })
 
 test('summary.unique_records_available debe ser false (incidencias ≠ únicos)', () => {

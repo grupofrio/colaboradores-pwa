@@ -1,20 +1,34 @@
-# M5 — Spec de UI (/inventario-flujo)
+# M5 — Spec de UI
 
-**Regla rectora: la UI muestra VEREDICTOS, no solo colores.**
+> **GENERADO desde el fixture real** (`src/modules/inventario/m5/fixtures/apiLatestFixture.js`,
+> emitido por el core del backend). Las cifras NO se escriben a mano: si este doc
+> discrepa del envelope, es que alguien lo edito en vez de regenerarlo.
+> **PR DRAFT · no Ready · no merge · no deploy · flag OFF · cero writes.**
 
-1. Encabezado: pills READ-ONLY/AUDITOR/DATOS/EVIDENCIA/DEMO + corte, ventana,
-   scope, linaje (midió + manifest + evidence).
-2. Banners: MODO DEMO (PR y measuring_commit del backend) · EVIDENCIA NO FORMAL
-   (por el DATO) · STALE · aviso rojo si el backend rechaza un filtro enviado.
-3. Qué prueba la evidencia: 5 VerdictTile; total = suma exacta; semántica de
-   incidencias declarada (la condición agregada del cuadre cuenta 1).
-4. "¿El flujo cuadra?": KPIs del backend agrupados — Cuadre (sumas + caveat de
-   UOM heterogéneas) · Carga · Catálogo/salidas/refill · Kilogramos y flota.
-5. "Fuera del contrato v1": NotEvaluableTile para vehicle_inventory, kg
-   esperados vs reales, carga vs capacidad, stock de almacén, conciliación
-   financiera (M6), rentabilidad (M7) — "—" con razón, JAMÁS 0.
-6. 10 bloques por categoría con peor veredicto, conteos e "umbral no aprobado".
-7. Detalle server-side (filtros con efecto real) + panel del hallazgo con
-   universo/fórmula/supuesto/limitaciones/umbral/linaje/lifecycle.
-8. Exports: CSV (con universe_id) · JSON evidencia · resumen · diferencias y
-   cuadre · handoff M5→M6/M7. Sin botones de acción. Sin PII.
+## Secciones (en este orden)
+
+1. **Nivel 1 · Senales reportadas en conciliacion** — conciliaciones totales /
+   finales / abiertas; sumas REPORTADAS de finales (cargado, entregado, devuelto,
+   merma); comparacion por producto. Cada tile declara universo, fuente,
+   cobertura y salvedad al pasar el cursor.
+2. **Nivel 2 · Cobertura de la instrumentacion** — recepcion confirmada, planes
+   con carga adicional, movimientos realizados, presencia de `actual_kg`.
+3. **Fuera del contrato v1** — capabilities en false: se muestra **"—" con su
+   razon, JAMAS un 0**.
+4. Carga · Catalogo, salidas y refill · Kilogramos y flota.
+
+## Reglas duras
+
+- El titulo **no** afirma un cuadre: dice "Senales del flujo".
+- Ningun KPI numerico de "cuadre" se emite (`physical_reconciliation=false`).
+- Los veredictos se muestran con nombre, no solo con color.
+- El banner de evidencia se decide por el DATO (`!run.is_production_shell_run`),
+  no por el modo de entrega.
+- `rejected_params` se muestra en banner rojo: un filtro rechazado en silencio
+  seria una mentira.
+
+## Exports
+
+Resumen ejecutivo · **Diferencias reportadas en conciliacion** (3 niveles) ·
+Hallazgos CSV · Evidencia JSON · Handoff M5→M6/M7. Todos declaran DEMO/NO FORMAL
+en el nombre del archivo y en el cuerpo.

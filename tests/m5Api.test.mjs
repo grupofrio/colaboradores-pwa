@@ -31,8 +31,8 @@ test('rutas M5: paths exactos + allowlist sin PII + filtro fail-safe', () => {
   for (const banned of ['employee_id', 'customer_name', 'phone', 'email', 'vat', 'rfc', 'address']) {
     assert.ok(!KOLD_OS_M5_FINDINGS_PARAMS.includes(banned), `${banned} JAMÁS en la allowlist`)
   }
-  const filtered = filterKoldOsM5Params({ category: 'recurrencia', employee_id: '7', domain: 'x', page: 2 })
-  assert.deepEqual(filtered, { category: 'recurrencia', page: 2 })
+  const filtered = filterKoldOsM5Params({ category: 'mermas_diferencias', employee_id: '7', domain: 'x', page: 2 })
+  assert.deepEqual(filtered, { category: 'mermas_diferencias', page: 2 })
 })
 
 // Detector de deriva entre repos. La allowlist del frontend debe ser el espejo
@@ -135,11 +135,11 @@ test('fetchM5Findings arma query SOLO con params del contrato', async () => {
   let seenPath = ''
   const page = { ok: true, schema_version: 'kold.os.m5.api/1', total: 0, page: 1, pages: 1, page_size: 10, items: [], rejected_params: [] }
   await fetchM5Findings(
-    { category: 'recurrencia', verdict: 'riesgo', employee_id: '7', junk: 'x', page: 2, page_size: 10 },
+    { category: 'mermas_diferencias', verdict: 'riesgo', employee_id: '7', junk: 'x', page: 2, page_size: 10 },
     { apiImpl: async (_m, path) => { seenPath = path; return page } },
   )
   assert.ok(seenPath.startsWith(KOLD_OS_M5_FINDINGS_PATH + '?'))
-  assert.ok(seenPath.includes('category=recurrencia') && seenPath.includes('verdict=riesgo'))
+  assert.ok(seenPath.includes('category=mermas_diferencias') && seenPath.includes('verdict=riesgo'))
   assert.ok(!seenPath.includes('employee_id') && !seenPath.includes('junk'))
 })
 

@@ -351,7 +351,7 @@ function validateSummary(doc, errors) {
     errors.push('summary: objeto requerido')
     return
   }
-  for (const key of ['definitive_incident_count', 'warning_count', 'exploratory_signal_count',
+  for (const key of ['definitive_incident_count', 'warning_count', 'anomaly_count',
     'total_incidences', 'total_rules']) {
     if (!isInt(summary[key]) || summary[key] < 0) errors.push(`summary.${key}: entero >= 0`)
   }
@@ -366,7 +366,7 @@ function validateSummary(doc, errors) {
     const expected = {
       definitive_incident_count: sumFor('incumplimiento'),
       warning_count: sumFor('riesgo'),
-      exploratory_signal_count: sumFor('anomalia'),
+      anomaly_count: sumFor('anomalia'),
     }
     for (const [key, value] of Object.entries(expected)) {
       if (isInt(summary[key]) && summary[key] !== value) {
@@ -374,7 +374,7 @@ function validateSummary(doc, errors) {
       }
     }
     const total = expected.definitive_incident_count + expected.warning_count
-      + expected.exploratory_signal_count
+      + expected.anomaly_count
     if (isInt(summary.total_incidences) && summary.total_incidences !== total) {
       errors.push(`summary.total_incidences: ${summary.total_incidences} ≠ suma exacta (${total})`)
     }

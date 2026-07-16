@@ -1,26 +1,43 @@
-# M5 — Validación ejecutada (frontend, 2026-07-15)
+# M5 — Validacion
 
-**Base: main `1460185` · rama `feat/kold-os-m5-inventory-flow` · backend
-GrupoVeniu/GrupoFrio PR #208 (midió `e32abcea`).**
+> **GENERADO desde el fixture real** (`src/modules/inventario/m5/fixtures/apiLatestFixture.js`,
+> emitido por el core del backend). Las cifras NO se escriben a mano: si este doc
+> discrepa del envelope, es que alguien lo edito en vez de regenerarlo.
+> **PR DRAFT · no Ready · no merge · no deploy · flag OFF · cero writes.**
+
+**Evidencia: XML-RPC read-only contra produccion, ventana `[2026-04-16, 2026-07-15)`.
+Auditor que midio: `aa589965` (= `run.auditor_build_sha`, con test que lo compara).
+NO es corrida odoo-shell formal.**
+
+## Gates
 
 | Gate | Resultado |
 |---|---|
-| `npm test` (main+M5) | **715/715** (93 M5) |
-| `npm run lint` (max-warnings 0) | **0 warnings** |
-| `npm run build` | OK (`ScreenInventarioM5` 142.21 kB · gzip 31.54 kB) |
-| `check_public_e1` | OK |
-| Smoke navegador | 6 casos, **0 errores de consola** |
-| Backend (puros, otro repo) | **46/46** = 37 core + 4 scan + 5 filter-docs |
+| `npm test` | **727/727** |
+| `npm run lint` | 0 |
+| `npm run build` | OK |
+| `check_public_e1` | OK (public/ sin fixtures servibles) |
+| CI `build` | SUCCESS |
+| Vercel Preview | SUCCESS |
 
-## Smoke (sesión LOCAL de prueba, eliminada al final)
-| Caso | Resultado |
+## Smoke (`/inventario-flujo?demo=1`)
+
+| Verificacion | Esperado |
 |---|---|
-| admin_plataforma | `/inventario-flujo?demo=1`: `midió: e32abceae2…` · tiles **0/8/9/6/13** · total **9,056** · 6 tiles "—" · banners DEMO + NO FORMAL · cero "comercial" |
-| Veredicto=incumplimiento (cero) | "Detalle de regla (0)" · "Sin hallazgos con estos filtros" · sin `rejected_params` oculto |
-| supervisor_ventas | URL directa → expulsado a `/` |
-| sin sesión | URL directa → `/login` |
+| Linaje visible | `midio: aa589965…` |
+| Tiles por veredicto | **0/9/8/7/14** · total **8,802** |
+| Open vs final | conciliaciones finales **90** y abiertas **266**, en tiles SEPARADOS |
+| Senal por producto | **3 de 261** lineas finales con difference |
+| Capabilities false | tiles en **"—"** con razon, ningun 0 |
+| Ausencia de conclusion | **cero** apariciones de "NO CUADRA" |
+| Ausencia de claim refutado | **cero** apariciones de "UOM heterogeneas" |
+| Ausencia de residuos M4 | cero "ventas"/"clientes"/"canales"/"recurrencia" visibles |
+| Exports | titulos de inventario/flujo; "Diferencias REPORTADAS en conciliacion" |
+| Filtros | categoria real del catalogo M5; `rejected_params` visible si los hay |
+| Banners | DEMO + EVIDENCIA NO FORMAL |
 
-## NO ejecutado
-CI + Vercel Preview corren al abrir el PR (reporta el bot). Validación contra la
-API real: imposible hasta merge+deploy del backend. Todo lo verificado es contra
-el fixture emitido por el core real.
+## Backend
+
+Tests puros del backend: ver PR del backend. TransactionCase/HttpCase quedan
+**preparados y NO ejecutados** (Track A odoo-shell bloqueado) ⇒ **el backend NO
+se declara GREEN formal**.

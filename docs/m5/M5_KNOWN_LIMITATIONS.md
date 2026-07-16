@@ -1,30 +1,42 @@
-# M5 — Limitaciones conocidas (frontend v1)
+# M5 — Limitaciones conocidas
 
-Backend: **PR #208 (DRAFT)**; el head se consulta en GitHub. El código que midió
-es `e32abcea` (= run.auditor_build_sha, con test que lo compara).
+> **GENERADO desde el fixture real** (`src/modules/inventario/m5/fixtures/apiLatestFixture.js`,
+> emitido por el core del backend). Las cifras NO se escriben a mano: si este doc
+> discrepa del envelope, es que alguien lo edito en vez de regenerarlo.
+> **PR DRAFT · no Ready · no merge · no deploy · flag OFF · cero writes.**
 
-## 0. Lo que gobierna todo
-De 36 reglas, **CERO incumplimientos**: 8 riesgos (2,905) · 9 anomalías (6,151)
-· 6 cumplen · 13 no evaluables · **9,056 incidencias**. La respuesta medida a
-"¿cuadra?" es **NO**: entregado > cargado con 0 refills (M5-G-06, 1 incidencia
-= la condición agregada), 160/356 reconciliaciones con diferencia.
+## Lo que M5 v1 NO puede afirmar
 
-## 1. Fronteras duras (capabilities=false, "—" en la UI)
-- **Stock por unidad**: NO existe modelo de inventario por vehículo.
-- Kg esperados vs reales / carga vs capacidad: v1.1 (umbral+cómputo).
-- Stock de almacén: cadencia de snapshots sin ratificar.
-- Conciliación financiera = **M6 (no iniciado)** · rentabilidad = **M7**.
+| Capability | Valor | Por que |
+|---|:---:|---|
+| `physical_reconciliation` | **false** | no hay base fisica integral comparable (M5-G-08 = no evaluable **por declaracion**) |
+| `uom_normalized_reconciliation` | false | las sumas no se normalizan por producto/UOM |
+| `delivery_acceptance_confirmed` | false | solo **2 de 5,637** lineas de salida tienen recepcion confirmada |
+| `vehicle_inventory` | false | no existe el modelo de stock por unidad |
+| `supplemental_load_attribution` | false | hay pickings adicionales que no se atribuyen a la conciliacion |
+| `refill_model_coverage` | false | `van.refill.request` no captura las recargas reales |
+| `physical_weight_verified` | false | `actual_weight_kg` se sincroniza por lote; presencia ≠ pesaje verificado |
 
-## 2. Heterogeneidad declarada
-Las sumas del cuadre mezclan UOM entre productos: señal direccional. El total
-de incidencias mezcla planes/líneas/paradas/reconciliaciones y lo DICE; la
-condición agregada cuenta 1.
+## Lo que SI (con su limite)
 
-## 3. Evidencia
-NO formal (XML-RPC read-only; odoo-shell bloqueado). El SQL del manifiesto
-nunca ha corrido: el runbook exige comparar conteos antes de ingerir.
+- `raw_reconciliation_signal` = **true**: leemos lo que el documento reporta. Un
+  total declarado **no es** un hecho fisico.
+- `supplemental_load_detection` = **true**: **156 de 216** planes con carga
+  tienen mas de un picking (hasta 7). Esto **refuta** que cada plan reciba
+  exactamente una carga, pero **NO** los clasifica: un picking adicional puede
+  ser recarga, correccion, retorno o despacho — el dominio mezcla traslados
+  internos, recepciones y ordenes de entrega, y su tipo **no se clasifico**.
+  **Multiples pickings ≠ refills.**
+- `actual_weight_presence` = **true**: el campo existe y se cuenta.
 
-## 4. Rebase futuro
-M3 (#71) y M4 (#72) siguen DRAFT: cuando mergeen, los `if` inline de
-m2/m3/m4/m5 se funden en navModel/registry/App/api — conflicto esperado,
-resolución semántica.
+## Trampas de lectura
+
+- **Cero registros en `van.refill.request` ≠ cero recargas operativas**: prueba
+  que ese modelo no las captura, no que no ocurran.
+- **Conciliaciones abiertas ≠ evidencia**: sus cifras aun cambian. Mezclarlas con
+  las finales produce un "descuadre" que solo refleja captura pendiente. Ese fue
+  el error de la v1.
+- **`uom_category_count = 1` ≠ intercambiabilidad fisica** entre productos.
+- **Evidencia NO formal**: `is_production_shell_run = false`. Los numeros son
+  reales (XML-RPC read-only contra produccion); la corrida formal odoo-shell esta
+  bloqueada (sin llave SSH + modulo sin desplegar).

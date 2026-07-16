@@ -25,7 +25,7 @@
 export const M5_API_FIXTURE_PROVENANCE = Object.freeze({
   kind: 'real_code_generated_measured_aggregates',
   backend_pr: 'GrupoVeniu/GrupoFrio#208',
-  measuring_commit: '777c59a47c0ae2e811ff68c855efcc2ee13c5e27',
+  measuring_commit: 'aa589965af604a41434da44d9946bafa991a921e',
   audited_base: '7c461e56',
   auditor_core: 'gf_kold_os_m5/lib/kold_os_m5_audit_core.py',
   backend_core: 'gf_kold_os_m5/lib/kold_os_m5_core.py',
@@ -149,14 +149,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "product",
       "evidence_limitations": "Solo se evaluó default_code: NO se evaluaron barcode, código de template ni identificadores externos, así que puede existir otra codificación operativa. El campo no es obligatorio por constraint. Riesgo de catálogo, no incumplimiento.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_sku_count",
           "product_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -205,14 +205,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "plan",
       "evidence_limitations": "Puede haber rutas legítimas sin carga (p. ej. supervisión); no hay política que exija carga para publicar.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_load_count",
           "published_plan_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -261,14 +261,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "plan",
       "evidence_limitations": "El sello es opcional en el modelo; su omisión puede ser operación en curso.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "unsealed_loaded_count",
           "loaded_plan_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -317,14 +317,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "plan",
       "evidence_limitations": "El vehículo puede asignarse después de la carga; sin política de orden.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_vehicle_loaded_count",
           "loaded_plan_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -373,14 +373,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "picking",
       "evidence_limitations": "Puede ser operación del día en curso; la ventana incluye hoy-1.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "open_count",
           "picking_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -429,14 +429,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "picking",
       "evidence_limitations": "Sin política que defina cancelación aceptable, es una señal, no una falta.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "cancel_count",
           "picking_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -485,14 +485,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "line",
       "evidence_limitations": "Sin política que exija confirmar la recepción, la ausencia masiva es una señal de adopción, no una falta individual.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "pending_reception_count",
           "line_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -541,14 +541,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "line",
       "evidence_limitations": "Sin motivo estructurado obligatorio ni política de merma aprobada.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "scrap_line_count",
           "line_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -597,14 +597,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "plan",
       "evidence_limitations": "NO implica ausencia de devolución física ni sobrante no devuelto. Ninguna política aprobada exige return_picking_id al cierre; un cierre puede legítimamente no necesitar devolución; return_picking_id puede no ser la fuente completa (existen líneas de devolución en parada) y NO se inspeccionó el saldo por producto.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "closed_recon_no_return_count",
           "closed_recon_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -653,14 +653,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "line",
       "evidence_limitations": "Sin cruce implementado, solo se observa el volumen.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "return_line_count",
           "line_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -709,14 +709,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "reconciliation",
       "evidence_limitations": "SEÑAL REPORTADA, NO CUADRE FÍSICO. Sin umbral aprobado. La cifra es una suma cruda entre productos (uom_normalized=false) y no se contrastó contra movimientos de inventario ni contra aceptación de entrega.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "final_with_difference_count",
           "recon_final_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -765,14 +765,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "reconciliation",
       "evidence_limitations": "NO implica pérdida, faltante, merma ni robo. Causas posibles NO descartadas: carga suplementaria no atribuida al documento, convención de signo, conciliación parcial, duplicidad, captura, UOM o flujo legacy. Sin inspección por registro (v1.1) no se puede atribuir causa.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "final_negative_difference_count",
           "recon_final_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -821,14 +821,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "reconciliation",
       "evidence_limitations": "Puede ser operación en curso; sin SLA aprobado de cierre. Esta regla explica por qué las cifras de las abiertas NO sostienen ningún dictamen.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "recon_open_count",
           "recon_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -877,14 +877,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "reconciliation",
       "evidence_limitations": "Es lo que el documento DECLARA como merma; no se verificó físicamente. Sin política de merma aprobada.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "final_with_scrap_count",
           "recon_final_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -933,14 +933,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "line",
       "evidence_limitations": "Sigue siendo lo REPORTADO por el documento, no una verificación física: no se contrastó contra stock.move ni contra aceptación de entrega. La línea no declara UOM propia (se hereda del producto). Sin umbral aprobado.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "final_line_with_difference_count",
           "final_line_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -989,14 +989,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "stop",
       "evidence_limitations": "PRESENCIA del campo, NO pesaje físico verificado: el valor se sincroniza por lote (wizard), su origen (capturado vs calculado desde product.weight) no se distingue en este contrato y su precisión es desconocida. Cobertura ≠ confiabilidad. Parte del hueco es cadencia de sincronización.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "executed_missing_actual_kg_count",
           "executed_stop_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -1045,14 +1045,14 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "entity_type": "vehicle",
       "evidence_limitations": "El campo no es obligatorio por constraint.",
       "evidence_reference": {
-        "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+        "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "vehicle_no_capacity_count",
           "vehicle_count"
         ],
-        "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+        "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
         "manifest_sha256": "c9874e46da4c851e96f42b2076aa9e00a97056dcd5db6febfb981862d8db7b54",
@@ -1333,7 +1333,7 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "value": 222.0
     },
     "plans_with_supplemental_pickings": {
-      "caveat": "Planes con MÁS DE UN picking: recibieron carga adicional. Esta carga NO se atribuye a los campos de la conciliación.",
+      "caveat": "Planes con MÁS DE UN picking vinculado. Refuta que el plan reciba exactamente una carga, pero NO clasifica esos pickings: pueden ser recarga, corrección, retorno o despacho (el dominio mezcla traslados internos, recepciones y órdenes de entrega). NO son 'refills' medidos, y no se atribuyen a la conciliación.",
       "coverage": 72.22,
       "data_as_of": "2026-07-15T09:00:00.400000Z",
       "source_fields": [
@@ -1979,7 +1979,7 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
     },
     {
       "approved_threshold": false,
-      "business_assumption": "Archivar un producto en movimiento rompe reportes y recompras.",
+      "business_assumption": "Archivar un producto que sigue moviéndose rompe su trazabilidad en el flujo.",
       "category": "catalogo_pesos",
       "classification": "caveated",
       "confidence": "medium",
@@ -2324,7 +2324,7 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
     },
     {
       "approved_threshold": false,
-      "business_assumption": "Cero registros en van.refill.request NO significa cero recargas operativas: las recargas entran como pickings adicionales del plan (medido: la mayoría de los planes cargados tiene más de un picking).",
+      "business_assumption": "Cero registros en van.refill.request NO significa cero recargas operativas. Lo medido es que la mayoría de los planes con carga tiene MÁS DE UN picking vinculado; de ahí NO se sigue que esos pickings sean recargas: su picking_type NO se clasificó y el dominio mezcla traslados internos, recepciones y órdenes de entrega. Un picking adicional puede ser una recarga, una corrección, un retorno o un despacho: sin clasificar el tipo, atribuirle causa sería inferirla de un conteo.",
       "category": "refill",
       "classification": "not_evaluable",
       "confidence": "n/a",
@@ -2333,7 +2333,7 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "granularity": "aggregate",
       "incidences": null,
       "name": "Flujo de refill sin uso operativo",
-      "not_evaluable_reason": "El modelo existe con flujo completo (estados, aprobación, picking) y midió 0 REGISTROS en la ventana — 1 en TODA la historia. Las recargas reales entran hoy como pickings adicionales del plan (load_picking_ids), no por este flujo. Ninguna política exige usarlo, así que su desuso no es un incumplimiento medible.",
+      "not_evaluable_reason": "El modelo existe con flujo completo (estados, aprobación, picking) y midió 0 REGISTROS en la ventana — 1 en TODA la historia. Ninguna política exige usarlo, así que su desuso no es un incumplimiento medible. OJO: de aquí NO se sigue que no haya recargas — solo que este modelo no las registra.",
       "numerator": null,
       "observed_value": "No evaluable en el contrato v1",
       "pct": null,
@@ -2559,7 +2559,7 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "classification": "exploratory",
       "confidence": "low",
       "denominator": null,
-      "evidence_limitations": "SEÑAL AGREGADA NO NORMALIZADA — NO es un cuadre físico ni prueba de descuadre. aggregate_raw=true · uom_normalized=false · physical_reconciliation_supported=false · refill_coverage=incomplete (las cargas suplementarias entran como pickings y NO se atribuyen a estos campos) · delivery_acceptance no confirmada. reconciliation_state_scope=final (las abiertas se excluyen porque sus cifras aún cambian). 1 incidencia = LA CONDICIÓN AGREGADA, no un conteo de unidades.",
+      "evidence_limitations": "SEÑAL AGREGADA NO NORMALIZADA — NO es un cuadre físico ni prueba de descuadre. aggregate_raw=true · uom_normalized=false · physical_reconciliation_supported=false · refill_coverage=incomplete (hay pickings adicionales por plan que NO se atribuyen a estos campos; su tipo y propósito no se clasificaron) · delivery_acceptance no confirmada. reconciliation_state_scope=final (las abiertas se excluyen porque sus cifras aún cambian). 1 incidencia = LA CONDICIÓN AGREGADA, no un conteo de unidades.",
       "granularity": "aggregate",
       "incidences": null,
       "name": "Totales reportados en reconciliación muestran mayor qty_delivered que qty_loaded",
@@ -2609,7 +2609,7 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
       "granularity": "aggregate",
       "incidences": null,
       "name": "Cuadre físico integral por producto y unidad",
-      "not_evaluable_reason": "NO EVALUABLE con la instrumentación actual. Faltan CUATRO piezas, todas medidas: (1) no existe inventario por unidad/vehículo; (2) la aceptación de entrega no está confirmada (la inmensa mayoría de las líneas de salida siguen con recepción pendiente); (3) las cargas suplementarias entran como pickings adicionales y no se atribuyen a la conciliación; (4) las cifras de la conciliación son REPORTADAS por el documento, sin contraste independiente contra stock.move. Con esas brechas, cualquier 'cuadre' sería una afirmación sin respaldo.",
+      "not_evaluable_reason": "NO EVALUABLE con la instrumentación actual. Faltan CUATRO piezas, todas medidas: (1) no existe inventario por unidad/vehículo; (2) la aceptación de entrega no está confirmada (la inmensa mayoría de las líneas de salida siguen con recepción pendiente); (3) existen pickings adicionales por plan que no se atribuyen a la conciliación y cuyo tipo/propósito no se clasificó; (4) las cifras de la conciliación son REPORTADAS por el documento, sin contraste independiente contra stock.move. Con esas brechas, cualquier 'cuadre' sería una afirmación sin respaldo.",
       "numerator": null,
       "observed_value": "No evaluable en el contrato v1",
       "pct": null,
@@ -2807,12 +2807,12 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
     }
   ],
   "run": {
-    "auditor_build_sha": "777c59a47c0ae2e811ff68c855efcc2ee13c5e27",
+    "auditor_build_sha": "aa589965af604a41434da44d9946bafa991a921e",
     "contract_build_sha": null,
     "duration_ms": 400,
     "environment": "dev",
     "evidence_classification": "pre_deployment_semantic_validation",
-    "evidence_sha256": "20361e47c58d96c45f31c7f3038a74f9ce1ad91c544cab92c6b7627a6fde9b4b",
+    "evidence_sha256": "31097f5ab30b9bcebb4c4bb345d801eebb9c3bdb8bcf270a035716489b881d55",
     "evidence_source": "xml_rpc_read_only_measurements",
     "executed_queries": [
       "module_status",
@@ -2865,11 +2865,18 @@ export const M5_API_LATEST_FIXTURE = Object.freeze(
   "schema_version": "kold.os.m5.api/1",
   "stale": false,
   "summary": {
+    "anomaly_count": 5894,
+    "anomaly_rule_count": 8,
+    "classification_rule_counts": {
+      "caveated": 15,
+      "definitive": 1,
+      "exploratory": 9,
+      "invalid": 0,
+      "not_evaluable": 13
+    },
     "compliant_rule_count": 7,
     "definitive_incident_count": 0,
     "definitive_incident_rule_count": 0,
-    "exploratory_signal_count": 5894,
-    "exploratory_signal_rule_count": 8,
     "not_evaluable_rule_count": 14,
     "overall_status": "AMBER",
     "rules_fail": 0,

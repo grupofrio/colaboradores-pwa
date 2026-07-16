@@ -74,6 +74,10 @@ test('filtros: verdict/classification/category filtran; desconocidos no', () => 
   assert.ok(porVerdicto.length > 0)
   assert.ok(porVerdicto.every((f) => f.verdict === 'riesgo'))
   const porClasificacion = applyFindingFilters(FINDINGS, { ...M5_DEFAULT_FILTERS, classification: 'exploratory' })
+  // `length > 0` PRIMERO: every() sobre [] es true, así que sin este guard el
+  // test pasaría aunque el filtro devolviera vacío. Un test vacuo da falsa
+  // cobertura -- es peor que no tenerlo.
+  assert.ok(porClasificacion.length > 0, 'debe haber hallazgos con classification=exploratory')
   assert.ok(porClasificacion.every((f) => f.classification === 'exploratory'))
   // 'recurrencia' era una categoría de M4 que en M5 NO existe: el filtro
   // devolvía [] y `every()` sobre [] es true, así que el test PASABA sin

@@ -363,15 +363,37 @@ export default function ScreenInventarioM5({ session }) {
         M5 NO corrige inventario: no crea movimientos, no valida pickings, no ajusta existencias ni pesos. M5 observa, no corrige.
       </div>
 
-      {/* Qué prueba la evidencia */}
+      {/* Qué prueba la evidencia — EJE 1: VEREDICTO (qué se concluye) */}
       <h2 style={{ ...typo.h3, fontSize: 15, marginTop: 18 }}>Qué prueba la evidencia</h2>
+      <div style={{ fontSize: 10, color: C.textLow, marginTop: 2, marginBottom: 6 }}>
+        Por <b>veredicto</b>: qué se concluye de cada regla.
+      </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
         <VerdictTile verdict="incumplimiento" rules={summary.definitive_incident_rule_count ?? 0} incidences={summary.definitive_incident_count} />
         <VerdictTile verdict="riesgo" rules={summary.warning_rule_count ?? 0} incidences={summary.warning_count} />
-        <VerdictTile verdict="anomalia" rules={summary.exploratory_signal_rule_count ?? 0} incidences={summary.exploratory_signal_count} />
+        <VerdictTile verdict="anomalia" rules={summary.anomaly_rule_count ?? 0} incidences={summary.anomaly_count} />
         <VerdictTile verdict="cumple" rules={summary.compliant_rule_count ?? 0} incidences={null} />
         <VerdictTile verdict="no_evaluable" rules={summary.not_evaluable_rule_count ?? 0} incidences={null} />
       </div>
+
+      {/* EJE 2: CLASIFICACIÓN (qué tan sólida es la evidencia).
+          Son las MISMAS reglas leídas de otra forma, no otra mitad: por eso
+          ambos ejes suman el total. "exploratory" es una CLASIFICACIÓN, jamás un
+          veredicto — colapsarlos hacía que un mismo número significara dos
+          cosas (hoy: 9 exploratorias vs 8 anomalías; la diferencia es M5-G-06,
+          exploratoria cuya condición no se cumple ⇒ cumple). */}
+      {summary.classification_rule_counts && (
+        <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 10, lineHeight: 1.5 }}>
+          <b style={{ color: C.textSoft }}>Las mismas {summary.total_rules ?? '—'} reglas por clasificación</b>
+          {' '}(otro eje: qué tan sólida es la evidencia, no qué se concluye) —{' '}
+          {Object.entries(summary.classification_rule_counts)
+            .map(([k, v]) => `${k} ${v}`).join(' · ')}
+          <div style={{ fontSize: 9.5, color: C.textLow, marginTop: 2 }}>
+            “exploratory” es una clasificación, no un veredicto: una regla exploratoria
+            cuya condición no se cumple queda en CUMPLE. Por eso los dos conteos difieren.
+          </div>
+        </div>
+      )}
       <div style={{ fontSize: 10.5, color: C.textLow, marginTop: 6 }}>
         Incidencias detectadas: {fmtInt(summary.total_incidences)} = suma exacta de incumplimientos + riesgos + anomalías.
         Son afectaciones por regla, NO entidades únicas ni unidades de producto (un mismo plan/línea puede aparecer en varias reglas; la condición agregada del cuadre cuenta 1).
