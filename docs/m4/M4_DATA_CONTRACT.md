@@ -59,6 +59,32 @@ rule_results** · rule_results y findings con el contrato epistémico completo
 (classification/verdict/confidence/universe/business_assumption/
 evidence_limitations/approved_threshold/threshold_source).
 
+### Universo: lo declara el backend, el frontend lo VALIDA
+
+Cada `rule_result` y cada `finding` traen `universe_id` (del catálogo canónico
+`core.UNIVERSES`) **y** su etiqueta derivada. **El frontend no decide qué
+universo le toca a una regla**: renderiza el que el backend declara y rechaza el
+envelope si
+
+- el `universe_id` no está en `M4_UNIVERSE_IDS`;
+- el `universe` describe la población **pre-A5** (`customer_rank`);
+- un `finding` declara **otro** universo que su `rule_result` (⇒ `/latest` y
+  `/findings` contarían historias distintas del mismo número);
+- el **numerador no cabe** en su denominador (M4-A-04 dividía archivados, 168,
+  entre activos, 584: aritmética válida, población errónea);
+- aparece una **cifra del universo pre-A5** (`1,620` · `2,333`) en cualquier
+  string del envelope ⇒ el texto se escribió a mano y quedó viejo.
+
+`customer_rank` **no** está prohibido en general: M4-D-02 mide precisamente
+"pedidos a un partner con `customer_rank<=0`" y los KPIs declaran el campo real
+que leen. Lo prohibido es que describa **la población**.
+
+Universos del contrato v1: `active_commercial_customer_roots_in_scope` (584) ·
+`commercial_customer_roots_in_scope` (752) ·
+`new_customer_roots_first_order_in_window` (319) · `confirmed_orders_in_window`
+(12,606) · `cancelled_orders_in_window` · `confirmed_order_lines_in_window`
+(13,778) · `leads_in_scope` (1,952).
+
 ### Contrato por KPI
 
 Cada entrada de `kpis` es un objeto, no un número suelto: `value` (finito) ·

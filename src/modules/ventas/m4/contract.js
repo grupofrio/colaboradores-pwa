@@ -28,6 +28,26 @@ export const M4_FORBIDDEN_M3_KPI_KEYS = Object.freeze([
   'closure_metrics', 'stop_universe_metrics',
 ])
 
+// Universos canónicos del backend (`core.UNIVERSES`). El frontend NO decide qué
+// universo le toca a cada regla: RENDERIZA el que el backend declara y valida
+// que sea uno conocido. Un `universe_id` desconocido = contrato que derivó.
+export const M4_UNIVERSE_IDS = Object.freeze([
+  'active_commercial_customer_roots_in_scope',
+  'commercial_customer_roots_in_scope',
+  'new_customer_roots_first_order_in_window',
+  'confirmed_orders_in_window',
+  'cancelled_orders_in_window',
+  'confirmed_order_lines_in_window',
+  'leads_in_scope',
+])
+
+// Cifras del universo PRE-A5. A5 probó que `company_id IN scope` (2,333) dejaba
+// FUERA a 410 de los 713 que compran, así que el universo canónico pasó a ser la
+// raíz comercial con historial (584 activas / 752 con archivadas). Estas cifras
+// describen una población que ya NO se mide: si el backend las envía, el
+// envelope viene con texto podrido y se RECHAZA.
+export const M4_PRE_A5_FIGURES = Object.freeze(['2,333', '2333', '1,620', '1620'])
+
 export const M4_CLASSIFICATIONS = Object.freeze(
   ['definitive', 'caveated', 'exploratory', 'not_evaluable', 'invalid'])
 export const M4_VERDICTS = Object.freeze(
@@ -71,6 +91,28 @@ export function scanForbiddenKeys(value, path = '', found = [], depth = 0) {
   for (const [key, val] of Object.entries(value)) {
     if (M4_FORBIDDEN_KEY_RE.test(key)) found.push(`${path}${key}`)
     scanForbiddenKeys(val, `${path}${key}.`, found, depth + 1)
+  }
+  return found
+}
+
+// Barrido recursivo de cifras del universo PRE-A5 en los textos del envelope.
+// Solo mira strings: un `584` numérico es un dato legítimo; un "1,620" escrito
+// dentro de una frase es una medición copiada a mano que ya no es cierta.
+export function scanPreA5Figures(value, path = '', found = [], depth = 0) {
+  if (depth > 14 || value == null) return found
+  if (typeof value === 'string') {
+    for (const figure of M4_PRE_A5_FIGURES) {
+      if (value.includes(figure)) found.push(`${path}: “…${figure}…”`)
+    }
+    return found
+  }
+  if (typeof value !== 'object') return found
+  if (Array.isArray(value)) {
+    for (const item of value) scanPreA5Figures(item, path, found, depth + 1)
+    return found
+  }
+  for (const [key, val] of Object.entries(value)) {
+    scanPreA5Figures(val, path ? `${path}.${key}` : key, found, depth + 1)
   }
   return found
 }
@@ -174,6 +216,12 @@ function validateRuleResults(doc, errors) {
     if (!VERDICT_SET.has(result.verdict)) { errors.push('rule_results: verdict requerido y válido'); break }
     if (typeof result.universe !== 'string' || !result.universe.trim()) {
       errors.push('rule_results: universe requerido'); break
+    }
+    if (!M4_UNIVERSE_IDS.includes(result.universe_id)) {
+      errors.push(`rule_results: universe_id desconocido (${result.universe_id})`); break
+    }
+    if (result.universe.includes('customer_rank')) {
+      errors.push(`rule_results: ${result.rule_code} describe el universo pre-A5 (customer_rank)`); break
     }
     if (typeof result.business_assumption !== 'string' || !result.business_assumption.trim()) {
       errors.push('rule_results: business_assumption requerido'); break
@@ -357,6 +405,9 @@ function validateFindings(doc, errors) {
     if (typeof finding.universe !== 'string' || !finding.universe.trim()) {
       errors.push('findings: universe requerido'); break
     }
+    if (!M4_UNIVERSE_IDS.includes(finding.universe_id)) {
+      errors.push(`findings: universe_id desconocido (${finding.universe_id})`); break
+    }
     if (typeof finding.approved_threshold !== 'boolean') {
       errors.push('findings: approved_threshold booleano requerido'); break
     }
@@ -373,6 +424,17 @@ function validateFindings(doc, errors) {
     const rule = ruleByCode.get(finding.rule_code)
     if (rule && (finding.verdict !== rule.verdict || finding.classification !== rule.classification)) {
       errors.push(`findings: ${finding.rule_code} contradice a su rule_result`); break
+    }
+    // /latest y /findings tienen que contar la MISMA historia del mismo número:
+    // si difieren en universo, la pantalla y el drill-down se contradicen.
+    if (rule && (finding.universe_id !== rule.universe_id || finding.universe !== rule.universe)) {
+      errors.push(`findings: ${finding.rule_code} declara otro universo que su regla`); break
+    }
+    // El numerador tiene que caber en su denominador. M4-A-04 dividía archivados
+    // (168, NO activos) entre activos (584): aritmética válida, población errónea.
+    if (Number.isFinite(Number(finding.numerator)) && Number.isFinite(Number(finding.denominator))
+      && Number(finding.denominator) > 0 && Number(finding.numerator) > Number(finding.denominator)) {
+      errors.push(`findings: ${finding.rule_code} numerador ${finding.numerator} > denominador ${finding.denominator}`); break
     }
   }
 }
@@ -414,6 +476,14 @@ export function validateM4Latest(doc) {
 
   const forbidden = scanForbiddenKeys(doc)
   if (forbidden.length) errors.push(`claves sensibles detectadas: ${forbidden.slice(0, 3).join(', ')}`)
+
+  // Texto podrido: una cifra del universo pre-A5 en CUALQUIER parte del envelope
+  // significa que alguien escribió el número del día a mano y la medición cambió
+  // debajo. El número tiene que salir de numerator/denominator/pct.
+  const stale = scanPreA5Figures(doc)
+  if (stale.length) {
+    errors.push(`cifras del universo pre-A5 en el envelope: ${stale.slice(0, 3).join(', ')}`)
+  }
 
   return { ok: errors.length === 0, errors, schema }
 }

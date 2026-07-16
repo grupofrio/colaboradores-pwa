@@ -19,7 +19,14 @@ autenticada `gf_kold_os_m4` (GET /pwa-kold-os/m4/{latest,findings,runs}).
   tiene canal propio) ⇒ "actualmente sin canal clasificado", no "se vendió sin
   canal".
 - **Cliente** = raíz comercial (`commercial_partner_id = id`) con historial de
-  pedido confirmado en el scope.
+  pedido confirmado en el scope. **584** activas
+  (`active_commercial_customer_roots_in_scope`, el universo de la salud
+  comercial) y **752** contando las 168 archivadas
+  (`commercial_customer_roots_in_scope`, que solo usa la regla de archivados).
+  **NO** es `res.partner customer_rank>0`: ese universo pre-A5 (2,333) dejaba
+  fuera a 410 de los 713 que compran.
+- **El universo lo declara el backend** (`universe_id` del catálogo canónico) y
+  esta pantalla lo **renderiza**; no infiere cuál le toca a cada regla.
 
 ## Autoridad y acceso (v1, fail-closed)
 - `direccion_general` (x_job_key efectivo) → GLOBAL.

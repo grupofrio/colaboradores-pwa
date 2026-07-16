@@ -1,16 +1,23 @@
 # M4 — Limitaciones conocidas (frontend v1)
 
-Backend: **GrupoVeniu/GrupoFrio PR #205** (DRAFT, head `4e195a92`) — el commit
-`978994c4` que auditó Codex, ya corregido. Puntos de ajuste si el contrato
-cambia: `src/lib/koldOsM4Route.js` + `m4/contract.js` + regenerar el fixture.
-La pantalla no se reescribe.
+Backend: **GrupoVeniu/GrupoFrio PR #205** (DRAFT). El head se consulta en
+GitHub; aquí no se fija (un SHA a mano se pudre en una vuelta). El código que
+**midió** esta evidencia es `3eeffd88` (= `run.auditor_build_sha`, con test que
+lo compara). Puntos de ajuste si el contrato cambia:
+`src/lib/koldOsM4Route.js` + `m4/contract.js` + regenerar el fixture. La
+pantalla no se reescribe.
 
 ## 0. La limitación que gobierna todo: qué prueba realmente la evidencia
 
 De 37 reglas, **CERO producen incumplimiento afirmable**: 9 riesgos (supuesto
 declarado, no verificado) · 5 anomalías exploratorias · 8 cumplen · 15 no
-evaluables · **12,158 incidencias**. Las 3 reglas `definitive` que sobreviven
-midieron 0 ⇒ cumplen.
+evaluables · **12,158 incidencias**. Las **2** reglas `definitive` que sobreviven
+(precio unitario negativo, línea sin producto) midieron 0 ⇒ cumplen.
+
+**M4-A-08 dejó de ser `definitive`**: afirmaba "todo cliente comercial pertenece
+a una compañía" —con umbral APROBADO— y A5 refutó esa premisa (`company_id`
+vacío = partner **compartido** entre compañías, el diseño multiempresa de Odoo).
+Solo un campo fantasma impidió que emitiera un incumplimiento falso.
 
 Esto es un cambio de conclusión, no de números: la ronda anterior afirmaba 1
 incumplimiento (M4-D-04, "6 líneas con cantidad ≤ 0, aritméticamente inválido").
@@ -23,6 +30,22 @@ bajó a `caveated`/RIESGO. **Era una afirmación de más.**
 La UI y los exports muestran el desglose; el contrato lo IMPONE (exploratory ≠
 incumplimiento; incumplimiento exige umbral aprobado; total = suma exacta
 recomputada desde `rule_results`).
+
+## 0.bis La lección que dejó esta ronda
+
+**Una corrección del universo debe propagarse a fórmula, contrato, narrativa,
+finding, fixture, UI y export; los textos numéricos no se escriben a mano.**
+
+A5 corrigió el universo y la corrección llegó a las **fórmulas** pero no a los
+**textos**: nueve reglas siguieron describiendo `customer_rank>0` (2,333) junto a
+un denominador de 584, y M4-F-01 mostraba `78/584` mientras su texto citaba
+`"1620/2333 (69%)"` — las cifras que A5 acababa de invalidar. Nadie lo vio porque
+**un texto no se ejecuta**.
+
+Ahora: el universo vive en un **catálogo** (`core.UNIVERSES`), las reglas lo
+referencian por `universe_id`, la etiqueta se **deriva**, el número vive en
+`numerator`/`denominator`/`pct` y se **serializa**. Este frontend **valida** esa
+cadena y rechaza el envelope si se rompe.
 
 ## 1. El universo de clientes se DERIVA de los pedidos (no del maestro)
 

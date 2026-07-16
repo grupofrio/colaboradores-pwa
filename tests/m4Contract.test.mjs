@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import {
   M4_API_SCHEMA_VERSION, classifySchemaVersion, validateM4Latest, validateM4Findings,
   validateM4Runs, isRunStale, M4_STALE_DAYS, scanForbiddenKeys,
+  scanPreA5Figures, M4_UNIVERSE_IDS,
 } from '../src/modules/ventas/m4/contract.js'
 import { M4_API_LATEST_FIXTURE, M4_API_FIXTURE_PROVENANCE } from '../src/modules/ventas/m4/fixtures/apiLatestFixture.js'
 
@@ -38,6 +39,104 @@ test('linaje coherente: measuring_commit === run.auditor_build_sha', () => {
     'la procedencia declara un build distinto al que emitió el envelope')
   assert.notEqual(declared, M4_API_FIXTURE_PROVENANCE.audited_ancestor,
     'el ancestro auditado no es el que produjo estas mediciones')
+})
+
+// ── Universo A5: el frontend RENDERIZA el universo del backend, no lo decide ──
+test('M4-F-01: 78 de 584 con el porcentaje matemáticamente correcto', () => {
+  const rule = M4_API_LATEST_FIXTURE.rule_results.find((r) => r.rule_code === 'M4-F-01')
+  assert.equal(rule.numerator, 78)
+  assert.equal(rule.denominator, 584)
+  // El pct se DERIVA: no se cree el texto, se recalcula.
+  assert.equal(rule.pct, Math.round((78 / 584) * 10000) / 100)
+  assert.equal(rule.observed_value, '78 de 584 (13.36%)')
+  assert.equal(rule.universe_id, 'active_commercial_customer_roots_in_scope')
+})
+
+test('M4-A-04: 168 de 752 — los archivados no se dividen entre los activos', () => {
+  const rule = M4_API_LATEST_FIXTURE.rule_results.find((r) => r.rule_code === 'M4-A-04')
+  assert.equal(rule.numerator, 168)
+  assert.equal(rule.denominator, 752, 'el denominador es el superconjunto, no los 584 activos')
+  assert.equal(rule.pct, Math.round((168 / 752) * 10000) / 100)
+  assert.equal(rule.observed_value, '168 de 752 (22.34%)')
+  assert.equal(rule.universe_id, 'commercial_customer_roots_in_scope')
+})
+
+test('cero cifras del universo pre-A5 en TODO el envelope', () => {
+  // 1,620 · 2,333 describían una población que ya no se mide: si vuelven, es
+  // que alguien escribió el número del día a mano y la medición cambió debajo.
+  assert.deepEqual(scanPreA5Figures(M4_API_LATEST_FIXTURE), [])
+  const blob = JSON.stringify(M4_API_LATEST_FIXTURE)
+  for (const figure of ['1,620', '1620', '2,333', '2333']) {
+    assert.ok(!blob.includes(figure), `${figure} sigue vivo en el envelope`)
+  }
+  // 69% solo puede aparecer si es un pct REAL calculado.
+  const pcts = M4_API_LATEST_FIXTURE.rule_results.map((r) => r.pct).filter((p) => p != null)
+  assert.ok(!pcts.includes(69), 'el 69% pre-A5 no es un resultado vigente')
+})
+
+test('customer_rank solo vive donde es una CONDICIÓN, nunca como universo', () => {
+  // `customer_rank` no está prohibido en el envelope: M4-D-02 mide precisamente
+  // "pedidos a un partner con customer_rank<=0", y los KPIs declaran el campo
+  // real que leen. Lo prohibido es que describa la POBLACIÓN — ahí significaba
+  // el universo pre-A5 de 2,333.
+  for (const r of M4_API_LATEST_FIXTURE.rule_results) {
+    assert.ok(!r.universe.includes('customer_rank'),
+      `${r.rule_code}: customer_rank en el universo = población pre-A5`)
+  }
+  for (const f of M4_API_LATEST_FIXTURE.findings) {
+    assert.ok(!f.universe.includes('customer_rank'), `${f.rule_code}: idem en el hallazgo`)
+  }
+  for (const [key, kpi] of Object.entries(M4_API_LATEST_FIXTURE.kpis)) {
+    assert.ok(!String(kpi.universe).includes('customer_rank'), `kpis.${key}: idem`)
+  }
+  // Y sigue vivo donde SÍ corresponde: la regla que lo mide.
+  const d02 = M4_API_LATEST_FIXTURE.rule_results.find((r) => r.rule_code === 'M4-D-02')
+  assert.ok(d02.business_assumption.includes('customer_rank'),
+    'M4-D-02 mide customer_rank: debe poder nombrarlo en su supuesto')
+  assert.equal(d02.universe_id, 'confirmed_orders_in_window',
+    'su universo es el PEDIDO; customer_rank es la condición')
+})
+
+test('el envelope con una cifra pre-A5 se RECHAZA', () => {
+  const doc = clone()
+  const f = doc.rule_results.find((r) => r.rule_code === 'M4-F-01')
+  f.evidence_limitations = "1620/2333 (69%) sin compra en 180d; sin definición aprobada."
+  const r = validateM4Latest(doc)
+  assert.equal(r.ok, false)
+  assert.ok(r.errors.some((e) => e.includes('pre-A5')), JSON.stringify(r.errors))
+})
+
+test('todo universe_id del envelope es del catálogo; el pre-A5 se rechaza', () => {
+  for (const r of M4_API_LATEST_FIXTURE.rule_results) {
+    assert.ok(M4_UNIVERSE_IDS.includes(r.universe_id), `${r.rule_code}: ${r.universe_id}`)
+    assert.ok(!r.universe.includes('customer_rank'), `${r.rule_code} describe el universo viejo`)
+  }
+  const doc = clone()
+  doc.rule_results[0].universe_id = 'res_partner_customer_rank_gt_0'
+  assert.equal(validateM4Latest(doc).ok, false, 'un universo desconocido debe rechazarse')
+})
+
+test('el numerador nunca excede su denominador (A4 dividía archivados entre activos)', () => {
+  for (const r of M4_API_LATEST_FIXTURE.rule_results) {
+    if (r.numerator == null || r.denominator == null || r.denominator === 0) continue
+    assert.ok(r.numerator <= r.denominator, `${r.rule_code}: ${r.numerator} de ${r.denominator}`)
+  }
+  const doc = clone()
+  const f = doc.findings[0]
+  f.numerator = (f.denominator || 1) + 1
+  assert.equal(validateM4Latest(doc).ok, false, 'un numerador que no cabe debe rechazarse')
+})
+
+test('/latest y /findings describen el MISMO universo', () => {
+  const rules = new Map(M4_API_LATEST_FIXTURE.rule_results.map((r) => [r.rule_code, r]))
+  for (const f of M4_API_LATEST_FIXTURE.findings) {
+    const rule = rules.get(f.rule_code)
+    assert.equal(f.universe_id, rule.universe_id, `${f.rule_code}: findings vs latest`)
+    assert.equal(f.universe, rule.universe, f.rule_code)
+  }
+  const doc = clone()
+  doc.findings[0].universe_id = 'leads_in_scope'
+  assert.equal(validateM4Latest(doc).ok, false, 'un hallazgo no puede cambiar de universo')
 })
 
 test('metadata de evidencia obligatoria: ausente o null => inválido', () => {

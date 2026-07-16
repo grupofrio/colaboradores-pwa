@@ -50,10 +50,16 @@ export const csvCell = (value) => {
 export const M4_CSV_COLUMNS = Object.freeze([
   'finding_id', 'rule_code', 'category', 'severity',
   // Contrato epistémico: el veredicto es la lectura autoritativa, no el color.
-  'verdict', 'classification', 'approved_threshold', 'universe',
+  'verdict', 'classification', 'approved_threshold',
+  // `universe_id` viaja junto a la etiqueta: quien abra el CSV en una hoja de
+  // cálculo puede agrupar por universo sin parsear prosa, y sabe que "168 de
+  // 752" y "39 de 584" NO comparten población.
+  'universe_id', 'universe',
   'status', 'granularity', 'lifecycle_status', 'title', 'entity_type',
   'entity_reference', 'observed_value', 'expected_rule', 'numerator',
-  'denominator', 'pct', 'incidences', 'company_id', 'branch_id',
+  'denominator', 'pct', 'incidences',
+  // Sin company_id/branch_id: el contrato v1 no tiene esas dimensiones y ningún
+  // hallazgo las porta (columnas siempre vacías = promesa incumplida).
   'responsible_area', 'owner_status', 'first_seen_at', 'last_seen_at',
   'occurrence_count', 'source_model', 'source_timestamp',
 ])

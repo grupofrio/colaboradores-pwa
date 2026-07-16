@@ -1,21 +1,21 @@
 // Fixture del DEMO de M4 — emitido por el CODIGO REAL del backend
 // (GrupoVeniu/GrupoFrio PR #205, rama feat/kold-os-m4-sales-customer-observability):
 // kold_os_m4_audit_core (manifiesto/sanitizador/hashes) + kold_os_m4_core
-// (37 reglas, contrato epistemico, commercial_kpis), alimentado con AGREGADOS
-// REALES medidos por XML-RPC read-only contra produccion, ventana acotada
-// [2026-01-16, 2026-07-15), universo canonico = raiz comercial con historial.
+// (37 reglas, contrato epistemico, commercial_kpis, catalogo de UNIVERSOS),
+// alimentado con AGREGADOS REALES medidos por XML-RPC read-only contra
+// produccion, ventana acotada [2026-01-16, 2026-07-15).
+//
+// UNIVERSO (A5): cada regla declara un `universe_id` del catalogo canonico y su
+// etiqueta se DERIVA — ninguna regla describe su poblacion con palabras propias.
+// Universo de clientes = raiz comercial (commercial_partner_id) con historial de
+// pedido confirmado en el scope: 584 ACTIVAS, 752 con las archivadas. El maestro
+// NO es scopeable por compania. El frontend NO decide que universo toca a cada
+// regla: renderiza el que el backend declara y valida su coherencia.
 //
 // LINAJE: `measuring_commit` es el codigo que MIDIO estos agregados, y es el
 // mismo valor que `run.auditor_build_sha` del envelope (hay test). NO se fija el
 // head de la rama: el head avanza con cada commit y no responde la pregunta que
-// importa ("que codigo emitio estos numeros"). Los commits posteriores que solo
-// derivan/limpian no reescriben quien midio. El ancestro auditado por Codex
-// (978994c4) queda registrado aparte. Declarar un SHA que no corresponde al
-// codigo que emitio la evidencia fue el hallazgo A8; no se repite.
-//
-// GRANULARIDAD: los hallazgos son AGREGADOS y no portan dimension de compañia,
-// sucursal, cliente ni producto (capabilities las declaran false). Si aparece
-// `branch_id`/`company_id` aqui, el contrato del frontend RECHAZA el envelope.
+// importa ("que codigo emitio estos numeros").
 //
 // ⚠ is_production_shell_run = FALSE: NO es la corrida odoo-shell de produccion
 // (bloqueada: sin llave SSH en Odoo.sh + modulo sin desplegar). Los NUMEROS son
@@ -25,7 +25,7 @@
 export const M4_API_FIXTURE_PROVENANCE = Object.freeze({
   kind: 'real_code_generated_measured_aggregates',
   backend_pr: 'GrupoVeniu/GrupoFrio#205',
-  measuring_commit: 'f0894765a3d7517bd74ac4f0d1ff90ee8900fc59',
+  measuring_commit: '3eeffd889b5902fb31f88f6573589afde0b166bc',
   audited_ancestor: '978994c49baefac9da010580667ae89a8f7251d5',
   auditor_core: 'gf_kold_os_m4/lib/kold_os_m4_audit_core.py',
   backend_core: 'gf_kold_os_m4/lib/kold_os_m4_core.py',
@@ -104,7 +104,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
   "findings": [
     {
       "approved_threshold": false,
-      "business_assumption": "El canal es un atributo del cliente (channel_id, 92.5% poblado); su ausencia impide clasificar la venta.",
+      "business_assumption": "El canal es un atributo del cliente (channel_id): su ausencia impide clasificar la venta. La cobertura medida viaja en numerator/denominator, no en este texto.",
       "category": "maestro_clientes",
       "classification": "caveated",
       "confidence": "high",
@@ -113,19 +113,19 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
-      "evidence_limitations": "El campo no es obligatorio por constraint: 176 sin canal puede incluir contactos legítimos sin canal asignado aún.",
+      "evidence_limitations": "El campo no es obligatorio por constraint: parte de los clientes sin canal pueden ser altas legítimas todavía sin clasificar.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_channel_count",
           "customer_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Todo cliente comercial debería declarar su canal.",
@@ -150,7 +150,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "RED",
       "threshold_source": "Cobertura observada del maestro (no umbral aprobado de negocio).",
       "title": "Cliente comercial actualmente sin canal clasificado",
-      "universe": "res.partner con customer_rank>0 de las compañías del scope.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "riesgo"
     },
     {
@@ -166,17 +167,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "customer",
       "evidence_limitations": "La geo mide geocódigo, no conducta comercial; algunos clientes de mostrador no requieren coordenada.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_geo_count",
           "customer_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Un cliente comercial debería tener coordenadas para ruteo/planeación.",
@@ -201,7 +202,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "AMBER",
       "threshold_source": "Cobertura observada (no umbral aprobado).",
       "title": "Cliente comercial sin geolocalización",
-      "universe": "res.partner con customer_rank>0 del scope.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "riesgo"
     },
     {
@@ -217,17 +219,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "customer",
       "evidence_limitations": "Campo no obligatorio; señal de calidad de datos.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_country_count",
           "customer_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Higiene mínima del maestro geográfico.",
@@ -252,7 +254,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "AMBER",
       "threshold_source": "Cobertura observada (no umbral aprobado).",
       "title": "Cliente comercial sin país",
-      "universe": "res.partner con customer_rank>0 del scope.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "riesgo"
     },
     {
@@ -261,24 +264,24 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "maestro_clientes",
       "classification": "caveated",
       "confidence": "medium",
-      "denominator": 584,
-      "description": "Clientes con active=False pero customer_rank>0.",
+      "denominator": 752,
+      "description": "Raices comerciales con active=False que sin embargo tienen pedidos confirmados.",
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
       "evidence_limitations": "El archivado puede ser una depuración legítima; no hay motivo estructurado obligatorio.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "archived_with_sales_count",
-          "customer_count"
+          "root_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Un cliente con ventas no debería quedar archivado sin traza.",
@@ -290,10 +293,10 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "last_seen_at": "2026-07-15T09:00:00.400000Z",
       "lifecycle_status": "new",
       "numerator": 168,
-      "observed_value": "168 de 584 (28.77%)",
+      "observed_value": "168 de 752 (22.34%)",
       "occurrence_count": 1,
       "owner_status": "unassigned",
-      "pct": 28.77,
+      "pct": 22.34,
       "recommended_action": "Revisar si el archivado es intencional o una pérdida no clasificada.",
       "responsible_area": "Comercial / Administración de datos maestros",
       "rule_code": "M4-A-04",
@@ -301,14 +304,15 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "source_model": "res.partner",
       "source_timestamp": "2026-07-15T09:00:00.400000Z",
       "status": "AMBER",
-      "threshold_source": "Modelo (active + customer_rank), sin política de archivado aprobada.",
+      "threshold_source": "Modelo (active), sin política de archivado aprobada.",
       "title": "Cliente archivado con historial de pedidos confirmados",
-      "universe": "res.partner con customer_rank>0 y active=False del scope.",
+      "universe": "Raíces comerciales (res.partner con commercial_partner_id = id) con al menos un pedido confirmado histórico en las compañías del scope, ACTIVAS y ARCHIVADAS.",
+      "universe_id": "commercial_customer_roots_in_scope",
       "verdict": "riesgo"
     },
     {
       "approved_threshold": false,
-      "business_assumption": "sale.order NO tiene channel_id (verificado): el canal se deriva del cliente.",
+      "business_assumption": "sale.order NO tiene channel_id (verificado): el canal se lee de partner_id.channel_id, es decir del CLIENTE, no del pedido.",
       "category": "clasificacion_canal",
       "classification": "caveated",
       "confidence": "high",
@@ -319,17 +323,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "order",
       "evidence_limitations": "CANAL ACTUAL, NO HISTÓRICO (Codex A4): channel_id refleja la clasificación de HOY del cliente, no un snapshot del momento del pedido. Un cliente reclasificado o clasificado después cambia este conteo retroactivamente ⇒ NO se puede afirmar 'el pedido se originó sin canal'. Sin snapshot histórico (capability historical_order_channel=false) esto es cobertura del maestro proyectada sobre pedidos, no un hecho del pedido.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_channel_customer_count",
           "confirmed_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "order_metrics"
       },
       "expected_rule": "Un pedido confirmado debería poder atribuirse a un canal vía su cliente.",
@@ -354,7 +358,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "RED",
       "threshold_source": "Cobertura ACTUAL del canal en el maestro (no umbral aprobado).",
       "title": "Pedido confirmado cuyo cliente actualmente no tiene canal clasificado",
-      "universe": "Pedidos state='sale', company_id en scope, date_order en [window_start, window_end_exclusive); el canal se lee de partner_id.channel_id.",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "riesgo"
     },
     {
@@ -370,17 +375,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "order",
       "evidence_limitations": "MIDE SOLO sale.order.user_id (Codex A3). NO evalúa res.partner.user_id, crm.team, vendedor de ruta, campos custom de empleado, POS, ecommerce ni integraciones ⇒ este número NO es 'ownership comercial total': un pedido sin user_id puede tener responsable por otra vía. Además incluye mostrador y PWA B2C, que legítimamente no tienen vendedor individual. Sin umbral de cobertura aprobado.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_salesperson_count",
           "confirmed_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "order_metrics"
       },
       "expected_rule": "Un pedido confirmado debería declarar su vendedor en sale.order.user_id.",
@@ -405,7 +410,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "RED",
       "threshold_source": "Cobertura observada de un ÚNICO campo (no umbral aprobado).",
       "title": "Pedido confirmado sin vendedor asignado en sale.order.user_id",
-      "universe": "Pedidos con state='sale', company_id en el scope y date_order en [window_start, window_end_exclusive).",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "riesgo"
     },
     {
@@ -419,19 +425,19 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "order",
-      "evidence_limitations": "El modelo permite la venta; no hay constraint que lo prohíba (143 casos).",
+      "evidence_limitations": "El modelo permite la venta: no hay constraint que lo prohíba.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "non_customer_count",
           "confirmed_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "order_metrics"
       },
       "expected_rule": "Una venta comercial debería ser a un cliente comercial (customer_rank>0).",
@@ -456,12 +462,13 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "RED",
       "threshold_source": "Modelo (customer_rank), sin constraint de bloqueo.",
       "title": "Pedido confirmado a contacto no-cliente comercial",
-      "universe": "sale.order state=sale con partner_id.customer_rank<=0.",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "riesgo"
     },
     {
       "approved_threshold": false,
-      "business_assumption": "x_analytic_account_id es la plaza canónica (98.9% poblado, mismo que M2/M4).",
+      "business_assumption": "x_analytic_account_id es la plaza canónica (la misma que usan M2 y M4).",
       "category": "pedidos_ventas",
       "classification": "caveated",
       "confidence": "medium",
@@ -470,19 +477,19 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "order",
-      "evidence_limitations": "134 sin plaza; puede ser captura pendiente.",
+      "evidence_limitations": "Puede ser captura pendiente: el campo no es obligatorio por constraint.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "no_analytic_count",
           "confirmed_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "order_metrics"
       },
       "expected_rule": "Toda venta debería atribuirse a una plaza (analytic).",
@@ -507,7 +514,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "AMBER",
       "threshold_source": "Cobertura observada (no umbral aprobado).",
       "title": "Pedido confirmado sin plaza / cuenta analítica",
-      "universe": "sale.order state=sale del scope.",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "riesgo"
     },
     {
@@ -521,19 +529,19 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "line",
-      "evidence_limitations": "INSPECCIÓN A6 (read-only, sanitizada) de los casos reales: TODAS son qty=0 EXACTA (ninguna negativa), con qty_delivered=0 y qty_invoiced=0 (no afectan entrega ni facturación), sobre productos consu vendibles. Odoo NO lo prohíbe: no hay constraint ni política que exija qty>0 ⇒ es una anomalía de captura sin efecto operativo, NO un incumplimiento definitivo. La medición previa (6) incluía una línea display_type='line_section' (encabezado de sección), que por definición tiene qty=0 y NO es una línea de producto.",
+      "evidence_limitations": "INSPECCIÓN A6 (read-only, sanitizada) de los casos reales: TODAS son qty=0 EXACTA (ninguna negativa), con qty_delivered=0 y qty_invoiced=0 (no afectan entrega ni facturación), sobre productos consu vendibles. Odoo NO lo prohíbe: no hay constraint ni política que exija qty>0 ⇒ es una anomalía de captura sin efecto operativo, NO un incumplimiento definitivo. El universo excluye los encabezados display_type='line_section', que por definición tienen qty=0 y no son líneas de producto (la historia de esa corrección está en docs/M4_EVIDENCE_STATUS.md, no aquí).",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "qty_le_zero_count",
           "product_line_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Una línea de producto de un pedido confirmado debería tener cantidad > 0.",
@@ -558,7 +566,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "AMBER",
       "threshold_source": "Modelo (product_uom_qty), SIN constraint ni política aprobada de cantidad mínima.",
       "title": "Línea de pedido confirmado con cantidad <= 0",
-      "universe": "sale.order.line con display_type VACÍO (excluye secciones/notas) de pedidos state='sale' en [window_start, window_end_exclusive).",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "riesgo"
     },
     {
@@ -572,19 +581,19 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "line",
-      "evidence_limitations": "37.6% de líneas con descuento; sin política de descuento aprobada no hay umbral.",
+      "evidence_limitations": "Sin política de descuento aprobada no hay umbral: el observatorio observa, no juzga.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "discount_gt0_count",
           "product_line_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Observación del uso de descuento.",
@@ -609,7 +618,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "AMBER",
       "threshold_source": "Umbral NO aprobado (pendiente dirección de precios).",
       "title": "Líneas con descuento aplicado",
-      "universe": "sale.order.line de producto de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "anomalia"
     },
     {
@@ -623,19 +633,19 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "line",
-      "evidence_limitations": "166 líneas; el umbral 50% es un default del observatorio, NO aprobado.",
+      "evidence_limitations": "El umbral 50% es un default del observatorio, NO aprobado por dirección.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "discount_ge50_count",
           "product_line_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Descuentos altos deberían tener autorización.",
@@ -660,7 +670,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "AMBER",
       "threshold_source": "Umbral NO aprobado (50% es default).",
       "title": "Descuento >= 50%",
-      "universe": "sale.order.line de producto de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "anomalia"
     },
     {
@@ -676,17 +687,17 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_type": "line",
       "evidence_limitations": "3 líneas; umbral 90% es default del observatorio, NO aprobado.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "discount_ge90_count",
           "product_line_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Un descuento casi total suele ser un error o un caso especial.",
@@ -711,7 +722,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "RED",
       "threshold_source": "Umbral NO aprobado (90% es default).",
       "title": "Descuento >= 90%",
-      "universe": "sale.order.line de producto de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "anomalia"
     },
     {
@@ -725,19 +737,19 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
-      "evidence_limitations": "1620/2333 (69%) sin compra en 180d; 'dormido' NO tiene definición aprobada de ventana.",
+      "evidence_limitations": "'Dormido' NO tiene definición de ventana aprobada por dirección: el corte lo fija la ventana de la corrida, no una política.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "dormant_count",
           "customer_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "recurrence_metrics"
       },
       "expected_rule": "Un cliente comercial activo debería comprar dentro de la ventana.",
@@ -762,7 +774,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "AMBER",
       "threshold_source": "Ventana de dormido NO aprobada (180d es default).",
       "title": "Clientes sin pedido confirmado en la ventana (dormidos)",
-      "universe": "res.partner customer_rank>0 sin sale.order state=sale en [window_start, window_end_exclusive).",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "anomalia"
     },
     {
@@ -776,19 +789,19 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "entity_id": null,
       "entity_reference": "AGREGADO (scope completo, contrato v1)",
       "entity_type": "customer",
-      "evidence_limitations": "245 nuevos con orden, 73 con >=2; sin objetivo aprobado de 2ª compra.",
+      "evidence_limitations": "Sin objetivo aprobado de 2ª compra: qué porcentaje debería repetir es una decisión comercial que no existe todavía.",
       "evidence_reference": {
-        "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+        "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
         "contract_build_sha": null,
         "evidence_classification": "pre_deployment_semantic_validation",
         "evidence_fields": [
           "new_without_second_count",
           "new_with_order_count"
         ],
-        "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+        "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
         "evidence_source": "xml_rpc_read_only_measurements",
         "is_production_shell_run": false,
-        "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+        "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
         "query_id": "recurrence_metrics"
       },
       "expected_rule": "Un cliente nuevo debería repetir compra.",
@@ -813,7 +826,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "status": "AMBER",
       "threshold_source": "Objetivo NO aprobado.",
       "title": "Clientes nuevos sin segunda compra",
-      "universe": "res.partner creados en la ventana con >=1 pedido confirmado, sin 2ª compra.",
+      "universe": "Raíces comerciales activas cuyo PRIMER pedido confirmado del historial cae dentro de [window_start, window_end_exclusive).",
+      "universe_id": "new_customer_roots_first_order_in_window",
       "verdict": "anomalia"
     }
   ],
@@ -1146,7 +1160,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "no_channel_count": 39,
         "no_country_count": 95,
         "no_geo_count": 97,
-        "non_commercial_rank_count": 18
+        "non_commercial_rank_count": 18,
+        "root_count": 752
       }
     ],
     "module_status": [
@@ -1341,12 +1356,12 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
   "rule_results": [
     {
       "approved_threshold": false,
-      "business_assumption": "El canal es un atributo del cliente (channel_id, 92.5% poblado); su ausencia impide clasificar la venta.",
+      "business_assumption": "El canal es un atributo del cliente (channel_id): su ausencia impide clasificar la venta. La cobertura medida viaja en numerator/denominator, no en este texto.",
       "category": "maestro_clientes",
       "classification": "caveated",
       "confidence": "high",
       "denominator": 584,
-      "evidence_limitations": "El campo no es obligatorio por constraint: 176 sin canal puede incluir contactos legítimos sin canal asignado aún.",
+      "evidence_limitations": "El campo no es obligatorio por constraint: parte de los clientes sin canal pueden ser altas legítimas todavía sin clasificar.",
       "granularity": "aggregate",
       "incidences": 39,
       "name": "Cliente comercial actualmente sin canal clasificado",
@@ -1358,7 +1373,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "high",
       "status": "RED",
       "threshold_source": "Cobertura observada del maestro (no umbral aprobado de negocio).",
-      "universe": "res.partner con customer_rank>0 de las compañías del scope.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "riesgo"
     },
     {
@@ -1380,7 +1396,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "AMBER",
       "threshold_source": "Cobertura observada (no umbral aprobado).",
-      "universe": "res.partner con customer_rank>0 del scope.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "riesgo"
     },
     {
@@ -1402,7 +1419,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "AMBER",
       "threshold_source": "Cobertura observada (no umbral aprobado).",
-      "universe": "res.partner con customer_rank>0 del scope.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "riesgo"
     },
     {
@@ -1411,20 +1429,21 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "category": "maestro_clientes",
       "classification": "caveated",
       "confidence": "medium",
-      "denominator": 584,
+      "denominator": 752,
       "evidence_limitations": "El archivado puede ser una depuración legítima; no hay motivo estructurado obligatorio.",
       "granularity": "aggregate",
       "incidences": 168,
       "name": "Cliente archivado con historial de pedidos confirmados",
       "not_evaluable_reason": null,
       "numerator": 168,
-      "observed_value": "168 de 584 (28.77%)",
-      "pct": 28.77,
+      "observed_value": "168 de 752 (22.34%)",
+      "pct": 22.34,
       "rule_code": "M4-A-04",
       "severity": "medium",
       "status": "AMBER",
-      "threshold_source": "Modelo (active + customer_rank), sin política de archivado aprobada.",
-      "universe": "res.partner con customer_rank>0 y active=False del scope.",
+      "threshold_source": "Modelo (active), sin política de archivado aprobada.",
+      "universe": "Raíces comerciales (res.partner con commercial_partner_id = id) con al menos un pedido confirmado histórico en las compañías del scope, ACTIVAS y ARCHIVADAS.",
+      "universe_id": "commercial_customer_roots_in_scope",
       "verdict": "riesgo"
     },
     {
@@ -1446,7 +1465,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (fuera del alcance del auditor v1, no imposible).",
-      "universe": "res.partner con customer_rank>0.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "no_evaluable"
     },
     {
@@ -1468,7 +1488,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "high",
       "status": "GREEN",
       "threshold_source": "Modelo (vat), sin regla de unicidad aprobada.",
-      "universe": "Grupos de res.partner con el mismo vat (customer_rank>0), solo conteos.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "cumple"
     },
     {
@@ -1490,34 +1511,36 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "GREEN",
       "threshold_source": "Sin política aprobada.",
-      "universe": "Grupos de res.partner con phone/mobile repetido, solo conteos.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "cumple"
     },
     {
-      "approved_threshold": true,
-      "business_assumption": "La compañía es requisito multiempresa; su ausencia rompe el scope.",
+      "approved_threshold": false,
+      "business_assumption": "NINGUNA verificada. A5 DESMINTIÓ la premisa original de esta regla: en el maestro, company_id vacío significa partner COMPARTIDO entre compañías — el diseño multiempresa de Odoo, no un defecto. La cifra de cuántos lo están vive en docs/M4_EVIDENCE_STATUS.md, no aquí.",
       "category": "maestro_clientes",
-      "classification": "definitive",
-      "confidence": "high",
+      "classification": "not_evaluable",
+      "confidence": "n/a",
       "denominator": null,
-      "evidence_limitations": "Ninguna: el scope se define por company_id, el campo está o no.",
+      "evidence_limitations": "A5 probó que company_id vacío es legítimo en el maestro compartido, así que 'sin compañía' no es un incumplimiento: era una regla escrita sobre un supuesto falso. Queda NO EVALUABLE por declaración explícita (threshold manual), no por accidente: la versión anterior leía un campo fantasma (`no_company_count`) que ninguna query emite, así que salía no evaluable sin decir por qué.",
       "granularity": "aggregate",
       "incidences": null,
-      "name": "Cliente comercial sin compañía",
-      "not_evaluable_reason": "métrica no disponible / denominador cero",
+      "name": "Cliente comercial sin compañía asignada",
+      "not_evaluable_reason": "A5 refutó la premisa: company_id vacío en el maestro es el diseño multiempresa de Odoo (438 partners compartidos), no un defecto. El auditor no mide este campo hasta que exista una política aprobada.",
       "numerator": null,
-      "observed_value": "Métrica no disponible o denominador cero",
+      "observed_value": "No evaluable en el contrato v1",
       "pct": null,
       "rule_code": "M4-A-08",
       "severity": "high",
       "status": "NOT_EVALUABLE",
-      "threshold_source": "Modelo (company_id como eje de scope multiempresa).",
-      "universe": "res.partner con customer_rank>0 del scope.",
+      "threshold_source": "n/a (premisa refutada por A5; sin política aprobada).",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "no_evaluable"
     },
     {
       "approved_threshold": false,
-      "business_assumption": "sale.order NO tiene channel_id (verificado): el canal se deriva del cliente.",
+      "business_assumption": "sale.order NO tiene channel_id (verificado): el canal se lee de partner_id.channel_id, es decir del CLIENTE, no del pedido.",
       "category": "clasificacion_canal",
       "classification": "caveated",
       "confidence": "high",
@@ -1534,7 +1557,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "high",
       "status": "RED",
       "threshold_source": "Cobertura ACTUAL del canal en el maestro (no umbral aprobado).",
-      "universe": "Pedidos state='sale', company_id en scope, date_order en [window_start, window_end_exclusive); el canal se lee de partner_id.channel_id.",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "riesgo"
     },
     {
@@ -1556,7 +1580,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (no medible en v1).",
-      "universe": "sale.order state=sale con partner_id.channel_id.active=False.",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "no_evaluable"
     },
     {
@@ -1578,7 +1603,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (no hay política aprobada).",
-      "universe": "sale.order.line de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "no_evaluable"
     },
     {
@@ -1600,7 +1626,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "GREEN",
       "threshold_source": "Cobertura observada (no umbral aprobado).",
-      "universe": "crm.lead del scope (1952 registros medidos).",
+      "universe": "Registros de crm.lead de las compañías del scope.",
+      "universe_id": "leads_in_scope",
       "verdict": "cumple"
     },
     {
@@ -1622,7 +1649,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "GREEN",
       "threshold_source": "Cobertura observada.",
-      "universe": "crm.lead del scope.",
+      "universe": "Registros de crm.lead de las compañías del scope.",
+      "universe_id": "leads_in_scope",
       "verdict": "cumple"
     },
     {
@@ -1644,7 +1672,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "GREEN",
       "threshold_source": "Cobertura observada.",
-      "universe": "crm.lead del scope.",
+      "universe": "Registros de crm.lead de las compañías del scope.",
+      "universe_id": "leads_in_scope",
       "verdict": "cumple"
     },
     {
@@ -1666,7 +1695,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (no medible en v1).",
-      "universe": "crm.lead con stage=won.",
+      "universe": "Registros de crm.lead de las compañías del scope.",
+      "universe_id": "leads_in_scope",
       "verdict": "no_evaluable"
     },
     {
@@ -1688,7 +1718,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "high",
       "status": "RED",
       "threshold_source": "Cobertura observada de un ÚNICO campo (no umbral aprobado).",
-      "universe": "Pedidos con state='sale', company_id en el scope y date_order en [window_start, window_end_exclusive).",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "riesgo"
     },
     {
@@ -1698,7 +1729,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "caveated",
       "confidence": "high",
       "denominator": 12606,
-      "evidence_limitations": "El modelo permite la venta; no hay constraint que lo prohíba (143 casos).",
+      "evidence_limitations": "El modelo permite la venta: no hay constraint que lo prohíba.",
       "granularity": "aggregate",
       "incidences": 143,
       "name": "Pedido confirmado a contacto no-cliente comercial",
@@ -1710,17 +1741,18 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "high",
       "status": "RED",
       "threshold_source": "Modelo (customer_rank), sin constraint de bloqueo.",
-      "universe": "sale.order state=sale con partner_id.customer_rank<=0.",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "riesgo"
     },
     {
       "approved_threshold": false,
-      "business_assumption": "x_analytic_account_id es la plaza canónica (98.9% poblado, mismo que M2/M4).",
+      "business_assumption": "x_analytic_account_id es la plaza canónica (la misma que usan M2 y M4).",
       "category": "pedidos_ventas",
       "classification": "caveated",
       "confidence": "medium",
       "denominator": 12606,
-      "evidence_limitations": "134 sin plaza; puede ser captura pendiente.",
+      "evidence_limitations": "Puede ser captura pendiente: el campo no es obligatorio por constraint.",
       "granularity": "aggregate",
       "incidences": 134,
       "name": "Pedido confirmado sin plaza / cuenta analítica",
@@ -1732,7 +1764,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "AMBER",
       "threshold_source": "Cobertura observada (no umbral aprobado).",
-      "universe": "sale.order state=sale del scope.",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "riesgo"
     },
     {
@@ -1742,7 +1775,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "caveated",
       "confidence": "medium",
       "denominator": 13778,
-      "evidence_limitations": "INSPECCIÓN A6 (read-only, sanitizada) de los casos reales: TODAS son qty=0 EXACTA (ninguna negativa), con qty_delivered=0 y qty_invoiced=0 (no afectan entrega ni facturación), sobre productos consu vendibles. Odoo NO lo prohíbe: no hay constraint ni política que exija qty>0 ⇒ es una anomalía de captura sin efecto operativo, NO un incumplimiento definitivo. La medición previa (6) incluía una línea display_type='line_section' (encabezado de sección), que por definición tiene qty=0 y NO es una línea de producto.",
+      "evidence_limitations": "INSPECCIÓN A6 (read-only, sanitizada) de los casos reales: TODAS son qty=0 EXACTA (ninguna negativa), con qty_delivered=0 y qty_invoiced=0 (no afectan entrega ni facturación), sobre productos consu vendibles. Odoo NO lo prohíbe: no hay constraint ni política que exija qty>0 ⇒ es una anomalía de captura sin efecto operativo, NO un incumplimiento definitivo. El universo excluye los encabezados display_type='line_section', que por definición tienen qty=0 y no son líneas de producto (la historia de esa corrección está en docs/M4_EVIDENCE_STATUS.md, no aquí).",
       "granularity": "aggregate",
       "incidences": 5,
       "name": "Línea de pedido confirmado con cantidad <= 0",
@@ -1754,7 +1787,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "AMBER",
       "threshold_source": "Modelo (product_uom_qty), SIN constraint ni política aprobada de cantidad mínima.",
-      "universe": "sale.order.line con display_type VACÍO (excluye secciones/notas) de pedidos state='sale' en [window_start, window_end_exclusive).",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "riesgo"
     },
     {
@@ -1776,7 +1810,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "high",
       "status": "GREEN",
       "threshold_source": "Aritmética del modelo (precio de venta).",
-      "universe": "sale.order.line de producto de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "cumple"
     },
     {
@@ -1798,7 +1833,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "high",
       "status": "GREEN",
       "threshold_source": "Modelo (product_id requerido en línea de producto).",
-      "universe": "sale.order.line con display_type vacío de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "cumple"
     },
     {
@@ -1820,7 +1856,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (frontera M5).",
-      "universe": "sale.order state=sale con delivery_status pendiente.",
+      "universe": "Pedidos confirmados (sale.order state='sale') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_orders_in_window",
       "verdict": "no_evaluable"
     },
     {
@@ -1830,11 +1867,11 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "exploratory",
       "confidence": "low",
       "denominator": null,
-      "evidence_limitations": "Sin umbral aprobado de cancelación aceptable (77 casos).",
+      "evidence_limitations": "Sin umbral aprobado de cancelación aceptable. Los cancelados NO pertenecen al universo de pedidos confirmados: son poblaciones disjuntas y no se dividen entre sí.",
       "granularity": "aggregate",
       "incidences": null,
       "name": "Pedidos cancelados (observación cruda)",
-      "not_evaluable_reason": "OBSERVACIÓN: la cancelación puede ser legítima; sin política aprobada de cancelación no es incumplimiento.",
+      "not_evaluable_reason": "OBSERVACIÓN: la cancelación puede ser legítima; sin política aprobada de cancelación no es incumplimiento. Además el conteo vive en una fila agrupada por estado (order_state_metrics), no en un campo escalar: extraerlo exige una lectura por grupo que el contrato v1 no implementa.",
       "numerator": null,
       "observed_value": "No evaluable en el contrato v1",
       "pct": null,
@@ -1842,7 +1879,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "NOT_EVALUABLE",
       "threshold_source": "Sin política aprobada.",
-      "universe": "sale.order state=cancel en [window_start, window_end_exclusive).",
+      "universe": "Pedidos CANCELADOS (sale.order state='cancel') de las compañías del scope con date_order en [window_start, window_end_exclusive).",
+      "universe_id": "cancelled_orders_in_window",
       "verdict": "no_evaluable"
     },
     {
@@ -1852,7 +1890,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "exploratory",
       "confidence": "medium",
       "denominator": 13778,
-      "evidence_limitations": "37.6% de líneas con descuento; sin política de descuento aprobada no hay umbral.",
+      "evidence_limitations": "Sin política de descuento aprobada no hay umbral: el observatorio observa, no juzga.",
       "granularity": "aggregate",
       "incidences": 5181,
       "name": "Líneas con descuento aplicado",
@@ -1864,7 +1902,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "AMBER",
       "threshold_source": "Umbral NO aprobado (pendiente dirección de precios).",
-      "universe": "sale.order.line de producto de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "anomalia"
     },
     {
@@ -1874,7 +1913,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "exploratory",
       "confidence": "medium",
       "denominator": 13778,
-      "evidence_limitations": "166 líneas; el umbral 50% es un default del observatorio, NO aprobado.",
+      "evidence_limitations": "El umbral 50% es un default del observatorio, NO aprobado por dirección.",
       "granularity": "aggregate",
       "incidences": 166,
       "name": "Descuento >= 50%",
@@ -1886,7 +1925,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "AMBER",
       "threshold_source": "Umbral NO aprobado (50% es default).",
-      "universe": "sale.order.line de producto de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "anomalia"
     },
     {
@@ -1908,7 +1948,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "high",
       "status": "RED",
       "threshold_source": "Umbral NO aprobado (90% es default).",
-      "universe": "sale.order.line de producto de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "anomalia"
     },
     {
@@ -1930,7 +1971,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "GREEN",
       "threshold_source": "Modelo (price_unit), sin política de muestras aprobada.",
-      "universe": "sale.order.line de producto de ventas confirmadas.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "cumple"
     },
     {
@@ -1940,7 +1982,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "exploratory",
       "confidence": "medium",
       "denominator": 584,
-      "evidence_limitations": "1620/2333 (69%) sin compra en 180d; 'dormido' NO tiene definición aprobada de ventana.",
+      "evidence_limitations": "'Dormido' NO tiene definición de ventana aprobada por dirección: el corte lo fija la ventana de la corrida, no una política.",
       "granularity": "aggregate",
       "incidences": 78,
       "name": "Clientes sin pedido confirmado en la ventana (dormidos)",
@@ -1952,7 +1994,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "AMBER",
       "threshold_source": "Ventana de dormido NO aprobada (180d es default).",
-      "universe": "res.partner customer_rank>0 sin sale.order state=sale en [window_start, window_end_exclusive).",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "anomalia"
     },
     {
@@ -1962,7 +2005,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "exploratory",
       "confidence": "medium",
       "denominator": 319,
-      "evidence_limitations": "245 nuevos con orden, 73 con >=2; sin objetivo aprobado de 2ª compra.",
+      "evidence_limitations": "Sin objetivo aprobado de 2ª compra: qué porcentaje debería repetir es una decisión comercial que no existe todavía.",
       "granularity": "aggregate",
       "incidences": 193,
       "name": "Clientes nuevos sin segunda compra",
@@ -1974,7 +2017,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "AMBER",
       "threshold_source": "Objetivo NO aprobado.",
-      "universe": "res.partner creados en la ventana con >=1 pedido confirmado, sin 2ª compra.",
+      "universe": "Raíces comerciales activas cuyo PRIMER pedido confirmado del historial cae dentro de [window_start, window_end_exclusive).",
+      "universe_id": "new_customer_roots_first_order_in_window",
       "verdict": "anomalia"
     },
     {
@@ -1984,19 +2028,20 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "exploratory",
       "confidence": "medium",
       "denominator": null,
-      "evidence_limitations": "82 candidatos; 'perdido' NO tiene definición aprobada.",
+      "evidence_limitations": "'Perdido' NO tiene definición aprobada: sin ventana ratificada, cualquier corte (180d/365d) sería del observatorio, no del negocio.",
       "granularity": "aggregate",
       "incidences": null,
       "name": "Candidatos a pérdida (activos 365d, no 180d)",
-      "not_evaluable_reason": "métrica no disponible / denominador cero",
+      "not_evaluable_reason": "Las ventanas 365d/180d son una definición de 'perdido' que dirección NO ha ratificado, así que el auditor v1 no emite el campo. La versión anterior declaraba leer `lost_180_365_count` —que ninguna query produce— y salía no evaluable en silencio, sin decir por qué.",
       "numerator": null,
-      "observed_value": "Métrica no disponible o denominador cero",
+      "observed_value": "No evaluable en el contrato v1",
       "pct": null,
       "rule_code": "M4-F-03",
       "severity": "high",
       "status": "NOT_EVALUABLE",
       "threshold_source": "Definición de pérdida NO aprobada.",
-      "universe": "res.partner con sale.order en [today-365, window_start) pero no en la ventana (query declara ventana 365d propia).",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "no_evaluable"
     },
     {
@@ -2006,7 +2051,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "classification": "exploratory",
       "confidence": "medium",
       "denominator": null,
-      "evidence_limitations": "491 recurrentes; es observación, no falta.",
+      "evidence_limitations": "Es una observación, no una falta: recurrente (>=2 pedidos) es un default del observatorio, no una definición ratificada.",
       "granularity": "aggregate",
       "incidences": null,
       "name": "Clientes recurrentes (observación)",
@@ -2018,7 +2063,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "NOT_EVALUABLE",
       "threshold_source": "Observación (no umbral).",
-      "universe": "res.partner con >=2 sale.order state=sale en la ventana.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "no_evaluable"
     },
     {
@@ -2040,7 +2086,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (no medible en v1).",
-      "universe": "res.partner activos con líneas de venta en la ventana.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "no_evaluable"
     },
     {
@@ -2062,7 +2109,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (sin política aprobada).",
-      "universe": "gf.sales.channel × líneas de venta.",
+      "universe": "Líneas de PRODUCTO (display_type vacío) de los pedidos confirmados en [window_start, window_end_exclusive).",
+      "universe_id": "confirmed_order_lines_in_window",
       "verdict": "no_evaluable"
     },
     {
@@ -2084,7 +2132,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (definición de segmento pendiente; ejecución = M8).",
-      "universe": "res.partner candidatos a pérdida.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "no_evaluable"
     },
     {
@@ -2106,7 +2155,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "low",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (campo no existe en v1).",
-      "universe": "res.partner candidatos a pérdida.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "no_evaluable"
     },
     {
@@ -2128,7 +2178,8 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (frontera M2; observación en v1.1).",
-      "universe": "res.partner activos comercialmente vs. cobertura del forecast M2.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "no_evaluable"
     },
     {
@@ -2150,17 +2201,18 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
       "severity": "medium",
       "status": "NOT_EVALUABLE",
       "threshold_source": "n/a (frontera M2).",
-      "universe": "res.partner candidatos a pérdida vs. planes de M2.",
+      "universe": "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico en las compañías del scope.",
+      "universe_id": "active_commercial_customer_roots_in_scope",
       "verdict": "no_evaluable"
     }
   ],
   "run": {
-    "auditor_build_sha": "f0894765a3d7517bd74ac4f0d1ff90ee8900fc59",
+    "auditor_build_sha": "3eeffd889b5902fb31f88f6573589afde0b166bc",
     "contract_build_sha": null,
     "duration_ms": 400,
     "environment": "dev",
     "evidence_classification": "pre_deployment_semantic_validation",
-    "evidence_sha256": "25a660c67bbb5ef847d411cf0ef1ac2eef3a6d43783ed985e2e2c81d0deec4ad",
+    "evidence_sha256": "d63681a98518911d75d5dbb6b9d586666b3cf9b7a5c74156f77755d66d536fe5",
     "evidence_source": "xml_rpc_read_only_measurements",
     "executed_queries": [
       "crm_metrics",
@@ -2177,7 +2229,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     "finished_at": "2026-07-15T09:00:00.400000Z",
     "ingested_at": null,
     "is_production_shell_run": false,
-    "manifest_sha256": "c54fd90e14836a9a71a0a28e5191bd319c4339af435c919b8f708c0a3993d21c",
+    "manifest_sha256": "2bbbed3ab1f21eed8ffdf998ac6f36b66067a4c27ce7b7cd17fd0fded0a6fbc7",
     "production_shell_run_blocked_by": [
       "ssh_key_not_registered",
       "module_not_deployed",

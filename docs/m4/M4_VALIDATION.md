@@ -1,20 +1,20 @@
 # M4 — Validación ejecutada (frontend, 2026-07-15)
 
 **Base: main `b2b14720` · rama `feat/kold-os-m4-sales-customers` · backend
-GrupoVeniu/GrupoFrio PR #205 (midió `f0894765`).**
+GrupoVeniu/GrupoFrio PR #205 (midió `3eeffd88`).**
 
 ## Gates ejecutados (cifras de ESTA vuelta, re-corridas tras adaptar el contrato)
 | Gate | Resultado |
 |---|---|
-| `npm test` (suite completa main+M4) | **705/705** (main 621 + 84 M4) |
+| `npm test` (suite completa main+M4) | **714/714** (main 621 + 93 M4) |
 | `npm run lint` (max-warnings 0) | **0 warnings** |
-| `npm run build` | OK (chunk `ScreenVentasM4` 126.06 kB · gzip 30.08 kB) |
+| `npm run build` | OK (chunk `ScreenVentasM4` 134.43 kB · gzip 31.00 kB) |
 | `check_public_e1` | OK (public/ sin fixtures servibles; sin artefactos M4) |
-| Smoke navegador (dev server) | 4 casos abajo, **0 errores de consola** |
-| Backend (puros, otro repo) | **80/80** = 71 core + 4 scan-M3 + 5 filter-docs |
+| Smoke navegador (dev server) | 6 casos abajo, **0 errores de consola** |
+| Backend (puros, otro repo) | **104/104** = 71 core + 24 universos + 4 scan-M3 + 5 filter-docs |
 
-## Suites M4 (84 tests)
-- `m4Contract.test.mjs` (19): fixture valida; metadata de evidencia obligatoria;
+## Suites M4 (93 tests)
+- `m4Contract.test.mjs` (26): fixture valida; metadata de evidencia obligatoria;
   linaje (**`measuring_commit === run.auditor_build_sha`**); ventana absoluta;
   scope flexible; invariantes epistémicas (el incumplimiento se **fabrica**: el
   fixture real tiene cero); totales = suma exacta; PII rechazada; schema
@@ -23,7 +23,7 @@ GrupoVeniu/GrupoFrio PR #205 (midió `f0894765`).**
   backend**; **todo filtro de la pantalla sobrevive el viaje**; estados 401/403/
   404/409/503/500/timeout/payload_too_large; wiring directKoldOsM4 GET-only sin
   fallback n8n; cero persistencia; cero writes.
-- `m4AccessFilters.test.mjs` (18): matriz readM4Access v1 (incluye strict-case y
+- `m4AccessFilters.test.mjs` (20): matriz readM4Access v1 (incluye strict-case y
   sesión inválida con rol privilegiado); scope; demo gate prod-off; filtros
   verdict/classification; paginación; CSV injection; sufijos _DEMO/_STALE/
   _NONFORMAL; sanitize drop+redact; exports de texto con fronteras.
@@ -45,11 +45,14 @@ total 14,078, que ya no existen).
 
 | Caso | Resultado |
 |---|---|
-| B. `admin_plataforma` | `/ventas-clientes?demo=1` renderiza: header con `midió: f0894765a3…` · banners DEMO + EVIDENCIA NO FORMAL (3 bloqueadores) · tiles **0 / 9 / 5 / 8 / 15** · total **12,158** = suma exacta · KPIs con universo, cobertura y salvedad visibles · **4 tiles "—"** en "Fuera del contrato v1" (Entregados/Facturados/Cobrados/Margen) · bloques con "umbral no aprobado" · **ninguna aparición de "venta" sin calificar** |
+| B. `admin_plataforma` | `/ventas-clientes?demo=1` renderiza: header con `midió: 3eeffd889b…` · banners DEMO + EVIDENCIA NO FORMAL (3 bloqueadores) · tiles **0 / 9 / 5 / 8 / 15** · total **12,158** = suma exacta · KPIs con universo, cobertura y salvedad visibles · **4 tiles "—"** en "Fuera del contrato v1" (Entregados/Facturados/Cobrados/Margen) · bloques con "umbral no aprobado" · **ninguna aparición de "venta" sin calificar** |
 | A. `supervisor_ventas` (Aida) | URL directa `/ventas-clientes` → **expulsada a `/`** |
 | D. `gerente_sucursal` | URL directa → **expulsado a `/`** |
 | E. sesión inválida (sin token) | URL directa → **`/login`** |
 | F. **"solo incumplimientos" con CERO incumplimientos** | Selector `Veredicto=incumplimiento` → encabezado **"Detalle de regla (0)"**, tabla con **"Sin hallazgos con estos filtros"**, **0 filas**, ninguna anomalía colada, ningún `rejected_params` oculto |
+| G. **Universo A5 en pantalla** | `midió: 3eeffd889b` · **M4-A-04 muestra "168 de 752 (22.34%)"** (antes 168 de 584) · **cero** apariciones de 1,620 / 2,333 / 69% |
+| H. **Detalle de M4-F-01** (filtro categoría=recurrencia → clic en la fila) | **Universo medido**: "Raíces comerciales ACTIVAS (active = true) con al menos un pedido confirmado histórico…" · **Cobertura**: **78 de 584 (13.36%)** · limitaciones sin cifras viejas |
+| I. **Export CSV** (blob interceptado) | lleva `universe_id`, **no** lleva `company_id`/`branch_id`, y **cero** cifras del universo viejo — coincide con pantalla y API |
 
 Consola en pestaña limpia: **0 errores**. Las 2 advertencias son *future flags*
 de React Router v6→v7, preexistentes en main y ajenas a M4.

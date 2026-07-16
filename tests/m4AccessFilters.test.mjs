@@ -104,6 +104,65 @@ test('el total filtrado corresponde a las filas filtradas', () => {
   }
 })
 
+// El export tiene que coincidir con la pantalla y con la API: si el CSV dice
+// una cosa y la UI otra, el que abre el CSV se lleva la versión equivocada.
+test('export CSV: M4-F-01 y M4-A-04 coinciden con la API, con su universo', async () => {
+  const { findingsToCsv, M4_CSV_COLUMNS } = await import('../src/modules/ventas/m4/exporters.js')
+  assert.ok(M4_CSV_COLUMNS.includes('universe_id'), 'el CSV debe llevar el universo canónico')
+  assert.ok(!M4_CSV_COLUMNS.includes('company_id'), 'dimensión inexistente en v1')
+  assert.ok(!M4_CSV_COLUMNS.includes('branch_id'), 'dimensión inexistente en v1')
+
+  // Parser RFC-4180 mínimo: partir por comas rompe, porque los campos citados
+  // llevan comas dentro (los universos son frases largas).
+  const parseCsv = (text) => {
+    const rows = []
+    let row = []
+    let cell = ''
+    let quoted = false
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i]
+      if (quoted) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { cell += '"'; i += 1 } else { quoted = false }
+        } else cell += ch
+      } else if (ch === '"') quoted = true
+      else if (ch === ',') { row.push(cell); cell = '' }
+      else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = '' }
+      else if (ch !== '\r') cell += ch
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row) }
+    return rows
+  }
+
+  const csv = findingsToCsv(FINDINGS)
+  const rows = parseCsv(csv)
+  const header = rows[0]
+  const iCode = header.indexOf('rule_code')
+  const iNum = header.indexOf('numerator')
+  const iDen = header.indexOf('denominator')
+  const iUid = header.indexOf('universe_id')
+  assert.ok(iCode >= 0 && iNum >= 0 && iDen >= 0 && iUid >= 0, 'faltan columnas en el CSV')
+
+  const row = (code) => rows.slice(1).find((cells) => cells[iCode] === code)
+
+  const f01 = row('M4-F-01')
+  assert.ok(f01, 'M4-F-01 debe estar en el export')
+  assert.equal(f01[iNum], '78')
+  assert.equal(f01[iDen], '584')
+  assert.equal(f01[iUid], 'active_commercial_customer_roots_in_scope')
+
+  const a04 = row('M4-A-04')
+  assert.ok(a04, 'M4-A-04 debe estar en el export')
+  assert.equal(a04[iNum], '168')
+  assert.equal(a04[iDen], '752', 'el export no puede dividir archivados entre activos')
+  assert.equal(a04[iUid], 'commercial_customer_roots_in_scope')
+
+  // Y cero cifras del universo viejo en el archivo entero.
+  for (const figure of ['1,620', '1620', '2,333', '2333']) {
+    assert.ok(!csv.includes(figure), `${figure} viaja en el export`)
+  }
+})
+
 // Ningún hallazgo puede portar una dimensión que las capabilities niegan.
 test('los findings no portan dimensiones fantasma (company/branch/route)', () => {
   for (const f of FINDINGS) {
