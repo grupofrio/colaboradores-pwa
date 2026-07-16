@@ -13,7 +13,7 @@
 //
 // DELIBERADO (Fase 10): gerente_sucursal / supervisor_ventas / vendedor /
 // chofer / jefe_ruta NO tienen acceso v1 — no existe fuente autoritativa de rol
-// comercial por sucursal hoy; autorizarlos “por nombre” sería inventar
+// autoritativo de almacén/operaciones por sucursal hoy; autorizarlos “por nombre” sería inventar
 // autoridad. Cada adición futura = decisión S/N + una línea en AMBAS
 // allowlists (frontend y backend), no inferencia.
 //

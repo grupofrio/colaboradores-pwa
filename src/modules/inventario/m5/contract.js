@@ -47,14 +47,10 @@ export const M5_UNIVERSE_IDS = Object.freeze([
   'consignments_in_scope',
 ])
 
-// Cifras del universo PRE-A5. A5 probó que `company_id IN scope` (2,333) dejaba
-// FUERA a 410 de los 713 que compran, así que el universo canónico pasó a ser la
-// raíz comercial con historial (584 activas / 752 con archivadas). Estas cifras
-// describen una población que ya NO se mide: si el backend las envía, el
-// envelope viene con texto podrido y se RECHAZA.
-// M5 nace CON el catálogo de universos (lección 41 de M4): no hay "cifras del
-// universo viejo" que vetar todavía. La constante existe para que el mecanismo
-// de rechazo quede armado el día que un universo de M5 se corrija.
+// M5 nace CON el catálogo de universos (lección 41, aprendida cuando A5 corrigió
+// el universo de M4 y los textos se quedaron viejos): aún no hay "cifras de
+// universo obsoleto" que vetar en M5. La constante existe para que el mecanismo
+// de rechazo quede armado el día que una corrección de universo lo requiera.
 export const M5_STALE_UNIVERSE_FIGURES = Object.freeze([])
 
 export const M5_CLASSIFICATIONS = Object.freeze(
