@@ -20,6 +20,7 @@ import { readAuthoritativeTowerStatus } from '../modules/torre/e1/loadTowerStatu
 import { readM2Access } from '../modules/planeacion/m2/access.js'
 import { readM3Access } from '../modules/ejecucion/m3/access.js'
 import { readM4Access } from '../modules/ventas/m4/access.js'
+import { readM5Access } from '../modules/inventario/m5/access.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
 // Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
@@ -34,6 +35,7 @@ export const ACCESS_POLICY_RESOLVERS = Object.freeze({
   m2: readM2Access,
   m3: readM3Access,
   m4: readM4Access,
+  m5: readM5Access,
 })
 
 // Resuelve una accessPolicy. FAIL-CLOSED: si la política no está registrada
@@ -173,7 +175,7 @@ export function getModuleEntryDecisionForSession(module, session) {
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
-  // accessPolicy (m2/m3/m4): entra o se deniega por SU contrato, sin role-context.
+  // accessPolicy (m2/m3/m4/m5): entra o se deniega por SU contrato, sin role-context.
   // Una política desconocida no tiene resolver ⇒ resolveAccessPolicy deniega.
   if (module?.accessPolicy) {
     return resolveAccessPolicy(module.accessPolicy, session)

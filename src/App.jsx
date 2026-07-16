@@ -15,6 +15,7 @@ import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus
 import { readM2Access } from './modules/planeacion/m2/access'
 import { readM3Access } from './modules/ejecucion/m3/access'
 import { readM4Access } from './modules/ventas/m4/access'
+import { readM5Access } from './modules/inventario/m5/access'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -36,6 +37,8 @@ const ScreenPlaneacionM2 = lazy(() => import('./modules/planeacion/ScreenPlaneac
 const ScreenEjecucionM3 = lazy(() => import('./modules/ejecucion/ScreenEjecucionM3'))
 // KOLD OS · M4 — Ventas y clientes (observatorio read-only, gate propio M4VentasRoute)
 const ScreenVentasM4 = lazy(() => import('./modules/ventas/ScreenVentasM4'))
+// KOLD OS · M5 — Inventario y flujo (observatorio read-only, gate propio M5InventarioRoute)
+const ScreenInventarioM5 = lazy(() => import('./modules/inventario/ScreenInventarioM5'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -274,6 +277,20 @@ function M4VentasRoute({ children }) {
 function ScreenVentasM4Mount() {
   const { session } = useSession()
   return <ScreenVentasM4 session={session} />
+}
+
+// KOLD OS · M5 (Inventario y flujo) — gate fail-closed propio. La autoridad
+// final coincide con la tarjeta y la navegación: readM5Access(session).
+function M5InventarioRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM5Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenInventarioM5Mount() {
+  const { session } = useSession()
+  return <ScreenInventarioM5 session={session} />
 }
 
 function ProductionOperatorRoute({ children, allowDelivered = false }) {
@@ -657,6 +674,8 @@ export default function App() {
             <Route path="/ejecucion" element={<M3EjecucionRoute><ScreenEjecucionM3Mount /></M3EjecucionRoute>} />
             {/* ── KOLD OS · M4 — Ventas y clientes (read-only) ─────────── */}
             <Route path="/ventas-clientes" element={<M4VentasRoute><ScreenVentasM4Mount /></M4VentasRoute>} />
+            {/* ── KOLD OS · M5 — Inventario y flujo (read-only) ────────── */}
+            <Route path="/inventario-flujo" element={<M5InventarioRoute><ScreenInventarioM5Mount /></M5InventarioRoute>} />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />

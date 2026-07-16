@@ -218,6 +218,24 @@ export const MODULES = [
     showInNav:  true,
   },
 
+  // ── KOLD OS · M5 — Inventario y flujo (observatorio read-only) ───────────
+  // M5 observa carga, salidas, devoluciones y señales de conciliación sin
+  // modificar inventario, pickings, planes ni conciliaciones.
+  {
+    id:     'inventario-flujo',
+    label:  'Inventario y flujo',
+    shortLabel: 'Inventario',
+    route:  '/inventario-flujo',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm5',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 16,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',
