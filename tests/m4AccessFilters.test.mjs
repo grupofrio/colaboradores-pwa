@@ -79,6 +79,41 @@ test('filtros: verdict/classification/category filtran; desconocidos no', () => 
   assert.ok(porCategoria.every((f) => f.category === 'recurrencia'))
 })
 
+// El caso que Codex pidió confirmar: con CERO incumplimientos, pedir "solo
+// incumplimientos" tiene que dar tabla vacía. Devolver la lista completa (o
+// colar anomalías) sería la mentira silenciosa que motivó todo este arreglo.
+test('cero incumplimientos: filtrar por incumplimiento deja la tabla vacía', () => {
+  assert.equal(FINDINGS.filter((f) => f.verdict === 'incumplimiento').length, 0,
+    'la evidencia v1 no prueba ningún incumplimiento')
+  const out = applyFindingFilters(FINDINGS, { ...M4_DEFAULT_FILTERS, verdict: 'incumplimiento' })
+  assert.deepEqual(out, [], 'no puede colarse ni un hallazgo')
+  const page = paginate(out, 1, 10)
+  assert.equal(page.total, 0, 'el total filtrado corresponde a las filas filtradas')
+  assert.deepEqual(page.items, [])
+  assert.ok(FINDINGS.length > 0, 'y sin filtro sí hay hallazgos: el filtro recorta de verdad')
+})
+
+// El total filtrado debe ser el de las filas filtradas, no el global.
+test('el total filtrado corresponde a las filas filtradas', () => {
+  for (const verdict of ['riesgo', 'anomalia']) {
+    const rows = applyFindingFilters(FINDINGS, { ...M4_DEFAULT_FILTERS, verdict })
+    const page = paginate(rows, 1, 10)
+    assert.equal(page.total, rows.length)
+    assert.ok(page.total < FINDINGS.length, `${verdict} debe ser un subconjunto`)
+    assert.ok(rows.every((f) => f.verdict === verdict))
+  }
+})
+
+// Ningún hallazgo puede portar una dimensión que las capabilities niegan.
+test('los findings no portan dimensiones fantasma (company/branch/route)', () => {
+  for (const f of FINDINGS) {
+    for (const banned of ['company_id', 'branch_id', 'branch_code', 'route_id', 'plan_id', 'stop_id']) {
+      assert.ok(!(banned in f), `${banned} no existe en el contrato v1`)
+    }
+    assert.equal(f.granularity, 'aggregate')
+  }
+})
+
 test('paginación defensiva: clamps y total', () => {
   const page = paginate(FINDINGS, 99, 5)
   assert.equal(page.total, FINDINGS.length)

@@ -17,8 +17,12 @@ export const KOLD_OS_M4_RUNS_PATH = '/pwa-kold-os/m4/runs'
 // JAMÁS: employee_id, customer_name, phone, email, vat/rfc, address — PII.
 // Sin channel/customer_segment/product_id: el contrato v1 es AGREGADO y no
 // tiene esas dimensiones. Sin route_id/plan_id/vehicle_id: son de M3.
+// Sin company_id/branch_id: capabilities declara company_dimension=false y
+// branch_dimension=false ⇒ ningún hallazgo los porta ⇒ filtrar por ellos daría
+// vacío SIEMPRE, y el usuario leería "no hay datos" en vez de "no existe ese
+// filtro". La compañía es el SCOPE de la corrida, no un filtro.
 export const KOLD_OS_M4_FINDINGS_PARAMS = Object.freeze([
-  'run_id', 'company_id', 'branch_id',
+  'run_id',
   'category', 'rule_code', 'classification', 'verdict', 'severity',
   'lifecycle_status', 'responsible_area',
   'granularity', 'entity_type', 'date_from', 'date_to',

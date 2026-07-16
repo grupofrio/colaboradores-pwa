@@ -150,6 +150,17 @@ test('KPIs del backend con su contrato; frontera M5/M6/M7/M8; sin números hardc
   }
 })
 
+// Un filtro que el backend rechaza no puede quedarse callado: la pantalla lo
+// mostraría aplicado sobre una lista que no lo cumple.
+test('rejected_params: la pantalla lo hace visible, no lo ignora', () => {
+  assert.match(screenSrc, /rejected_params/)
+  assert.match(screenSrc, /table\.rejected\?\.length > 0/)
+  assert.match(screenSrc, /El backend RECHAZÓ/)
+  assert.match(screenSrc, /role="alert"/)
+  // page/page_size no son filtros del usuario: no deben alarmar.
+  assert.match(screenSrc, /p !== 'page' && p !== 'page_size'/)
+})
+
 test('sin botones de acción comercial (read-only estricto)', () => {
   for (const banned of ['editar cliente', 'crear pedido', 'cambiar canal', 'cambiar precio',
     'enviar campaña', 'reactivar cliente', 'cerrar oportunidad']) {

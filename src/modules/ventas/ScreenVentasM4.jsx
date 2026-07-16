@@ -233,9 +233,18 @@ export default function ScreenVentasM4({ session }) {
     const result = await fetchM4Findings(params)
     if (!aliveRef.current) return
     if (result.state === 'ok') {
-      setTable({ phase: 'ok', items: result.payload.items, total: result.payload.total, pages: result.payload.pages })
+      setTable({
+        phase: 'ok', items: result.payload.items, total: result.payload.total,
+        pages: result.payload.pages,
+        // Un filtro rechazado por el backend NO puede quedarse callado: la UI lo
+        // mostraría aplicado sobre una lista que no lo cumple. Con las allowlists
+        // alineadas esto debe venir siempre vacío; si aparece, es divergencia de
+        // contrato y el usuario tiene que verla, no sufrirla.
+        rejected: (result.payload.rejected_params || []).filter(
+          (p) => p !== 'page' && p !== 'page_size'),
+      })
     } else {
-      setTable({ phase: 'error', items: [], total: 0, pages: 1, state: result.state })
+      setTable({ phase: 'error', items: [], total: 0, pages: 1, state: result.state, rejected: [] })
     }
   }, [payload, demo, filters, page])
 
@@ -532,6 +541,20 @@ export default function ScreenVentasM4({ session }) {
           style={{ ...selectStyle, minWidth: 170 }}
         />
       </div>
+
+      {/* Divergencia de contrato: el backend ignoró un filtro que esta UI envió.
+          Con las allowlists alineadas no debería ocurrir jamás; si ocurre, la
+          lista NO cumple el filtro que se ve puesto y hay que decirlo. */}
+      {table.rejected?.length > 0 && (
+        <div role="alert" style={{
+          marginTop: 10, padding: '10px 12px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+          background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.5)', color: '#fca5a5',
+        }}>
+          ⚠ El backend RECHAZÓ {table.rejected.length === 1 ? 'el filtro' : 'los filtros'}{' '}
+          <code>{table.rejected.join(', ')}</code>: la lista de abajo <b>NO</b> los aplica.
+          Es una divergencia entre el contrato de esta PWA y el de la API — no filtres por ahí hasta corregirla.
+        </div>
+      )}
 
       <div style={{ overflowX: 'auto', marginTop: 10, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>

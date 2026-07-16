@@ -87,10 +87,14 @@ Import: `import { readM4Access } from './modules/ventas/m4/access'`. NO usa
 `koldOsM4Route.js` (molde `koldOsM2Route.js`, 28 líneas):
 - `KOLD_OS_M4_LATEST_PATH='/pwa-kold-os/m4/latest'`, `..._FINDINGS_PATH='/pwa-kold-os/m4/findings'`,
   `..._RUNS_PATH='/pwa-kold-os/m4/runs'` (M4 SÍ expone runs; M2 no lo tenía).
-- `KOLD_OS_M4_FINDINGS_PARAMS` (frozen): run_id, company_id, branch_id, **channel,
-  customer_segment, product_id**, category, rule_code, classification, verdict,
-  severity, lifecycle_status, granularity, entity_type, date_from, date_to, search,
-  page, page_size. **JAMÁS** name/phone/email/rfc/employee_id/customer_name.
+- `KOLD_OS_M4_FINDINGS_PARAMS` (frozen): espejo EXACTO de
+  `core.FINDINGS_FILTER_PARAMS` (15), fijado por un test en cada repo: run_id,
+  category, rule_code, classification, verdict, severity, lifecycle_status,
+  responsible_area, granularity, entity_type, date_from, date_to, search, page,
+  page_size.
+  **JAMÁS** name/phone/email/rfc/employee_id/customer_name (PII). **Tampoco**
+  channel/customer_segment/product_id ni company_id/branch_id ni route/plan/vehicle:
+  el contrato v1 no tiene esas dimensiones.
 - `isKoldOsM4Path(cleanPath)`: match exacto de los 3 paths.
 - `filterKoldOsM4Params(query)`: itera SOLO la allowlist.
 

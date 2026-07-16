@@ -89,14 +89,26 @@ la razón, **nunca 0**.
 
 ## 6. Granularidad v1 = AGREGADO
 
-`capabilities.granularities = ["aggregate"]` y `features.branch_dimension =
-false`. Sin dimensión cliente/canal/producto/sucursal en findings (cero PII por
-diseño): sin drill-down a clientes. **La allowlist de `/findings` contiene solo
-los filtros que el backend ejercita de verdad** — un parámetro de más caería en
-`rejected_params` y la pantalla mostraría el filtro puesto con la lista sin
-filtrar (mentira silenciosa); uno de menos se descartaría antes de salir y el
-selector no haría nada. Hay un test que fija la allowlist contra el contrato del
-backend. Paginación server-side.
+`capabilities.granularities = ["aggregate"]`, `features.branch_dimension = false`
+y `features.company_dimension = false`. Sin dimensión cliente/canal/producto/
+sucursal/compañía en los findings (cero PII por diseño): sin drill-down a
+clientes. El backend lo hace cumplir hallazgo por hallazgo
+(`validate_finding_contract` rechaza cualquier dimensión no soportada, en el
+origen, en la ingesta y en la serialización) y este frontend lo revalida
+(`validateGranularityCoherence`).
+
+**La allowlist de `/findings` son los 15 filtros que el backend ejercita de
+verdad**, ni uno más. Los dos modos de derivar fallan en silencio y en
+direcciones opuestas: un parámetro de más cae en `rejected_params` y la pantalla
+mostraría el filtro puesto con la lista sin filtrar; uno de menos se descarta
+antes de salir y el selector no hace nada. Hay un test en CADA repo que fija la
+lista contra el contrato, y ahora la pantalla **muestra un aviso rojo** si el
+backend rechaza algo que se le envió.
+
+`company_id`/`branch_id` **no son filtros**: ningún hallazgo los porta, así que
+filtrar por ellos daría vacío siempre y el usuario leería "no hay datos" en vez
+de "ese filtro no existe". La compañía es el **scope de la corrida**, no una
+dimensión visible. Paginación server-side.
 
 ## 7. PII: el contrato RECHAZA, no oculta
 

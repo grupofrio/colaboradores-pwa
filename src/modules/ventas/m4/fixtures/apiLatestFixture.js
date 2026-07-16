@@ -5,12 +5,17 @@
 // REALES medidos por XML-RPC read-only contra produccion, ventana acotada
 // [2026-01-16, 2026-07-15), universo canonico = raiz comercial con historial.
 //
-// LINAJE: `measuring_commit` es el codigo que produjo ESTAS mediciones, y es el
+// LINAJE: `measuring_commit` es el codigo que MIDIO estos agregados, y es el
 // mismo valor que `run.auditor_build_sha` del envelope (hay test). NO se fija el
 // head de la rama: el head avanza con cada commit y no responde la pregunta que
-// importa ("que codigo emitio estos numeros"). El ancestro auditado por Codex
+// importa ("que codigo emitio estos numeros"). Los commits posteriores que solo
+// derivan/limpian no reescriben quien midio. El ancestro auditado por Codex
 // (978994c4) queda registrado aparte. Declarar un SHA que no corresponde al
 // codigo que emitio la evidencia fue el hallazgo A8; no se repite.
+//
+// GRANULARIDAD: los hallazgos son AGREGADOS y no portan dimension de compañia,
+// sucursal, cliente ni producto (capabilities las declaran false). Si aparece
+// `branch_id`/`company_id` aqui, el contrato del frontend RECHAZA el envelope.
 //
 // ⚠ is_production_shell_run = FALSE: NO es la corrida odoo-shell de produccion
 // (bloqueada: sin llave SSH en Odoo.sh + modulo sin desplegar). Los NUMEROS son
@@ -99,12 +104,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
   "findings": [
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "El canal es un atributo del cliente (channel_id, 92.5% poblado); su ausencia impide clasificar la venta.",
       "category": "maestro_clientes",
       "classification": "caveated",
-      "company_id": null,
       "confidence": "high",
       "denominator": 584,
       "description": "Clientes del universo comercial cuyo res.partner.channel_id está vacío HOY.",
@@ -127,7 +129,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Todo cliente comercial debería declarar su canal.",
-      "finding_id": "M4-A-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::customer:aggregate",
+      "finding_id": "M4-A-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::customer:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -153,12 +155,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "La geo alimenta a M2 (planeación) y M4 (ejecución).",
       "category": "maestro_clientes",
       "classification": "caveated",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 584,
       "description": "Clientes sin partner_latitude.",
@@ -181,7 +180,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Un cliente comercial debería tener coordenadas para ruteo/planeación.",
-      "finding_id": "M4-A-02::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::customer:aggregate",
+      "finding_id": "M4-A-02::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::customer:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -207,12 +206,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "País es higiene mínima del maestro.",
       "category": "maestro_clientes",
       "classification": "caveated",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 584,
       "description": "Clientes sin country_id.",
@@ -235,7 +231,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Higiene mínima del maestro geográfico.",
-      "finding_id": "M4-A-03::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::customer:aggregate",
+      "finding_id": "M4-A-03::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::customer:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -261,12 +257,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "Archivar un cliente con ventas puede ocultar una pérdida comercial.",
       "category": "maestro_clientes",
       "classification": "caveated",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 584,
       "description": "Clientes con active=False pero customer_rank>0.",
@@ -289,7 +282,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "customer_master_metrics"
       },
       "expected_rule": "Un cliente con ventas no debería quedar archivado sin traza.",
-      "finding_id": "M4-A-04::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::customer:aggregate",
+      "finding_id": "M4-A-04::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::customer:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -315,12 +308,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "sale.order NO tiene channel_id (verificado): el canal se deriva del cliente.",
       "category": "clasificacion_canal",
       "classification": "caveated",
-      "company_id": null,
       "confidence": "high",
       "denominator": 12606,
       "description": "Pedidos confirmados cuyo partner_id.channel_id está vacío AL MOMENTO de la auditoría.",
@@ -343,7 +333,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "order_metrics"
       },
       "expected_rule": "Un pedido confirmado debería poder atribuirse a un canal vía su cliente.",
-      "finding_id": "M4-B-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::order:aggregate",
+      "finding_id": "M4-B-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::order:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -369,12 +359,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "sale.order.user_id es el ÚNICO campo de vendedor medido por este auditor.",
       "category": "pedidos_ventas",
       "classification": "caveated",
-      "company_id": null,
       "confidence": "high",
       "denominator": 12606,
       "description": "Pedidos confirmados (state='sale') cuyo campo sale.order.user_id está vacío.",
@@ -397,7 +384,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "order_metrics"
       },
       "expected_rule": "Un pedido confirmado debería declarar su vendedor en sale.order.user_id.",
-      "finding_id": "M4-D-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::order:aggregate",
+      "finding_id": "M4-D-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::order:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -423,12 +410,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "customer_rank>0 es como Odoo marca a un cliente; vender a rank<=0 es vender a un contacto/proveedor.",
       "category": "pedidos_ventas",
       "classification": "caveated",
-      "company_id": null,
       "confidence": "high",
       "denominator": 12606,
       "description": "Pedidos confirmados cuyo partner tiene customer_rank<=0.",
@@ -451,7 +435,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "order_metrics"
       },
       "expected_rule": "Una venta comercial debería ser a un cliente comercial (customer_rank>0).",
-      "finding_id": "M4-D-02::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::order:aggregate",
+      "finding_id": "M4-D-02::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::order:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -477,12 +461,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "x_analytic_account_id es la plaza canónica (98.9% poblado, mismo que M2/M4).",
       "category": "pedidos_ventas",
       "classification": "caveated",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 12606,
       "description": "Pedidos confirmados sin x_analytic_account_id.",
@@ -505,7 +486,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "order_metrics"
       },
       "expected_rule": "Toda venta debería atribuirse a una plaza (analytic).",
-      "finding_id": "M4-D-03::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::order:aggregate",
+      "finding_id": "M4-D-03::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::order:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -531,12 +512,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "Una línea de producto con cantidad cero no aporta al pedido y suele ser un residuo de captura.",
       "category": "pedidos_ventas",
       "classification": "caveated",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 13778,
       "description": "sale.order.line de PRODUCTO (display_type vacío) de pedidos confirmados con product_uom_qty<=0.",
@@ -559,7 +537,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Una línea de producto de un pedido confirmado debería tener cantidad > 0.",
-      "finding_id": "M4-D-04::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::line:aggregate",
+      "finding_id": "M4-D-04::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::line:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -585,12 +563,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "El descuento afecta el margen (margen total es de M7).",
       "category": "precio_descuento",
       "classification": "exploratory",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 13778,
       "description": "sale.order.line con discount>0.",
@@ -613,7 +588,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Observación del uso de descuento.",
-      "finding_id": "M4-E-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::line:aggregate",
+      "finding_id": "M4-E-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::line:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -639,12 +614,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "Un descuento alto sin autorización erosiona precio.",
       "category": "precio_descuento",
       "classification": "exploratory",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 13778,
       "description": "Líneas con discount>=50.",
@@ -667,7 +639,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Descuentos altos deberían tener autorización.",
-      "finding_id": "M4-E-02::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::line:aggregate",
+      "finding_id": "M4-E-02::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::line:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -693,12 +665,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "Descuento >=90% es anómalo.",
       "category": "precio_descuento",
       "classification": "exploratory",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 13778,
       "description": "Líneas con discount>=90.",
@@ -721,7 +690,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "order_line_metrics"
       },
       "expected_rule": "Un descuento casi total suele ser un error o un caso especial.",
-      "finding_id": "M4-E-03::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::line:aggregate",
+      "finding_id": "M4-E-03::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::line:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -747,12 +716,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "La inactividad comercial es una señal de riesgo de cartera.",
       "category": "recurrencia",
       "classification": "exploratory",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 584,
       "description": "Clientes del universo sin ningún pedido confirmado en la ventana.",
@@ -775,7 +741,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "recurrence_metrics"
       },
       "expected_rule": "Un cliente comercial activo debería comprar dentro de la ventana.",
-      "finding_id": "M4-F-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::customer:aggregate",
+      "finding_id": "M4-F-01::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::customer:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -801,12 +767,9 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
     },
     {
       "approved_threshold": false,
-      "branch_code": null,
-      "branch_id": null,
       "business_assumption": "La segunda compra mide activación real del cliente nuevo.",
       "category": "recurrencia",
       "classification": "exploratory",
-      "company_id": null,
       "confidence": "medium",
       "denominator": 319,
       "description": "Clientes creados en la ventana con exactamente 1 pedido.",
@@ -829,7 +792,7 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
         "query_id": "recurrence_metrics"
       },
       "expected_rule": "Un cliente nuevo debería repetir compra.",
-      "finding_id": "M4-F-02::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::global:all::customer:aggregate",
+      "finding_id": "M4-F-02::c8ecfff0a3dde47b35194c6822ec8e9336ed78f008d57047e4b74d4b334ae254::customer:aggregate",
       "first_seen_at": "2026-07-15T09:00:00.400000Z",
       "granularity": "aggregate",
       "incidence_semantics": "Incidencias detectadas, NO entidades unicas.",
@@ -2244,7 +2207,6 @@ export const M4_API_LATEST_FIXTURE = Object.freeze({
   "schema_version": "kold.os.m4.api/1",
   "stale": false,
   "summary": {
-    "branches_with_findings": [],
     "compliant_rule_count": 8,
     "definitive_incident_count": 0,
     "definitive_incident_rule_count": 0,

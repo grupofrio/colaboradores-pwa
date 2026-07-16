@@ -6,28 +6,28 @@ GrupoVeniu/GrupoFrio PR #205 (midió `f0894765`).**
 ## Gates ejecutados (cifras de ESTA vuelta, re-corridas tras adaptar el contrato)
 | Gate | Resultado |
 |---|---|
-| `npm test` (suite completa main+M4) | **700/700** (main 621 + 79 M4) |
+| `npm test` (suite completa main+M4) | **705/705** (main 621 + 84 M4) |
 | `npm run lint` (max-warnings 0) | **0 warnings** |
-| `npm run build` | OK (chunk `ScreenVentasM4` 126.28 kB · gzip 29.94 kB) |
+| `npm run build` | OK (chunk `ScreenVentasM4` 126.06 kB · gzip 30.08 kB) |
 | `check_public_e1` | OK (public/ sin fixtures servibles; sin artefactos M4) |
 | Smoke navegador (dev server) | 4 casos abajo, **0 errores de consola** |
-| Backend `test_kold_os_m4_core` | **62/62** (referencia; corre en el otro repo) |
+| Backend (puros, otro repo) | **80/80** = 71 core + 4 scan-M3 + 5 filter-docs |
 
-## Suites M4 (79 tests)
+## Suites M4 (84 tests)
 - `m4Contract.test.mjs` (19): fixture valida; metadata de evidencia obligatoria;
   linaje (**`measuring_commit === run.auditor_build_sha`**); ventana absoluta;
   scope flexible; invariantes epistémicas (el incumplimiento se **fabrica**: el
   fixture real tiene cero); totales = suma exacta; PII rechazada; schema
   versions; STALE recompute; **números NO hardcodeados**.
-- `m4Api.test.mjs` (13): paths/allowlist sin PII; **allowlist = espejo exacto del
+- `m4Api.test.mjs` (14): paths/allowlist sin PII; **allowlist = espejo exacto del
   backend**; **todo filtro de la pantalla sobrevive el viaje**; estados 401/403/
   404/409/503/500/timeout/payload_too_large; wiring directKoldOsM4 GET-only sin
   fallback n8n; cero persistencia; cero writes.
-- `m4AccessFilters.test.mjs` (15): matriz readM4Access v1 (incluye strict-case y
+- `m4AccessFilters.test.mjs` (18): matriz readM4Access v1 (incluye strict-case y
   sesión inválida con rol privilegiado); scope; demo gate prod-off; filtros
   verdict/classification; paginación; CSV injection; sufijos _DEMO/_STALE/
   _NONFORMAL; sanitize drop+redact; exports de texto con fronteras.
-- `m4Surface.test.mjs` (18): registry; visibilidad=clic (sin asimetría); URL
+- `m4Surface.test.mjs` (19): registry; visibilidad=clic (sin asimetría); URL
   guard; nav no oculta; demo gate en pantalla; banner por DATO; veredictos +
   copy; **KPIs leídos de `payload.kpis`** con universo/fuente/cobertura/salvedad/
   corte; **capabilities gobiernan (`NotEvaluableTile`, fronteras M5/M6/M7)**;
@@ -49,6 +49,7 @@ total 14,078, que ya no existen).
 | A. `supervisor_ventas` (Aida) | URL directa `/ventas-clientes` → **expulsada a `/`** |
 | D. `gerente_sucursal` | URL directa → **expulsado a `/`** |
 | E. sesión inválida (sin token) | URL directa → **`/login`** |
+| F. **"solo incumplimientos" con CERO incumplimientos** | Selector `Veredicto=incumplimiento` → encabezado **"Detalle de regla (0)"**, tabla con **"Sin hallazgos con estos filtros"**, **0 filas**, ninguna anomalía colada, ningún `rejected_params` oculto |
 
 Consola en pestaña limpia: **0 errores**. Las 2 advertencias son *future flags*
 de React Router v6→v7, preexistentes en main y ajenas a M4.

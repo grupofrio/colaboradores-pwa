@@ -43,13 +43,18 @@ test('rutas M4: paths exactos + allowlist sin PII + filtro fail-safe', () => {
 //   · parámetro de menos → se descarta antes de salir: el selector no hace nada.
 // Ninguno lanza un error, por eso se fija aquí.
 test('allowlist /findings: espejo exacto del backend gf_kold_os_m4 (PR #205)', () => {
+  // Espejo literal de core.FINDINGS_FILTER_PARAMS. Del lado backend hay un test
+  // gemelo (tests/test_kold_os_m4_filter_docs.py) que fija la misma lista contra
+  // el código y contra los docs. Un test no puede cruzar repos: por eso se fija
+  // en los dos, y el PR body de cada uno declara el mismo contrato.
   const BACKEND_FINDINGS_FILTER_PARAMS = [
-    'run_id', 'company_id', 'branch_id',
+    'run_id',
     'category', 'rule_code', 'classification', 'verdict', 'severity',
     'lifecycle_status', 'responsible_area',
     'granularity', 'entity_type', 'date_from', 'date_to',
     'search', 'page', 'page_size',
   ]
+  assert.equal(KOLD_OS_M4_FINDINGS_PARAMS.length, 15)
   assert.deepEqual(
     [...KOLD_OS_M4_FINDINGS_PARAMS].sort(),
     [...BACKEND_FINDINGS_FILTER_PARAMS].sort(),
@@ -60,9 +65,25 @@ test('allowlist /findings: espejo exacto del backend gf_kold_os_m4 (PR #205)', (
     assert.ok(KOLD_OS_M4_FINDINGS_PARAMS.includes(key), `${key} debe llegar al backend`)
   }
   // Dimensiones que el contrato v1 NO tiene: pedirlas sería afirmar de más.
-  for (const banned of ['route_id', 'plan_id', 'vehicle_id', 'channel', 'customer_segment', 'product_id']) {
+  // company_id/branch_id: capabilities las declara false ⇒ ningún hallazgo las
+  // porta ⇒ filtrar por ellas daría vacío siempre (peor que no ofrecerlas).
+  for (const banned of ['route_id', 'plan_id', 'vehicle_id', 'stop_id',
+    'channel', 'customer_segment', 'product_id', 'company_id', 'branch_id']) {
     assert.ok(!KOLD_OS_M4_FINDINGS_PARAMS.includes(banned), `${banned} no existe en el contrato v1`)
   }
+})
+
+// Los tres que el backend rechaza: si se colaran, el backend los mandaría a
+// `rejected_params` y devolvería la lista SIN filtrar bajo un filtro aplicado.
+test('channel / customer_segment / product_id JAMÁS se envían', () => {
+  const sent = filterKoldOsM4Params({
+    channel: 'mayoreo', customer_segment: 'dormido', product_id: '42',
+    company_id: '1', branch_id: '29', route_id: '7',
+    verdict: 'riesgo', responsible_area: 'Comercial', classification: 'caveated',
+  })
+  assert.deepEqual(sent, {
+    verdict: 'riesgo', responsible_area: 'Comercial', classification: 'caveated',
+  }, 'solo viajan los filtros que el backend sabe aplicar')
 })
 
 // Todo filtro que la pantalla ofrece tiene que sobrevivir el viaje al backend.

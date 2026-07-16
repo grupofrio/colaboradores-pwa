@@ -13,15 +13,24 @@ ajuste si el contrato cambia: `src/lib/koldOsM4Route.js` (paths/allowlist) +
 
 ## Allowlist de `/findings` — espejo EXACTO del backend
 
-`run_id` · `company_id` · `branch_id` · `category` · `rule_code` ·
-`classification` · `verdict` · `severity` · `lifecycle_status` ·
-`responsible_area` · `granularity` · `entity_type` · `date_from` · `date_to` ·
-`search` · `page` · `page_size`.
+Los **15** que `core.FINDINGS_FILTER_PARAMS` soporta de verdad:
+
+`run_id` · `category` · `rule_code` · `classification` · `verdict` ·
+`severity` · `lifecycle_status` · `responsible_area` · `granularity` ·
+`entity_type` · `date_from` · `date_to` · `search` · `page` · `page_size`.
+
+**Regla de admisión: un filtro entra SOLO si el hallazgo porta ese campo.**
 
 **JAMÁS**: employee_id, customer_name, phone, email, vat/rfc, address (PII).
-**Tampoco**: `channel` / `customer_segment` / `product_id` (el contrato v1 es
-agregado y no tiene esas dimensiones) ni `route_id` / `plan_id` / `vehicle_id`
-(ontología de M3: un hallazgo comercial no vive en una ruta).
+**Tampoco**:
+- `channel` / `customer_segment` / `product_id` — el contrato v1 es agregado y
+  no tiene esas dimensiones.
+- `company_id` / `branch_id` — `company_dimension=false` / `branch_dimension=false`:
+  ningún hallazgo los porta ⇒ filtrar por ellos daría vacío **siempre**, y el
+  lector concluiría "no hay datos" en vez de "ese filtro no existe". La
+  compañía es el **scope de la corrida**, no un filtro.
+- `route_id` / `plan_id` / `vehicle_id` — ontología de M3: un hallazgo comercial
+  no vive en una ruta.
 
 Debe coincidir campo por campo con `core.FINDINGS_FILTER_PARAMS`, y hay un test
 que lo fija. Los dos modos de derivar fallan **en silencio** y en direcciones
