@@ -8,7 +8,7 @@
 // Estados honestos:
 //   · técnico (auditor):   PASS / FAIL / STALE / UNAVAILABLE (+disabled/etc.)
 //   · operativo (datos):   GREEN / AMBER / RED / NOT_EVALUABLE
-// "M3 está funcionando y detectó incumplimientos" — jamás "M3 falló" porque
+// "M3 está funcionando y detectó señales operativas" — jamás "M3 falló" porque
 // una ruta no se cerró. STALE se muestra prominente y marca los exports.
 //
 // KPIs: cada tarjeta cuenta UNA sola entidad (rutas O paradas O cajas); el
@@ -21,20 +21,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
-import { fetchM3Latest, fetchM3Findings } from './m3/m3Api'
+import { createLatestRequestGate, fetchM3Latest, fetchM3Findings } from './m3/m3Api'
 import { isM3DemoAllowed } from './m3/demoGate'
+import {
+  M3_CLASSIFICATIONS, M3_VERDICTS, getM3RunAgeDays, startM3StaleClock,
+  validateM3Latest,
+} from './m3/contract'
 import { applyFindingFilters, paginate, M3_DEFAULT_FILTERS, M3_PAGE_SIZE } from './m3/filters'
 import {
   findingsToCsv, evidenceJson, executiveSummaryText, planVsRealText,
   downloadTextFile, exportFilename,
 } from './m3/exporters'
 import {
-  M3_CATEGORY_ORDER, M3_STATUS_LABELS, M3_LIFECYCLE_LABELS, M3_SEVERITY_LABELS,
+  M3_CATEGORY_ORDER, M3_OPERATIONAL_STATUS_LABELS, M3_LIFECYCLE_LABELS, M3_SEVERITY_LABELS,
   M3_GRANULARITY_LABELS, M3_VERDICT_LABELS, M3_VERDICT_COLORS, M3_VERDICT_HELP,
   M3_CLASSIFICATION_LABELS, M3_EVIDENCE_SOURCE_LABELS, M3_SHELL_BLOCKER_LABELS,
-  categoryLabel,
+  categoryLabel, getM3FindingSemanticLabel, getM3Lineage,
 } from './m3/m3Meta'
-import { M3_API_FIXTURE_PROVENANCE, M3_API_LATEST_FIXTURE } from './m3/fixtures/apiLatestFixture'
+import { M3_API_FIXTURE_PROVENANCE, M3_API_LATEST_FIXTURE } from '#m3-demo-fixture'
 
 const C = TOKENS.colors
 const STATUS_COLORS = {
@@ -115,7 +119,9 @@ export default function ScreenEjecucionM3({ session }) {
   const [page, setPage] = useState(1)
   const [table, setTable] = useState({ phase: 'idle', items: [], total: 0, pages: 1 })
   const [openFindingId, setOpenFindingId] = useState(null)
+  const [staleClock, setStaleClock] = useState({ stale: false, nowIso: null })
   const aliveRef = useRef(true)
+  const tableRequestGate = useRef(createLatestRequestGate())
 
   useEffect(() => {
     aliveRef.current = true
@@ -124,7 +130,10 @@ export default function ScreenEjecucionM3({ session }) {
 
   useEffect(() => {
     if (demo) {
-      setLoad({ phase: 'ok', payload: M3_API_LATEST_FIXTURE, demo: true })
+      const fixture = validateM3Latest(M3_API_LATEST_FIXTURE)
+      setLoad(fixture.ok
+        ? { phase: 'ok', payload: fixture.payload, demo: true }
+        : { phase: 'invalid', errors: fixture.errors })
       return
     }
     setLoad({ phase: 'loading' })
@@ -138,35 +147,78 @@ export default function ScreenEjecucionM3({ session }) {
   const payload = load.phase === 'ok' ? load.payload : null
   const runsCount = payload?.history?.runs_count ?? 0
   const hasHistory = runsCount >= 2
-  const stale = payload?.stale === true
+  const tableQueryKey = JSON.stringify({
+    run_id: payload?.run?.run_id || null, demo, filters, page,
+  })
+  const tableQueryKeyRef = useRef(tableQueryKey)
+  tableQueryKeyRef.current = tableQueryKey
+
+  useEffect(() => {
+    if (!payload?.run) {
+      setStaleClock({ stale: false, nowIso: null })
+      return undefined
+    }
+    return startM3StaleClock(payload.run, (stale, nowIso) => {
+      setStaleClock({ stale, nowIso })
+    })
+  }, [payload?.run])
+
+  const localStale = staleClock.stale
+  const stale = payload?.stale === true || localStale
+  const effectivePayload = useMemo(() => {
+    if (!payload) return null
+    const localAge = getM3RunAgeDays(payload.run, staleClock.nowIso)
+    return {
+      ...payload,
+      stale,
+      age_days: localAge === null ? payload.age_days : Math.max(Number(payload.age_days) || 0, localAge),
+    }
+  }, [payload, stale, staleClock.nowIso])
 
   const loadTable = useCallback(async () => {
+    const requestId = tableRequestGate.current.begin()
+    const requestQueryKey = tableQueryKey
     if (!payload) return
     if (demo) {
       const filtered = applyFindingFilters(payload.findings, filters)
       const local = paginate(filtered, page, M3_PAGE_SIZE)
-      setTable({ phase: 'ok', items: local.items, total: local.total, pages: local.pages })
+      if (aliveRef.current && tableRequestGate.current.isLatest(requestId)) {
+        setTable({ phase: 'ok', items: local.items, total: local.total, pages: local.pages })
+      }
       return
     }
-    setTable((prev) => ({ ...prev, phase: 'loading' }))
-    const params = { page, page_size: M3_PAGE_SIZE }
-    for (const [key, value] of Object.entries(filters)) if (value && key !== 'status') params[key] = value
-    const result = await fetchM3Findings(params)
-    if (!aliveRef.current) return
-    if (result.state === 'ok') {
-      // El filtro por `status` (RED/AMBER) es local: el backend pagina el resto.
-      const items = filters.status
-        ? result.payload.items.filter((item) => item.status === filters.status)
-        : result.payload.items
-      setTable({ phase: 'ok', items, total: result.payload.total, pages: result.payload.pages })
-    } else {
-      setTable({ phase: 'error', items: [], total: 0, pages: 1, state: result.state })
+    if (tableRequestGate.current.isLatest(requestId)) {
+      setTable((prev) => ({ ...prev, phase: 'loading' }))
     }
-  }, [payload, demo, filters, page])
+    const params = { run_id: payload.run.run_id, page, page_size: M3_PAGE_SIZE }
+    for (const [key, value] of Object.entries(filters)) if (value) params[key] = value
+    const result = await fetchM3Findings(params, { latestPayload: payload })
+    if (!aliveRef.current
+      || !tableRequestGate.current.isLatest(requestId)
+      || tableQueryKeyRef.current !== requestQueryKey) return
+    if (result.state === 'ok') {
+      if (result.payload.page !== page) {
+        setPage(result.payload.page)
+        return
+      }
+      setTable({
+        phase: 'ok',
+        items: result.payload.items,
+        total: result.payload.total,
+        pages: result.payload.pages,
+      })
+    } else {
+      setTable({
+        phase: 'error', items: [], total: 0, pages: 1, state: result.state,
+        rejectedParams: result.rejected_params || [],
+      })
+    }
+  }, [payload, demo, filters, page, tableQueryKey])
 
   useEffect(() => { loadTable() }, [loadTable])
 
   const setFilter = (key, value) => { setFilters((prev) => ({ ...prev, [key]: value })); setPage(1) }
+  const clearFilters = () => { setFilters(M3_DEFAULT_FILTERS); setPage(1) }
 
   const blocks = useMemo(() => {
     if (!payload) return []
@@ -230,11 +282,12 @@ export default function ScreenEjecucionM3({ session }) {
 
   const summary = payload.summary
   const run = payload.run
+  const lineage = getM3Lineage(run, shortHash)
   const kpis = payload.kpis || {}
 
   return (
     <div style={wrap}>
-      <Header demo={load.demo} technical={run.technical_state} payload={payload} />
+      <Header demo={load.demo} technical={run.technical_state === 'PASS' && stale ? 'STALE' : run.technical_state} payload={effectivePayload} />
 
       {load.demo && (
         <div style={{
@@ -272,7 +325,7 @@ export default function ScreenEjecucionM3({ session }) {
           marginTop: 10, padding: '10px 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
           background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.5)', color: '#fbbf24',
         }}>
-          ⚠ CORRIDA STALE — la auditoría tiene {payload.age_days ?? '?'} días (umbral: {payload.capabilities?.stale_days ?? 7}).
+          ⚠ CORRIDA STALE — la auditoría tiene {effectivePayload.age_days ?? '?'} días (umbral: {payload.capabilities?.stale_days ?? 7}).
           Se puede leer, pero NO representa el estado vigente; los exports quedan marcados STALE.
         </div>
       )}
@@ -281,7 +334,7 @@ export default function ScreenEjecucionM3({ session }) {
         marginTop: 12, padding: '10px 12px', borderRadius: 10, fontSize: 12,
         background: C.surfaceSoft, border: `1px solid ${C.border}`, color: C.textSoft, lineHeight: 1.5,
       }}>
-        <b>M3 está funcionando y detectó incumplimientos.</b> El semáforo describe el estado de la EJECUCIÓN en campo, no del
+        <b>M3 está funcionando y detectó señales operativas.</b> El semáforo describe el estado de la EJECUCIÓN en campo, no del
         sistema: una ruta sin cerrar es un hallazgo válido del observatorio, no un fallo de M3. M3 observa, no corrige.
         <br />
         <b>Lee los veredictos, no solo los colores:</b> solo los <span style={{ color: M3_VERDICT_COLORS.incumplimiento, fontWeight: 700 }}>INCUMPLIMIENTOS</span> tienen
@@ -342,7 +395,7 @@ export default function ScreenEjecucionM3({ session }) {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <div style={{ fontSize: 13.5, fontWeight: 800 }}>{block.order}. {block.label}</div>
-              <Pill color={STATUS_COLORS[block.status]}>{M3_STATUS_LABELS[block.status]}</Pill>
+              <Pill color={STATUS_COLORS[block.status]}>{M3_OPERATIONAL_STATUS_LABELS[block.status]}</Pill>
             </div>
             <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 6 }}>
               {fmtInt(block.incidences)} incidencias · {block.red} rojo · {block.amber} ámbar ·{' '}
@@ -375,7 +428,7 @@ export default function ScreenEjecucionM3({ session }) {
         Detalle de regla ({table.total})
       </h2>
       <div style={{ fontSize: 11, color: C.textLow, marginTop: 4 }}>
-        El contrato v1 es agregado/sucursal: aquí se detalla la REGLA incumplida (badge de granularidad por fila).
+        El contrato v1 es agregado/sucursal: aquí se detalla la REGLA observada (badge de granularidad por fila).
         El detalle por ruta/parada/registro se habilita cuando el contrato v1.1 entregue esas dimensiones.
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
@@ -392,10 +445,17 @@ export default function ScreenEjecucionM3({ session }) {
           <option value="high">Alta</option>
           <option value="medium">Media</option>
         </select>
-        <select aria-label="Estado" style={selectStyle} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
-          <option value="">Todo estado</option>
-          <option value="RED">Incumplimiento</option>
-          <option value="AMBER">Riesgo</option>
+        <select aria-label="Veredicto" style={selectStyle} value={filters.verdict} onChange={(e) => setFilter('verdict', e.target.value)}>
+          <option value="">Todo veredicto</option>
+          {M3_VERDICTS.map((verdict) => (
+            <option key={verdict} value={verdict}>{M3_VERDICT_LABELS[verdict]}</option>
+          ))}
+        </select>
+        <select aria-label="Clasificación" style={selectStyle} value={filters.classification} onChange={(e) => setFilter('classification', e.target.value)}>
+          <option value="">Toda clasificación</option>
+          {M3_CLASSIFICATIONS.map((classification) => (
+            <option key={classification} value={classification}>{M3_CLASSIFICATION_LABELS[classification]}</option>
+          ))}
         </select>
         <select aria-label="Ciclo de vida" style={selectStyle} value={filters.lifecycle_status} onChange={(e) => setFilter('lifecycle_status', e.target.value)} disabled={!hasHistory}>
           <option value="">{hasHistory ? 'Todo ciclo de vida' : 'Ciclo de vida (requiere 2ª corrida)'}</option>
@@ -419,6 +479,7 @@ export default function ScreenEjecucionM3({ session }) {
           onChange={(e) => setFilter('search', e.target.value)}
           style={{ ...selectStyle, minWidth: 170 }}
         />
+        <button type="button" onClick={clearFilters} style={pagerBtn(false)}>Limpiar filtros</button>
       </div>
 
       <div style={{ overflowX: 'auto', marginTop: 10, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg }}>
@@ -435,7 +496,11 @@ export default function ScreenEjecucionM3({ session }) {
               <tr><td colSpan={10} style={{ padding: 14, color: C.textMuted }}>Cargando hallazgos…</td></tr>
             )}
             {table.phase === 'error' && (
-              <tr><td colSpan={10} style={{ padding: 14, color: STATUS_COLORS.AMBER }}>No fue posible consultar /findings ({table.state}). Reintenta.</td></tr>
+              <tr><td colSpan={10} style={{ padding: 14, color: STATUS_COLORS.AMBER }}>
+                {table.state === 'invalid_request'
+                  ? <>Filtros rechazados por el backend. La tabla se cerró sin mostrar resultados. <button type="button" onClick={clearFilters} style={pagerBtn(false)}>Restablecer filtros</button></>
+                  : <>No fue posible consultar /findings ({table.state}). Reintenta.</>}
+              </td></tr>
             )}
             {table.phase === 'ok' && table.items.length === 0 && (
               <tr><td colSpan={10} style={{ padding: 14, color: C.textMuted }}>Sin hallazgos con estos filtros.</td></tr>
@@ -448,7 +513,7 @@ export default function ScreenEjecucionM3({ session }) {
               >
                 <td style={{ padding: '8px 10px' }}>
                   <Pill color={M3_VERDICT_COLORS[f.verdict] || STATUS_COLORS[f.status]} title={M3_VERDICT_HELP[f.verdict]}>
-                    {M3_VERDICT_LABELS[f.verdict] || M3_STATUS_LABELS[f.status]}
+                    {getM3FindingSemanticLabel(f)}
                   </Pill>
                 </td>
                 <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', fontWeight: 700 }}>{f.rule_code}</td>
@@ -480,19 +545,19 @@ export default function ScreenEjecucionM3({ session }) {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
         <ExportBtn label="CSV de hallazgos" onClick={() => downloadTextFile(
           exportFilename('m3_findings', 'csv', { stale, demo: load.demo }),
-          findingsToCsv(payload.findings), 'text/csv')} />
+          findingsToCsv(effectivePayload), 'text/csv')} />
         <ExportBtn label="JSON de evidencia" onClick={() => downloadTextFile(
           exportFilename('m3_evidencia', 'json', { stale, demo: load.demo }),
-          evidenceJson(payload, load.demo ? { fixture_provenance: M3_API_FIXTURE_PROVENANCE } : {}), 'application/json')} />
+          evidenceJson(effectivePayload, load.demo ? { fixture_provenance: M3_API_FIXTURE_PROVENANCE } : {}), 'application/json')} />
         <ExportBtn label="Resumen ejecutivo (imprimible)" onClick={() => downloadTextFile(
           exportFilename('m3_resumen_ejecutivo', 'txt', { stale, demo: load.demo }),
-          executiveSummaryText(payload, { demo: load.demo }))} />
+          executiveSummaryText(effectivePayload, { demo: load.demo }))} />
         <ExportBtn label="Comparación plan vs real" onClick={() => downloadTextFile(
           exportFilename('m3_plan_vs_real', 'txt', { stale, demo: load.demo }),
-          planVsRealText(payload, { demo: load.demo }))} />
+          planVsRealText(effectivePayload, { demo: load.demo }))} />
       </div>
       <div style={{ fontSize: 10.5, color: C.textLow, marginTop: 8 }}>
-        Trazabilidad: run {shortHash(run.run_id)} · manifest {shortHash(run.manifest_sha256)} · evidencia {shortHash(run.evidence_sha256)} · auditor {shortHash(run.build_sha)}
+        Trazabilidad: run {shortHash(run.run_id)} · manifest {shortHash(run.manifest_sha256)} · evidencia {shortHash(run.evidence_sha256)} · auditor {lineage.auditor} · contrato {lineage.contract}
         {stale ? ' · exports marcados STALE' : ''}
       </div>
     </div>
@@ -531,7 +596,7 @@ function Header({ demo, technical, payload }) {
         {demo && <Pill color="#fbbf24">DEMO</Pill>}
       </div>
       <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 6, lineHeight: 1.6 }}>
-        KOLD OS · M3 (Ejecución operativa en campo) · observatorio de incumplimientos —{' '}
+        KOLD OS · M3 (Ejecución operativa en campo) · observatorio de ejecución —{' '}
         {run ? (
           <>
             corte {fmtDateTime(run.finished_at)} · ventana {run.scope?.window_days} días · compañías{' '}
@@ -564,7 +629,7 @@ function FindingDetail({ finding, runsCount, hasHistory, onClose }) {
         <div style={{ fontSize: 14, fontWeight: 800 }}>
           {finding.rule_code} · {finding.title}{' '}
           <Pill color={M3_VERDICT_COLORS[finding.verdict] || STATUS_COLORS[finding.status]} title={M3_VERDICT_HELP[finding.verdict]}>
-            {M3_VERDICT_LABELS[finding.verdict] || M3_STATUS_LABELS[finding.status]}
+            {getM3FindingSemanticLabel(finding)}
           </Pill>{' '}
           <Pill color={C.blue3}>{M3_GRANULARITY_LABELS[finding.granularity] || finding.granularity}</Pill>
         </div>

@@ -10,10 +10,56 @@
 // AbortSignal — limitación documentada, misma que Tower M1 y M2).
 
 import { KOLD_OS_M3_LATEST_PATH, KOLD_OS_M3_FINDINGS_PATH, KOLD_OS_M3_RUNS_PATH, KOLD_OS_M3_FINDINGS_PARAMS } from '../../../lib/koldOsM3Route.js'
-import { validateM3Latest, validateM3Findings } from './contract.js'
+import { isM3RunId, validateM3Latest, validateM3Findings } from './contract.js'
 
 export const M3_TIMEOUT_MS = 30000
 export const M3_MAX_PAYLOAD_CHARS = 2_000_000
+export const M3_MAX_TEXT_FILTER_CHARS = 120
+
+const M3_NUMERIC_FILTERS = new Set([
+  'company_id', 'branch_id', 'route_id', 'plan_id', 'vehicle_id', 'page', 'page_size',
+])
+const PYTHON_DECIMAL_INT_RE = /^[+-]?\d+$/
+
+export function normalizeM3FindingsRequest(params = {}) {
+  const clean = {}
+  const rejected = []
+  for (const key of KOLD_OS_M3_FINDINGS_PARAMS) {
+    const raw = params?.[key]
+    if (raw === undefined || raw === null || raw === '') continue
+    const value = String(raw).trim()
+    if (!value) continue
+    if (M3_NUMERIC_FILTERS.has(key)) {
+      const number = Number(value)
+      if (!PYTHON_DECIMAL_INT_RE.test(value) || !Number.isSafeInteger(number)) rejected.push(key)
+      else clean[key] = number
+      continue
+    }
+    if (value.length > M3_MAX_TEXT_FILTER_CHARS) {
+      rejected.push(key)
+      continue
+    }
+    clean[key] = value
+  }
+  if (!isM3RunId(clean.run_id)) {
+    delete clean.run_id
+    if (!rejected.includes('run_id')) rejected.unshift('run_id')
+  }
+  return { ok: rejected.length === 0, params: clean, rejected_params: rejected }
+}
+
+export function createLatestRequestGate() {
+  let latestRequestId = 0
+  return {
+    begin() {
+      latestRequestId += 1
+      return latestRequestId
+    },
+    isLatest(requestId) {
+      return requestId === latestRequestId
+    },
+  }
+}
 
 // api() se resuelve LAZY: mantiene este módulo puro para tests (node) y solo
 // carga el cliente canónico completo en el navegador cuando de verdad se usa.
@@ -65,19 +111,31 @@ export async function fetchM3Latest({ timeoutMs = M3_TIMEOUT_MS, apiImpl = defau
   } catch (err) {
     return { ...classifyM3Error(err), errors: [String(err?.code || err?.message || 'error')] }
   }
-  const { ok, errors, schema } = validateM3Latest(payload)
+  const { ok, errors, schema, payload: canonicalPayload } = validateM3Latest(payload)
   if (!ok) {
     return schema === 'unsupported'
       ? { state: 'schema_mismatch', errors }
       : { state: 'invalid', errors }
   }
-  return { state: 'ok', payload }
+  return { state: 'ok', payload: canonicalPayload }
 }
 
-export async function fetchM3Findings(params = {}, { timeoutMs = M3_TIMEOUT_MS, apiImpl = defaultApi } = {}) {
+export async function fetchM3Findings(params = {}, {
+  timeoutMs = M3_TIMEOUT_MS,
+  apiImpl = defaultApi,
+  latestPayload = null,
+} = {}) {
+  const normalized = normalizeM3FindingsRequest(params)
+  if (!normalized.ok) {
+    return {
+      state: 'invalid_request',
+      errors: ['findings: filtros invalidos'],
+      rejected_params: normalized.rejected_params,
+    }
+  }
   const query = new URLSearchParams()
   for (const key of KOLD_OS_M3_FINDINGS_PARAMS) {
-    const value = params?.[key]
+    const value = normalized.params[key]
     if (value !== undefined && value !== null && value !== '') query.set(key, String(value))
   }
   const suffix = query.toString() ? `?${query.toString()}` : ''
@@ -87,13 +145,18 @@ export async function fetchM3Findings(params = {}, { timeoutMs = M3_TIMEOUT_MS, 
   } catch (err) {
     return { ...classifyM3Error(err), errors: [String(err?.code || err?.message || 'error')] }
   }
-  const { ok, errors, schema } = validateM3Findings(payload)
+  const { ok, errors, schema, payload: canonicalPayload } = validateM3Findings(
+    payload, normalized.params, latestPayload,
+  )
   if (!ok) {
+    if (Array.isArray(payload?.rejected_params) && payload.rejected_params.length > 0) {
+      return { state: 'invalid_request', errors, rejected_params: payload.rejected_params }
+    }
     return schema === 'unsupported'
       ? { state: 'schema_mismatch', errors }
       : { state: 'invalid', errors }
   }
-  return { state: 'ok', payload }
+  return { state: 'ok', payload: canonicalPayload }
 }
 
 /** GET /pwa-kold-os/m3/runs (historial ligero; validación mínima). */

@@ -22,6 +22,15 @@ export const M3_STATUS_LABELS = Object.freeze({
   GREEN: 'Cumple', AMBER: 'Riesgo', RED: 'Incumplimiento', NOT_EVALUABLE: 'No evaluable',
 })
 
+// El semáforo técnico no prueba por sí mismo una conclusión de negocio.
+// Los bloques agregados usan copy neutral; el veredicto vive por separado.
+export const M3_OPERATIONAL_STATUS_LABELS = Object.freeze({
+  GREEN: 'Operación estable',
+  AMBER: 'Atención operativa',
+  RED: 'Alerta operativa',
+  NOT_EVALUABLE: 'No evaluable',
+})
+
 export const M3_LIFECYCLE_LABELS = Object.freeze({
   new: 'Nuevo', persistent: 'Persistente', corrected: 'Corregido', recurrent: 'Reincidente',
 })
@@ -46,6 +55,18 @@ export const M3_VERDICT_LABELS = Object.freeze({
   cumple: 'CUMPLE',
   no_evaluable: 'NO EVALUABLE',
 })
+
+export function getM3FindingSemanticLabel(finding) {
+  return M3_VERDICT_LABELS[finding?.verdict] || 'SIN VEREDICTO'
+}
+
+export function getM3Lineage(run, format = (value) => value) {
+  const render = (value) => format(value || '—')
+  return {
+    auditor: render(run?.auditor_build_sha),
+    contract: render(run?.contract_build_sha),
+  }
+}
 
 export const M3_VERDICT_COLORS = Object.freeze({
   incumplimiento: '#ef4444',

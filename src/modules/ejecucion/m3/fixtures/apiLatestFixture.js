@@ -3131,7 +3131,7 @@ export const M3_API_LATEST_FIXTURE = Object.freeze({
       "production_shell_unavailable"
     ],
     "rollback_confirmed": true,
-    "run_id": "m3-demo-fixture",
+    "run_id": "d1e544bf310ef4d0ab61a907d0ac53f187c3f0f546a9e1520b8675d1b7fb142a",
     "scope": {
       "company_ids": [
         1,

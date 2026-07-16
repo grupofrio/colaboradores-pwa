@@ -7,7 +7,8 @@ export const M3_DEFAULT_FILTERS = Object.freeze({
   category: '',
   rule_code: '',
   severity: '',
-  status: '',
+  verdict: '',
+  classification: '',
   lifecycle_status: '',
   responsible_area: '',
   granularity: '',
@@ -44,7 +45,10 @@ export function applyFindingFilters(findings = [], filters = M3_DEFAULT_FILTERS)
     : Number(f.branch_id)
   return (Array.isArray(findings) ? findings : []).filter((finding) => {
     if (!finding) return false
-    for (const key of ['category', 'rule_code', 'severity', 'status', 'lifecycle_status', 'responsible_area', 'granularity', 'entity_type']) {
+    for (const key of [
+      'category', 'rule_code', 'severity', 'verdict', 'classification',
+      'lifecycle_status', 'responsible_area', 'granularity', 'entity_type',
+    ]) {
       if (f[key] && finding[key] !== f[key]) return false
     }
     if (branchId !== null && finding.branch_id !== branchId) return false

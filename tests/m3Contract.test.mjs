@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   M3_API_SCHEMA_VERSION, M3_SUPPORTED_SCHEMA_VERSIONS, classifySchemaVersion,
-  validateM3Latest, validateM3Findings, isRunStale, M3_STALE_DAYS,
+  validateM3Latest, validateM3Findings, isRunStale, startM3StaleClock, M3_STALE_DAYS,
 } from '../src/modules/ejecucion/m3/contract.js'
 import { M3_API_LATEST_FIXTURE, M3_API_FIXTURE_PROVENANCE } from '../src/modules/ejecucion/m3/fixtures/apiLatestFixture.js'
 
@@ -33,6 +33,20 @@ test('Track B: scope declara bordes explícitos y timezone', () => {
   assert.equal(scope.window_start, '2026-04-16')
   assert.equal(scope.window_end_exclusive, '2026-07-15')
   assert.equal(scope.timezone, 'America/Mexico_City')
+})
+
+test('scope.timezone acepta zonas IANA soportadas y rechaza nombres arbitrarios', () => {
+  for (const timezone of ['America/Mexico_City', 'UTC']) {
+    const doc = clone()
+    doc.run.scope.timezone = timezone
+    assert.equal(validateM3Latest(doc).ok, true, timezone)
+  }
+
+  for (const timezone of ['Aida', 'Sucursal_Centro', 'hora-mexico']) {
+    const doc = clone()
+    doc.run.scope.timezone = timezone
+    assert.equal(validateM3Latest(doc).ok, false, timezone)
+  }
 })
 
 // ── Contrato epistémico (Track C) ───────────────────────────────────────────
@@ -215,8 +229,129 @@ test('schema_version: soportada / futura => error controlado / campos extra OK',
   assert.equal(res.schema, 'unsupported')
   const extended = clone()
   extended.future_field = { x: 1 }
-  extended.capabilities.optional_query_ids = [...extended.capabilities.optional_query_ids, 'future_query']
   assert.equal(validateM3Latest(extended).ok, true)
+  const changedCapabilities = clone()
+  changedCapabilities.capabilities.optional_query_ids.push('future_query')
+  assert.equal(validateM3Latest(changedCapabilities).ok, false, 'capabilities es cerrado')
+})
+
+test('latest exige read_only, capabilities backend exactas y summary derivado', () => {
+  const mutations = [
+    (doc) => { doc.read_only = false },
+    (doc) => { doc.capabilities.granularities.push('record') },
+    (doc) => { doc.capabilities.features.route_dimension = true },
+    (doc) => { doc.capabilities.findings_max_page_size = 101 },
+    (doc) => { doc.applied_scope = { level: 'branch' } },
+  ]
+  for (const mutate of mutations) {
+    const doc = clone(); mutate(doc)
+    assert.equal(validateM3Latest(doc).ok, false)
+  }
+
+  for (const field of [
+    'total_rules', 'rules_pass', 'rules_warning', 'rules_fail', 'rules_not_evaluable',
+    'total_incidences', 'definitive_incident_rule_count', 'warning_rule_count',
+    'exploratory_signal_rule_count', 'not_evaluable_rule_count', 'compliant_rule_count',
+    'definitive_incident_count', 'warning_count', 'exploratory_signal_count',
+    'branches_with_findings', 'overall_status',
+  ]) {
+    const doc = clone()
+    doc.summary[field] = Array.isArray(doc.summary[field]) ? []
+      : (typeof doc.summary[field] === 'number' ? doc.summary[field] + 1 : 'GREEN')
+    assert.equal(validateM3Latest(doc).ok, false, `summary.${field} se deriva`)
+  }
+})
+
+test('latest valida tipos exactos de valores renderizados', () => {
+  for (const mutate of [
+    (doc) => { doc.rule_results[0].name = 7 },
+    (doc) => { doc.rule_results[0].incidences = '1' },
+    (doc) => { doc.findings[0].title = 7 },
+    (doc) => { doc.findings[0].occurrence_count = '1' },
+    (doc) => { doc.kpis.plans_closed = '178' },
+  ]) {
+    const doc = clone(); mutate(doc)
+    assert.equal(validateM3Latest(doc).ok, false)
+  }
+})
+
+test('metadata canonica usa formatos backend y acepta el payload generado real', () => {
+  const result = validateM3Latest(M3_API_LATEST_FIXTURE)
+  assert.equal(result.ok, true, JSON.stringify(result.errors))
+  assert.match(result.payload.run.run_id, /^[0-9a-f]{64}$/)
+  assert.equal(result.payload.run.run_id,
+    'd1e544bf310ef4d0ab61a907d0ac53f187c3f0f546a9e1520b8675d1b7fb142a')
+  assert.equal(result.payload.run.environment, 'dev')
+  assert.equal(result.payload.run.scope.timezone, 'America/Mexico_City')
+})
+
+test('run metadata rechaza emails, texto libre, formatos y cronologia invalidos', () => {
+  const cases = [
+    ['run_id email', (doc) => { doc.run.run_id = 'persona@example.com' }],
+    ['run_id texto', (doc) => { doc.run.run_id = 'run libre' }],
+    ['run_id corto', (doc) => { doc.run.run_id = 'a'.repeat(63) }],
+    ['environment email', (doc) => { doc.run.environment = 'dev@example.com' }],
+    ['environment libre', (doc) => { doc.run.environment = 'qa manual' }],
+    ['started date-only', (doc) => { doc.run.started_at = '2026-07-15' }],
+    ['finished libre', (doc) => { doc.run.finished_at = 'ayer' }],
+    ['ingested email', (doc) => { doc.run.ingested_at = 'persona@example.com' }],
+    ['ingested date-only', (doc) => { doc.run.ingested_at = '2026-07-15' }],
+    ['run invertido', (doc) => {
+      doc.run.started_at = '2026-07-15T10:00:00Z'
+      doc.run.finished_at = '2026-07-15T09:00:00Z'
+    }],
+    ['ingesta anterior', (doc) => { doc.run.ingested_at = '2026-07-15T08:00:00Z' }],
+    ['timezone email', (doc) => { doc.run.scope.timezone = 'persona@example.com' }],
+    ['timezone libre', (doc) => { doc.run.scope.timezone = 'hora de mexico' }],
+  ]
+  for (const [name, mutate] of cases) {
+    const doc = clone(); mutate(doc)
+    assert.equal(validateM3Latest(doc).ok, false, name)
+  }
+})
+
+test('rule_code y finding_id son catalogados, deterministas y resistentes a mutacion coordinada', () => {
+  const baseFinding = M3_API_LATEST_FIXTURE.findings[0]
+  assert.match(baseFinding.rule_code, /^M3-[A-H]-\d{2}$/)
+  assert.equal(baseFinding.finding_id,
+    `${baseFinding.rule_code}::global:${baseFinding.branch_id ?? 'all'}::${baseFinding.entity_type}:aggregate`)
+
+  const cases = [
+    ['rule email', (doc) => { doc.rule_results[0].rule_code = 'a@b.com' }],
+    ['rule libre', (doc) => { doc.rule_results[0].rule_code = 'regla uno' }],
+    ['finding email', (doc) => { doc.findings[0].finding_id = 'persona@example.com' }],
+    ['finding libre', (doc) => { doc.findings[0].finding_id = 'hallazgo libre' }],
+    ['finding inconsistente', (doc) => { doc.findings[0].finding_id += '-otro' }],
+    ['mutacion coordinada', (doc) => {
+      const finding = doc.findings[0]
+      const rule = doc.rule_results.find((item) => item.rule_code === finding.rule_code)
+      rule.rule_code = 'M3-Z-99'
+      finding.rule_code = 'M3-Z-99'
+      finding.finding_id = `M3-Z-99::global:all::${finding.entity_type}:aggregate`
+    }],
+  ]
+  for (const [name, mutate] of cases) {
+    const doc = clone(); mutate(doc)
+    assert.equal(validateM3Latest(doc).ok, false, name)
+  }
+})
+
+test('timestamps de findings requieren ISO UTC y cronologia coherente', () => {
+  const cases = [
+    ['first email', (item) => { item.first_seen_at = 'persona@example.com' }],
+    ['last libre', (item) => { item.last_seen_at = 'despues' }],
+    ['source date-only', (item) => { item.source_timestamp = '2026-07-15' }],
+    ['first > last', (item) => {
+      item.first_seen_at = '2026-07-15T10:00:00Z'
+      item.last_seen_at = '2026-07-15T09:00:00Z'
+    }],
+    ['last != source', (item) => { item.last_seen_at = '2026-07-15T09:00:00Z' }],
+    ['source != run', (item) => { item.source_timestamp = '2026-07-15T08:00:00Z' }],
+  ]
+  for (const [name, mutate] of cases) {
+    const doc = clone(); mutate(doc.findings[0])
+    assert.equal(validateM3Latest(doc).ok, false, name)
+  }
 })
 
 test('rechaza: no-objeto, ok!=true, run/kpis malformados, claves sensibles', () => {
@@ -233,6 +368,48 @@ test('rechaza: no-objeto, ok!=true, run/kpis malformados, claves sensibles', () 
   assert.equal(validateM3Latest(leaky).ok, false)
 })
 
+test('proyeccion canonica elimina extensiones y rechaza PII en campos renderizados', () => {
+  const extended = clone()
+  extended.future_extension = { harmless: 'value' }
+  extended.run.future_run_field = 'value'
+  extended.rule_results[0].future_rule_field = 'value'
+  extended.findings[0].future_finding_field = 'value'
+  const projected = validateM3Latest(extended)
+  assert.equal(projected.ok, true, JSON.stringify(projected.errors))
+  assert.equal(projected.payload.future_extension, undefined)
+  assert.equal(projected.payload.run.future_run_field, undefined)
+  assert.equal(projected.payload.rule_results[0].future_rule_field, undefined)
+  assert.equal(projected.payload.findings[0].future_finding_field, undefined)
+  assert.notEqual(projected.payload, extended, 'la salida es un objeto nuevo')
+
+  for (const [field, malicious] of [
+    ['entity_reference', 'persona@example.com'],
+    ['title', 'Cliente RFC XAXX010101000'],
+    ['description', 'CURP GODE561231HDFRRN09'],
+    ['recommended_action', 'Llamar al 5512345678'],
+  ]) {
+    const doc = clone()
+    doc.findings[0][field] = malicious
+    assert.equal(validateM3Latest(doc).ok, false, `${field} no acepta PII`)
+  }
+})
+
+test('finding v1 acepta solo granularidad aggregate/branch y referencia canonica', () => {
+  for (const granularity of ['route', 'stop', 'record']) {
+    const doc = clone()
+    doc.findings[0].granularity = granularity
+    assert.equal(validateM3Latest(doc).ok, false, granularity)
+  }
+  const badAggregate = clone()
+  badAggregate.findings[0].entity_reference = 'texto libre agregado'
+  assert.equal(validateM3Latest(badAggregate).ok, false)
+
+  const badBranch = clone()
+  const branch = badBranch.findings.find((finding) => finding.granularity === 'branch')
+  branch.entity_reference = `SUCURSAL branch_config_id=${branch.branch_id + 1}`
+  assert.equal(validateM3Latest(badBranch).ok, false)
+})
+
 test('scope flexible: otras compañías validan; forma sí se exige', () => {
   const other = clone(); other.run.scope.company_ids = [7, 42]
   assert.equal(validateM3Latest(other).ok, true)
@@ -240,16 +417,169 @@ test('scope flexible: otras compañías validan; forma sí se exige', () => {
   assert.equal(validateM3Latest(bad).ok, false)
 })
 
-test('validateM3Findings: bien formada OK; malformadas rechazadas', () => {
+test('validateM3Findings: contrato completo y contexto de latest obligatorios', () => {
+  const latest = clone()
+  const runId = latest.run.run_id
+  const validItem = structuredClone(latest.findings[0])
   const good = {
-    ok: true, schema_version: M3_API_SCHEMA_VERSION, run_id: 'r', total: 2, page: 1,
-    pages: 1, page_size: 25, items: [], applied_scope: { level: 'global' },
-    applied_filters: {}, rejected_params: [], read_only: true,
+    ok: true, schema_version: M3_API_SCHEMA_VERSION, run_id: runId, total: 1, page: 1,
+    pages: 1, page_size: 25, items: [validItem], applied_scope: { level: 'global' },
+    applied_filters: { run_id: runId }, rejected_params: [], read_only: true,
   }
-  assert.equal(validateM3Findings(good).ok, true)
-  assert.equal(validateM3Findings({ ...good, schema_version: 'kold.os.m3.api/9' }).schema, 'unsupported')
-  assert.equal(validateM3Findings({ ...good, total: -1 }).ok, false)
-  assert.equal(validateM3Findings({ ...good, rejected_params: 'x' }).ok, false)
+  const expected = { run_id: runId, page: 1, page_size: 25 }
+  assert.equal(validateM3Findings(good, expected, latest).ok, true)
+  const extended = structuredClone(good)
+  extended.future_envelope = 'discarded'
+  extended.items[0].future_item = 'discarded'
+  extended.items[0].evidence_reference.future_evidence = 'discarded'
+  const projected = validateM3Findings(extended, expected, latest)
+  assert.equal(projected.ok, true)
+  assert.equal(projected.payload.future_envelope, undefined)
+  assert.equal(projected.payload.items[0].future_item, undefined)
+  assert.equal(projected.payload.items[0].evidence_reference.future_evidence, undefined)
+  assert.equal(validateM3Findings(good, expected).ok, false, 'sin latest no hay autoridad epistémica')
+  assert.equal(validateM3Findings({ ...good, schema_version: 'kold.os.m3.api/9' }, expected, latest).schema, 'unsupported')
+  assert.equal(validateM3Findings({ ...good, total: -1 }, expected, latest).ok, false)
+  assert.equal(validateM3Findings({ ...good, rejected_params: 'x' }, expected, latest).ok, false)
+
+  const impossible = structuredClone(good)
+  Object.assign(impossible.items[0], {
+    classification: 'exploratory', verdict: 'incumplimiento', approved_threshold: false,
+  })
+  assert.equal(validateM3Findings(impossible, expected, latest).ok, false)
+
+  const mismatch = structuredClone(good)
+  Object.assign(mismatch.items[0], {
+    classification: 'exploratory', verdict: 'anomalia', approved_threshold: false,
+  })
+  assert.equal(validateM3Findings(mismatch, expected, latest).ok, false, 'contradiccion con rule_result')
+
+  const thresholdMismatch = structuredClone(good)
+  thresholdMismatch.items[0].approved_threshold = true
+  assert.equal(validateM3Findings(thresholdMismatch, expected, latest).ok, false, 'umbral contradice rule_result')
+
+  const unknown = structuredClone(good)
+  unknown.items[0].rule_code = 'M3-Z-99'
+  assert.equal(validateM3Findings(unknown, expected, latest).ok, false, 'regla desconocida')
+
+  const leaky = structuredClone(good)
+  leaky.items[0].partner_name = 'PII'
+  assert.equal(validateM3Findings(leaky, expected, latest).ok, false)
+
+  for (const field of [
+    'classification', 'verdict', 'confidence', 'universe', 'business_assumption',
+    'evidence_limitations', 'approved_threshold', 'threshold_source',
+  ]) {
+    const malformed = structuredClone(good)
+    delete malformed.items[0][field]
+    assert.equal(validateM3Findings(malformed, expected, latest).ok, false, `${field} es obligatorio`)
+  }
+
+  for (const mutate of [
+    (item) => { item.confidence = 'invented' },
+    (item) => { item.approved_threshold = 'false' },
+    (item) => { item.granularity = 'unknown' },
+  ]) {
+    const malformed = structuredClone(good)
+    mutate(malformed.items[0])
+    assert.equal(validateM3Findings(malformed, expected, latest).ok, false)
+  }
+
+  for (const mutate of [
+    (item) => { item.entity_reference = 'persona@example.com' },
+    (item) => { item.evidence_reference.query_id = 'unknown_query' },
+    (item) => { item.evidence_reference.evidence_sha256 = 'invalid' },
+    (item) => { item.responsible_area = 'Texto libre no catalogado' },
+  ]) {
+    const hostile = structuredClone(good)
+    mutate(hostile.items[0])
+    assert.equal(validateM3Findings(hostile, expected, latest).ok, false)
+  }
+})
+
+test('validateM3Findings: los 8 campos epistemicos coinciden exactamente con latest', () => {
+  const latest = clone()
+  const runId = latest.run.run_id
+  const validItem = structuredClone(latest.findings[0])
+  const expected = { run_id: runId, page: 1, page_size: 25 }
+  const response = {
+    ok: true, schema_version: M3_API_SCHEMA_VERSION, run_id: runId, total: 1, page: 1,
+    pages: 1, page_size: 25, items: [validItem], applied_scope: { level: 'global' },
+    applied_filters: { run_id: runId }, rejected_params: [], read_only: true,
+  }
+  const mutations = {
+    classification: 'exploratory',
+    verdict: 'anomalia',
+    approved_threshold: true,
+    confidence: 'high',
+    universe: `${validItem.universe} MUTADO`,
+    business_assumption: `${validItem.business_assumption} MUTADO`,
+    evidence_limitations: `${validItem.evidence_limitations} MUTADO`,
+    threshold_source: `${validItem.threshold_source} MUTADO`,
+  }
+
+  assert.equal(validateM3Findings(response, expected, latest).ok, true, 'item identico aceptado')
+  for (const [field, value] of Object.entries(mutations)) {
+    const mutated = structuredClone(response)
+    mutated.items[0][field] = value
+    assert.equal(validateM3Findings(mutated, expected, latest).ok, false, `${field} debe coincidir`)
+  }
+})
+
+test('validateM3Findings: replica default, maximo y clamp de pagina del backend', () => {
+  const latest = clone()
+  const runId = latest.run.run_id
+  const good = {
+    ok: true, schema_version: M3_API_SCHEMA_VERSION, run_id: runId,
+    total: latest.findings.length, page: 1, pages: 1, page_size: 100,
+    items: structuredClone(latest.findings),
+    applied_scope: { level: 'global' },
+    applied_filters: { run_id: runId }, rejected_params: [], read_only: true,
+  }
+  const expected = {
+    run_id: runId, page: 9999, page_size: 9999,
+  }
+  assert.equal(validateM3Findings(good, expected, latest).ok, true, '9999 se normaliza a 100 y page a 1')
+  assert.equal(validateM3Findings({ ...good, page_size: 9999 }, expected, latest).ok, false)
+  assert.equal(validateM3Findings({ ...good, page: 2 }, expected, latest).ok, false)
+
+  const defaulted = { ...good, total: 0, page: 1, pages: 1, page_size: 25, items: [] }
+  assert.equal(validateM3Findings(defaulted, { run_id: runId, page: -4, page_size: 0 }, latest).ok, true)
+  assert.equal(validateM3Findings(defaulted, { run_id: runId }, latest).ok, true)
+})
+
+test('findings envelope exige scope/read-only, IDs únicos y aritmética completa', () => {
+  const latest = clone()
+  const runId = latest.run.run_id
+  const [item, second, third] = structuredClone(latest.findings)
+  const expected = { run_id: runId, page: 1, page_size: 2 }
+  const base = {
+    ok: true, schema_version: M3_API_SCHEMA_VERSION, run_id: runId,
+    total: 3, page: 1, pages: 2, page_size: 2,
+    items: [item, second],
+    applied_scope: { level: 'global' }, applied_filters: { run_id: runId },
+    rejected_params: [], read_only: true,
+  }
+  assert.equal(validateM3Findings(base, expected, latest).ok, true)
+
+  for (const mutate of [
+    (doc) => { doc.read_only = false },
+    (doc) => { doc.applied_scope = { level: 'branch' } },
+    (doc) => { doc.items[1].finding_id = doc.items[0].finding_id },
+    (doc) => { doc.items.push(third) },
+    (doc) => { doc.items.pop() },
+    (doc) => { doc.pages = 3 },
+  ]) {
+    const doc = structuredClone(base); mutate(doc)
+    assert.equal(validateM3Findings(doc, expected, latest).ok, false)
+  }
+
+  const last = { ...structuredClone(base), page: 2, items: [third] }
+  assert.equal(validateM3Findings(last, { ...expected, page: 2 }, latest).ok, true)
+  const empty = { ...structuredClone(base), total: 0, page: 1, pages: 1, items: [] }
+  assert.equal(validateM3Findings(empty, expected, latest).ok, true)
+  const invalidEmpty = { ...structuredClone(base), total: 3, page: 2, items: [] }
+  assert.equal(validateM3Findings(invalidEmpty, { ...expected, page: 2 }, latest).ok, false)
 })
 
 test('stale: recomputación defensiva client-side', () => {
@@ -258,6 +588,27 @@ test('stale: recomputación defensiva client-side', () => {
   const staleDate = new Date(Date.parse(run.finished_at) + (M3_STALE_DAYS + 1) * 86400000).toISOString()
   assert.equal(isRunStale(run, staleDate), true)
   assert.equal(M3_API_LATEST_FIXTURE.stale, false)
+})
+
+test('reloj stale recompone el estado al cruzar el umbral sin refetch', () => {
+  const run = { finished_at: '2026-07-01T00:00:00.000Z' }
+  let now = Date.parse('2026-07-07T23:59:59.000Z')
+  let scheduled = null
+  let cancelled = false
+  const states = []
+  const stop = startM3StaleClock(run, (stale) => states.push(stale), {
+    now: () => now,
+    setTimer: (fn, delay) => { scheduled = { fn, delay }; return 7 },
+    clearTimer: (id) => { assert.equal(id, 7); cancelled = true },
+  })
+
+  assert.deepEqual(states, [false])
+  assert.ok(scheduled.delay > 0 && scheduled.delay <= 1001)
+  now = Date.parse('2026-07-08T00:00:00.001Z')
+  scheduled.fn()
+  assert.deepEqual(states, [false, true])
+  stop()
+  assert.equal(cancelled, true)
 })
 
 // ── Codex ronda 2 §1/§2: metadata de evidencia y linaje de build ─────────────

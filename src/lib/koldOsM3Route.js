@@ -11,6 +11,7 @@ export const KOLD_OS_M3_RUNS_PATH = '/pwa-kold-os/m3/runs'
 export const KOLD_OS_M3_FINDINGS_PARAMS = Object.freeze([
   'run_id', 'company_id', 'branch_id', 'route_id', 'plan_id', 'vehicle_id',
   'category', 'rule_code', 'severity', 'lifecycle_status', 'responsible_area',
+  'verdict', 'classification',
   'granularity', 'entity_type', 'date_from', 'date_to', 'search', 'page', 'page_size',
 ])
 

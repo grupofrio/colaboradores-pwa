@@ -10,6 +10,7 @@ import {
   getModuleEntryDecisionForSession, buildDesktopNav, buildMobileNav, isNavHiddenForPath,
 } from '../src/lib/navModel.js'
 import { M3_API_LATEST_FIXTURE } from '../src/modules/ejecucion/m3/fixtures/apiLatestFixture.js'
+import * as m3Meta from '../src/modules/ejecucion/m3/m3Meta.js'
 
 const appSrc = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const homeSrc = readFileSync(new URL('../src/screens/ScreenHome.jsx', import.meta.url), 'utf8')
@@ -115,7 +116,9 @@ test('nav: /ejecucion NO está oculta (usa la nav global con estado activo)', ()
 test('demo: la pantalla gatea con isM3DemoAllowed(import.meta.env)', () => {
   assert.match(screenSrc, /isM3DemoAllowed\(import\.meta\.env\)/)
   assert.match(screenSrc, /demoAllowed && new URLSearchParams\(location\.search\)\.get\('demo'\) === '1'/)
-  assert.match(screenSrc, /if \(demo\) \{\s*setLoad\(\{ phase: 'ok', payload: M3_API_LATEST_FIXTURE, demo: true \}\)/)
+  assert.match(screenSrc, /if \(demo\) \{\s*const fixture = validateM3Latest\(M3_API_LATEST_FIXTURE\)/)
+  assert.match(screenSrc, /payload: fixture\.payload, demo: true/)
+  assert.ok(!/payload: M3_API_LATEST_FIXTURE, demo: true/.test(screenSrc), 'nunca renderiza fixture crudo')
 })
 
 test('labels: "Incidencias detectadas" con nota de no-unicidad; KPIs de una entidad', () => {
@@ -143,6 +146,39 @@ test('Codex Track C/U: la UI distingue veredictos y no llama incumplimiento a un
     assert.ok(screenSrc.includes(field), field)
   }
   assert.ok(screenSrc.includes('NO APROBADO'), 'marca los umbrales sin aprobar')
+})
+
+test('RED exploratorio conserva veredicto ANOMALÍA y copy operacional neutral', () => {
+  const exploratoryRed = {
+    status: 'RED',
+    classification: 'exploratory',
+    verdict: 'anomalia',
+  }
+  assert.equal(typeof m3Meta.getM3FindingSemanticLabel, 'function')
+  assert.equal(m3Meta.getM3FindingSemanticLabel(exploratoryRed), 'ANOMALÍA')
+  assert.notEqual(m3Meta.getM3FindingSemanticLabel(exploratoryRed), 'Incumplimiento')
+  assert.equal(m3Meta.M3_OPERATIONAL_STATUS_LABELS?.RED, 'Alerta operativa')
+
+  assert.match(screenSrc, /M3_OPERATIONAL_STATUS_LABELS\[block\.status\]/)
+  assert.match(screenSrc, /getM3FindingSemanticLabel\(f\)/)
+  assert.doesNotMatch(screenSrc, /detectó incumplimientos/i)
+})
+
+test('filtros epistémicos: controles separados, reset y backend autoritativo', () => {
+  assert.match(screenSrc, /aria-label="Veredicto"/)
+  assert.match(screenSrc, /value=\{filters\.verdict\}/)
+  assert.match(screenSrc, /aria-label="Clasificación"/)
+  assert.match(screenSrc, /value=\{filters\.classification\}/)
+  assert.ok(!screenSrc.includes('aria-label="Estado"'), 'no ofrece status RED/AMBER como veredicto')
+  assert.match(screenSrc, /setFilters\(M3_DEFAULT_FILTERS\)/, 'permite limpiar filtros')
+  assert.match(screenSrc, /setPage\(1\)/, 'selección o reset vuelve a página 1')
+
+  assert.match(screenSrc, /items:\s*result\.payload\.items/)
+  assert.match(screenSrc, /total:\s*result\.payload\.total/)
+  assert.match(screenSrc, /pages:\s*result\.payload\.pages/)
+  assert.doesNotMatch(screenSrc, /result\.payload\.items\.filter\(/,
+    'no postfiltra una página ya paginada por el servidor')
+  assert.doesNotMatch(screenSrc, /key !== 'status'/)
 })
 
 test('Track H: el KPI de cumplimiento declara su universo y su justificación', () => {
@@ -235,6 +271,50 @@ test('banner de evidencia NO FORMAL se decide por el DATO, no por el modo demo',
   // Muestra POR QUÉ está bloqueada y QUÉ build midió.
   assert.match(screenSrc, /production_shell_run_blocked_by/)
   assert.match(screenSrc, /auditor_build_sha/)
+})
+
+test('linaje UI muestra build auditor y contrato sin depender de build_sha', () => {
+  assert.equal(typeof m3Meta.getM3Lineage, 'function')
+  assert.deepEqual(m3Meta.getM3Lineage({
+    auditor_build_sha: '1111111',
+    contract_build_sha: '2222222',
+  }), { auditor: '1111111', contract: '2222222' })
+  assert.match(screenSrc, /getM3Lineage\(run, shortHash\)/)
+  assert.match(screenSrc, /lineage\.auditor/)
+  assert.match(screenSrc, /lineage\.contract/)
+  assert.doesNotMatch(screenSrc, /run\.build_sha/)
+})
+
+test('tabla M3 aplica loading y resultado solo para la petición más reciente', () => {
+  assert.match(screenSrc, /createLatestRequestGate/)
+  assert.match(screenSrc, /tableRequestGate\.current\.begin\(\)/)
+  assert.match(screenSrc, /tableRequestGate\.current\.isLatest\(requestId\)/)
+  assert.match(screenSrc, /!aliveRef\.current\s*\|\|\s*!tableRequestGate\.current\.isLatest\(requestId\)/)
+  assert.match(screenSrc, /tableQueryKeyRef\.current !== requestQueryKey/)
+})
+
+test('tabla M3 fija findings al run de latest y falla cerrada ante rechazos', () => {
+  assert.match(screenSrc, /run_id:\s*payload\.run\.run_id/)
+  assert.match(screenSrc, /invalid_request/)
+  assert.match(screenSrc, /clearFilters/)
+  assert.match(screenSrc, /Filtros rechazados por el backend/)
+  assert.match(screenSrc, /result\.payload\.page !== page/)
+  assert.match(screenSrc, /setPage\(result\.payload\.page\)/)
+})
+
+test('stale se recompone mientras la pantalla sigue montada y gobierna exports', () => {
+  assert.match(screenSrc, /startM3StaleClock/)
+  assert.match(screenSrc, /payload\?\.stale === true \|\| localStale/)
+  assert.match(screenSrc, /effectivePayload/)
+  assert.match(screenSrc, /evidenceJson\(effectivePayload,/)
+  assert.match(screenSrc, /executiveSummaryText\(effectivePayload/)
+  assert.match(screenSrc, /technical=\{run\.technical_state === 'PASS' && stale \? 'STALE' : run\.technical_state\}/)
+  assert.match(screenSrc, /effectivePayload\.age_days/)
+})
+
+test('fixture demo se resuelve por alias de build y nunca se importa por ruta real', () => {
+  assert.match(screenSrc, /from '#m3-demo-fixture'/)
+  assert.doesNotMatch(screenSrc, /m3\/fixtures\/apiLatestFixture/)
 })
 
 test('el fixture del demo NO se declara corrida formal', () => {

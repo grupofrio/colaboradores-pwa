@@ -6,8 +6,8 @@
 //   · STALE/DEMO en el NOMBRE del archivo y en la metadata;
 //   · revokeObjectURL tras la descarga; sin PII (el contrato ya no la trae).
 
-import { M3_FORBIDDEN_KEY_RE } from './contract.js'
-import { categoryLabel } from './m3Meta.js'
+import { M3_FORBIDDEN_KEY_RE, validateM3Latest } from './contract.js'
+import { categoryLabel, getM3Lineage } from './m3Meta.js'
 
 export const CREDENTIAL_VALUE_RE = /(?:\bBearer\s+\S+|\b(?:password|passwd|api[_-]?key|token|secret)\s*[=:]\s*\S+|\b(?:sk-|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]+)/i
 
@@ -53,10 +53,16 @@ export const M3_CSV_COLUMNS = Object.freeze([
   'source_model', 'source_timestamp',
 ])
 
-export function findingsToCsv(findings = []) {
+function canonicalLatest(payload) {
+  const validation = validateM3Latest(payload)
+  if (!validation.ok) throw new Error(`M3 payload invalid: ${validation.errors.join('; ')}`)
+  return validation.payload
+}
+
+export function findingsToCsv(payload) {
+  const canonical = canonicalLatest(payload)
   const rows = [M3_CSV_COLUMNS.join(',')]
-  for (const raw of Array.isArray(findings) ? findings : []) {
-    const finding = sanitizeForExport(raw)
+  for (const finding of canonical.findings) {
     rows.push(M3_CSV_COLUMNS.map((col) => {
       const value = finding?.[col]
       return csvCell(Array.isArray(value) ? value.join('|') : value)
@@ -72,23 +78,29 @@ export function exportFilename(base, ext, { stale = false, demo = false } = {}) 
 }
 
 export function evidenceJson(payload, extra = {}) {
+  const canonical = canonicalLatest(payload)
   return JSON.stringify(sanitizeForExport({
     exported_schema: 'kold.os.m3.export/1',
     export_meta: {
-      stale: payload?.stale === true,
-      age_days: payload?.age_days ?? null,
-      technical_state: payload?.run?.technical_state || null,
+      stale: canonical.stale === true,
+      age_days: canonical.age_days ?? null,
+      technical_state: canonical.run?.technical_state || null,
       ...extra,
     },
-    envelope: payload,
+    envelope: canonical,
   }), null, 2)
 }
 
 /** Resumen ejecutivo imprimible (texto plano). */
 export function executiveSummaryText(payload, { demo = false } = {}) {
+  payload = canonicalLatest(payload)
   const run = payload?.run || {}
   const summary = payload?.summary || {}
   const kpis = payload?.kpis || {}
+  const lineage = getM3Lineage(run)
+  const findingHeadline = Number(summary.definitive_incident_rule_count || 0) > 0
+    ? 'M3 está funcionando y detectó incumplimientos definitivos: la evidencia cumple el contrato epistémico para afirmarlos.'
+    : 'M3 está funcionando y detectó señales operativas: un tablero rojo no prueba por sí solo un incumplimiento.'
   const lines = [
     'KOLD OS · M3 — EJECUCIÓN DE RUTAS (resumen ejecutivo)',
     '=====================================================',
@@ -98,12 +110,13 @@ export function executiveSummaryText(payload, { demo = false } = {}) {
     `Corte de auditoría : ${run.finished_at || '—'}`,
     `Ventana            : últimos ${run.scope?.window_days ?? '—'} días`,
     `Compañías (scope)  : ${(run.scope?.company_ids || []).join(', ') || '—'}`,
-    `Auditor (build)    : ${run.build_sha || '—'} · manifest ${run.manifest_sha256 || '—'}`,
+    `Auditor (midió)       : ${lineage.auditor}`,
+    `Contrato (empaquetó)  : ${lineage.contract} · manifest ${run.manifest_sha256 || '—'}`,
     `Evidencia sha256   : ${run.evidence_sha256 || '—'}`,
     '',
     `ESTADO TÉCNICO DEL AUDITOR : ${run.technical_state || '—'}`,
     `ESTADO OPERATIVO DE DATOS  : ${summary.overall_status || '—'}`,
-    'M3 está funcionando y detectó incumplimientos: un tablero rojo es un resultado VÁLIDO del observatorio, no un fallo del sistema.',
+    findingHeadline,
     '',
     'KPIs DE EJECUCIÓN (cada uno cuenta UNA sola entidad):',
     ` - Rutas operativas: ${kpis.plans_operational ?? '—'} · iniciadas y VENCIDAS sin cierre: ${kpis.plans_started_overdue_open ?? '—'} · cerradas: ${kpis.plans_closed ?? '—'}`,
@@ -134,6 +147,7 @@ export function executiveSummaryText(payload, { demo = false } = {}) {
 
 /** Comparación plan vs real (export dedicado, honesto sobre lo medible). */
 export function planVsRealText(payload, { demo = false } = {}) {
+  payload = canonicalLatest(payload)
   const kpis = payload?.kpis || {}
   const rules = payload?.rule_results || []
   const byCode = Object.fromEntries(rules.map((r) => [r.rule_code, r]))

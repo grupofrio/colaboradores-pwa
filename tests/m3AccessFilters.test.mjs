@@ -88,6 +88,23 @@ test('filtros: categoría/sucursal/granularidad/severidad/búsqueda/fechas', () 
   assert.deepEqual(applyFindingFilters(null, M3_DEFAULT_FILTERS), [])
 })
 
+test('filtros epistémicos: verdict/classification son exactos y fail-closed', () => {
+  assert.ok('verdict' in M3_DEFAULT_FILTERS)
+  assert.ok('classification' in M3_DEFAULT_FILTERS)
+  assert.ok(!('status' in M3_DEFAULT_FILTERS), 'el semáforo técnico no sustituye al veredicto')
+
+  const risks = applyFindingFilters(FINDINGS, { verdict: 'riesgo' })
+  assert.ok(risks.length > 0)
+  assert.ok(risks.every((finding) => finding.verdict === 'riesgo'))
+
+  const exploratory = applyFindingFilters(FINDINGS, { classification: 'exploratory' })
+  assert.ok(exploratory.length > 0)
+  assert.ok(exploratory.every((finding) => finding.classification === 'exploratory'))
+
+  assert.deepEqual(applyFindingFilters(FINDINGS, { verdict: 'RIESGO' }), [], 'strict-case')
+  assert.deepEqual(applyFindingFilters(FINDINGS, { classification: 'unknown' }), [], 'inválido no amplía resultados')
+})
+
 test('paginación defensiva: clamps y defaults', () => {
   const items = Array.from({ length: 28 }, (_, i) => ({ i }))
   assert.equal(paginate(items, 3, 10).items.length, 8)
@@ -106,20 +123,50 @@ test('neutralizeCsvCell: fórmulas y controles neutralizados', () => {
   assert.equal(neutralizeCsvCell('texto ñormal ✓'), 'texto ñormal ✓')
 })
 
-test('findingsToCsv: payload hostil no produce celdas ejecutables', () => {
-  const hostile = [{
-    finding_id: '=2+5', rule_code: '+CMD|calc', category: '-neg', severity: '@at',
-    status: 'RED', granularity: 'aggregate', lifecycle_status: 'new', title: '\ttab',
-    branch_id: null, branch_code: null, route_id: null, plan_id: null,
-    entity_type: 'x', entity_reference: '=HYPERLINK("http://evil")', observed_value: 'ok',
-    expected_rule: 'r', numerator: 1, denominator: 2, pct: 50, incidences: 1,
-    responsible_area: 'a', owner_status: 'unassigned', first_seen_at: 'x',
-    last_seen_at: 'y', occurrence_count: 1, source_model: 'm', source_timestamp: 't',
-  }]
-  const csv = findingsToCsv(hostile)
+test('findingsToCsv exporta solo el envelope canonico validado', () => {
+  const payload = JSON.parse(JSON.stringify(M3_API_LATEST_FIXTURE))
+  payload.future_extension = 'NO_EXPORTAR'
+  payload.findings[0].future_finding_field = 'NO_EXPORTAR'
+  const csv = findingsToCsv(payload)
   const dataLine = csv.split('\n')[1]
   assert.ok(!/(^|,)[=+\-@]/.test(dataLine), `sin celdas de fórmula: ${dataLine}`)
   assert.equal(csv.split('\n')[0], M3_CSV_COLUMNS.join(','))
+  assert.ok(!csv.includes('NO_EXPORTAR'))
+
+  const hostile = JSON.parse(JSON.stringify(M3_API_LATEST_FIXTURE))
+  hostile.findings[0].entity_reference = 'persona@example.com'
+  assert.throws(() => findingsToCsv(hostile), /invalid/i)
+})
+
+test('todos los exports fallan cerrados ante metadata coordinada no canonica', () => {
+  const cases = [
+    (payload) => { payload.run.run_id = 'run-libre' },
+    (payload) => { payload.run.environment = 'qa@example.com' },
+    (payload) => { payload.run.finished_at = 'ayer' },
+    (payload) => { payload.run.scope.timezone = 'hora de mexico' },
+    (payload) => { payload.findings[0].finding_id = 'hallazgo libre' },
+    (payload) => {
+      const finding = payload.findings[0]
+      const rule = payload.rule_results.find((item) => item.rule_code === finding.rule_code)
+      rule.rule_code = 'M3-Z-99'
+      finding.rule_code = 'M3-Z-99'
+      finding.finding_id = `M3-Z-99::global:all::${finding.entity_type}:aggregate`
+    },
+  ]
+  for (const mutate of cases) {
+    const payload = JSON.parse(JSON.stringify(M3_API_LATEST_FIXTURE))
+    mutate(payload)
+    assert.throws(() => evidenceJson(payload), /invalid/i)
+    assert.throws(() => findingsToCsv(payload), /invalid/i)
+  }
+})
+
+test('exports canonicos rechazan timezone con forma valida pero no soportado', () => {
+  const payload = JSON.parse(JSON.stringify(M3_API_LATEST_FIXTURE))
+  payload.run.scope.timezone = 'Aida'
+
+  assert.throws(() => evidenceJson(payload), /invalid/i)
+  assert.throws(() => findingsToCsv(payload), /invalid/i)
 })
 
 test('exportFilename: STALE/DEMO en el nombre · revokeObjectURL presente', () => {
@@ -160,4 +207,57 @@ test('resumen ejecutivo y plan-vs-real: metadata honesta + números reales', () 
   const json = JSON.parse(evidenceJson(stalePayload))
   assert.equal(json.exported_schema, 'kold.os.m3.export/1')
   assert.equal(json.export_meta.stale, true)
+  assert.equal(json.envelope.metrics, undefined, 'metrics raw no forman parte del contrato exportable')
+
+  stalePayload.future_extension = 'NO_EXPORTAR'
+  stalePayload.findings[0].future_finding_field = 'NO_EXPORTAR'
+  const projectedJson = evidenceJson(stalePayload)
+  assert.ok(!projectedJson.includes('NO_EXPORTAR'))
+})
+
+test('resumen anomaly-only no convierte RED exploratorio en incumplimiento', () => {
+  const anomalyOnly = JSON.parse(JSON.stringify(M3_API_LATEST_FIXTURE))
+  const finding = anomalyOnly.findings.find((item) => item.verdict === 'anomalia')
+  const rule = anomalyOnly.rule_results.find((item) => item.rule_code === finding.rule_code)
+  anomalyOnly.rule_results = [rule]
+  anomalyOnly.findings = [finding]
+  anomalyOnly.summary.definitive_incident_rule_count = 0
+  anomalyOnly.summary.definitive_incident_count = 0
+  anomalyOnly.summary.warning_rule_count = 0
+  anomalyOnly.summary.warning_count = 0
+  anomalyOnly.summary.exploratory_signal_rule_count = 1
+  anomalyOnly.summary.exploratory_signal_count = Number.isInteger(rule.incidences) ? rule.incidences : 0
+  anomalyOnly.summary.compliant_rule_count = 0
+  anomalyOnly.summary.not_evaluable_rule_count = 0
+  anomalyOnly.summary.total_incidences = Number.isInteger(rule.incidences) ? rule.incidences : 0
+  anomalyOnly.summary.total_rules = 1
+  anomalyOnly.summary.rules_pass = 0
+  anomalyOnly.summary.rules_warning = 1
+  anomalyOnly.summary.rules_fail = 0
+  anomalyOnly.summary.rules_not_evaluable = 0
+  anomalyOnly.summary.overall_status = 'AMBER'
+  anomalyOnly.summary.branches_with_findings = finding.branch_id == null ? [] : [finding.branch_id]
+
+  const text = executiveSummaryText(anomalyOnly)
+  assert.ok(text.includes('detectó señales operativas'))
+  assert.ok(!text.includes('detectó incumplimientos'))
+  assert.ok(text.includes(`[ANOMALIA] ${rule.rule_code}`))
+  assert.ok(text.includes('INCUMPLIMIENTOS definitivos : 0 reglas'))
+})
+
+test('resumen exporta por separado build auditor y build de contrato', () => {
+  const payload = JSON.parse(JSON.stringify(M3_API_LATEST_FIXTURE))
+  payload.run.auditor_build_sha = '1111111111111111111111111111111111111111'
+  payload.run.contract_build_sha = '2222222222222222222222222222222222222222'
+  for (const finding of payload.findings) {
+    finding.evidence_reference.auditor_build_sha = payload.run.auditor_build_sha
+    finding.evidence_reference.contract_build_sha = payload.run.contract_build_sha
+  }
+
+  const text = executiveSummaryText(payload)
+  assert.ok(text.includes('Auditor (midió)'))
+  assert.ok(text.includes(payload.run.auditor_build_sha))
+  assert.ok(text.includes('Contrato (empaquetó)'))
+  assert.ok(text.includes(payload.run.contract_build_sha))
+  assert.ok(!text.includes('Auditor (build)'))
 })

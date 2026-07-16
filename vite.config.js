@@ -2,11 +2,22 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
+    resolve: {
+      alias: {
+        '#m3-demo-fixture': fileURLToPath(new URL(
+          mode === 'production'
+            ? './src/modules/ejecucion/m3/fixtures/emptyDemoFixture.js'
+            : './src/modules/ejecucion/m3/fixtures/apiLatestFixture.js',
+          import.meta.url,
+        )),
+      },
+    },
     plugins: [
       react(),
       tailwindcss(),
