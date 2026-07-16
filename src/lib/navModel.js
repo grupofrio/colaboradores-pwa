@@ -18,6 +18,32 @@ import {
 import { isValidAuthenticatedSession } from './session.js'
 import { readAuthoritativeTowerStatus } from '../modules/torre/e1/loadTowerStatus.js'
 import { readM2Access } from '../modules/planeacion/m2/access.js'
+import { readM3Access } from '../modules/ejecucion/m3/access.js'
+import { readM4Access } from '../modules/ventas/m4/access.js'
+
+// ── Registro de políticas de acceso por módulo ───────────────────────────────
+// Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
+// x_job_key. Antes esto era una cadena de `if (accessPolicy === 'mN')`: crecía
+// una rama por módulo y una política nueva mal escrita quedaba visible por
+// defecto. Como registro, lo desconocido no tiene resolver ⇒ se deniega solo.
+//
+// Tower NO entra aquí: su autoridad sigue siendo `towerGated` +
+// readAuthoritativeTowerStatus (M1 intacto — no se convierte a x_job_key ni a
+// accessPolicy).
+export const ACCESS_POLICY_RESOLVERS = Object.freeze({
+  m2: readM2Access,
+  m3: readM3Access,
+  m4: readM4Access,
+})
+
+// Resuelve una accessPolicy. FAIL-CLOSED: si la política no está registrada
+// (typo, módulo nuevo sin dar de alta, resolver borrado) devuelve false — nunca
+// cae al camino por rol, porque eso expondría el módulo a quien no debe verlo.
+export function resolveAccessPolicy(policy, session) {
+  const resolver = ACCESS_POLICY_RESOLVERS[policy]
+  if (typeof resolver !== 'function') return false
+  return resolver(session)?.level === 'global'
+}
 
 // Anclas fijas (no son módulos del registry). Siempre presentes con sesión:
 // todos pueden ir a su Inicio y a su perfil.
@@ -101,22 +127,28 @@ function navPriorityOf(module) {
 
 // ── Visibilidad SESSION-AWARE (fuente única para tarjeta + nav + clic) ───────
 // Un módulo con accessPolicy declara que su autoridad NO es x_job_key genérico
-// sino un contrato propio (B3: la MISMA función decide tarjeta, nav, Más, rail
-// y clic; el route guard revalida). Hoy: accessPolicy 'm2' => readM2Access.
-// FAIL-CLOSED: sesión inválida => nada; política desconocida => oculto.
-// (Mismos nombres/firmas que la mecánica towerGated del PR #67 para que el
-// rebase post-#67 sea una unión mecánica de ramas en la misma función.)
+// sino un contrato propio (la MISMA función decide tarjeta, nav, Más, rail y
+// clic; el route guard revalida). Se resuelven por ACCESS_POLICY_RESOLVERS.
+// FAIL-CLOSED en tres capas: sesión inválida => nada; política desconocida =>
+// oculto; y el route guard revalida en la entrada.
+//
+// ORDEN de resolución (un módulo tiene accessPolicy O towerGated, nunca ambos):
+//   1. sesión inválida            => deny
+//   2. module.accessPolicy        => resolver del registro; desconocida => deny
+//   3. module.towerGated          => tower_status autoritativo (M1, intacto)
+//   4. resto                      => roles x_job_key
 export function isModuleVisibleForSession(module, session) {
   if (!module) return false
   if (module.showInNav === false && module.showOnHome === false) return false
   if (!isValidAuthenticatedSession(session)) return false
+  if (module.accessPolicy) return resolveAccessPolicy(module.accessPolicy, session)
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
-  if (module.accessPolicy === 'm2') return readM2Access(session).level === 'global'
-  if (module.accessPolicy) return false // política desconocida => fail-closed
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
 }
 
 // Módulos visibles para la sesión en el orden canónico del registry.
+// La AUTORIZACIÓN no reordena ni filtra por superficie: cada superficie aplica
+// después su propia metadata (fix de Sebastián d7c2bb8, conservado).
 export function getVisibleModulesForSession(session = null) {
   if (!isValidAuthenticatedSession(session)) return []
   const seen = new Set()
@@ -134,23 +166,22 @@ export function getHomeModulesForSession(session = null) {
 }
 
 // Decisión de ENTRADA (clic del home) con la MISMA autoridad que la
-// visibilidad (B3): módulos accessPolicy entran/deniegan por su contrato
-// (navegan directo, sin role-context); el resto delega en la lógica por rol.
+// visibilidad: módulos accessPolicy entran/deniegan por su contrato (navegan
+// directo, sin role-context); el resto delega en la lógica por rol.
 // El route guard (App.jsx) sigue siendo la autoridad final.
-// Nota de rebase: el PR #67 define una función homónima (towerGated) en
-// roleContext.js; al rebasar #68 sobre main post-#67 se unifican en una sola.
 export function getModuleEntryDecisionForSession(module, session) {
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
-  if (module?.accessPolicy === 'm2') {
-    return readM2Access(session).level === 'global'
+  // accessPolicy (m2/m3/m4): entra o se deniega por SU contrato, sin role-context.
+  // Una política desconocida no tiene resolver ⇒ resolveAccessPolicy deniega.
+  if (module?.accessPolicy) {
+    return resolveAccessPolicy(module.accessPolicy, session)
       ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
       : { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
-  if (module?.accessPolicy) {
-    return { type: 'denied', compatibleRoles: [], selectedRole: '' }
-  }
+  // Tower (towerGated) y los módulos por rol siguen resolviéndose en
+  // roleContext, sin cambios: M1 conserva su autoridad tal cual.
   return getRoleAwareModuleEntryDecision(module, session)
 }
 
@@ -159,6 +190,8 @@ export function getModuleEntryDecisionForSession(module, session) {
 // FAIL-CLOSED (BLOCKER 1): sesión inválida (null/{}/token vacío/expirada/
 // corrupta) => []. Sesión válida sin roles especiales => solo universales.
 export function getNavModules(session = null) {
+  // Nav SÍ ordena por navPriority (a diferencia del home, que conserva el orden
+  // del registry). El sort vive aquí, no en la autorización.
   return getVisibleModulesForSession(session)
     .filter((m) => m.showInNav !== false)
     .map((module, index) => ({ module, index }))

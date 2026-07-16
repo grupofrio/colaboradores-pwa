@@ -173,6 +173,51 @@ export const MODULES = [
     showInNav:  true,
   },
 
+  // ── KOLD OS · M3 — Ejecución de rutas (observatorio read-only) ────────────
+  // Evidencia incumplimientos de EJECUCIÓN (arranque/paradas/comercial/carga/
+  // incidentes/cierre/plan-vs-real) desde la API autenticada gf_kold_os_m3.
+  // accessPolicy 'm3': misma mecánica que M2 — se resuelve por el registro
+  // ACCESS_POLICY_RESOLVERS de navModel, NUNCA por roles genéricos.
+  // M3EjecucionRoute (App.jsx) revalida como autoridad final.
+  {
+    id:     'ejecucion',
+    label:  'Ejecución de rutas',
+    shortLabel: 'Ejecución',
+    route:  '/ejecucion',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm3',
+    status: 'live',
+    icon:   'ruta',
+    navPriority: 14,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
+  // ── KOLD OS · M4 — Ventas y clientes (observatorio read-only) ────────────
+  // Evidencia de la operación comercial (maestro de clientes, canal, leads,
+  // pedidos confirmados, precio/descuento, recurrencia, portafolio,
+  // pérdida/recompra, señal M4→M2) desde la API autenticada gf_kold_os_m4
+  // (GrupoVeniu/GrupoFrio PR #205, aún sin mergear ni desplegar).
+  // accessPolicy 'm4': tarjeta, nav Y clic se deciden con readM4Access
+  // mediante ACCESS_POLICY_RESOLVERS en navModel, NUNCA por roles
+  // genéricos. `roles` queda SOLO como documentación. M4VentasRoute (App.jsx)
+  // revalida como autoridad final de la ruta.
+  {
+    id:     'ventas-clientes',
+    label:  'Ventas y clientes',
+    shortLabel: 'Ventas',
+    route:  '/ventas-clientes',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm4',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 15,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',

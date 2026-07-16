@@ -242,7 +242,8 @@ export default function ScreenHome() {
   }, [])
 
   // Módulos visibles para esta sesión: roles x_job_key, Tower por tower_status
-  // autoritativo y políticas propias como M2. Home conserva el orden histórico.
+  // autoritativo y políticas propias (M2/M3) vía ACCESS_POLICY_RESOLVERS.
+  // Home conserva el orden histórico del registry.
   const modules = useMemo(() =>
     getHomeModulesForSession(session),
   [session])
