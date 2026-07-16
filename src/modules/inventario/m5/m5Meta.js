@@ -32,11 +32,12 @@ export const M5_SEVERITY_LABELS = Object.freeze({
   high: 'Alta', medium: 'Media', low: 'Baja',
 })
 
+// M5 v1 emite UNA sola granularidad: el backend declara
+// `capabilities.granularities == ['aggregate']`. Las demás etiquetas venían de
+// M4 (canal/segmento/cliente/pedido) y de M3 (vehículo/almacén): rotular algo
+// que el backend nunca emite es prometer una dimensión que no existe.
 export const M5_GRANULARITY_LABELS = Object.freeze({
-  aggregate: 'AGREGADO', company: 'COMPAÑÍA', branch: 'SUCURSAL',
-  channel: 'CANAL', customer_segment: 'SEGMENTO', customer: 'CLIENTE',
-  order: 'PEDIDO', line: 'LÍNEA', product: 'PRODUCTO',
-  vehicle: 'VEHÍCULO', warehouse: 'ALMACÉN',
+  aggregate: 'AGREGADO',
 })
 
 export const M5_LIFECYCLE_LABELS = Object.freeze({

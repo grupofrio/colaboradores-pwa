@@ -105,9 +105,9 @@ export function executiveSummaryText(payload, { demo = false } = {}) {
   const summary = payload?.summary || {}
   const nonformal = run.is_production_shell_run !== true
   const lines = [
-    'KOLD OS · M5 — VENTAS, CLIENTES Y CANALES (resumen ejecutivo)',
-    '=============================================================',
-    demo ? '⚠ ORIGEN: MODO DEMO (fixture emitido por el core real del backend GrupoVeniu/GrupoFrio#205; numeros reales medidos por XML-RPC, NO evidencia en vivo)' : 'ORIGEN: API autenticada gf_kold_os_m5',
+    'KOLD OS · M5 — INVENTARIO Y FLUJO DE PRODUCTO (resumen ejecutivo)',
+    '=================================================================',
+    demo ? '⚠ ORIGEN: MODO DEMO (fixture emitido por el core real del backend GrupoVeniu/GrupoFrio#208; numeros reales medidos por XML-RPC, NO evidencia en vivo)' : 'ORIGEN: API autenticada gf_kold_os_m5',
     payload?.stale ? `⚠ CORRIDA STALE: ${payload?.age_days ?? '?'} días de antigüedad (no vigente)` : 'Corrida vigente',
     nonformal
       ? `⚠ EVIDENCIA NO FORMAL: no es corrida odoo-shell de producción. Bloqueada por: ${(run.production_shell_run_blocked_by || []).join(' · ') || '—'}`
@@ -139,43 +139,76 @@ export function executiveSummaryText(payload, { demo = false } = {}) {
     ...(payload?.findings || []).map((f) =>
       ` - [${String(f.verdict || '').toUpperCase()}${f.approved_threshold ? '' : ' · UMBRAL NO APROBADO'}] ${f.rule_code} ${f.title}: ${f.observed_value} · área: ${f.responsible_area} · ciclo: ${f.lifecycle_status || 'new'} · granularidad: ${f.granularity}`),
     '',
-    'M5 define segmento/motivo/oferta de recompra; NO ejecuta campañas, opt-in ni automatización (eso es M8, LOCK).',
+    'M5 NO demuestra un cuadre físico: reporta SEÑALES de lo que los documentos declaran (ver capacidades no disponibles).',
     'M5 observa, no corrige. Cero writes. Generado client-side desde la API read-only.',
   ]
   return sanitizeForExport(lines.join('\n'))
 }
 
-/** Export de RECURRENCIA: el bloque F en texto plano, con universos declarados. */
+/** Export de DIFERENCIAS REPORTADAS: lo que el documento declara, en 3 niveles.
+ *
+ *  NIVEL 1 · señales reportadas      -> lo que la conciliación DECLARA.
+ *  NIVEL 2 · cobertura de instrumentación -> cuánto de la realidad observamos.
+ *  NIVEL 3 · capacidades no disponibles   -> lo que NO se puede afirmar.
+ *
+ *  Nunca dice "cuadra"/"no cuadra": `physical_reconciliation` es false.
+ */
 export function differencesText(payload, { demo = false } = {}) {
   const run = payload?.run || {}
   const rec = (payload?.metrics?.reconciliation_metrics || [])[0] || {}
+  const line = (payload?.metrics?.reconciliation_line_metrics || [])[0] || {}
+  const supp = (payload?.metrics?.supplemental_load_metrics || [])[0] || {}
+  const out = (payload?.metrics?.outflow_metrics || [])[0] || {}
+  const uomc = (payload?.metrics?.uom_category_metrics || [])[0] || {}
+  const caps = payload?.capabilities?.features || {}
+  const n = (v) => (v === null || v === undefined ? '—' : v)
   const lines = [
-    'KOLD OS · M5 — DIFERENCIAS Y CUADRE DEL FLUJO',
-    '=============================================',
+    'KOLD OS · M5 — DIFERENCIAS REPORTADAS EN CONCILIACIÓN',
+    '=====================================================',
     demo ? '⚠ MODO DEMO (fixture del core real del backend; NO evidencia en vivo)' : 'API autenticada gf_kold_os_m5',
     run.is_production_shell_run !== true ? '⚠ EVIDENCIA NO FORMAL (sin corrida odoo-shell)' : 'EVIDENCIA FORMAL',
     `Ventana: [${run.scope?.window_start || '—'}, ${run.scope?.window_end_exclusive || '—'}) · corte ${run.finished_at || '—'}`,
     '',
-    'SUMAS DEL CUADRE (UOM heterogéneas: señal direccional, no unidades comparables):',
-    ` - Cargado    : ${rec.sum_loaded ?? '—'}`,
-    ` - Entregado  : ${rec.sum_delivered ?? '—'}`,
-    ` - Devuelto   : ${rec.sum_returned ?? '—'}`,
-    ` - Merma      : ${rec.sum_scrap ?? '—'}`,
-    ` - Diferencia : ${rec.sum_difference ?? '—'}`,
+    '── NIVEL 1 · SEÑALES REPORTADAS ─────────────────────────────────────────',
+    'Cifras REPORTADAS por gf.dispatch.reconciliation. Un total declarado en un',
+    'documento no es un hecho físico verificado.',
     '',
-    'RECONCILIACIONES:',
-    ` - Total                    : ${rec.recon_count ?? '—'}`,
-    ` - Cerradas (done)          : ${rec.recon_done_count ?? '—'}`,
-    ` - Con diferencia ≠ 0       : ${rec.with_difference_count ?? '—'}`,
-    ` - Con diferencia NEGATIVA  : ${rec.negative_difference_count ?? '—'}`,
-    ` - Con merma                : ${rec.with_scrap_count ?? '—'}`,
+    `CONCILIACIONES FINALES (state=done) — las únicas que sostienen lectura: ${n(rec.recon_final_count)} de ${n(rec.recon_count)}`,
+    ` - Cargado reportado    : ${n(rec.final_sum_loaded)}`,
+    ` - Entregado reportado  : ${n(rec.final_sum_delivered)}`,
+    ` - Devuelto reportado   : ${n(rec.final_sum_returned)}`,
+    ` - Merma reportada      : ${n(rec.final_sum_scrap)}`,
+    ` - Campo difference     : ${n(rec.final_sum_difference)}`,
+    ` - Con difference ≠ 0   : ${n(rec.final_with_difference_count)} de ${n(rec.recon_final_count)}`,
     '',
-    rec.delivered_exceeds_loaded_flag
-      ? 'CONDICIÓN AGREGADA: lo ENTREGADO excede lo CARGADO con 0 refills registrados (M5-G-06).'
-      : 'Condición agregada entregado>cargado: no detectada en esta corrida.',
+    `CONCILIACIONES ABIERTAS — TRABAJO EN CURSO, sus cifras aún cambian: ${n(rec.recon_open_count)}`,
+    ` - Cargado reportado    : ${n(rec.open_sum_loaded)}`,
+    ` - Entregado reportado  : ${n(rec.open_sum_delivered)}`,
+    ` - Con difference ≠ 0   : ${n(rec.open_with_difference_count)}`,
+    'Mezclar abiertas con finales produce un "descuadre" que solo refleja captura pendiente.',
+    '',
+    `POR PRODUCTO (lo más fino que el documento permite, sin mezclar productos):`,
+    ` - Líneas de conciliaciones finales   : ${n(line.final_line_count)}`,
+    ` - Con difference ≠ 0                 : ${n(line.final_line_with_difference_count)}`,
+    ` - Productos distintos                : ${n(line.final_product_groups)}`,
+    '',
+    '── NIVEL 2 · COBERTURA DE INSTRUMENTACIÓN ───────────────────────────────',
+    `Aceptación de entrega confirmada : ${n(out.received_count)} de ${n(out.line_count)} líneas de salida`,
+    `Planes con carga adicional       : ${n(supp.plans_with_supplemental_pickings)} de ${n(supp.plans_with_pickings)} (hasta ${n(supp.max_pickings_per_plan)} pickings)`,
+    `Categorías de UOM conciliadas    : ${n(uomc.uom_category_count)} (1 = cantidades comparables como conteo)`,
+    '',
+    '── NIVEL 3 · CAPACIDADES NO DISPONIBLES ─────────────────────────────────',
+    'Lo que esta corrida NO puede afirmar, y por qué:',
+    ` - Cuadre físico integral      : ${caps.physical_reconciliation === false ? 'NO DISPONIBLE' : '—'} · no hay base física comparable (M5-G-08 = no evaluable)`,
+    ` - Normalización por UOM       : ${caps.uom_normalized_reconciliation === false ? 'NO DISPONIBLE' : '—'} · las sumas no se normalizan`,
+    ` - Aceptación de entrega       : ${caps.delivery_acceptance_confirmed === false ? 'NO DISPONIBLE' : '—'} · la recepción casi no se usa`,
+    ` - Inventario por vehículo     : ${caps.vehicle_inventory === false ? 'NO DISPONIBLE' : '—'} · no existe el modelo`,
+    ` - Atribución de carga adicional: ${caps.supplemental_load_attribution === false ? 'NO DISPONIBLE' : '—'} · entra por picking, no por el documento`,
+    ` - Cobertura del modelo refill : ${caps.refill_model_coverage === false ? 'NO DISPONIBLE' : '—'} · van.refill.request no captura las recargas reales`,
+    '',
     'Los umbrales de diferencia aceptable NO están aprobados: cada caso es señal exploratoria.',
   ]
-  return lines.join('\n')
+  return sanitizeForExport(lines.join('\n'))
 }
 
 /** Export del HANDOFF M5→M6/M7: lo que finanzas y rentabilidad deben consumir.
@@ -192,16 +225,17 @@ export function handoffM5M6M7Text(payload, { demo = false } = {}) {
     `Ventana: [${run.scope?.window_start || '—'}, ${run.scope?.window_end_exclusive || '—'}) · corte ${run.finished_at || '—'}`,
     '',
     'PARA M6 (caja/cobranza/conciliación — módulo NO iniciado):',
-    ` - Reconciliaciones con diferencia física : ${rec.with_difference_count ?? '—'} de ${rec.recon_count ?? '—'}`,
-    ` - Diferencias NEGATIVAS (salió de más)   : ${rec.negative_difference_count ?? '—'}`,
-    ` - Suma de diferencia (señal direccional) : ${rec.sum_difference ?? '—'}`,
+    ` - Conciliaciones FINALES con difference reportado ≠ 0 : ${rec.final_with_difference_count ?? '—'} de ${rec.recon_final_count ?? '—'}`,
+    ` - De ellas, con difference negativo                   : ${rec.final_negative_difference_count ?? '—'}`,
+    ` - Suma del campo difference (señal REPORTADA)         : ${rec.final_sum_difference ?? '—'}`,
     '',
     'PARA M7 (rentabilidad — módulo NO iniciado):',
-    ` - Paradas ejecutadas                     : ${wgt.executed_stop_count ?? '—'}`,
-    ` - Con actual_kg                          : ${wgt.executed_with_actual_kg_count ?? '—'}`,
-    ` - Sin actual_kg (hueco para margen/kg)   : ${wgt.executed_missing_actual_kg_count ?? '—'}`,
+    ` - Paradas completadas                                 : ${wgt.executed_stop_count ?? '—'}`,
+    ` - Con actual_kg PRESENTE (≠ pesaje verificado)        : ${wgt.executed_with_actual_kg_count ?? '—'}`,
+    ` - Sin actual_kg (hueco para margen/kg)                : ${wgt.executed_missing_actual_kg_count ?? '—'}`,
     '',
     'M5 solo OBSERVA: no ejecuta conciliaciones financieras ni calcula margen.',
+    'M6/M7 deben leer esto como SEÑAL REPORTADA, jamás como un cuadre demostrado.',
   ]
   return lines.join('\n')
 }

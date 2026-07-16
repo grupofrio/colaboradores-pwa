@@ -106,7 +106,7 @@ test('el total filtrado corresponde a las filas filtradas', () => {
 
 // El export tiene que coincidir con la pantalla y con la API: si el CSV dice
 // una cosa y la UI otra, el que abre el CSV se lleva la versión equivocada.
-test('export CSV: M5-H-01 y M5-G-06 coinciden con la API, con su universo', async () => {
+test('export CSV: M5-H-01 y M5-G-07 coinciden con la API, con su universo', async () => {
   const { findingsToCsv, M5_CSV_COLUMNS } = await import('../src/modules/inventario/m5/exporters.js')
   assert.ok(M5_CSV_COLUMNS.includes('universe_id'), 'el CSV debe llevar el universo canónico')
   assert.ok(!M5_CSV_COLUMNS.includes('company_id'), 'dimensión inexistente en v1')
@@ -137,9 +137,14 @@ test('export CSV: M5-H-01 y M5-G-06 coinciden con la API, con su universo', asyn
   assert.equal(h01[iUid], 'executed_stops_in_window')
   const api = FINDINGS.find((f) => f.rule_code === 'M5-H-01')
   assert.equal(Number(h01[iNum]), api.numerator, 'el export coincide con la API')
-  const g06 = rows.slice(1).find((c) => c[iCode] === 'M5-G-06')
-  assert.ok(g06, 'M5-G-06 (la condición agregada) viaja en el export')
-  assert.equal(g06[iUid], 'route_reconciliations_in_window')
+  // M5-G-06 (la condición agregada) ya NO viaja: medida solo contra las
+  // conciliaciones FINALES, la condición no se cumple => cumple => sin hallazgo.
+  // Se exporta G-07, la comparación POR PRODUCTO, que sí declara diferencia.
+  assert.ok(!rows.slice(1).some((c) => c[iCode] === 'M5-G-06'),
+    'una regla que cumple no genera hallazgo, así que no viaja en el export')
+  const g07 = rows.slice(1).find((c) => c[iCode] === 'M5-G-07')
+  assert.ok(g07, 'M5-G-07 (diferencia reportada por producto) viaja en el export')
+  assert.equal(g07[iUid], 'final_reconciliation_product_lines_in_window')
 })
 
 // Ningún hallazgo puede portar una dimensión que las capabilities niegan.
@@ -199,9 +204,22 @@ test('exports de texto: resumen/diferencias/handoff declaran NO FORMAL y fronter
   const resumen = executiveSummaryText(M5_API_LATEST_FIXTURE, { demo: true })
   assert.match(resumen, /EVIDENCIA NO FORMAL/)
   const dif = differencesText(M5_API_LATEST_FIXTURE, { demo: true })
-  assert.match(dif, /DIFERENCIAS Y CUADRE/)
-  assert.match(dif, /heterogéneas/)
-  assert.match(dif, /CONDICIÓN AGREGADA|no detectada/)
+  // El export ya no promete un "cuadre": nombra lo que de verdad trae.
+  assert.match(dif, /DIFERENCIAS REPORTADAS EN CONCILIACIÓN/)
+  assert.match(dif, /NIVEL 1 · SEÑALES REPORTADAS/)
+  assert.match(dif, /NIVEL 2 · COBERTURA DE INSTRUMENTACIÓN/)
+  assert.match(dif, /NIVEL 3 · CAPACIDADES NO DISPONIBLES/)
+  assert.ok(!/NO CUADRA/i.test(dif), 'el export jamás afirma un descuadre')
+  // La v1 afirmaba "UOM heterogéneas" -- y esa afirmación tampoco estaba medida.
+  // La medición la refuta: uom_category_count = 1 (todos los productos
+  // conciliados comparten la categoría "Unit"), así que las sumas SÍ son
+  // dimensionalmente consistentes como conteo. Lo que no son es una magnitud
+  // física ni una normalización por producto: eso es lo que debe declararse.
+  assert.match(dif, /REPORTADA|reportan|reportado/)
+  assert.match(dif, /Normalización por UOM\s*:\s*NO DISPONIBLE/)
+  assert.match(dif, /Cuadre físico integral\s*:\s*NO DISPONIBLE/)
+  assert.ok(!/heterogéneas/i.test(dif),
+    'no se afirma heterogeneidad de UOM: la medición dice 1 sola categoría')
   const handoff = handoffM5M6M7Text(M5_API_LATEST_FIXTURE, { demo: true })
   assert.match(handoff, /M6/)
   assert.match(handoff, /M7/)

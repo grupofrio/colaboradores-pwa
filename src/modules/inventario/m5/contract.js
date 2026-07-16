@@ -1,5 +1,5 @@
 // ─── KOLD OS · M5 — contrato del envelope `kold.os.m5.api/1` ─────────────────
-// Espejo del backend: GrupoVeniu/GrupoFrio PR #205 (el commit `978994c4` que
+// Espejo del backend: GrupoVeniu/GrupoFrio PR #208 (el commit `978994c4` que
 // auditó Codex, ya corregido). Si el contrato del backend cambia, se ajusta
 // AQUÍ (y en koldOsM5Route.js) sin reescribir la pantalla.
 //
@@ -45,6 +45,12 @@ export const M5_UNIVERSE_IDS = Object.freeze([
   'executed_stops_in_window',
   'active_fleet_vehicles',
   'consignments_in_scope',
+  // Añadidos en la corrección RED: separar conciliaciones FINALES de ABIERTAS
+  // es lo que impide volver a mezclar trabajo en curso con trabajo cerrado.
+  // Ids copiados de `core.UNIVERSES` del backend, NO inventados aquí.
+  'final_reconciliations_in_window',
+  'open_reconciliations_in_window',
+  'final_reconciliation_product_lines_in_window',
 ])
 
 // M5 nace CON el catálogo de universos (lección 41, aprendida cuando A5 corrigió
@@ -57,9 +63,10 @@ export const M5_CLASSIFICATIONS = Object.freeze(
   ['definitive', 'caveated', 'exploratory', 'not_evaluable', 'invalid'])
 export const M5_VERDICTS = Object.freeze(
   ['incumplimiento', 'riesgo', 'anomalia', 'cumple', 'no_evaluable'])
-export const M5_GRANULARITIES = Object.freeze(
-  ['aggregate', 'company', 'branch', 'channel', 'customer_segment', 'customer',
-    'order', 'line', 'product'])
+// Espejo EXACTO de `capabilities.granularities` del backend: M5 v1 es agregado.
+// La lista larga era de M4; aceptar aquí una granularidad que el backend jamás
+// emite es dejar pasar un envelope de otro módulo como si fuera M5.
+export const M5_GRANULARITIES = Object.freeze(['aggregate'])
 const CLASSIFICATION_SET = new Set(M5_CLASSIFICATIONS)
 const VERDICT_SET = new Set(M5_VERDICTS)
 const GRANULARITY_SET = new Set(M5_GRANULARITIES)

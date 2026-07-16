@@ -51,16 +51,47 @@ test('M5-H-01: cobertura actual_kg con porcentaje derivado, no escrito', () => {
   assert.equal(rule.verdict, 'riesgo')
 })
 
-test('M5-G-06: la condición agregada vale 1 incidencia, no unidades', () => {
-  // El hallazgo central del cuadre: entregado > cargado con 0 refills. Su
-  // semántica declarada es 1 = LA CONDICIÓN, para no inflar el total con
-  // unidades heterogéneas (lección 14).
+test('M5-G-06 es una señal reportada acotada a conciliaciones FINALES', () => {
+  // El titular de la v1 ("entregado > cargado con 0 refills ⇒ el flujo NO
+  // cuadra") mezclaba conciliaciones ABIERTAS -- trabajo en curso -- con
+  // FINALES. Medido por estado, la condición NO se cumple en las finales.
+  // No se quema el veredicto: se fija la ESTRUCTURA y los límites declarados.
   const rule = M5_API_LATEST_FIXTURE.rule_results.find((r) => r.rule_code === 'M5-G-06')
-  assert.equal(rule.verdict, 'anomalia')
-  assert.equal(rule.incidences, 1)
   assert.equal(rule.classification, 'exploratory')
-  assert.ok(rule.evidence_limitations.includes('CONDICIÓN AGREGADA'))
-  assert.equal(rule.universe_id, 'route_reconciliations_in_window')
+  assert.notEqual(rule.verdict, 'incumplimiento', 'una exploratoria jamás lo afirma')
+  assert.ok([null, 0, 1].includes(rule.incidences),
+    '1 = LA CONDICIÓN agregada, no un conteo de unidades')
+  assert.equal(rule.universe_id, 'final_reconciliations_in_window')
+  for (const token of ['aggregate_raw=true', 'uom_normalized=false',
+    'physical_reconciliation_supported=false', 'reconciliation_state_scope=final']) {
+    assert.ok(rule.evidence_limitations.includes(token), `G-06 debe declarar ${token}`)
+  }
+})
+
+test('M5-G-08: el cuadre físico se declara NO EVALUABLE, no se insinúa', () => {
+  const rule = M5_API_LATEST_FIXTURE.rule_results.find((r) => r.rule_code === 'M5-G-08')
+  assert.ok(rule, 'la regla del cuadre físico debe existir para declararse inevaluable')
+  assert.equal(rule.verdict, 'no_evaluable')
+  assert.ok([null, 0].includes(rule.incidences), 'no_evaluable no aporta incidencias')
+  assert.equal(M5_API_LATEST_FIXTURE.capabilities.features.physical_reconciliation, false)
+})
+
+test('señal reportada y cuadre físico son capabilities distintas', () => {
+  // El blocker del RED: leer los totales del documento es posible; demostrar el
+  // cuadre físico no lo es. Confundirlas fue el error de la v1.
+  const f = M5_API_LATEST_FIXTURE.capabilities.features
+  assert.equal(f.raw_reconciliation_signal, true)
+  assert.equal(f.physical_reconciliation, false)
+  assert.equal(f.uom_normalized_reconciliation, false)
+})
+
+test('ningún KPI numérico de "cuadre" cuando la capability es false', () => {
+  assert.equal(M5_API_LATEST_FIXTURE.capabilities.features.physical_reconciliation, false)
+  for (const key of Object.keys(M5_API_LATEST_FIXTURE.kpis)) {
+    for (const banned of ['cuadre', 'balance', 'match_rate', 'physical_match']) {
+      assert.ok(!key.toLowerCase().includes(banned), `${key}: un número ahí sería una conclusión`)
+    }
+  }
 })
 
 test('cero cifras del universo pre-A5 en TODO el envelope', () => {
@@ -76,12 +107,19 @@ test('cero cifras del universo pre-A5 en TODO el envelope', () => {
   assert.ok(!pcts.includes(69), 'el 69% pre-A5 no es un resultado vigente')
 })
 
-test('las sumas de unidades declaran heterogeneidad de UOM en su caveat', () => {
-  for (const key of ['units_loaded_sum', 'units_delivered_sum', 'units_difference_sum']) {
+test('toda suma de conciliación se declara REPORTADA y con su estado', () => {
+  // Una suma de qty_* es lo que el documento DECLARA, no un hecho físico. Y
+  // jamás mezcla estados: mezclarlos fue el origen del titular falso.
+  const keys = Object.keys(M5_API_LATEST_FIXTURE.kpis).filter((k) => k.includes('reported_units'))
+  assert.ok(keys.length >= 4, 'deben existir los totales reportados')
+  for (const key of keys) {
     const kpi = M5_API_LATEST_FIXTURE.kpis[key]
-    assert.ok(kpi, `${key} debe emitirse`)
-    assert.match(kpi.caveat || '', /heterog/i,
-      `${key}: una suma entre UOM distintas sin caveat es una afirmación de más`)
+    assert.match(kpi.caveat || '', /REPORTADA/,
+      `${key}: una suma cruda sin declararse reportada es una afirmación de más`)
+    assert.ok(key.startsWith('final_'), `${key}: todo total reportado declara su estado`)
+  }
+  for (const key of ['reconciliations_final', 'reconciliations_open']) {
+    assert.ok(M5_API_LATEST_FIXTURE.kpis[key], `${key} debe emitirse por separado`)
   }
 })
 
