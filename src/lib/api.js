@@ -27,6 +27,10 @@ import {
   filterKoldOsM5Params,
 } from './koldOsM5Route.js'
 import {
+  isKoldOsM6Path,
+  filterKoldOsM6Params,
+} from './koldOsM6Route.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -9375,6 +9379,24 @@ async function directKoldOsM5(method, path) {
   return odooHttp('GET', cleanPath, filterKoldOsM5Params(query))
 }
 
+// ── KOLD OS M6 (gf_kold_os_m6) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Direct authenticated GET-only client for the KOLD OS M6 backend (caja,
+// cobranza, conciliación y liquidación). Sin número de PR: el backend está
+// construido en LOCAL y aún no publicado (el repo Odoo migra a grupofrio/gf), y
+// un número de PR en runtime envejece y miente.
+async function directKoldOsM6(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM6Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M6 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM6Params(query))
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
@@ -9384,6 +9406,7 @@ async function routeDirect(method, path, body) {
     directKoldOsM3,
     directKoldOsM4,
     directKoldOsM5,
+    directKoldOsM6,
     directProfile,
     directGerente,
     directAdmin,

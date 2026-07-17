@@ -16,6 +16,7 @@ import { readM2Access } from './modules/planeacion/m2/access'
 import { readM3Access } from './modules/ejecucion/m3/access'
 import { readM4Access } from './modules/ventas/m4/access'
 import { readM5Access } from './modules/inventario/m5/access'
+import { readM6Access } from './modules/caja-conciliacion/m6/access'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -39,6 +40,8 @@ const ScreenEjecucionM3 = lazy(() => import('./modules/ejecucion/ScreenEjecucion
 const ScreenVentasM4 = lazy(() => import('./modules/ventas/ScreenVentasM4'))
 // KOLD OS · M5 — Inventario y flujo (observatorio read-only, gate propio M5InventarioRoute)
 const ScreenInventarioM5 = lazy(() => import('./modules/inventario/ScreenInventarioM5'))
+// KOLD OS · M6 — Caja y conciliación (observatorio read-only, gate propio M6CajaRoute)
+const ScreenCajaConciliacionM6 = lazy(() => import('./modules/caja-conciliacion/ScreenCajaConciliacionM6'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -242,6 +245,25 @@ function M2PlaneacionRoute({ children }) {
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   if (readM2Access(session).level !== 'global') return <Navigate to="/" replace />
   return children
+}
+
+// KOLD OS · M6 (Caja y conciliación) — gate fail-closed PROPIO: SÓLO
+// direccion_general (x_job_key efectivo). Cualquier otra sesión => redirect
+// seguro a "/". Cero writes.
+//
+// OJO — a diferencia de M2PlaneacionRoute, aquí NO se acepta el tower_status
+// `admin_plataforma`: el backend M6 sólo valida el job key. Si el frontend fuera
+// más permisivo, la tarjeta se vería y el endpoint respondería 403 (bug de M1).
+function M6CajaRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM6Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenCajaConciliacionM6Mount() {
+  const { session } = useSession()
+  return <ScreenCajaConciliacionM6 session={session} />
 }
 
 function ScreenPlaneacionM2Mount() {
@@ -676,6 +698,8 @@ export default function App() {
             <Route path="/ventas-clientes" element={<M4VentasRoute><ScreenVentasM4Mount /></M4VentasRoute>} />
             {/* ── KOLD OS · M5 — Inventario y flujo (read-only) ────────── */}
             <Route path="/inventario-flujo" element={<M5InventarioRoute><ScreenInventarioM5Mount /></M5InventarioRoute>} />
+            {/* ── KOLD OS · M6 — Caja y conciliación (read-only) ───────── */}
+            <Route path="/caja-conciliacion" element={<M6CajaRoute><ScreenCajaConciliacionM6Mount /></M6CajaRoute>} />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />

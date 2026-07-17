@@ -45,12 +45,25 @@ const surfaces = (sess) => {
 const entersInto = (mod, sess) => getModuleEntryDecisionForSession(mod, sess).type !== 'denied'
 
 // ── El registro de políticas ─────────────────────────────────────────────────
-test('ACCESS_POLICY_RESOLVERS registra m2, m3, m4 y m5; Tower NO entra al registro', () => {
-  assert.deepEqual(Object.keys(ACCESS_POLICY_RESOLVERS).sort(), ['m2', 'm3', 'm4', 'm5'])
+test('ACCESS_POLICY_RESOLVERS registra M2-M6; Tower NO entra al registro', () => {
+  assert.deepEqual(Object.keys(ACCESS_POLICY_RESOLVERS).sort(), ['m2', 'm3', 'm4', 'm5', 'm6'])
   // Tower conserva su propia autoridad (towerGated + tower_status), no se
   // convierte a accessPolicy ni a x_job_key.
   assert.equal(TOWER.accessPolicy, undefined)
   assert.equal(TOWER.towerGated, true)
+})
+
+test('M5 y M6 conservan identidad, rutas y prioridad consecutiva', () => {
+  const m5 = getModuleById('inventario-flujo')
+  const m6 = getModuleById('cash-reconciliation')
+  assert.deepEqual(
+    [m5.route, m5.accessPolicy, m5.navPriority],
+    ['/inventario-flujo', 'm5', 16],
+  )
+  assert.deepEqual(
+    [m6.route, m6.accessPolicy, m6.navPriority],
+    ['/caja-conciliacion', 'm6', 17],
+  )
 })
 
 test('política desconocida => fail-closed (no cae al camino por rol)', () => {
