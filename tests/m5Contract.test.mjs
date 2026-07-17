@@ -17,6 +17,14 @@ test('fixture valida el contrato kold.os.m5.api/1', () => {
   assert.equal(M5_API_LATEST_FIXTURE.schema_version, M5_API_SCHEMA_VERSION)
 })
 
+test('latest acepta age_days decimal no negativo del envelope backend', () => {
+  const doc = clone()
+  doc.age_days = 0.05
+
+  const result = validateM5Latest(doc)
+  assert.equal(result.ok, true, result.errors.join('\n'))
+})
+
 test('procedencia: linaje al backend real, NO corrida formal', () => {
   assert.equal(M5_API_FIXTURE_PROVENANCE.backend_pr, 'GrupoVeniu/GrupoFrio#208')
   // Base contra la que se midió (origin/GrupoFrio al iniciar M5):
