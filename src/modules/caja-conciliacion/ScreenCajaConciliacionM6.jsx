@@ -352,7 +352,7 @@ export default function ScreenCajaConciliacionM6({ session }) {
     const messages = {
       loading: ['Cargando…', ''],
       unavailable: ['Sin fuente de datos disponible',
-        'La API autenticada de M6 (gf_kold_os_m6) aún no está desplegada. El backend está construido en LOCAL y todavía NO se ha publicado: el repositorio Odoo está migrando a grupofrio/gf. El merge, el despliegue, el flag y la ingesta son gates posteriores, cada uno con su S/N.'],
+        'La API autenticada de M6 (gf_kold_os_m6) no está disponible. Confirma instalación, endpoint y flag antes de habilitar su uso.'],
       flag_off: ['Módulo deshabilitado', 'El flag gf_kold_os.m6.enabled está en 0. Habilitarlo es una decisión con S/N.'],
       unauthorized: ['Sesión no válida', 'Vuelve a iniciar sesión.'],
       forbidden: ['Sin acceso', 'Este observatorio está limitado a dirección general.'],

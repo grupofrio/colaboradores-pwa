@@ -53,6 +53,19 @@ test('ACCESS_POLICY_RESOLVERS registra M2-M6; Tower NO entra al registro', () =>
   assert.equal(TOWER.towerGated, true)
 })
 
+test('M5 y M6 conservan identidad, rutas y prioridad consecutiva', () => {
+  const m5 = getModuleById('inventario-flujo')
+  const m6 = getModuleById('cash-reconciliation')
+  assert.deepEqual(
+    [m5.route, m5.accessPolicy, m5.navPriority],
+    ['/inventario-flujo', 'm5', 16],
+  )
+  assert.deepEqual(
+    [m6.route, m6.accessPolicy, m6.navPriority],
+    ['/caja-conciliacion', 'm6', 17],
+  )
+})
+
 test('política desconocida => fail-closed (no cae al camino por rol)', () => {
   const fake = { id: 'fake', route: '/fake', accessPolicy: 'no_existe', roles: ['*'] }
   const sess = s('direccion_general')

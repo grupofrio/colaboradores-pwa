@@ -47,7 +47,7 @@ function lineageLines(payload, { demo = false } = {}) {
   const scope = run.scope || {}
   const nonformal = run.is_production_shell_run !== true
   return [
-    demo ? '⚠ ORIGEN: MODO DEMO — fixture emitido por el core real del backend M6 LOCAL (aún no publicado). NO es evidencia en vivo.'
+    demo ? '⚠ ORIGEN: MODO DEMO — fixture emitido por el core real del backend M6. NO es evidencia en vivo.'
          : 'ORIGEN: API autenticada gf_kold_os_m6',
     nonformal
       ? `⚠ EVIDENCIA NO FORMAL: medición ${run.measurement_method || 'read-only'} fuera de odoo-shell productivo. Bloqueada por: ${(run.production_shell_run_blocked_by || []).map((b) => M6_SHELL_BLOCKER_LABELS[b] || b).join(' · ') || '—'}`

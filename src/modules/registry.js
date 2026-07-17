@@ -232,6 +232,9 @@ export const MODULES = [
     status: 'live',
     icon:   'kpis',
     navPriority: 16,
+    showOnHome: true,
+    showInNav:  true,
+  },
 
   // ── KOLD OS · M6 — Caja y conciliación (observatorio read-only) ───────────
   // Señales del ESTADO FINANCIERO/ADMINISTRATIVO de caja: facturación y cuentas
@@ -239,10 +242,8 @@ export const MODULES = [
   // conciliación, cartera y aging. M6 NO afirma un cuadre: presenta señales
   // reportadas, cobertura de instrumentación y capacidades no disponibles.
   //
-  // ⚠️ El backend (gf_kold_os_m6) está construido en LOCAL y AÚN NO PUBLICADO:
-  // el repo Odoo migra de GrupoVeniu/GrupoFrio a grupofrio/gf. Sin backend
-  // desplegado la pantalla resuelve `unavailable` en producción. Sin número de
-  // PR aquí: un número en runtime envejece y miente.
+  // La disponibilidad se confirma únicamente con la API autenticada y su flag;
+  // la PWA no infiere instalación ni habilitación desde el cliente.
   //
   // accessPolicy 'm6': tarjeta, nav Y clic se deciden con readM6Access (misma
   // mecánica inline que M2), NUNCA por roles genéricos. `roles` queda SOLO como

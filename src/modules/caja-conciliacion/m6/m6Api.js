@@ -3,10 +3,8 @@
 // api() (X-GF-Employee-Token, /odoo-api, ApiError status/code, sin retries,
 // PROHIBIDO fallback n8n — ver directKoldOsM6 en src/lib/api.js).
 //
-// ⚠️ LA API REAL NUNCA HA SIDO PROBADA: el backend M6 está construido en LOCAL y
-// no publicado (el repo Odoo migra a grupofrio/gf). Hoy NO existe endpoint
-// desplegado ⇒ en producción este cliente resuelve `unavailable` (404) y la
-// pantalla lo declara. Jamás carga el fixture como sustituto.
+// Si la API no está disponible, la pantalla resuelve `unavailable` sin cargar
+// el fixture como sustituto. La PWA nunca infiere habilitación desde el cliente.
 //
 // Política de datos: la evidencia NO se cachea ni se persiste en ningún
 // almacenamiento del navegador (hay test que escanea la ausencia de esas APIs);
