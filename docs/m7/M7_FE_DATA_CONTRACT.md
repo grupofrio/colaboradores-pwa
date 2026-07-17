@@ -8,6 +8,11 @@ Esquema: **`kold.os.m7.api/1`**. El frontend valida el envelope ANTES de renderi
 `schema_version · read_only · run · summary · capabilities · capability_requirements
 · rule_results · findings · history · metrics`
 
+**`/latest` NO acepta `run_id`**: siempre es la corrida más reciente. Sólo
+`/findings` y `/runs` honran `run_id`/`scope_key`. Por eso la selección de una
+corrida histórica es una vista PARCIAL (re-ancla findings + export; el resumen y las
+capacidades siguen siendo latest). Ver [`M7_FE_RUN_SELECTION.md`](M7_FE_RUN_SELECTION.md).
+
 ## Invariantes que el validador EXIGE (y que muerden si se rompen)
 
 1. `read_only === true` (M7 es observatorio).

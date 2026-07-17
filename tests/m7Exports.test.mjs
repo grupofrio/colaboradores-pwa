@@ -8,6 +8,7 @@ import {
   FORMULA_PREFIX_RE, M7_EXPORT_MAX_ROWS,
 } from '../src/modules/rentabilidad-costos/m7/exporters.js'
 import { scanPii, M7_PII_KEYS } from '../src/modules/rentabilidad-costos/m7/contract.js'
+import { runContextFromLatest, runContextFromRunsItem } from '../src/modules/rentabilidad-costos/m7/runController.js'
 import { M7_API_LATEST_FIXTURE } from '../src/modules/rentabilidad-costos/m7/fixtures/apiLatestFixture.js'
 
 const F = M7_API_LATEST_FIXTURE
@@ -97,6 +98,30 @@ test('capabilitiesText enumera lo NO disponible con lo que falta', () => {
   assert.match(t, /gross_margin_observable: NO disponible/)
   assert.match(t, /falta:/)
   assert.match(t, /Nivel económico alcanzado: L1_observable_revenue/)
+})
+
+// ── export ANCLADO a la corrida seleccionada (blocker Codex) ─────────────────
+test('CSV de corrida histórica: linaje del run anclado, NO el de latest', () => {
+  const anchor = runContextFromRunsItem({
+    run_id: 'RUNAAAA1111', scope_key: 'SCOPEAAAA', finished_at: '2026-05-01T00:00:00Z',
+    is_production_shell_run: false, measurement_method: 'xml_rpc_read_only',
+    auditor_build_sha: 'auditAAAA',
+  }, F.run.run_id)
+  const csv = findingsToCsv(F.findings, F, { runContext: anchor })
+  assert.match(csv, /CORRIDA HISTÓRICA/)
+  assert.ok(csv.includes('RUNAAAA1111'), 'debe portar el run_id anclado (A)')
+  assert.ok(!csv.includes(F.run.run_id), 'NO debe portar el run_id de latest (B)')
+  // el scope económico NO se copia del latest: se declara no disponible.
+  assert.match(csv, /no disponible por corrida histórica/)
+  assert.ok(!csv.includes(F.run.scope.window_start), 'no debe filtrar la ventana de latest')
+})
+
+test('CSV de la corrida latest: linaje COMPLETO (comportamiento previo)', () => {
+  const anchor = runContextFromLatest(F)
+  const csv = findingsToCsv(F.findings, F, { runContext: anchor })
+  assert.ok(csv.includes(F.run.run_id), 'porta el run_id de latest')
+  assert.ok(csv.includes(F.run.scope_key), 'porta el scope_key de latest')
+  assert.ok(!/CORRIDA HISTÓRICA/.test(csv), 'latest no es histórica')
 })
 
 // ── downloadTextFile: revoca el object URL ───────────────────────────────────

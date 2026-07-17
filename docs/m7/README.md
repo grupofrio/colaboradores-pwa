@@ -18,11 +18,13 @@ rentabilidad completa. Backend #211 congelado y **no desplegado**; PR **DRAFT**.
 
 **Superficie**
 - [M7_FE_ARCHITECTURE.md](M7_FE_ARCHITECTURE.md) — mapa de módulos
+- [M7_FE_RUN_SELECTION.md](M7_FE_RUN_SELECTION.md) — selección histórica (vista parcial honesta)
 - [M7_FE_FILTERS.md](M7_FE_FILTERS.md) — allowlist y filtros no soportados
 - [M7_FE_PERMISSIONS.md](M7_FE_PERMISSIONS.md) — sólo direccion_general
-- [M7_FE_SECURITY.md](M7_FE_SECURITY.md) — GET-only, PII, exports
-- [M7_FE_EXPORTS.md](M7_FE_EXPORTS.md) — CSV/JSON/TXT honestos
-- [M7_FE_DEMO.md](M7_FE_DEMO.md) — gate DEV/Preview
+- [M7_FE_SECURITY.md](M7_FE_SECURITY.md) — GET-only, PII, bundling demo
+- [M7_FE_NPM_AUDIT.md](M7_FE_NPM_AUDIT.md) — 17 vulnerabilidades, decisión
+- [M7_FE_EXPORTS.md](M7_FE_EXPORTS.md) — CSV/JSON/TXT honestos (anclados)
+- [M7_FE_DEMO.md](M7_FE_DEMO.md) — gate + import dinámico
 
 **Estado y entrega**
 - [M7_FE_LINEAGE_GATE.md](M7_FE_LINEAGE_GATE.md) — pre-migración, reseal

@@ -4,11 +4,17 @@ Todos client-side, read-only, sin PII, con linaje declarado y sin consolidar mon
 
 ## Qué se puede exportar
 
-| Export | Función | Contenido |
-|--------|---------|-----------|
-| Hallazgos CSV | `findingsToCsv` | columnas del contrato (sin PII) + cabecera de linaje + nota de incidencias |
-| Evidencia JSON | `evidenceJson` | run + summary + capabilities + capability_requirements, sanitizado |
-| Capacidades TXT | `capabilitiesText` | nivel alcanzado + capabilities NO disponibles con lo que falta |
+| Export | Función | Contenido | Corrida |
+|--------|---------|-----------|---------|
+| Hallazgos CSV | `findingsToCsv` | columnas del contrato (sin PII) + linaje + nota | **la corrida ANCLADA** (todas sus páginas; run_id en linaje+filename) |
+| Evidencia JSON | `evidenceJson` | run + summary + capabilities, sanitizado | siempre **latest** (marcado `_latest`) |
+| Capacidades TXT | `capabilitiesText` | nivel + capabilities no disponibles | siempre **latest** (marcado `_latest`) |
+
+**Anclaje (post-Codex):** con una corrida histórica seleccionada, el CSV de hallazgos
+corresponde a **esa** corrida (no a latest), y su linaje declara que el scope
+económico completo no está disponible por corrida histórica. Evidencia/Capacidades
+sólo existen para la corrida más reciente y así se marcan. El botón se **bloquea**
+mientras se reúnen las páginas. Prueba: `m7Exports` "CSV de corrida histórica".
 
 ## Garantías (cada una con prueba)
 

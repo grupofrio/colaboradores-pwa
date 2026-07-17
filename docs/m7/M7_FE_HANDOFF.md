@@ -18,6 +18,16 @@ read-only en `colaboradores-pwa`. Ruta `/rentabilidad-costos`, sólo Dirección 
 | Escritura / n8n / financiero | **ninguno** (GET-only) |
 | PR | **DRAFT** — sin Ready, sin merge, sin reviewers |
 
+## Selección de corridas (tras la auditoría final de Codex)
+
+Seleccionar una corrida histórica re-ancla **Hallazgos + su exportación** a ese
+`run_id` (el backend no expone summary/capacidades por corrida; `/latest` no acepta
+run_id). El Resumen y las Capacidades siguen mostrando la **corrida más reciente**, y
+la UI lo declara. El fixture demo NO viaja en el bundle productivo (import dinámico
+gated + `check_m7_demo_bundle.mjs`). npm audit: 17 (0 critical), ninguna runtime
+alcanzable desde M7 (ver [`M7_FE_NPM_AUDIT.md`](M7_FE_NPM_AUDIT.md)).
+Detalle: [`M7_FE_RUN_SELECTION.md`](M7_FE_RUN_SELECTION.md).
+
 ## Lo que M7 SÍ responde
 
 - ¿Cuánto ingreso facturado hay, **por moneda**? (MXN y USD por separado, sin sumar.)

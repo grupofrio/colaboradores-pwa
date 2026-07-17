@@ -11,17 +11,22 @@
 // ⚠️ Backend M7 = PR TEMPORAL #211, NO desplegado. En producción esta pantalla
 // resuelve `unavailable`; el demo (fixture del core real) sólo vive en DEV/
 // Preview con VITE_ENABLE_M7_DEMO. La API real NUNCA ha sido probada.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS } from '../../tokens'
 import { fetchM7Latest, fetchM7Findings, fetchM7Runs } from './m7/m7Api'
-import { isM7DemoAllowed } from './m7/demoGate'
+import { canLoadM7DemoFixture } from './m7/demoGate'
 import {
-  M7_DEFAULT_FILTERS, M7_PAGE_SIZE, M7_FILTER_AXES, M7_UNSUPPORTED_FILTERS,
-  buildFindingsParams, activeFilterCount,
+  M7_DEFAULT_FILTERS, M7_FILTER_AXES, activeFilterCount,
 } from './m7/filters'
 import {
+  initSelection, m7SelectionReducer, selectRunAction, clearRunAction,
+  planFindingsRequest, planRunsRequest, findingsAnchorMismatch,
+  selectedRunContext, isLatestSelected, makeSeqGuard,
+} from './m7/runController'
+import {
   findingsToCsv, evidenceJson, capabilitiesText, downloadTextFile, exportFilename,
+  M7_EXPORT_MAX_ROWS,
 } from './m7/exporters'
 import {
   M7_VERDICT_ORDER, M7_VERDICT_LABELS, M7_VERDICT_COLORS, M7_VERDICT_HELP,
@@ -30,7 +35,15 @@ import {
   M7_INCIDENCES_NOTE, M7_EVIDENCE_SOURCE_LABELS, categoryLabel,
 } from './m7/m7Meta'
 import { resolveM7Metric, lineageState, M7_LIFECYCLE_STATES_UNSUPPORTED } from './m7/contract'
-import { M7_API_FIXTURE_PROVENANCE, M7_API_LATEST_FIXTURE } from './m7/fixtures/apiLatestFixture'
+
+// El fixture demo se carga por import DINÁMICO tras el gate (nunca estático):
+// `virtual:m7-demo-fixture` resuelve a un stub en producción, así el payload
+// financiero jamás entra al bundle productivo (ver demoGate + vite.config).
+async function loadDemoPayload() {
+  const mod = await import('virtual:m7-demo-fixture')
+  if (!mod?.demoFixtureAvailable) return null
+  return mod.loadM7DemoFixture()   // { payload, provenance } | null
+}
 
 const C = TOKENS.colors
 const RAD = TOKENS.radius
@@ -157,22 +170,27 @@ const STATE_COPY = {
   error: ['Error temporal', 'No se pudo consultar el backend. Reintenta.'],
 }
 
-export default function ScreenRentabilidadCostosM7({ session }) {
-  const typo = getTypo ? getTypo() : {}
+export default function ScreenRentabilidadCostosM7({ session, initialLoad, initialSelectedRun = null }) {
   const location = useLocation()
   const demoRequested = useMemo(
     () => new URLSearchParams(location.search).get('demo') === '1', [location.search])
-  const demoAllowed = isM7DemoAllowed(import.meta.env)
+  // Gate de demo: DEV o Preview autorizado, NUNCA producción real. El fixture se
+  // carga por import DINÁMICO tras el gate (loadDemoPayload); no entra al bundle.
+  const env = typeof import.meta !== 'undefined' ? import.meta.env : null
+  const demoAllowed = canLoadM7DemoFixture(env, { authorized: true })
 
-  const [load, setLoad] = useState({ phase: 'loading' })
-  const [tab, setTab] = useState('overview')
+  const [load, setLoad] = useState(initialLoad || { phase: 'loading' })
   const mounted = useRef(true)
   useEffect(() => () => { mounted.current = false }, [])
 
   const loadLatest = useCallback(async () => {
     setLoad({ phase: 'loading' })
     if (demoRequested && demoAllowed) {
-      setLoad({ phase: 'ok', payload: M7_API_LATEST_FIXTURE, demo: true })
+      const demo = await loadDemoPayload()
+      if (!mounted.current) return
+      // Si el gate/loader niega (p. ej. producción), NO se muestran cifras de demo.
+      if (demo?.payload) setLoad({ phase: 'ok', payload: demo.payload, demo: true })
+      else setLoad({ phase: 'unavailable' })
       return
     }
     const result = await fetchM7Latest()
@@ -181,15 +199,29 @@ export default function ScreenRentabilidadCostosM7({ session }) {
     else setLoad({ phase: result.state, errors: result.errors })
   }, [demoRequested, demoAllowed])
 
-  useEffect(() => { loadLatest() }, [loadLatest])
+  // Con initialLoad inyectado (tests SSR) no se re-dispara el fetch.
+  useEffect(() => { if (!initialLoad) loadLatest() }, [initialLoad, loadLatest])
 
   if (load.phase === 'loading') return <Shell><FullState title={STATE_COPY.loading[0]} detail={STATE_COPY.loading[1]} /></Shell>
   if (load.phase !== 'ok') {
     const [t, d] = STATE_COPY[load.phase] || STATE_COPY.error
     return <Shell><FullState title={t} detail={d} tone={load.phase === 'forbidden' ? STATUS.RED : C.textMuted} /></Shell>
   }
+  // key por run_id: si el payload latest cambia, la selección se reinicia limpia.
+  return (
+    <LoadedM7 key={load.payload?.run?.run_id || 'latest'}
+      payload={load.payload} demo={!!load.demo} initialSelectedRun={initialSelectedRun} />
+  )
+}
 
-  const payload = load.payload
+// Vista cargada: dueña de la ÚNICA selección de corrida (runController).
+function LoadedM7({ payload, demo, initialSelectedRun }) {
+  const [selection, dispatch] = useReducer(m7SelectionReducer, undefined, () => {
+    const base = initSelection(payload)
+    return initialSelectedRun ? m7SelectionReducer(base, selectRunAction(initialSelectedRun)) : base
+  })
+  const [tab, setTab] = useState('overview')
+
   const run = payload.run || {}
   const scope = run.scope || {}
   const caps = payload.capabilities || {}
@@ -201,20 +233,29 @@ export default function ScreenRentabilidadCostosM7({ session }) {
   const currencies = scope.currency_ids || []
   const invoiceRows = (payload.metrics?.invoice_revenue_by_currency) || []
 
+  const anchor = selectedRunContext(selection)
+  const historical = !isLatestSelected(selection)
+
   return (
     <Shell>
       {/* ── banners de estado del dato ─────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        {load.demo && <Pill color="#a78bfa" title="Fixture del core real; NO evidencia en vivo">MODO DEMO</Pill>}
+        {demo && <Pill color="#a78bfa" title="Fixture del core real; NO evidencia en vivo">MODO DEMO</Pill>}
         {!lin.is_production_shell_run && <Pill color="#f59e0b" title="Medición read-only; corrida formal odoo-shell inexistente">EVIDENCIA NO FORMAL</Pill>}
         <Pill color="#f59e0b" title="El sello cambia al portar a grupofrio/gf">LINAJE PRE-MIGRACIÓN</Pill>
         {feats.multi_currency_detected && <Pill color="#60a5fa" title="Importes por moneda; sin total global">MULTI-MONEDA SIN CONSOLIDAR</Pill>}
       </div>
 
-      {/* ── HOME: nivel económico observable ────────────────────────────────── */}
+      {/* ── aviso de vista histórica PARCIAL ────────────────────────────────── */}
+      {historical && <HistoricalNotice anchor={anchor} onClear={() => dispatch(clearRunAction())} />}
+
+      {/* ── HOME: nivel económico observable (SIEMPRE corrida más reciente) ─── */}
       <div style={{ background: C.surfaceStrong || C.surface, border: `1px solid ${C.borderBlue || C.border}`,
         borderRadius: RAD.lg, padding: '14px 16px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: C.textLow }}>NIVEL ECONÓMICO OBSERVABLE</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: C.textLow }}>NIVEL ECONÓMICO OBSERVABLE</div>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: C.textLow }}>corrida más reciente</span>
+        </div>
         <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginTop: 2 }}>
           L1 · Ingreso observable
         </div>
@@ -244,16 +285,39 @@ export default function ScreenRentabilidadCostosM7({ session }) {
         ))}
       </div>
 
-      {tab === 'overview' && <Overview payload={payload} summary={summary} feats={feats} reqs={reqs} />}
+      {tab === 'overview' && <Overview payload={payload} summary={summary} feats={feats} reqs={reqs} historical={historical} />}
       {tab === 'ladder' && <Ladder level={level} feats={feats} reqs={reqs} />}
-      {tab === 'sections' && <Sections payload={payload} feats={feats} invoiceRows={invoiceRows} caps={caps} />}
-      {tab === 'findings' && <FindingsTab demo={load.demo} runId={run.run_id} scopeKey={run.scope_key} />}
-      {tab === 'runs' && <RunsTab demo={load.demo} currentRunId={run.run_id} />}
-      {tab === 'scope' && <ScopeTab run={run} scope={scope} caps={caps} lin={lin} />}
+      {tab === 'sections' && <Sections payload={payload} feats={feats} invoiceRows={invoiceRows} caps={caps} historical={historical} />}
+      {tab === 'findings' && <FindingsTab demo={demo} selection={selection} demoPayload={demo ? payload : null} />}
+      {tab === 'runs' && <RunsTab demo={demo} selection={selection} dispatch={dispatch} demoPayload={demo ? payload : null} />}
+      {tab === 'scope' && <ScopeTab run={run} scope={scope} caps={caps} lin={lin} anchor={anchor} historical={historical} />}
 
       {/* ── exports ────────────────────────────────────────────────────────── */}
-      <ExportsBar payload={payload} demo={load.demo} />
+      <ExportsBar payload={payload} demo={demo} selection={selection} />
     </Shell>
+  )
+}
+
+// Aviso honesto: al ver una corrida histórica sólo cambian findings + su export.
+function HistoricalNotice({ anchor, onClear }) {
+  return (
+    <div data-testid="m7-historical-notice" style={{
+      background: 'rgba(96,165,250,0.08)', border: `1px solid #60a5fa55`, borderRadius: RAD.md,
+      padding: '10px 12px', marginBottom: 10, display: 'flex', gap: 10,
+      alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      <div style={{ fontSize: 11, color: C.textSoft, lineHeight: 1.5, maxWidth: 760 }}>
+        Viendo la corrida histórica <b>{shortHash(anchor?.run_id)}</b> ({fmtDate(anchor?.finished_at)}).
+        Los <b>Hallazgos</b> y su <b>exportación</b> corresponden a esta corrida. El <b>Resumen</b>,
+        la <b>Escalera</b>, las <b>Señales por dominio</b> y las <b>Capacidades</b> siguen mostrando la
+        corrida <b>más reciente</b>: el backend M7 no expone un payload completo por corrida
+        (<code>/latest</code> no acepta run_id).
+      </div>
+      <button onClick={onClear} style={{
+        fontSize: 10.5, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer',
+        background: 'transparent', color: '#60a5fa', border: `1px solid #60a5fa66`, whiteSpace: 'nowrap' }}>
+        Volver a la más reciente
+      </button>
+    </div>
   )
 }
 
@@ -270,7 +334,7 @@ function Shell({ children }) {
 }
 
 // ── Resumen: qué hay, qué no, qué falta ──────────────────────────────────────
-function Overview({ payload, summary, feats, reqs }) {
+function Overview({ payload, summary, feats, reqs, historical }) {
   const verdicts = M7_VERDICT_ORDER.map((v) => ({
     v, n: {
       incumplimiento: summary.definitive_incident_rule_count,
@@ -295,6 +359,8 @@ function Overview({ payload, summary, feats, reqs }) {
   ].filter(([k]) => feats[k] !== true)
   return (
     <>
+      {historical && <div data-testid="m7-overview-latest-tag" style={{ fontSize: 10, fontWeight: 700,
+        color: C.textLow, marginTop: 12 }}>Resumen · corrida más reciente (no la corrida histórica seleccionada).</div>}
       <Block title="Ejes del dictamen (4 ejes independientes)"
         note="classification · verdict · severity · lifecycle no se derivan uno de otro. status=RED NO es incumplimiento.">
         {verdicts.map(({ v, n }) => (
@@ -386,9 +452,11 @@ function Ladder({ level, feats, reqs }) {
 }
 
 // ── Señales por dominio ──────────────────────────────────────────────────────
-function Sections({ payload, feats, invoiceRows, caps }) {
+function Sections({ payload, feats, invoiceRows, caps, historical }) {
   return (
     <>
+      {historical && <div data-testid="m7-sections-latest-tag" style={{ fontSize: 10, fontWeight: 700,
+        color: C.textLow, marginTop: 12 }}>Señales por dominio · corrida más reciente (no la corrida histórica seleccionada).</div>}
       <Block title="1 · Ingresos observables (POR MONEDA — jamás sumados)"
         note="Pedido ≠ ingreso; factura ≠ cobro. Importes siempre con su moneda; sin total global.">
         <MetricTile label="Pedidos confirmados" unit="pedidos" payload={payload}
@@ -487,33 +555,49 @@ function Sections({ payload, feats, invoiceRows, caps }) {
   )
 }
 
-// ── Hallazgos (filtros server-side) ──────────────────────────────────────────
-function FindingsTab({ demo, scopeKey }) {
+// ── Hallazgos (server-side + ANCLADOS a la corrida seleccionada) ─────────────
+// El run_id/scope_key vienen del anchor (runController), NO de los filtros: cambiar
+// filtro o página conserva la corrida. Guarda de carrera: una respuesta tardía de
+// otra corrida no pisa la vista. Defensa: se verifica el run_id que ecoa el backend.
+function FindingsTab({ demo, selection, demoPayload }) {
+  const anchor = selectedRunContext(selection)
   const [filters, setFilters] = useState(M7_DEFAULT_FILTERS)
   const [state, setState] = useState({ phase: 'loading' })
   const mounted = useRef(true)
+  const guard = useRef(makeSeqGuard())
   useEffect(() => () => { mounted.current = false }, [])
 
-  const run = useCallback(async (f) => {
+  const load = useCallback(async (f) => {
+    const token = guard.current.next()
     setState({ phase: 'loading' })
     if (demo) {
-      // El demo NO simula filtrado server-side: lo declara y muestra el fixture entero.
-      const items = M7_API_LATEST_FIXTURE.findings || []
-      setState({ phase: 'ok', demo: true, items, total: items.length, page: 1, pages: 1, rejected: [] })
+      const items = (demoPayload?.findings) || []
+      if (guard.current.isStale(token) || !mounted.current) return
+      setState({ phase: 'ok', demo: true, items, total: items.length, page: 1, pages: 1,
+        rejected: [], runId: anchor?.run_id })
       return
     }
-    const res = await fetchM7Findings(buildFindingsParams(f))
-    if (!mounted.current) return
-    if (res.state === 'ok') setState({ phase: 'ok', demo: false, items: res.payload.items,
-      total: res.payload.total, page: res.payload.page, pages: res.payload.pages,
-      rejected: res.payload.rejected_params || [] })
-    else setState({ phase: res.state })
-  }, [demo])
+    const res = await fetchM7Findings(planFindingsRequest(selection, f))
+    if (guard.current.isStale(token) || !mounted.current) return // respuesta fuera de orden ⇒ descartar
+    if (res.state !== 'ok') { setState({ phase: res.state }); return }
+    if (findingsAnchorMismatch(res.payload, selection)) { setState({ phase: 'run_mismatch' }); return }
+    setState({ phase: 'ok', demo: false, items: res.payload.items, total: res.payload.total,
+      page: res.payload.page, pages: res.payload.pages, rejected: res.payload.rejected_params || [],
+      runId: res.payload.run_id })
+  }, [demo, demoPayload, selection, anchor])
 
-  useEffect(() => { run(filters) }, [run, filters])
+  // Cambiar de corrida anclada reinicia la paginación (no el run).
+  useEffect(() => { setFilters((s) => ({ ...s, page: 1 })) }, [anchor?.run_id, anchor?.scope_key])
+  useEffect(() => { load(filters) }, [load, filters])
+
+  const setPage = (p) => setFilters((s) => ({ ...s, page: Math.max(1, p) }))
 
   return (
     <section style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 10.5, color: C.textLow, marginBottom: 6 }}>
+        Hallazgos de la corrida <b>{shortHash(anchor?.run_id)}</b>
+        {anchor && !anchor.isLatest ? ' (histórica)' : ' (más reciente)'} · anclados por run_id + scope_key.
+      </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {M7_FILTER_AXES.map((ax) => (
           <label key={ax.key} style={{ fontSize: 11, color: C.textMuted }}>
@@ -540,8 +624,12 @@ function FindingsTab({ demo, scopeKey }) {
       )}
 
       {state.phase === 'loading' && <FullState title="Cargando hallazgos…" />}
-      {state.phase !== 'ok' && state.phase !== 'loading' &&
-        <FullState title={(STATE_COPY[state.phase] || STATE_COPY.error)[0]} />}
+      {state.phase === 'run_mismatch' && <FullState tone={STATUS.RED}
+        title="Corrida no coincide"
+        detail="El backend devolvió una corrida distinta a la seleccionada. No se muestran datos que no correspondan al run pedido." />}
+      {state.phase !== 'ok' && state.phase !== 'loading' && state.phase !== 'run_mismatch' &&
+        <FullState title={(STATE_COPY[state.phase] || STATE_COPY.error)[0]}
+          detail={(STATE_COPY[state.phase] || STATE_COPY.error)[1]} />}
 
       {state.phase === 'ok' && (
         <div style={{ overflowX: 'auto', marginTop: 10 }}>
@@ -569,8 +657,18 @@ function FindingsTab({ demo, scopeKey }) {
               ))}
             </tbody>
           </table>
-          <div style={{ fontSize: 10.5, color: C.textLow, marginTop: 6 }}>
-            {fmtInt(state.total)} hallazgos · página {state.page}/{state.pages} · {M7_INCIDENCES_NOTE}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+            {!demo && (
+              <>
+                <button disabled={state.page <= 1} onClick={() => setPage(state.page - 1)}
+                  style={pagerStyle(state.page <= 1)}>‹ anterior</button>
+                <button disabled={state.page >= state.pages} onClick={() => setPage(state.page + 1)}
+                  style={pagerStyle(state.page >= state.pages)}>siguiente ›</button>
+              </>
+            )}
+            <span style={{ fontSize: 10.5, color: C.textLow }}>
+              {fmtInt(state.total)} hallazgos · página {state.page}/{state.pages} · {M7_INCIDENCES_NOTE}
+            </span>
           </div>
         </div>
       )}
@@ -578,64 +676,86 @@ function FindingsTab({ demo, scopeKey }) {
   )
 }
 
-// ── Corridas (selección real por run_id) ─────────────────────────────────────
-function RunsTab({ demo, currentRunId }) {
+// ── Corridas (selección que RE-ANCLA findings/export; summary sigue latest) ──
+function RunsTab({ demo, selection, dispatch, demoPayload }) {
+  const anchor = selectedRunContext(selection)
+  const latestRunId = selection?.latest?.run_id
   const [state, setState] = useState({ phase: 'loading' })
-  const [selected, setSelected] = useState('')
   const mounted = useRef(true)
   useEffect(() => () => { mounted.current = false }, [])
 
   useEffect(() => {
     (async () => {
       if (demo) {
+        const r = demoPayload?.run || {}
         setState({ phase: 'ok', demo: true, items: [{
-          run_id: currentRunId, scope_key: M7_API_LATEST_FIXTURE.run.scope_key,
-          finished_at: M7_API_LATEST_FIXTURE.run.finished_at,
-          is_production_shell_run: false, measurement_method: 'xml_rpc_read_only',
-          auditor_build_sha: M7_API_LATEST_FIXTURE.run.auditor_build_sha, finding_count: 36 }] })
+          run_id: r.run_id, scope_key: r.scope_key, finished_at: r.finished_at,
+          is_production_shell_run: !!r.is_production_shell_run,
+          measurement_method: r.measurement_method || 'xml_rpc_read_only',
+          auditor_build_sha: r.auditor_build_sha,
+          finding_count: (demoPayload?.findings || []).length }] })
         return
       }
-      const res = await fetchM7Runs()
+      const res = await fetchM7Runs(planRunsRequest())
       if (!mounted.current) return
       setState(res.state === 'ok' ? { phase: 'ok', items: res.payload.items } : { phase: res.state })
     })()
-  }, [demo, currentRunId])
+  }, [demo, demoPayload])
 
   return (
     <section style={{ marginTop: 16 }}>
-      <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 8 }}>
-        Selecciona una corrida por <b>run_id</b>: la vista carga EXACTAMENTE ese run. Un run_id
-        desconocido produce error visible; jamás cae silenciosamente a la última corrida.
+      <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 8, lineHeight: 1.5 }}>
+        Selecciona una corrida: sus <b>Hallazgos</b> y su <b>exportación</b> se anclan a ese
+        <b> run_id</b> (+ scope_key). El <b>Resumen</b> y las <b>Capacidades</b> siguen mostrando la
+        corrida más reciente — el backend M7 no expone un payload completo por corrida. Un run_id
+        desconocido produce error visible; jamás cae a la última corrida.
       </div>
       {state.phase === 'loading' && <FullState title="Cargando corridas…" />}
       {state.phase !== 'ok' && state.phase !== 'loading' &&
-        <FullState title={(STATE_COPY[state.phase] || STATE_COPY.error)[0]} />}
+        <FullState title={(STATE_COPY[state.phase] || STATE_COPY.error)[0]}
+          detail={(STATE_COPY[state.phase] || STATE_COPY.error)[1]} />}
       {state.phase === 'ok' && (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 11.5 }}>
+          <table style={{ width: '100%', minWidth: 680, borderCollapse: 'collapse', fontSize: 11.5 }}>
             <thead><tr style={{ color: C.textLow, textAlign: 'left' }}>
               {['run_id', 'scope_key', 'Corte', 'Evidencia', 'auditor', 'Hallazgos', ''].map((h) => (
                 <th key={h} style={{ padding: '6px 8px', borderBottom: `1px solid ${C.border}`, fontWeight: 700 }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
-              {state.items.map((r) => (
-                <tr key={r.run_id} data-selected={selected === r.run_id}>
-                  <td style={td}>{shortHash(r.run_id)}</td>
-                  <td style={td}>{shortHash(r.scope_key)}</td>
-                  <td style={td}>{fmtDate(r.finished_at)}</td>
-                  <td style={td}>{r.is_production_shell_run
-                    ? <Pill color={C.success}>FORMAL</Pill> : <Pill color="#f59e0b">NO FORMAL</Pill>}</td>
-                  <td style={td}>{shortHash(r.auditor_build_sha)}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{fmtInt(r.finding_count)}</td>
-                  <td style={td}><button onClick={() => setSelected(r.run_id)} style={{
-                    fontSize: 10.5, padding: '3px 8px', borderRadius: 999, cursor: 'pointer',
-                    background: 'transparent', color: C.textMuted, border: `1px solid ${C.border}` }}>
-                    Ver</button></td>
-                </tr>
-              ))}
+              {state.items.map((r) => {
+                const isAnchor = anchor?.run_id === r.run_id
+                const isLatest = latestRunId === r.run_id
+                return (
+                  <tr key={r.run_id} data-selected={isAnchor}>
+                    <td style={td}>{shortHash(r.run_id)}{isLatest &&
+                      <span style={{ marginLeft: 6, fontSize: 9, color: C.textLow }}>· más reciente</span>}</td>
+                    <td style={td}>{shortHash(r.scope_key)}</td>
+                    <td style={td}>{fmtDate(r.finished_at)}</td>
+                    <td style={td}>{r.is_production_shell_run
+                      ? <Pill color={C.success}>FORMAL</Pill> : <Pill color="#f59e0b">NO FORMAL</Pill>}</td>
+                    <td style={td}>{shortHash(r.auditor_build_sha)}</td>
+                    <td style={{ ...td, textAlign: 'right' }}>{fmtInt(r.finding_count)}</td>
+                    <td style={td}>
+                      {isAnchor
+                        ? <span style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa' }}>viendo</span>
+                        : <button onClick={() => dispatch(selectRunAction(r))} style={{
+                            fontSize: 10.5, padding: '3px 8px', borderRadius: 999, cursor: 'pointer',
+                            background: 'transparent', color: C.textMuted, border: `1px solid ${C.border}` }}>
+                            Ver</button>}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
+          {anchor && !anchor.isLatest && (
+            <button onClick={() => dispatch(clearRunAction())} style={{
+              marginTop: 8, fontSize: 10.5, fontWeight: 700, padding: '4px 10px', borderRadius: 999,
+              cursor: 'pointer', background: 'transparent', color: '#60a5fa', border: `1px solid #60a5fa66` }}>
+              Volver a la corrida más reciente
+            </button>
+          )}
         </div>
       )}
     </section>
@@ -643,7 +763,10 @@ function RunsTab({ demo, currentRunId }) {
 }
 
 // ── Alcance (scope técnico legible, sin PII) ─────────────────────────────────
-function ScopeTab({ run, scope, caps, lin }) {
+// El scope económico completo (ventana/monedas/date_basis…) SÓLO existe para la
+// corrida más reciente. Para una corrida histórica anclada, el backend no lo
+// expone: se muestra su metadata y se DECLARA el faltante (no se inventa).
+function ScopeTab({ run, scope, caps, lin, anchor, historical }) {
   const rows = [
     ['Compañías', (scope.company_ids || []).join(', ')],
     ['Sucursales', (scope.branch_ids || []).join(', ') || '(agregado, sin sucursal)'],
@@ -665,6 +788,19 @@ function ScopeTab({ run, scope, caps, lin }) {
   ]
   return (
     <section style={{ marginTop: 16 }}>
+      {historical && anchor && (
+        <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 8, background: 'rgba(96,165,250,0.08)',
+          border: `1px solid #60a5fa55`, borderRadius: RAD.sm, padding: '8px 10px', lineHeight: 1.5 }}>
+          <b>Corrida anclada</b> (findings/export): run_id {shortHash(anchor.run_id)} · scope_key
+          {' '}{shortHash(anchor.scope_key)} · corte {fmtDate(anchor.finished_at)} ·
+          {' '}auditor {shortHash(anchor.auditor_build_sha)}. El <b>scope económico completo</b>
+          {' '}(ventana, monedas, date_basis, cost_method) NO está disponible por corrida histórica:
+          el backend sólo lo expone para la corrida más reciente (mostrada abajo).
+        </div>
+      )}
+      <div style={{ fontSize: 10, color: C.textLow, marginBottom: 4 }}>
+        Alcance de la corrida <b>más reciente</b>{historical ? ' (no la anclada)' : ''}:
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
         <tbody>
           {rows.map(([k, v]) => (
@@ -679,32 +815,79 @@ function ScopeTab({ run, scope, caps, lin }) {
   )
 }
 
-function ExportsBar({ payload, demo }) {
+// ── Exports: findings ANCLADOS a la corrida vista; evidencia/capacidades=latest ──
+function ExportsBar({ payload, demo, selection }) {
   const lin = lineageState(payload)
-  const doExport = (kind) => {
-    const opts = { demo, nonformal: !lin.is_production_shell_run, unconsolidated: true }
-    if (kind === 'findings') {
-      downloadTextFile(findingsToCsv(payload.findings, payload, { demo }),
-        exportFilename('m7_hallazgos', 'csv', opts), 'text/csv')
-    } else if (kind === 'evidence') {
-      downloadTextFile(evidenceJson(payload, { demo }),
-        exportFilename('m7_evidencia', 'json', opts), 'application/json')
-    } else if (kind === 'capabilities') {
-      downloadTextFile(capabilitiesText(payload),
-        exportFilename('m7_capabilities', 'txt', opts), 'text/plain')
+  const anchor = selectedRunContext(selection)
+  const historical = !isLatestSelected(selection)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  // Reúne TODOS los hallazgos de la corrida anclada (no sólo la página visible).
+  async function collectAnchoredFindings() {
+    if (demo) return payload.findings || []
+    const acc = []
+    let page = 1
+    for (;;) {
+      const res = await fetchM7Findings({ ...planFindingsRequest(selection, {}), page, page_size: 200 })
+      if (res.state !== 'ok') throw new Error(res.state)
+      if (findingsAnchorMismatch(res.payload, selection)) throw new Error('run_mismatch')
+      acc.push(...(res.payload.items || []))
+      if (page >= (res.payload.pages || 1) || acc.length >= M7_EXPORT_MAX_ROWS) break
+      page += 1
+    }
+    return acc
+  }
+
+  const doExport = async (kind) => {
+    if (busy) return
+    setErr('')
+    const base = { demo, nonformal: !lin.is_production_shell_run, unconsolidated: true }
+    try {
+      if (kind === 'findings') {
+        setBusy(true)
+        const items = await collectAnchoredFindings()
+        const runTag = shortHash(anchor?.run_id).replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'run'
+        downloadTextFile(
+          findingsToCsv(items, payload, { demo, runContext: anchor }),
+          exportFilename(`m7_hallazgos_${runTag}`, 'csv', { ...base, stale: historical }), 'text/csv')
+      } else if (kind === 'evidence') {
+        // evidencia/summary/capabilities SÓLO existen para la corrida más reciente.
+        downloadTextFile(evidenceJson(payload, { demo }),
+          exportFilename('m7_evidencia_latest', 'json', base), 'application/json')
+      } else if (kind === 'capabilities') {
+        downloadTextFile(capabilitiesText(payload),
+          exportFilename('m7_capabilities_latest', 'txt', base), 'text/plain')
+      }
+    } catch (e) {
+      setErr(String(e?.message || 'error'))
+    } finally {
+      setBusy(false)
     }
   }
   return (
-    <div style={{ marginTop: 20, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-      <span style={{ fontSize: 11, color: C.textLow }}>Exportar (sin PII · por moneda · linaje declarado):</span>
-      {[['findings', 'Hallazgos CSV'], ['evidence', 'Evidencia JSON'], ['capabilities', 'Capabilities TXT']].map(([k, l]) => (
-        <button key={k} onClick={() => doExport(k)} style={{
-          fontSize: 11, padding: '5px 10px', borderRadius: 999, cursor: 'pointer',
-          background: 'transparent', color: C.textMuted, border: `1px solid ${C.border}` }}>{l}</button>
-      ))}
+    <div style={{ marginTop: 20 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: C.textLow }}>Exportar (sin PII · por moneda · linaje declarado):</span>
+        {[['findings', 'Hallazgos CSV'], ['evidence', 'Evidencia JSON (latest)'], ['capabilities', 'Capabilities TXT (latest)']].map(([k, l]) => (
+          <button key={k} disabled={busy} onClick={() => doExport(k)} style={{
+            fontSize: 11, padding: '5px 10px', borderRadius: 999, cursor: busy ? 'not-allowed' : 'pointer',
+            opacity: busy ? 0.5 : 1, background: 'transparent', color: C.textMuted, border: `1px solid ${C.border}` }}>{l}</button>
+        ))}
+        {busy && <span style={{ fontSize: 10.5, color: C.textLow }}>preparando export…</span>}
+      </div>
+      {historical && <div style={{ fontSize: 10, color: C.textLow, marginTop: 6 }}>
+        El CSV de hallazgos corresponde a la corrida anclada {shortHash(anchor?.run_id)}. Evidencia y
+        capacidades corresponden a la corrida más reciente (el backend no expone ese payload por corrida).</div>}
+      {err && <div style={{ fontSize: 10.5, color: STATUS.RED, marginTop: 6 }}>No se pudo exportar: {err}</div>}
     </div>
   )
 }
+
+const pagerStyle = (disabled) => ({
+  fontSize: 10.5, padding: '3px 10px', borderRadius: 999, cursor: disabled ? 'not-allowed' : 'pointer',
+  opacity: disabled ? 0.45 : 1, background: 'transparent', color: C.textMuted, border: `1px solid ${C.border}`,
+})
 
 const td = { padding: '6px 8px', borderBottom: `1px solid ${C.border}`, color: C.textSoft }
 const selectStyle = {

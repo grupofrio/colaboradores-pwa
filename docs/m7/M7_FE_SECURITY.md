@@ -29,13 +29,25 @@ profundidad.
 Fail-closed, sólo `direccion_general`, revalidado en el route guard. Ver
 [`M7_FE_PERMISSIONS.md`](M7_FE_PERMISSIONS.md).
 
-## Consideración honesta declarada
+## Bundling del fixture demo (RESUELTO — antes un MAJOR de Codex)
 
-El fixture de demo se importa estáticamente en el chunk perezoso de la pantalla
-(patrón idéntico a M6, ya mergeado). El **gate de demo controla el render, no el
-bundling**: las cifras agregadas del fixture (sin PII) viajan en el JS del chunk. Si
-Dirección decide que ni cifras agregadas de demo deben viajar, la mitigación es un
-`import()` dinámico detrás del gate — misma decisión que enfrentaría M6; **no se
-introdujo unilateralmente aquí** para no divergir del baseline mergeado.
+Codex marcó como MAJOR que el fixture financiero pudiera viajar en el bundle
+productivo. **Corregido**: el fixture se carga por **import dinámico gated**
+(`virtual:m7-demo-fixture`), que en build de producción resuelve a un stub
+(`demoFixtureLoader.prod.js`) que **no importa el fixture**. Evidencia:
 
-Pruebas: `tests/m7Exports.test.mjs`, `tests/m7AccessApi.test.mjs`.
+- El chunk de la pantalla bajó de ~122 kB a ~57 kB al salir el fixture.
+- `scripts/check_m7_demo_bundle.mjs` (en `npm run build`) falla si cualquier
+  sentinel del fixture (run_id, scope_key, content commit, importe distintivo)
+  aparece en `dist/`. Resultado: **OK (fixture ausente en dist productivo)**.
+- `sourcemap: false` en `vite.config.js` ⇒ no hay leak vía sourcemaps públicos.
+- Gate `canLoadM7DemoFixture` fail-closed: producción real NUNCA, aunque el flag
+  esté encendido (ver [`M7_FE_DEMO.md`](M7_FE_DEMO.md)).
+
+## Vulnerabilidades npm
+
+17 (0 critical); ninguna runtime alcanzable desde M7; sin fix seguro no-breaking.
+Ver [`M7_FE_NPM_AUDIT.md`](M7_FE_NPM_AUDIT.md).
+
+Pruebas: `tests/m7Exports.test.mjs`, `tests/m7AccessApi.test.mjs`,
+`tests/m7DemoGate.test.mjs`, `scripts/check_m7_demo_bundle.mjs`.

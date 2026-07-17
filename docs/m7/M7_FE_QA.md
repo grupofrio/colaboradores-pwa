@@ -4,16 +4,36 @@
 
 | Gate | Comando | Resultado |
 |------|---------|-----------|
-| Tests M7 | `node --test tests/m7*.test.mjs` | **94/94 PASS** |
-| Suite completa | `node --test tests/**/*.test.mjs` | **1207/1207 PASS** |
+| Suite completa | `node --test tests/**/*.test.mjs` | **1249/1249 PASS** |
 | Lint | `npm run lint` | **limpio** (0 warnings, `--max-warnings 0`) |
-| Build | `npm run build` | **OK** (chunk `ScreenRentabilidadCostosM7` emitido) |
+| Build | `npm run build` | **OK** (chunk M7 ~57 kB; fixture excluido) |
 | Leak scan M3 | (en build) | **OK** |
 | Leak check M4 | (en build) | **OK** |
+| **Bundle demo M7** | `scripts/check_m7_demo_bundle.mjs` (en build) | **OK (fixture ausente en dist)** |
+| **Render real (SSR)** | `tests/m7ScreenRender.test.mjs` | **5/5** (esbuild+react-dom/server) |
+| **npm audit** | `npm audit` | 17 (0 critical); ver [`M7_FE_NPM_AUDIT.md`](M7_FE_NPM_AUDIT.md) |
 
 Node 24.18.0 vía Volta (`%LOCALAPPDATA%\Volta\tools\image\node\24.18.0`).
 
-## Cobertura de las 7 suites M7 (94 pruebas)
+## Suites de la corrección post-Codex
+
+- `m7RunController` — selección histórica: ancla run_id/scope_key, conserva run al
+  filtrar/paginar, clear→latest, mismatch, guarda de carrera (el código real que usa
+  la pantalla, no una reimplementación).
+- `m7DemoGate` — matriz del gate: DEV/Preview permiten, producción NUNCA, unauthorized no.
+- `m7ScreenRender` — render REAL de la pantalla (esbuild bundle + react-dom/server +
+  MemoryRouter): monta, L1, banner histórico, forbidden, sin claim falso.
+- `m7ScreenWiring` — el cableado real: "Ver" despacha al controller, findings anclados,
+  defensa, guarda de carrera, import dinámico del fixture, sin claim falso.
+- `m7Exports` (ampliado) — CSV anclado al run seleccionado (A, no latest B).
+
+> **Nota honesta sobre el render**: el repo no trae jsdom/RTL (añadirlos ampliaría la
+> superficie de `npm audit` que Codex pide reducir). El render se hace transpilando la
+> PANTALLA REAL con esbuild (ya presente vía Vite) y `react-dom/server`. Cubre el
+> render inicial y los estados inyectados; las interacciones se cubren por el
+> controller real (`m7RunController`) + el wiring de fuente.
+
+## Cobertura de las 7 suites M7 originales (94 pruebas)
 
 - `m7Contract` — envelope, 4 ejes disjuntos, L1, provenance, L2-sin-COGS rechazado,
   match null, DAG, multi-moneda, linaje, PII, findings/runs, universos.

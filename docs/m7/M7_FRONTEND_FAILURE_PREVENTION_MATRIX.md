@@ -28,5 +28,20 @@
 | 20 | Object URL vivo tras exportar | M6 | `downloadTextFile` revoca en `setTimeout(…,0)` | `m7Exports` — "downloadTextFile … REVOCA el object URL" |
 | 21 | Regresión de M1–M6 al agregar M7 | integración | rutas/ids únicos; resolvers m2..m7 presentes | `m7Surface` — "módulos previos siguen presentes"; `koldOsAccessPolicy` — set de resolvers |
 
-**Total: 21 fallas mapeadas, cada una con al menos una prueba que se pone roja si se
-reintroduce.** Suite M7: 94 pruebas; suite completa: 1207 en verde.
+## Corrección post-auditoría FINAL de Codex
+
+| # | Falla | Mitigación | Prueba que muerde |
+|---|-------|-----------|-------------------|
+| 22 | Selección de corrida cosmética (`setSelected`) que no recarga nada | `runController` autoridad única; el botón despacha `selectRunAction` | `m7ScreenWiring` "DESPACHA la selección"; `m7RunController` |
+| 23 | Findings no anclados al run (siempre latest) | `planFindingsRequest` ancla run_id+scope_key; filtro/página conservan run | `m7RunController` (filtro/página conservan run) |
+| 24 | Fallback silencioso a latest ante run devuelto distinto | `findingsAnchorMismatch` (defensa sobre el echo del backend) | `m7RunController` "mismatch" |
+| 25 | Export de latest mientras la UI muestra otra corrida | export reúne la corrida anclada; run_id en linaje+filename | `m7Exports` "CSV de corrida histórica: A, no B" |
+| 26 | Carrera: respuesta tardía de A pisa B | `makeSeqGuard` descarta tokens obsoletos | `m7RunController` "makeSeqGuard" |
+| 27 | Summary latest presentado como la corrida histórica | banner + tags "corrida más reciente"; se DECLARA la vista parcial | `m7ScreenRender` "banner declara vista PARCIAL" |
+| 28 | Fixture demo en el bundle productivo | import dinámico gated + loader stub en prod + `sourcemap:false` | `check_m7_demo_bundle.mjs` (en build) |
+| 29 | Flag de demo basta en producción | `canLoadM7DemoFixture` exige señal de Vercel; producción NUNCA | `m7DemoGate` "producción real ⇒ NEGADO" |
+| 30 | Claim falso "carga EXACTAMENTE ese run" | retirado; wording honesto de vista parcial | `m7ScreenWiring` + `m7ScreenRender` |
+
+**Total: 30 fallas mapeadas, cada una con prueba que se pone roja si reaparece.**
+Suite completa: **1249 en verde** · lint limpio · build OK · bundle check OK · npm
+audit documentado (0 critical).

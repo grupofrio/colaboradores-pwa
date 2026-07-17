@@ -81,6 +81,19 @@
 - Frontend `M7_ALLOWED_JOB_KEYS = ['direccion_general']`, fail-closed.
 - Prueba: `m7AccessApi`, `m7Surface`.
 
+## 6b · Selección de corrida (post-auditoría Codex)
+
+| Endpoint backend | run_id | Consumidor frontend | Prueba |
+|------------------|--------|---------------------|--------|
+| `/latest` | **NO acepta** (siempre la más reciente) | Home/summary/capabilities/sections (LABELED "más reciente") | `m7ScreenRender` banner |
+| `/findings` | acepta run_id+scope_key; 422 si desconocido | FindingsTab + export, anclados por `planFindingsRequest` | `m7RunController` (8 casos) |
+| `/runs` | metadata por corrida (sin summary/metrics) | RunsTab; `runContextFromRunsItem` (full=null) | `m7RunController` "PARCIAL" |
+
+Vista histórica = **parcial y declarada** (Strategy B): re-ancla findings + su
+export; summary/capacidades siguen siendo latest porque el backend no expone payload
+completo por corrida. `findingsAnchorMismatch` verifica el run_id que ecoa `/findings`
+(defensa anti-fallback). Ver [`M7_FE_RUN_SELECTION.md`](M7_FE_RUN_SELECTION.md).
+
 ## 7 · Divergencias declaradas (NO son bugs)
 
 | Tema | Estado |

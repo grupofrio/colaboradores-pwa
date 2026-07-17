@@ -41,12 +41,16 @@ export function exportFilename(base, ext, { demo = false, nonformal = false, sta
   return `${base}${marks.length ? `_${marks.join('_')}` : ''}.${ext}`
 }
 
-/** Cabecera de linaje común a TODOS los exports M7. */
-function lineageLines(payload, { demo = false } = {}) {
+/** Cabecera de linaje común a TODOS los exports M7.
+ *  runContext (opcional): la corrida ANCLADA para findings. Si es histórica, el
+ *  backend NO expone el scope económico completo por corrida ⇒ se DECLARA faltante
+ *  en vez de copiar el de la corrida más reciente (mentira que M5 nos costó un RED).
+ */
+function lineageLines(payload, { demo = false, runContext = null } = {}) {
   const run = payload?.run || {}
   const scope = run.scope || {}
   const lin = lineageState(payload)
-  return [
+  const head = [
     demo ? '⚠ ORIGEN: MODO DEMO — fixture del core real del backend M7 #211. NO es evidencia en vivo.'
          : 'ORIGEN: API autenticada gf_kold_os_m7',
     lin.is_production_shell_run
@@ -54,6 +58,25 @@ function lineageLines(payload, { demo = false } = {}) {
       : `⚠ EVIDENCIA NO FORMAL: ${M7_EVIDENCE_SOURCE_LABELS[run.measurement_method] || run.measurement_method || 'read-only'}. Backend #211 no desplegado; API real no probada.`,
     '⚠ LINAJE PRE-MIGRACIÓN — re-sellado requerido al portar a grupofrio/gf.',
     '⚠ MULTI-MONEDA SIN CONSOLIDAR: importes por moneda (MXN/USD); NO hay total global.',
+  ]
+  // Corrida histórica anclada: metadata sí, scope económico NO (no lo expone /latest).
+  if (runContext && runContext.isLatest === false) {
+    return head.concat([
+      '⚠ CORRIDA HISTÓRICA: findings de la corrida seleccionada; el backend no expone su scope económico completo.',
+      `run_id             : ${runContext.run_id || '—'}`,
+      `scope_key          : ${runContext.scope_key || '—'}`,
+      `Corte de auditoría : ${runContext.finished_at || '—'}`,
+      `Medición           : ${M7_EVIDENCE_SOURCE_LABELS[runContext.measurement_method] || runContext.measurement_method || '—'}`,
+      `auditor_build_sha  : ${runContext.auditor_build_sha || '—'}`,
+      'Nivel económico    : (no disponible por corrida histórica)',
+      'Ventana            : (no disponible por corrida histórica)',
+      'Monedas (scope)    : (no disponible por corrida histórica)',
+      'date_basis         : (no disponible por corrida histórica)',
+      'cost_method        : (no disponible por corrida histórica)',
+      'contract_build_sha : (no disponible por corrida histórica)',
+    ])
+  }
+  return head.concat([
     `Nivel económico    : ${payload?.capabilities?.profitability_level_reached || '—'}`,
     `Corte de auditoría : ${run.finished_at || '—'}`,
     `Ventana            : [${scope.window_start || '—'}, ${scope.window_end_exclusive || '—'})`,
@@ -65,17 +88,17 @@ function lineageLines(payload, { demo = false } = {}) {
     `run_id             : ${run.run_id || '—'}`,
     `auditor_build_sha  : ${run.auditor_build_sha || '—'}`,
     `contract_build_sha : ${run.contract_build_sha || '—'}`,
-  ]
+  ])
 }
 
-/** CSV de findings (sin PII, con nota de incidencias). */
-export function findingsToCsv(items, payload, { demo = false } = {}) {
+/** CSV de findings (sin PII, con nota de incidencias). runContext ancla el linaje. */
+export function findingsToCsv(items, payload, { demo = false, runContext = null } = {}) {
   const rows = (items || []).slice(0, M7_EXPORT_MAX_ROWS).map(sanitizeForExport)
   const cols = ['rule_code', 'category', 'title', 'classification', 'verdict',
     'severity', 'lifecycle_status', 'incidences', 'universe_id', 'date_basis',
     'cost_method', 'evidence_limitations', 'recommended_action']
   const out = []
-  for (const l of lineageLines(payload, { demo })) out.push('# ' + l)
+  for (const l of lineageLines(payload, { demo, runContext })) out.push('# ' + l)
   out.push('# NOTA: ' + M7_INCIDENCES_NOTE)
   out.push(cols.join(','))
   for (const r of rows) {

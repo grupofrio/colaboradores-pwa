@@ -4,14 +4,29 @@ El backend #211 **no está desplegado** y la API real **no ha sido probada**. Pa
 Dirección pueda ver la superficie con datos reales de forma (fixture derivado del core
 del backend), existe un modo demo — **estrictamente fuera de producción**.
 
-## Gate
+## Gate (fail-closed, reforzado tras Codex)
 
-`isM7DemoAllowed(env)` = **DEV** o `VITE_ENABLE_M7_DEMO === 'true'`.
+`canLoadM7DemoFixture(env, ctx)`:
+- **DEV local** (`import.meta.env.DEV`) ⇒ permitido.
+- **Preview de Vercel** (`VITE_VERCEL_ENV === 'preview'`) **+** `VITE_ENABLE_M7_DEMO === 'true'` ⇒ permitido.
+- **Producción real** (`VITE_VERCEL_ENV === 'production'`) ⇒ **NUNCA**, aunque el flag esté encendido.
+- Usuario no autorizado ⇒ negado. Cualquier otro caso ⇒ negado (fail-closed).
 
-- En **producción**, `?demo=1` se **ignora**: la pantalla resuelve `unavailable`
-  (backend 404) como corresponde a un módulo cuyo endpoint aún no existe.
-- El demo se marca en TODA su evidencia: banner `MODO DEMO`, banner `EVIDENCIA NO
-  FORMAL`, y nombre de archivo `_DEMO_NONFORMAL`.
+Codex marcó que `VITE_ENABLE_M7_DEMO='true'` NO debe bastar por sí solo en
+producción: ahora se exige la señal de entorno de Vercel, no sólo el flag.
+
+- En **producción**, `?demo=1` se **ignora**: la pantalla resuelve `unavailable`.
+- El demo se marca en TODA su evidencia: banner `MODO DEMO`, `EVIDENCIA NO FORMAL`,
+  y nombre de archivo `_DEMO_NONFORMAL`.
+
+## Carga por import DINÁMICO (el fixture NO viaja en producción)
+
+El fixture se carga con `await import('virtual:m7-demo-fixture')` **sólo tras pasar
+el gate**. En build de producción ese módulo virtual resuelve a un stub
+(`demoFixtureLoader.prod.js`) que no importa el fixture ⇒ el payload financiero
+queda **fuera del bundle productivo**. Lo verifica `scripts/check_m7_demo_bundle.mjs`
+en `npm run build` (sentinels: run_id, scope_key, content commit, importe). Evidencia:
+el chunk de la pantalla bajó de ~122 kB a ~57 kB.
 
 ## Qué NO es el demo
 
