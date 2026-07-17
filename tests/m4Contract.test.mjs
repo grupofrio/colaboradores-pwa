@@ -70,6 +70,25 @@ test('fixture valida el contrato kold.os.m4.api/1', () => {
   assert.equal(M4_API_LATEST_FIXTURE.schema_version, M4_API_SCHEMA_VERSION)
 })
 
+test('latest acepta age_days decimal no negativo del envelope backend', () => {
+  const doc = clone()
+  doc.age_days = 0.05
+
+  const result = validateM4Latest(doc)
+  assert.equal(result.ok, true, result.errors.join('\n'))
+})
+
+test('latest acepta las dependencias de backend declaradas en module_status', () => {
+  const doc = clone()
+  doc.metrics.module_status.push(
+    { name: 'gf_logistics_ops', state: 'installed', version: '18.0.1.0' },
+    { name: 'os_customer_zones', state: 'installed', version: '18.0.1.0' },
+  )
+
+  const result = validateM4Latest(doc)
+  assert.equal(result.ok, true, result.errors.join('\n'))
+})
+
 test('latest acepta el incidence_semantics literal emitido por Odoo', () => {
   const doc = clone()
   for (const item of doc.findings) {

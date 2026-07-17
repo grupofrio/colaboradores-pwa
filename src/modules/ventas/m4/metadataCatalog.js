@@ -59,7 +59,9 @@ export const M4_CANONICAL_CAPABILITIES = Object.freeze({
   ]),
 })
 
-export const M4_MODULE_NAMES = Object.freeze(['gf_kold_os_m4', 'sale', 'crm'])
+export const M4_MODULE_NAMES = Object.freeze([
+  'gf_kold_os_m4', 'sale', 'crm', 'gf_logistics_ops', 'os_customer_zones',
+])
 export const M4_MODULE_STATES = Object.freeze([
   'installed', 'uninstalled', 'to install', 'to upgrade', 'to remove',
 ])

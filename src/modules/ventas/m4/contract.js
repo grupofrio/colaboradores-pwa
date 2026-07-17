@@ -996,8 +996,8 @@ export function validateM4Latest(doc) {
   validateRun(doc.run, errors)
 
   if (!isBool(doc.stale)) errors.push('stale: booleano')
-  if (doc.age_days != null && (!isInt(doc.age_days) || doc.age_days < 0)) {
-    errors.push('age_days: entero >= 0 o null')
+  if (doc.age_days != null && (!Number.isFinite(doc.age_days) || doc.age_days < 0)) {
+    errors.push('age_days: número >= 0 o null')
   }
   validateMetrics(doc, errors)
 
