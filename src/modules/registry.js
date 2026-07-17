@@ -267,6 +267,27 @@ export const MODULES = [
     showInNav:  true,
   },
 
+  // ── KOLD OS · M7 — Rentabilidad y costos (observatorio read-only) ─────────
+  // Rentabilidad, costos, márgenes y desempeño económico. M7 v1 sólo alcanza
+  // NIVEL L1 (ingreso observable por moneda): NO afirma utilidad, margen real ni
+  // rentabilidad completa. accessPolicy 'm7' se resuelve con readM7Access (misma
+  // autoridad que tarjeta, nav, clic y route guard). Como M6, NO acepta
+  // `admin_plataforma`: el backend #211 sólo valida `direccion_general`.
+  {
+    id:     'profitability-costs',
+    label:  'Rentabilidad y costos',
+    shortLabel: 'Rentabilidad',
+    route:  '/rentabilidad-costos',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm7',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 18,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',

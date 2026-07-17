@@ -17,6 +17,7 @@ import { readM3Access } from './modules/ejecucion/m3/access'
 import { readM4Access } from './modules/ventas/m4/access'
 import { readM5Access } from './modules/inventario/m5/access'
 import { readM6Access } from './modules/caja-conciliacion/m6/access'
+import { readM7Access } from './modules/rentabilidad-costos/m7/access'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -42,6 +43,8 @@ const ScreenVentasM4 = lazy(() => import('./modules/ventas/ScreenVentasM4'))
 const ScreenInventarioM5 = lazy(() => import('./modules/inventario/ScreenInventarioM5'))
 // KOLD OS · M6 — Caja y conciliación (observatorio read-only, gate propio M6CajaRoute)
 const ScreenCajaConciliacionM6 = lazy(() => import('./modules/caja-conciliacion/ScreenCajaConciliacionM6'))
+// KOLD OS · M7 — Rentabilidad y costos (observatorio read-only, gate propio M7RentabilidadRoute)
+const ScreenRentabilidadCostosM7 = lazy(() => import('./modules/rentabilidad-costos/ScreenRentabilidadCostosM7'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -264,6 +267,21 @@ function M6CajaRoute({ children }) {
 function ScreenCajaConciliacionM6Mount() {
   const { session } = useSession()
   return <ScreenCajaConciliacionM6 session={session} />
+}
+
+// KOLD OS · M7 (Rentabilidad y costos) — gate fail-closed PROPIO: SÓLO
+// direccion_general. Como M6, NO acepta admin_plataforma: el backend #211 sólo
+// valida el job key; ser más permisivo mostraría la tarjeta con endpoint 403.
+function M7RentabilidadRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM7Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenRentabilidadCostosM7Mount() {
+  const { session } = useSession()
+  return <ScreenRentabilidadCostosM7 session={session} />
 }
 
 function ScreenPlaneacionM2Mount() {
@@ -704,6 +722,8 @@ export default function App() {
             <Route path="/inventario-flujo" element={<M5InventarioRoute><ScreenInventarioM5Mount /></M5InventarioRoute>} />
             {/* ── KOLD OS · M6 — Caja y conciliación (read-only) ───────── */}
             <Route path="/caja-conciliacion" element={<M6CajaRoute><ScreenCajaConciliacionM6Mount /></M6CajaRoute>} />
+            {/* ── KOLD OS · M7 — Rentabilidad y costos (read-only) ─────── */}
+            <Route path="/rentabilidad-costos" element={<M7RentabilidadRoute><ScreenRentabilidadCostosM7Mount /></M7RentabilidadRoute>} />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />
