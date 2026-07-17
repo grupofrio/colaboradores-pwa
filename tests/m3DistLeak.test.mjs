@@ -30,3 +30,14 @@ test('scanner acepta un dist sin artefactos del fixture real', () => {
   ].join('\n'))
   assert.deepEqual(scanM3DistLeaks(root), [])
 })
+
+test('scanner no confunde procedencia genérica de otro módulo con fixture M3', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'm3-other-module-'))
+  mkdirSync(path.join(root, 'assets'))
+  writeFileSync(
+    path.join(root, 'assets', 'm5.js'),
+    'const provenance = { kind: "real_code_generated_measured_aggregates" }',
+  )
+
+  assert.deepEqual(scanM3DistLeaks(root), [])
+})

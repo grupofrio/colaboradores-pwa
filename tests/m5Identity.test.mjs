@@ -40,7 +40,6 @@ const M4_IDENTITY = [
 ]
 
 const RUNTIME_FILES = [
-  '../src/modules/registry.js',
   '../src/lib/koldOsM5Route.js',
   '../src/modules/inventario/ScreenInventarioM5.jsx',
   '../src/modules/inventario/m5/exporters.js',
@@ -58,9 +57,10 @@ test('registry: el módulo M5 tiene identidad propia, no la de M4', () => {
   assert.equal(m5.route, '/inventario-flujo')
   assert.equal(m5.accessPolicy, 'm5')
   assert.equal(m5.label, 'Inventario y flujo')
-  // El id de M4 no puede seguir vivo aquí: colisionaría cuando #72 mergee.
-  assert.equal(getModuleById('ventas-clientes'), undefined,
-    "'ventas-clientes' es la identidad de M4; getModuleById resuelve POR id")
+  // M4 ya forma parte de main y conserva su identidad. M5 no puede reutilizarla.
+  const m4 = getModuleById('ventas-clientes')
+  assert.ok(m4, "'ventas-clientes' pertenece a M4")
+  assert.notEqual(m5.id, m4.id, 'M5 no reutiliza la identidad de M4')
   const ids = MODULES.map((m) => m.id)
   assert.equal(new Set(ids).size, ids.length, 'ningún id duplicado en el registry')
 })

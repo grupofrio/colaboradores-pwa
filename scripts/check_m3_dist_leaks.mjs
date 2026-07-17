@@ -1,9 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import {
-  M3_API_FIXTURE_PROVENANCE, M3_API_LATEST_FIXTURE,
-} from '../src/modules/ejecucion/m3/fixtures/apiLatestFixture.js'
+import { M3_API_LATEST_FIXTURE } from '../src/modules/ejecucion/m3/fixtures/apiLatestFixture.js'
 
 const escapePattern = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -11,7 +9,6 @@ const MARKERS = Object.freeze([
   ['demo_run_id', new RegExp(escapePattern(M3_API_LATEST_FIXTURE.run.run_id))],
   ['auditor_sha', new RegExp(escapePattern(M3_API_LATEST_FIXTURE.run.auditor_build_sha))],
   ['manifest_sha', new RegExp(escapePattern(M3_API_LATEST_FIXTURE.run.manifest_sha256))],
-  ['fixture_provenance', new RegExp(escapePattern(M3_API_FIXTURE_PROVENANCE.kind))],
   ['measured_total_incidences', new RegExp(
     `total_incidences["']?\\s*[:=]\\s*${M3_API_LATEST_FIXTURE.summary.total_incidences}`,
   )],

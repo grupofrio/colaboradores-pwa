@@ -9363,7 +9363,7 @@ async function directKoldOsM4(method, path) {
 }
 
 // ── KOLD OS M5 (gf_kold_os_m5) ── Odoo directo; PROHIBIDO fallback n8n ─────
-// Cliente autenticado GET-only para el observatorio de inventario y flujo.
+// KOLD OS M5 backend: cliente autenticado GET-only de inventario y flujo.
 async function directKoldOsM5(method, path) {
   const query = new URLSearchParams(path.split('?')[1] || '')
   const cleanPath = path.split('?')[0]
