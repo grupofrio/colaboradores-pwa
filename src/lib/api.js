@@ -23,6 +23,10 @@ import {
   filterKoldOsM4Params,
 } from './koldOsM4Route.js'
 import {
+  isKoldOsM5Path,
+  filterKoldOsM5Params,
+} from './koldOsM5Route.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -9358,6 +9362,19 @@ async function directKoldOsM4(method, path) {
   return odooHttp('GET', cleanPath, filterKoldOsM4Params(query))
 }
 
+// ── KOLD OS M5 (gf_kold_os_m5) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// KOLD OS M5 backend: cliente autenticado GET-only de inventario y flujo.
+async function directKoldOsM5(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM5Path(cleanPath)) return NO_DIRECT
+  if (method !== 'GET') {
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM5Params(query))
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
@@ -9366,6 +9383,7 @@ async function routeDirect(method, path, body) {
     directKoldOsM2,
     directKoldOsM3,
     directKoldOsM4,
+    directKoldOsM5,
     directProfile,
     directGerente,
     directAdmin,
