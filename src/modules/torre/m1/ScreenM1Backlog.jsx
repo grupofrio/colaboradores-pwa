@@ -348,8 +348,19 @@ export default function ScreenM1Backlog({ session }) {
 
         {/* KPIs (globales del backend; jamás recalculados) */}
         {data && (phase === 'success' || phase === 'empty' || phase === 'loading') && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: activeFilters > 0 ? 6 : 12 }}>
             {data.kpis.map((card) => <KpiCard key={card.key} card={card} />)}
+          </div>
+        )}
+
+        {/* Leyenda de alcance de los KPIs: son TOTALES GLOBALES; los filtros afectan
+            SÓLO la tabla de abajo (evita leer un total como si estuviera filtrado). */}
+        {data && (phase === 'success' || phase === 'empty') && activeFilters > 0 && (
+          <div data-testid="m1-filter-legend" style={{
+            fontSize: 11, color: C.textLow, marginBottom: 12, lineHeight: 1.5,
+          }}>
+            Los indicadores de arriba son <strong>totales globales</strong>; la tabla de abajo
+            está filtrada ({activeFilters} {activeFilters === 1 ? 'filtro' : 'filtros'}).
           </div>
         )}
 

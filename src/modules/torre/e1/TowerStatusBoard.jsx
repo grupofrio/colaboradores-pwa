@@ -2,7 +2,8 @@
 // Presentacional puro: 0 writes, 0 endpoints, 0 acciones. Estándar Enterprise con lo existente
 // (inline styles + tokens del PWA; sin librerías nuevas). Roles gated NO renderizan módulos.
 import { useEffect, useMemo, useState } from "react";
-import { fetchTowerStatus, resolveBoardView } from "./loadTowerStatus";
+import { fetchTowerStatus, resolveBoardView, TOWER_STATUS_ERROR_KINDS } from "./loadTowerStatus";
+import StateScreen from "../../../components/kold/StateScreen";
 
 const C = {
   text: "#FFFFFF",
@@ -143,12 +144,29 @@ export default function TowerStatusBoard({ role, base = "/e1", fetchImpl, allowG
     setState({ status: "loading", doc: null, error: null });
     fetchTowerStatus(role, { base, ...(fetchImpl ? { fetchImpl } : {}) })
       .then((doc) => alive && setState({ status: "ok", doc, error: null }))
-      .catch((e) => alive && setState({ status: "error", doc: null, error: String(e.message || e) }));
+      .catch((e) => {
+        if (!alive) return;
+        // El detalle técnico va a logging, NUNCA a la cara del usuario (sin HTML,
+        // sin "Unexpected token"). El estado se deriva del `kind` tipado del loader.
+        if (typeof console !== "undefined") console.warn("tower.status:", e && e.kind, String(e && e.message || e));
+        setState({ status: "error", doc: null, error: { kind: e && e.kind } });
+      });
     return () => { alive = false; };
   }, [role, base, fetchImpl]);
 
   if (state.status === "loading") return <div style={{ color: C.muted, padding: 4 }}>Cargando estado…</div>;
-  if (state.status === "error") return <div style={{ color: tone("red").fg, padding: 4 }}>No se pudo cargar el estado: {state.error}</div>;
+  if (state.status === "error") {
+    const kind = state.error && state.error.kind;
+    const copy = kind === TOWER_STATUS_ERROR_KINDS.NOT_PUBLISHED
+      ? { title: "El mapa de estado de la Torre aún no está publicado",
+          detail: "El resto de KOLD OS funciona con normalidad. Esta vista se habilitará cuando se publique su información." }
+      : { title: "No se pudo cargar el estado de la Torre",
+          detail: "Intenta de nuevo más tarde. El resto de KOLD OS funciona con normalidad." };
+    return (
+      <StateScreen title={copy.title} detail={copy.detail} tone="neutral"
+        actionLabel="Volver al inicio" actionHref="/" />
+    );
+  }
 
   const { doc } = state;
   const view = resolveBoardView(doc, { allowGatedPreview });

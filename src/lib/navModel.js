@@ -112,8 +112,15 @@ export function normalizePath(pathname = '') {
 //    /entregas/*    → operación diaria de entregas (carga, cierre de turno…)
 //    /koldcup/*     → capturas KOLDCUP (compra, producción, corte, traspaso)
 //    /torres/*      → validación de requisiciones (detalle con acciones)
-const NAV_HIDDEN_EXACT = ['/login']
-const NAV_HIDDEN_PREFIXES = ['/torre', '/admin/pos', '/admin/ticket', '/admin/cierre']
+// Etapa 0A — política exacta de /torre:
+//   · /torre         (E1 Tower)   → OCULTA EXACTA (full-screen). No hay artefacto E1
+//                                   publicado; se muestra StateScreen controlado. No
+//                                   es un módulo operativo (ninguna tarjeta apunta acá).
+//   · /torre/backlog (M1)         → NAV GLOBAL VISIBLE (recupera el sidebar).
+//   · /torres/*      (requisic.)  → operativo full-screen (subtree), sin cambios.
+// Antes '/torre' era prefijo y ocultaba también /torre/backlog (bug: M1 sin sidebar).
+const NAV_HIDDEN_EXACT = ['/login', '/torre']
+const NAV_HIDDEN_PREFIXES = ['/admin/pos', '/admin/ticket', '/admin/cierre']
 const NAV_HIDDEN_SUBTREES = ['/ruta', '/produccion', '/almacen-pt', '/entregas', '/koldcup', '/torres']
 
 export function isNavHiddenForPath(pathname = '') {

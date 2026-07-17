@@ -89,7 +89,12 @@ test('fetchTowerStatus queda blindado a "/e1" en prod (sin fetchImpl)', async ()
 })
 test('fetchTowerStatus con fetchImpl inyectado permite base dev limpia', async () => {
   const doc = read('tower.status.supervisor_ventas.json')
-  const fakeFetch = async () => ({ ok: true, status: 200, json: async () => doc })
+  // Response realista (Etapa 0A: el loader lee el body UNA vez como texto).
+  const fakeFetch = async () => ({
+    ok: true, status: 200,
+    headers: { get: () => 'application/json' },
+    text: async () => JSON.stringify(doc),
+  })
   const got = await fetchTowerStatus('supervisor_ventas', { base: '/fixtures', fetchImpl: fakeFetch })
   assert.equal(got.generated_for_role, 'supervisor_ventas')
 })
