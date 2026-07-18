@@ -7,16 +7,18 @@ import {
   commonDecisionCaveats, commonTechnicalEvidence, buildMeta,
 } from './shared.js'
 
-// M1 — outlier: modelo de backlog, no el shape auditor-contrato.
+// M1 — outlier: modelo de backlog, no el shape auditor-contrato. El modelo top-level
+// NO expone un label de sucursal (cada FILA trae su branch_name; el alcance de
+// sucursal se resuelve server-side por token) ⇒ branchScope = null, sin inventar.
 export function readM1PresentationMeta(data) {
   const d = data || {}
   return buildMeta({
     module: 'M1',
     dataAsOf: str(d.dataAsOf),               // de p.data_as_of
     period: null,                            // snapshot, sin ventana
-    companies: [],                           // branch-scoped, no company_ids
-    branchScope: str(d.branchLabel) || 'agregado',
-    formal: null,
+    companies: [],                           // sin company_ids en el modelo M1
+    branchScope: null,                       // no hay label de sucursal top-level; no se inventa
+    formal: null,                            // M1 no declara formalidad
     source: null,
     auditor: null,
     status: null,

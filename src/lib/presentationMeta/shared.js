@@ -36,18 +36,22 @@ export function commonDecisionCaveats(run) {
   return out
 }
 
-/** Bloque de evidencia técnica común (baja a EvidenceSection). */
+/** Bloque de evidencia técnica común (baja a EvidenceSection). Sólo captura lo que
+ *  el run REALMENTE emite; los módulos difieren (verificado contra fixtures):
+ *  M2 usa `build_sha`; M3/M4/M5/M6 usan `auditor_build_sha`+`contract_build_sha`.
+ *  Un campo ausente ⇒ null (jamás se inventa). */
 export function commonTechnicalEvidence(run, extra = {}) {
   const r = run || {}
   return {
     run_id: str(r.run_id),
     scope_key: str(r.scope_key),
     evidence_sha256: str(r.evidence_sha256),
-    auditor_build_sha: str(r.auditor_build_sha),
+    build_sha: str(r.build_sha),                 // M2 lo emite; el resto null
+    auditor_build_sha: str(r.auditor_build_sha), // M3-M6 lo emiten; M2 null
     contract_build_sha: str(r.contract_build_sha),
     duration_ms: Number.isFinite(r.duration_ms) ? r.duration_ms : null,
     executed_queries: Array.isArray(r.executed_queries) ? r.executed_queries.length : null,
-    measurement_method: str(r.measurement_method),
+    measurement_method: str(r.measurement_method), // SÓLO M6 lo emite; el resto null
     ...extra,
   }
 }

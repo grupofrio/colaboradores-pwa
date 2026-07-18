@@ -1,50 +1,49 @@
-# Matriz PresentationMeta M1–M6
+# Matriz PresentationMeta M1–M6 (verificada contra fixtures reales)
 
 `ModuleHeader` NO lee seis payloads ad-hoc: cada módulo tiene un adaptador
-`readMxPresentationMeta(payload)` que **normaliza metadata** (no recalcula negocio) a
-una forma común. Esta matriz documenta, por campo visual, el **path backend exacto**,
-el **fallback** y el **estado si falta**. Verificado leyendo las pantallas en `main`.
+`readMxPresentationMeta(payload)` que **normaliza metadata** (no recalcula negocio).
+Esta matriz se **verificó campo por campo contra el fixture real** de cada módulo
+(`tests/uxPresentationMetaModules.test.mjs`). Regla dura: **un campo ausente ⇒ null;
+jamás se inventa fuente, formalidad, auditor ni status.**
 
 ## Forma común que devuelve cada adaptador
 
 ```
-{ title,               // título de negocio (glosario 0B; en 0A conserva el actual)
-  dataAsOf,            // ISO | null
-  period,             // { kind:'range', start, endExclusive } | { kind:'days', days } | null
-  companies,          // number[]  (ids; el label lo pone la UI vía COMPANY_LABELS)
-  branchScope,        // string | null
-  formal,             // boolean | null   (is_production_shell_run)
-  source,             // string | null    (measurement_method o fuente declarada)
-  decisionCaveats,    // string[]  (capa 1: no-formal, cobertura baja, dato viejo…)
-  technicalEvidence,  // { run_id, scope_key, evidence_sha256, duration_ms,
-                      //   executed_queries, manifest, contract, extra{} }
-  auditor, status }   // technical_state / overall_status (badges)
+{ title, dataAsOf, period, companies, branchScope, formal, source,
+  auditor, status, decisionCaveats[], technicalEvidence{} }
 ```
+`period` = `{kind:'range', start, endExclusive}` | `{kind:'days', days}` | `null`.
 
-## Campo visual → path backend, por módulo
+## Verificación por módulo (path real · presente · ausente)
 
-| Campo | M1 | M2 | M3 | M4 | M5 | M6 | Si falta |
-|-------|----|----|----|----|----|----|----------|
-| dataAsOf | `data.dataAsOf` (de `p.data_as_of`) | `run.finished_at` | `run.finished_at` | `run.finished_at` | `run.finished_at` | `run.finished_at` | "corte no informado"; sin freshness |
-| period | — (snapshot) | `run.scope.window_days` (nº) | `run.scope.window_days` (nº) | `run.scope.window_start` / `window_end_exclusive` | idem M4 | `run.scope.window_start` / `window_end_exclusive` | ocultar chip periodo |
-| companies | — (branch-scoped) | `run.scope.company_ids` | `run.scope.company_ids` | `run.scope.company_ids` | `run.scope.company_ids` | `run.scope.company_ids` | "compañías no informadas" |
-| branchScope | selector M1 | — (agregado) | — | — | — | — | "agregado" |
-| formal | n/a | (no se muestra) | `run.is_production_shell_run` | `run.is_production_shell_run` | `run.is_production_shell_run` | `run.is_production_shell_run` | omitir pill |
-| source | endpoint backlog | literal módulo | literal módulo | — | — | `run.measurement_method` | "fuente no informada" |
-| auditor | n/a | `run.technical_state` | `run.technical_state` | `run.technical_state` | `run.technical_state` | `run.technical_state` | omitir badge |
-| status | n/a | `summary.overall_status` | `summary.overall_status` | `payload.summary.overall_status` | idem | `payload.summary.overall_status` | "estado no informado" |
+| Campo | M1 | M2 | M3 | M4 | M5 | M6 |
+|-------|----|----|----|----|----|----|
+| **dataAsOf** | `data.dataAsOf` ✓ | `run.finished_at` ✓ | `run.finished_at` ✓ | `run.finished_at` ✓ | `run.finished_at` ✓ | `run.finished_at` ✓ |
+| **period** | `null` (snapshot) | `days(90)` — `scope.window_days`; **sin rango** | `days(90)` (tiene rango, pero se usa days) | `range(2026-01-16→2026-07-15)` | `range(…)` | `range(…)`; **sin window_days** |
+| **companies** | `[]` (sin company_ids) | `[1,34,35,36]` | `[1,34,35,36]` | `[1,34,35,36]` | `[1,34,35,36]` | `[1,34,35,36]` |
+| **branchScope** | `null` (no hay label top-level; sí `branch_name` por fila) | `null` | `null` | `null` | `null` | `null` |
+| **formal** (`is_production_shell_run`) | `null` | **`null` — ABSENTE en M2** | `false` | `false` | `false` | `false` |
+| **source** (`measurement_method`) | `null` | **`null` — ABSENTE** | **`null` — ABSENTE** | **`null` — ABSENTE** | **`null` — ABSENTE** | `xml_rpc_read_only` (**único que lo emite**) |
+| **auditor** (`run.technical_state`) | `null` | `PASS` | `PASS` | `PASS` | `PASS` | `PASS` |
+| **status** (`summary.overall_status`) | `null` | `RED` | `RED` | `AMBER` | `AMBER` | `AMBER` |
+| **evidence.build id** | `branch_resolution_source` | **`build_sha`** (M2 no usa auditor/contract) | `auditor_build_sha`+`contract_build_sha` | idem | idem | idem |
 
-**Inconsistencias reales que la matriz resuelve (por eso hacen falta adaptadores):**
-1. **periodo**: M2/M3 emiten `window_days` (número); M4/M5/M6 emiten rango de fechas;
-   M1 no tiene ventana (snapshot de backlog). El adaptador normaliza a `period.kind`.
-2. **data_as_of**: M1 usa `data.dataAsOf` (top-level); el resto `run.finished_at`;
-   M4/M5 además traen `kpi.data_as_of` por tile (no se usa en el header).
-3. **auditor/status**: el binding local difiere entre pantallas; el path canónico es
-   `run.technical_state` y `summary.overall_status` (o `payload.summary.overall_status`).
-4. **M1 es el outlier**: modelo de backlog, no el shape auditor-contrato. Su adaptador
-   mapea lo mínimo (dataAsOf, branchScope) y declara el resto como no aplicable.
+## Consecuencias honestas (correcciones tras verificar)
 
-## Regla dura (test por adaptador)
-Un campo ausente **no** produce copy falso: devuelve el estado "no informado"; nunca
-un `0`, una fecha inventada ni una compañía por defecto. Cada adaptador tiene un test
-que verifica el path correcto y el estado-si-falta.
+1. **`source` = null en M1–M5.** Sólo M6 emite `measurement_method`. El adaptador
+   **no** coloca un literal ("gf_kold_os_mX"): ese texto vive hardcodeado en el
+   *screen* de M2/M3, no en el contrato. El adaptador refleja el contrato: null.
+2. **`formal` = null en M2.** M2 no emite `is_production_shell_run`; no se inventa
+   formal/no-formal. Por eso M2 tampoco genera el caveat "Evidencia no formal".
+3. **`period` de M2 es solo `days`** (no tiene rango de fechas en el contrato).
+4. **build id difiere:** M2 usa `build_sha`; M3–M6 usan `auditor_build_sha`+
+   `contract_build_sha`. `commonTechnicalEvidence` captura ambos (null el que no aplique).
+5. **M1 `branchScope` = null** (el alcance de sucursal se resuelve server-side por
+   token; el modelo top-level no lo expone).
+
+## Estado de adopción (importante)
+
+En Etapa 0A **sólo M6** consume estos adaptadores (vía `EvidenceSection`/`DataFreshness`,
+y **M6 conserva su encabezado propio**, no fue sustituido por `ModuleHeader`). Los
+adaptadores M1–M5 están **construidos y verificados por tests**, pero **no cableados**
+en la app todavía: su adopción es **Etapa 0A.2**, tras validar #78.

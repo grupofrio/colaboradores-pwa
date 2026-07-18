@@ -41,12 +41,14 @@ test('M3 usa periodo days; M4/M5 usan rango (paridad de forma)', () => {
   assert.equal(readM5PresentationMeta(range).period.kind, 'range')
 })
 
-test('M1 es el outlier: data.dataAsOf, sin periodo ni company_ids', () => {
-  const m = readM1PresentationMeta({ dataAsOf: '2026-07-17T16:03:00Z', branchLabel: 'IGU34' })
+test('M1 es el outlier: data.dataAsOf; sin periodo/company_ids/branchScope (no se inventa)', () => {
+  const m = readM1PresentationMeta({ dataAsOf: '2026-07-17T16:03:00Z', branch_resolution_source: 'token' })
   assert.equal(m.dataAsOf, '2026-07-17T16:03:00Z')
   assert.equal(m.period, null)
   assert.deepEqual(m.companies, [])
-  assert.equal(m.branchScope, 'IGU34')
+  // el modelo top-level de M1 NO expone label de sucursal ⇒ null, jamás 'agregado'
+  assert.equal(m.branchScope, null)
+  assert.equal(m.technicalEvidence.branch_resolution_source, 'token')
 })
 
 // ── un campo ausente NO produce copy falso ───────────────────────────────────
