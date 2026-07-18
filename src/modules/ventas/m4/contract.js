@@ -981,6 +981,26 @@ function validateFinding(finding, errors, ruleByCode = null, run = null) {
   return errors.length === initialErrorCount
 }
 
+/**
+ * Guard de renderizabilidad para la UI (defensa en profundidad; NO revalida el contrato).
+ *
+ * `fetchM4Latest` solo devuelve state:'ok' con un payload que pasó `validateM4Latest`,
+ * así que por la vía real `run` y `summary` están garantizados. Pero el camino demo
+ * fija phase:'ok' con un fixture SIN validar (y un contrato podría regresar). La pantalla
+ * desreferencia `payload.run.*` y `payload.summary.*`; si esos objetos no vienen NO debe
+ * desreferenciarlos (causaría TypeError → loop de ErrorBoundary). Esta función solo
+ * confirma que el envelope mínimo que la vista lee está presente como objeto. Si es false,
+ * la pantalla trata el payload como 'invalid' y muestra el estado controlado, sin inventar
+ * datos ni convertir la ausencia en ceros.
+ */
+export function isRenderableM4Payload(payload) {
+  return (
+    payload != null && typeof payload === 'object'
+    && payload.run != null && typeof payload.run === 'object'
+    && payload.summary != null && typeof payload.summary === 'object'
+  )
+}
+
 /** Valida el envelope de GET /pwa-kold-os/m4/latest. Devuelve {ok, errors, schema}. */
 export function validateM4Latest(doc) {
   const errors = []
