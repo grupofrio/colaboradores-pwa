@@ -18,17 +18,28 @@ semántica de negocio. Todo lo que se mueve es presentación.
 
 ---
 
-## ETAPA 0A — Correcciones y fundamentos (ESTE PR)
+## ETAPA 0A — Infraestructura común + piloto M6 + correcciones M1/M3/Torre (ESTE PR)
 
-### Alcance
-- Corregir el error crudo de `/torre` (parseo seguro + estado controlado).
-- Restaurar navegación global en M1 (`/torre/backlog`).
-- Crear componentes base: `ModuleHeader`, `EvidenceSection`, `DataFreshness`,
-  `StateScreen`.
-- Crear adaptadores de metadata de presentación por módulo (`readMxPresentationMeta`).
-- Retirar telemetría forense y referencias internas de la capa 1 → Evidencia.
-- Corregir leyenda de filtros de M1 y affordance de scroll de M3.
-- Pruebas (render real), responsive y accesibilidad.
+> **Alcance HONESTO de #78:** este PR crea la infraestructura común y la ESTRENA en
+> M6 (piloto acotado); NO afirma que la experiencia común ya esté adoptada en M1–M6.
+
+### Qué entrega exactamente
+- **Componentes creados:** `ModuleHeader`, `DataFreshness`, `EvidenceSection`,
+  `StateScreen` (+ adaptadores `readM1..M6PresentationMeta`, verificados por tests).
+- **Torre:** `/torre` con parseo seguro + `StateScreen` (sin error crudo);
+  `/torre/backlog` recupera nav global.
+- **M1:** corrección de leyenda de filtros (los KPIs son totales globales).
+- **M3:** affordance de scroll horizontal.
+- **M6 (piloto):** integra `DataFreshness` + `EvidenceSection` + copy curado (retira
+  `docs/*.md` y la telemetría forense de la capa 1). **M6 CONSERVA su encabezado
+  propio; NO fue sustituido por `ModuleHeader`.**
+
+### Estado de adopción (para no sobre-declarar)
+- `ModuleHeader` **NO es la autoridad del encabezado de ningún módulo todavía** (está
+  creado y probado; se adopta por módulo en 0A.2/Etapa 2).
+- **M2, M4, M5 NO adoptan** los componentes en #78. Sus adaptadores están
+  construidos y verificados, pero **no cableados**.
+- La adopción de los componentes en **M2/M4/M5 será Etapa 0A.2**, después de validar #78.
 
 ### Excluido de 0A (para no confundir alcance)
 Agrupación de navegación (`navGroup`), renombre global de módulos, reorden de Home,
@@ -129,7 +140,8 @@ del commit del módulo). No se mantienen dos UIs.
 1. `docs(ux): plan Etapa 0A + matrices + tokens semánticos`
 2. `feat(ux): componentes kold + adaptadores PresentationMeta + tests`
 3. `fix(ux): gates 1-4 — /torre parse-guard + StateScreen + navModel + M1 legend + M3 scroll`
-4. `refactor(ux): headers M2-M6 → ModuleHeader/Evidence/Freshness; gate 5 M6 sin docs/telemetría`
+4. `refactor(ux): gate 5 — M6 (piloto) integra DataFreshness/EvidenceSection + copy curado`
+   · M6 conserva su encabezado propio; NO se sustituye por ModuleHeader; M2/M4/M5 sin adoptar (0A.2)
 
 ## Orden de integración con M7 (recordatorio, no se ejecuta aquí)
 
