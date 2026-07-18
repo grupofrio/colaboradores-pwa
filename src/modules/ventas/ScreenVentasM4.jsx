@@ -237,12 +237,14 @@ export default function ScreenVentasM4({ session, initialLoadForTesting }) {
     return () => { current = false }
   }, [demo, initialLoadForTesting])
 
-  // Guard de renderizabilidad (defensa en profundidad). El camino real /latest solo
-  // fija 'ok' con un payload que pasó validateM4Latest (run + summary garantizados),
-  // pero el camino demo fija 'ok' con un fixture SIN validar. Un payload truthy pero
-  // incompleto NO debe desreferenciarse aguas abajo (payload.run.* reventaría con un
-  // TypeError → loop de ErrorBoundary). Si no es renderizable se trata como 'invalid'
-  // y la vista cae al estado controlado de más abajo, sin inventar datos ni ceros.
+  // Guard de renderizabilidad (defensa en profundidad). Ambos caminos de entrada validan
+  // y canonicalizan el envelope antes de 'ok' (fetchM4Latest en el real, resolveM4DemoLatest
+  // en el demo), así que en operación normal el payload ya trae la estructura del contrato.
+  // Este guard permanece como última línea ante una regresión futura, una inyección de test
+  // o un envelope inesperado: si el payload no es renderizable NO debe desreferenciarse aguas
+  // abajo (payload.run.* / rule_results.filter reventarían con un TypeError → loop de
+  // ErrorBoundary). Se trata como 'invalid' ANTES de cualquier dereference y la vista cae al
+  // estado controlado de más abajo, sin inventar datos ni ceros.
   const rawPayload = load.phase === 'ok' ? load.payload : null
   const payloadRenderable = isRenderableM4Payload(rawPayload)
   const payload = payloadRenderable ? rawPayload : null
