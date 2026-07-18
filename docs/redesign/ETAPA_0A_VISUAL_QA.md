@@ -10,9 +10,10 @@
 
 ## Resultado global
 
-**Desktop (viewport real 1966 CSS px): los 5 gates PASS.** **Responsive 375/tablet:
-NO verificado — bloqueo de herramienta** (ver abajo). Sin blockers ni majors nuevos
-en desktop.
+**Desktop (viewport real 1966 CSS px): los 5 gates PASS** (observado por Claude).
+**Móvil (dispositivo real): PASS** — validado manualmente por **Yamil** (2026-07-17).
+**Tablet (768×1024): NOT TESTED** — sin dispositivo; riesgo residual **aceptado como
+NO BLOQUEANTE** por el responsable. **Gate responsive: CERRADO.** Sin blockers ni majors.
 
 ## Matriz de pantallas · viewport · resultado
 
@@ -42,36 +43,33 @@ en desktop.
 |----------|-----------|
 | `/torre`: el encabezado del wrapper ("mapa real del sistema") antecede al StateScreen "aún no publicado"; leve disonancia | **minor** — diferido a **0A.2** |
 | M3 conserva su footer de telemetría en capa 1 (M3 no era gate 5; sólo M6 se limpió en 0A) | declarado, no regresión |
-| Responsive móvil/tablet **NOT TESTED** (la emulación no llega al tab automatizado) | **gate de proceso previo al merge** (no de código) |
+| Responsive: **móvil PASS** (validado por Yamil en dispositivo real); **tablet NOT TESTED** (sin dispositivo) | riesgo residual **aceptado, no bloqueante**; gate **CERRADO** |
 
 Sin blockers ni majors de código. Sin regresiones observadas en desktop.
 
-## Responsive móvil/tablet — NOT TESTED (limitación de la herramienta)
+## Responsive — CIERRE del gate (decisión de Yamil, 2026-07-17)
 
-**Estado: NO PROBADO.** Se intentaron dos vías y ninguna cambió el viewport de la
-pestaña que la herramienta automatiza:
-- `resize_window` a 390×844 → `window.innerWidth` permaneció en **1966**.
-- **DevTools device toolbar** (F12 → Ctrl+Shift+M → 390×844 → recarga), operado
-  manualmente por Yamil → remedido: `innerWidth` siguió en **1966** en la única
-  pestaña del grupo automatizado. La emulación no alcanza esa pestaña.
+El gate responsive de #78 queda **CERRADO** con esta composición de evidencia:
 
-Por decisión de Yamil (Opción 3) **no se sigue intentando** con la herramienta. Por
-tanto **NO se verificaron visualmente** los viewports móvil (390×844) ni tablet
-(768×1024). **No se infiere PASS por CSS ni por tests**: la revisión visual manual
-responsive es un **gate OBLIGATORIO previo al merge**.
+- **Desktop (1966 CSS px): PASS** — observado por **Claude** en el Preview autenticado
+  (los 5 gates + sin overflow global; ver matriz arriba).
+- **Móvil (dispositivo real): PASS** — **validado manualmente por Yamil** (responsable),
+  2026-07-17, sobre el recorrido responsive pre-registrado de la Etapa 0A (Home ·
+  `/torre` · `/torre/backlog` M1 · M3 · M6 · EvidenceSection). **El veredicto es de
+  Yamil; Claude NO observó el móvil.** No se transcriben observaciones por superficie
+  que Yamil no haya detallado.
+- **Tablet (768×1024): NOT TESTED** — no se dispuso de dispositivo. **Riesgo residual
+  aceptado como NO BLOQUEANTE por decisión del responsable (Yamil).**
 
-### PENDIENTE OBLIGATORIO antes del merge (revisión manual responsive)
+**El gate responsive ya no bloquea #78.**
 
-Móvil **390×844** y tablet **768×1024**, para Home · `/torre` · `/torre/backlog` (M1
-con/sin filtro) · M3 (scroll horizontal real) · M6 · EvidenceSection (cerrado/abierto):
-- navegación inferior móvil visible + hoja "Más" funcional;
-- qué navegación corresponde realmente a 768 (verificar en DOM, no asumir);
-- safe-area inferior respetada; áreas táctiles suficientes;
-- scroll horizontal de la tabla M3 sin overflow horizontal **global**;
-- M6 sin telemetría en capa principal; EvidenceSection sin desbordar el ancho;
-- sin solapes, sin cortes de texto/tarjetas, sin scroll horizontal global.
+### Contexto — por qué la validación móvil fue en dispositivo real
 
-Ninguna de estas filas se declara PASS: todas quedan **NOT TESTED / pendientes**.
+La emulación no alcanzó la pestaña que la herramienta automatiza: `resize_window` a
+390×844 y la device toolbar de DevTools dejaron `window.innerWidth` en **1966**. Por
+eso el móvil se validó **en dispositivo real por Yamil** (no por Claude) y el tablet
+quedó pendiente por falta de dispositivo (riesgo aceptado, no bloqueante). No se infiere
+PASS por CSS ni por tests: el móvil está respaldado por la validación manual de Yamil.
 
 ## Minor conocido (diferido a Etapa 0A.2)
 
@@ -90,13 +88,13 @@ en 0A.2; sin cambio en #78.**
 
 ## Conclusión
 
-- **Desktop (1966 px): PASS**, observado por Claude en el Preview autenticado (los 5
+- **Desktop (1966 px): PASS** — observado por Claude en el Preview autenticado (los 5
   gates funcionales + sin overflow global).
-- **Móvil (390×844) y tablet (768×1024): NOT TESTED** por limitación de la
-  herramienta. **No se infiere PASS por CSS ni tests.**
-- **La revisión manual responsive es un gate previo al merge.**
+- **Móvil (dispositivo real): PASS** — validado manualmente por Yamil (2026-07-17).
+- **Tablet (768×1024): NOT TESTED** — riesgo residual **aceptado, no bloqueante** (Yamil).
+- **Gate responsive: CERRADO** — ya no bloquea #78.
 - **Minor de `/torre`: diferido a 0A.2.**
 - Código: sin blockers ni majors (auditoría estática de Codex).
 
-Recomendación: **auditoría delta docs-only de Codex**; **merge bloqueado** hasta
-completar la QA responsive manual 390/768.
+#78 permanece **DRAFT**; el merge queda sujeto a S/N (el gate responsive dejó de ser
+el bloqueo). El minor de `/torre` sigue diferido a 0A.2.
