@@ -151,6 +151,18 @@ del commit del módulo). No se mantienen dos UIs.
 
 ---
 
+## Pendientes conocidos para Etapa 0A.2 (NO iniciar aún)
+
+- **Adopción de componentes en M2/M4/M5** (ModuleHeader/EvidenceSection/DataFreshness);
+  al cablear M2, `EvidenceSection` mostrará `build_sha` (P3 de Codex — sin pérdida en M6).
+- **Minor `/torre`**: el encabezado del wrapper ("mapa real del sistema") antecede al
+  `StateScreen` "aún no publicado"; leve disonancia, no bloquea. Se ajusta en 0A.2.
+- **Gate previo al merge de #78**: revisión visual responsive manual (móvil 390×844 y
+  tablet 768×1024) — quedó **NOT TESTED** por limitación del tab automatizado (ver
+  `ETAPA_0A_VISUAL_QA.md`). No se infiere PASS por CSS ni tests.
+
+---
+
 ## ETAPA 0B — Navegación y lenguaje común (NO iniciar aún)
 
 `navGroup` (Operación/Negocio/Personal) · labels de negocio · orden coherente
