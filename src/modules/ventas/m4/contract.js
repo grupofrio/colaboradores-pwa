@@ -982,22 +982,38 @@ function validateFinding(finding, errors, ruleByCode = null, run = null) {
 }
 
 /**
+ * `isPlainRecord`: objeto plano (no null, no array). Como `typeof [] === 'object'`,
+ * `Array.isArray` es imprescindible para no aceptar un arreglo donde el contrato exige
+ * un record.
+ */
+export const isPlainRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+/**
  * Guard de renderizabilidad para la UI (defensa en profundidad; NO revalida el contrato).
  *
- * `fetchM4Latest` solo devuelve state:'ok' con un payload que pasó `validateM4Latest`,
- * así que por la vía real `run` y `summary` están garantizados. Pero el camino demo
- * fija phase:'ok' con un fixture SIN validar (y un contrato podría regresar). La pantalla
- * desreferencia `payload.run.*` y `payload.summary.*`; si esos objetos no vienen NO debe
- * desreferenciarlos (causaría TypeError → loop de ErrorBoundary). Esta función solo
- * confirma que el envelope mínimo que la vista lee está presente como objeto. Si es false,
- * la pantalla trata el payload como 'invalid' y muestra el estado controlado, sin inventar
- * datos ni convertir la ausencia en ceros.
+ * `fetchM4Latest` (y, tras la corrección, el camino demo vía `resolveM4DemoLatest`) solo
+ * entregan `state:'ok'` con un payload que pasó `validateM4Latest` + canonicalización. Este
+ * guard es la última línea: exige exactamente los campos que la pantalla DESREFERENCIA sin
+ * protección propia, para que un envelope malformado caiga a 'invalid' ANTES de cualquier
+ * acceso, hook o cálculo:
+ *   - run / summary: records planos (la vista hace `run.*` y `summary.*` directo);
+ *   - rule_results: arreglo NO vacío (blocks useMemo hace `payload.rule_results.filter(...)`
+ *     sobre TODAS las categorías; el contrato lo exige no vacío, línea `rule_results`);
+ *   - findings: arreglo, puede venir vacío (el camino demo pasa `payload.findings` a
+ *     applyFindingFilters; un run sin hallazgos es válido).
+ * Los cuatro reflejan requisitos del contrato real (`validateM4Latest`), así que el guard NO
+ * inventa requisitos incompatibles con el endpoint productivo. `kpis`/`capabilities` NO se
+ * exigen aquí: la pantalla ya los protege con `?. || {}` (no se duplica lo ya protegido).
+ * Un arreglo como run/summary, o rule_results/findings ausentes o del tipo incorrecto, se
+ * rechazan. No se inventan defaults ni se renderizan datos parciales.
  */
 export function isRenderableM4Payload(payload) {
   return (
-    payload != null && typeof payload === 'object'
-    && payload.run != null && typeof payload.run === 'object'
-    && payload.summary != null && typeof payload.summary === 'object'
+    isPlainRecord(payload)
+    && isPlainRecord(payload.run)
+    && isPlainRecord(payload.summary)
+    && Array.isArray(payload.rule_results) && payload.rule_results.length > 0
+    && Array.isArray(payload.findings)
   )
 }
 

@@ -28,7 +28,7 @@ import { useLocation } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { createLatestRequestGate } from '../../lib/latestRequestGate'
 import { demoFixtureAvailable, loadM4DemoFixture } from 'virtual:m4-demo-fixture'
-import { fetchM4Latest, fetchM4Findings } from './m4/m4Api'
+import { fetchM4Latest, fetchM4Findings, resolveM4DemoLatest } from './m4/m4Api'
 import { isRenderableM4Payload } from './m4/contract'
 import { isM4DemoAllowed } from './m4/demoGate'
 import { buildM4EffectivePayload, startM4StaleMonitor } from './m4/staleClock'
@@ -183,14 +183,18 @@ function Header({ demo, technical, payload }) {
   )
 }
 
-export default function ScreenVentasM4({ session, initialLoad }) {
+// `initialLoadForTesting`: semilla INMUTABLE de montaje, exclusiva para tests (permite
+// renderizar el componente real en un estado determinista bajo SSR, donde useEffect no
+// corre). No debe pasarse desde App/router (el montaje productivo solo pasa `session`);
+// se lee una sola vez en useState y NO se sincroniza si cambia después.
+export default function ScreenVentasM4({ session, initialLoadForTesting }) {
   const location = useLocation()
   const demoAllowed = demoFixtureAvailable && isM4DemoAllowed(import.meta.env)
   const demo = useMemo(
     () => demoAllowed && new URLSearchParams(location.search).get('demo') === '1',
     [demoAllowed, location.search],
   )
-  const [load, setLoad] = useState(initialLoad || { phase: 'loading' })
+  const [load, setLoad] = useState(initialLoadForTesting || { phase: 'loading' })
   const [filters, setFilters] = useState(M4_DEFAULT_FILTERS)
   const [page, setPage] = useState(1)
   const [table, setTable] = useState({ phase: 'idle', items: [], total: 0, pages: 1 })
@@ -206,19 +210,20 @@ export default function ScreenVentasM4({ session, initialLoad }) {
   // ── /latest ────────────────────────────────────────────────────────────────
   useEffect(() => {
     let current = true
-    // Semilla de test: con initialLoad inyectado no se dispara el fetch real,
-    // para poder renderizar el componente REAL en estados deterministas.
-    if (initialLoad) return undefined
+    // Con la semilla de test inyectada no se dispara el fetch real (el estado ya viene
+    // determinado por initialLoadForTesting). Es inmutable, así que no re-siembra.
+    if (initialLoadForTesting) return undefined
     if (demo) {
       setLoad({ phase: 'loading' })
       loadM4DemoFixture().then((fixture) => {
         if (!current || !aliveRef.current) return
-        if (fixture?.payload && fixture?.provenance) {
-          setLoad({
-            phase: 'ok', payload: fixture.payload, provenance: fixture.provenance, demo: true,
-          })
+        // El fixture demo pasa por la MISMA autoridad contractual que /latest
+        // (validar + canonicalizar, sin red): un fixture malformado NO entra a 'ok'.
+        const result = resolveM4DemoLatest(fixture)
+        if (result.state === 'ok') {
+          setLoad({ phase: 'ok', payload: result.payload, provenance: result.provenance, demo: true })
         } else {
-          setLoad({ phase: 'unavailable' })
+          setLoad({ phase: result.state, errors: result.errors || [] })
         }
       })
       return () => { current = false }
@@ -230,7 +235,7 @@ export default function ScreenVentasM4({ session, initialLoad }) {
       else setLoad({ phase: result.state, errors: result.errors || [] })
     })
     return () => { current = false }
-  }, [demo, initialLoad])
+  }, [demo, initialLoadForTesting])
 
   // Guard de renderizabilidad (defensa en profundidad). El camino real /latest solo
   // fija 'ok' con un payload que pasó validateM4Latest (run + summary garantizados),
@@ -343,7 +348,7 @@ export default function ScreenVentasM4({ session, initialLoad }) {
       session_expired: ['Sesión expirada', 'Vuelve a iniciar sesión para consultar M4.'],
       forbidden: ['Sin permiso M4', 'Tu sesión no tiene acceso M4 (direccion_general / admin_plataforma). El acceso es fail-closed.'],
       schema_mismatch: ['Versión de contrato no soportada', 'El backend publica una versión de kold.os.m4.api que esta UI no soporta. Actualiza la PWA (no se intenta adivinar la estructura).'],
-      invalid: ['Respuesta inválida del backend', 'El envelope no validó el contrato kold.os.m4.api/1; no se muestra nada derivado de datos corruptos.'],
+      invalid: ['Respuesta inválida de la fuente de datos', 'El envelope no cumple el contrato kold.os.m4.api/1; no se muestra información derivada y no se inventan métricas.'],
       error: ['Error de red o servidor', 'No fue posible consultar la API de M4. Reintenta más tarde.'],
     }[displayPhase] || ['Estado desconocido', 'No fue posible determinar el estado de la fuente M4.']
     return (
