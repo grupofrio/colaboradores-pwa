@@ -851,7 +851,7 @@ export const DAY_CONTROL_FIXTURE_DEGRADED = Object.freeze({
       "entity_id": 5102,
       "route_id": 5102,
       "count": 1,
-      "occurred_at": "2026-01-15 14:40:00",
+      "occurred_at": "2026-01-15T14:40:00Z",
       "data_as_of": "2026-01-15 15:05:00"
     }
   ],
