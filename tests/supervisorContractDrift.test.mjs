@@ -137,10 +137,20 @@ test('P2-A: offset máximo ISO 8601 (±14:00; en ±14 los minutos deben ser 00)'
     '+14:00', '-14:00']) {
     assert.ok(isValidContractDateTime(ts(off)), `${off} debe ser válido`)
   }
-  // inválidos: cualquier cosa > ±14:00 (incl. +14:01/+14:59) y horas > 14
-  for (const off of ['+14:01', '+14:30', '+14:59', '-14:01', '-14:59', '+15:00', '-15:00',
-    '+99:99']) {
+  // inválidos: cualquier cosa > ±14:00 (incl. ±14:30/±14:59) y horas > 14
+  for (const off of ['+14:01', '+14:30', '-14:30', '+14:59', '-14:01', '-14:59', '+15:00',
+    '-15:00', '+99:99']) {
     assert.ok(!isValidContractDateTime(ts(off)), `${off} debe rechazarse`)
+  }
+})
+
+test('P3: cobertura explícita de offsets ±14 (Codex YELLOW-5)', () => {
+  const ts = (off) => `2026-01-15T12:30:00${off}`
+  for (const off of ['+14:00', '-14:00', '+13:59', '-13:59']) {
+    assert.ok(isValidContractDateTime(ts(off)), `${off} válido`)
+  }
+  for (const off of ['+14:30', '-14:30', '+14:59', '-14:59', '+15:00', '-15:00']) {
+    assert.ok(!isValidContractDateTime(ts(off)), `${off} inválido`)
   }
 })
 
@@ -359,49 +369,61 @@ function isDemoIdentityString(s) {
   return DEMO_NAME_PATTERNS.some((re) => re.test(s))
 }
 
-// (F) CORREOS/URLS/DOMINIOS (YELLOW-3 F3) — SIN lista de TLD y SIN excepción por
-// raíz/prefijo (que permitía evadir con `sale.`/`route.`/`gf.`). Regla POSITIVA: el
-// único hostname permitido es `.invalid` (RFC 6761). Se detecta cualquier forma de
-// hostname/dominio/URL/email con/sin protocolo, TLD desconocido, mayúsculas,
-// subdominios, puerto, path, en texto. La ÚNICA excepción para un nombre de MODELO
-// Odoo es CONTEXTUAL: solo si la CLAVE del campo es de modelo (model/model_name/
-// res_model/odoo_model/technical_model) y el valor cumple la gramática estricta.
+// (F) CORREOS/URLS/DOMINIOS (YELLOW-5 · decisión A aprobada) — SIN allowlist global de
+// modelos y SIN excepción por prefijo (sale./stock./gf./route./hr.). La ÚNICA forma de
+// nombrar un modelo Odoo es por CLAVE EXPLÍCITA de modelo (grammar sobre el valor
+// COMPLETO). El texto libre se escanea ESTRICTO. `data_notes`/`contract` se tratan por
+// PROCEDENCIA (metadatos contractuales copiados verbatim del golden #220): se buscan
+// emails/URLs/endpoints explícitos/secretos, pero un `a.b` desnudo NO se clasifica como
+// hostname (podría ser un nombre técnico de modelo documentado por el backend).
 const RESERVED_TLD_RE = /\.invalid$/i
+// gramática de modelo Odoo: valor COMPLETO (anclado), sin URL/email/espacios/texto extra
 const ODOO_MODEL_GRAMMAR = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/
 const MODEL_KEYS = new Set(['model', 'model_name', 'res_model', 'odoo_model', 'technical_model'])
-// YELLOW-4 P2-B: la PROSA técnica se escanea IGUAL de estricto que cualquier campo —
-// NO hay excepción por estar en data_notes/reason/contract/note/description/title. Un
-// `a.b` en prosa se rechaza salvo que termine en `.invalid`. La ÚNICA forma de nombrar
-// un modelo Odoo es (1) por CLAVE explícita de modelo (grammar) o (2) por esta
-// ALLOWLIST EXACTA y LIMITADA de los nombres técnicos que la documentación del contrato
-// referencia (identificadores públicos de framework Odoo/gf; NO son hostnames ni PII).
-// NUNCA se permite un `a.b` arbitrario por "parecer" modelo, ni por raíz/prefijo.
-// Incluye también el identificador de contrato del radar (versionado, enum fijo del
-// schema); el de day-control se salta por adyacencia a '_' (day_control).
-const SYNTHETIC_MODEL_ALLOWLIST = new Set([
-  'sale.order', 'stock.picking', 'gf.route.incident', 'gf.tower.m1.route.backlog.cash',
-  'gf.salesops.supervisor.radar', // bare de 'gf.salesops.supervisor.radar/1' (path stripped)
-])
+// identificador de contrato canónico versionado: <dotted>/<version>
+const CONTRACT_ID_GRAMMAR = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+\/\d+$/
 const hostBare = (h) => h.replace(/:\d+.*$/, '').replace(/\/.*$/, '')
 const URL_RE = /\bhttps?:\/\/([^\s/:]+(?::\d+)?)/gi
 const EMAIL_RE = /[a-z0-9._%+-]+@([a-z0-9.-]+\.[a-z][a-z0-9-]*)/gi
 const HOST_RE = /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z][a-z0-9-]*(?::\d+)?(?:\/[^\s]*)?/gi
-// detección ESTRICTA (se aplica a TODO string, incluida la prosa): email/URL + hostname
-// suelto; solo `.invalid` o un token EXACTO de la allowlist de modelos pasa.
-function contactLeak(s) {
+// leaks de email/URL comunes a todo campo (un dominio real en email/URL siempre muerde).
+function emailUrlLeak(s) {
   for (const m of s.matchAll(URL_RE)) {
     if (!RESERVED_TLD_RE.test(hostBare(m[1]))) return `URL con host no-.invalid: ${m[1]}`
   }
   for (const m of s.matchAll(EMAIL_RE)) {
     if (!RESERVED_TLD_RE.test(m[1])) return `email con dominio no-.invalid: ${m[1]}`
   }
+  return null
+}
+// TEXTO LIBRE (note/reason/description/title/otros): estricto — email/URL + hostname
+// suelto; solo `.invalid` pasa. SIN allowlist, SIN excepción de modelo.
+function contactLeak(s) {
+  const eu = emailUrlLeak(s)
+  if (eu) return eu
   for (const m of s.matchAll(HOST_RE)) {
     const before = s[m.index - 1], after = s[m.index + m[0].length]
     if (before === '_' || after === '_') continue // fragmento snake_case (DNS no lleva '_')
     const bare = hostBare(m[0])
-    if (RESERVED_TLD_RE.test(bare)) continue          // .invalid permitido
-    if (SYNTHETIC_MODEL_ALLOWLIST.has(bare)) continue // token EXACTO de modelo documentado
+    if (RESERVED_TLD_RE.test(bare)) continue // .invalid es el único permitido
     return `hostname no-.invalid: ${bare}`
+  }
+  return null
+}
+// METADATO CONTRACTUAL (data_notes/contract, autoría backend): email/URL + endpoint
+// EXPLÍCITO (host con :puerto o /path). Un `a.b` desnudo NO se clasifica como host
+// (procedencia): puede ser un nombre técnico de modelo referenciado por la doc.
+function metadataLeak(s) {
+  const eu = emailUrlLeak(s)
+  if (eu) return eu
+  for (const m of s.matchAll(HOST_RE)) {
+    const before = s[m.index - 1], after = s[m.index + m[0].length]
+    if (before === '_' || after === '_') continue
+    const tok = m[0]
+    if (!/[:/]/.test(tok)) continue // desnudo (sin puerto/path) ⇒ no es endpoint explícito
+    const bare = hostBare(tok)
+    if (RESERVED_TLD_RE.test(bare)) continue
+    return `endpoint/host explícito no-.invalid: ${tok}`
   }
   return null
 }
@@ -441,8 +463,16 @@ function auditSynthetic(node, path, errs) {
       } else if (CURRENCY_CODE_KEYS.has(k) && (typeof v === 'string' || v === null)) {
         if (!isSyntheticCurrency(v)) errs.push(`${p}: moneda no sintética '${v}'`)
       } else if (MODEL_KEYS.has(k) && typeof v === 'string') {
-        // F3: SOLO en campos de modelo el valor punteado se acepta como modelo Odoo
+        // decisión A: SOLO por CLAVE de modelo; el valor COMPLETO debe cumplir la
+        // gramática (rechaza 'sale.order extra', 'https://sale.order', etc.).
         if (!ODOO_MODEL_GRAMMAR.test(v)) errs.push(`${p}: valor de modelo Odoo inválido '${v}'`)
+      } else if (k === 'contract' && typeof v === 'string') {
+        // metadato contractual: id canónico <dotted>/<version> pasa; si no, se escanea
+        // como metadato (email/URL/endpoint explícito).
+        if (!CONTRACT_ID_GRAMMAR.test(v)) {
+          const leak = metadataLeak(v)
+          if (leak) errs.push(`${p}: ${leak}`)
+        }
       } else if (IDENTITY_NAME_KEYS.has(k) && typeof v === 'string') {
         if (!isDemoIdentityString(v)) errs.push(`${p}: nombre no sintético '${v}'`)
         const leak = contactLeak(v) // identidad: escaneo ESTRICTO (hostname incluido)
@@ -454,8 +484,10 @@ function auditSynthetic(node, path, errs) {
     return
   }
   if (typeof node === 'string') {
-    // TODO string se escanea ESTRICTO (incluida la prosa): sin excepción por campo.
-    const leak = contactLeak(node)
+    // decisión A por PROCEDENCIA: data_notes = metadato contractual (email/URL/endpoint
+    // explícito; a.b desnudo NO es host). Todo lo demás (texto libre) = estricto.
+    const isMetadata = /(^|\.)data_notes(\.|$)/.test(path)
+    const leak = isMetadata ? metadataLeak(node) : contactLeak(node)
     if (leak) errs.push(`${path}: ${leak}`)
     if (/^\d{4}-\d{2}-\d{2}/.test(node) && !isSyntheticDate(node)) errs.push(`${path}: fecha no demo '${node}'`)
   }
@@ -542,75 +574,78 @@ test('F3: campo id desconocido con valor del NAMESPACE ALTO reservado pasa', () 
   assert.deepEqual(syntheticFixtureErrors(c), [])
 })
 
-test('F3: modelo Odoo permitido SOLO por clave de modelo; en otros campos = hostname', () => {
-  // A) campos de MODELO: valor con gramática Odoo ⇒ permitido
-  for (const [key, val] of [['res_model', 'sale.order'], ['model_name', 'gf.route.plan'],
-    ['model', 'stock.picking'], ['odoo_model', 'hr.employee']]) {
-    const c = structuredClone(DC_GOLDEN); c.routes[0][key] = val
-    assert.deepEqual(syntheticFixtureErrors(c), [], `${key}=${val} debe permitirse`)
+// Decisión A aprobada — helper: inyecta un valor bajo `key` y devuelve los errores.
+const mutErr = (key, val, where = 'route') => {
+  const c = structuredClone(DC_GOLDEN)
+  if (where === 'data_notes') c.data_notes.extra = val
+  else if (where === 'reason') c.priorities[0].reason = val
+  else if (where === 'contract') c.contract = val
+  else c.routes[0][key] = val
+  return syntheticFixtureErrors(c)
+}
+
+test('DecA — modelos estructurados: permitidos SOLO por clave de modelo con valor completo', () => {
+  // 1-4) claves de modelo con gramática válida ⇒ pasan
+  for (const [k, v] of [['res_model', 'sale.order'], ['model', 'stock.picking'],
+    ['model_name', 'gf.route.plan'], ['technical_model', 'hr.employee'], ['odoo_model', 'hr.employee']]) {
+    assert.deepEqual(mutErr(k, v), [], `${k}="${v}" debe pasar`)
   }
-  // B) el MISMO valor en un campo NO-modelo/NO-prosa ⇒ analizado como hostname y rechazado
-  for (const [key, val] of [['url', 'sale.example'], ['host', 'stock.examplecustom'],
-    ['text', 'route.synthetic'], ['gateway', 'gf.example']]) {
-    const c = structuredClone(DC_GOLDEN); c.routes[0][key] = val
-    assert.ok(syntheticFixtureErrors(c).length > 0, `${key}=${val} debe rechazarse`)
-  }
-  // C) un modelo Odoo de la ALLOWLIST exacta (referenciado por la doc del contrato) pasa
-  //    en cualquier campo, incluida la prosa; uno NO allowlisted en prosa es rechazado.
-  const cNote = structuredClone(DC_GOLDEN); cNote.routes[0].note = 'El modelo sale.order genera la orden'
-  assert.deepEqual(syntheticFixtureErrors(cNote), [], 'sale.order (allowlist) en prosa pasa')
-  const cDn = structuredClone(DC_GOLDEN); cDn.data_notes.extra = 'gf.route.plan no está en la allowlist'
-  assert.ok(syntheticFixtureErrors(cDn).length > 0, 'modelo NO allowlisted en prosa debe morder')
+  // 5-6) valor NO completo (espacio / URL) bajo clave de modelo ⇒ falla
+  assert.ok(mutErr('res_model', 'sale.order extra').length > 0, 'res_model con texto extra falla')
+  assert.ok(mutErr('res_model', 'https://sale.order').length > 0, 'res_model con URL falla')
 })
 
-test('P2-B: hostnames SUELTOS en prosa se rechazan (sin excepción por campo)', () => {
-  const proseMut = (key, val) => {
-    const c = structuredClone(DC_GOLDEN)
-    if (key === 'data_notes') c.data_notes.extra = val
-    else if (key === 'reason') c.priorities[0].reason = val
-    else if (key === 'contract') c.contract = val
-    else c.routes[0][key] = val
-    return syntheticFixtureErrors(c)
-  }
-  // deben FALLAR (hostname-like a.b sin .invalid) — incluso en prosa
-  const fails = [
-    ['note', 'sale.example'], ['reason', 'stock.examplecustom'],
-    ['description', 'route.synthetic'], ['title', 'gf.example'],
-    ['data_notes', 'Conectar a host.synthetic:8080'],
-    ['contract', 'ver sub.host.synthetic/path'],
-    ['note', 'user@host.synthetic'], ['note', 'https://host.synthetic/path'],
-  ]
-  for (const [k, v] of fails) assert.ok(proseMut(k, v).length > 0, `prosa ${k}='${v}' debe fallar`)
-  // dominios demo permitidos incluso en prosa
-  for (const [k, v] of [['note', 'demo.invalid'], ['note', 'https://demo.invalid/path']]) {
-    assert.deepEqual(proseMut(k, v), [], `prosa ${k}='${v}' debe permitirse`)
-  }
+test('DecA — texto libre: escaneo ESTRICTO (hostname/email/URL); solo .invalid pasa', () => {
+  // 7-12) fallan (reason va a priorities[0].reason; el resto a un campo ordinario)
+  assert.ok(mutErr('note', 'sale.example').length > 0, 'note=sale.example falla')
+  assert.ok(mutErr(null, 'stock.examplecustom', 'reason').length > 0, 'reason=stock.examplecustom falla')
+  assert.ok(mutErr('description', 'route.synthetic').length > 0, 'description=route.synthetic falla')
+  assert.ok(mutErr('title', 'gf.example').length > 0, 'title=gf.example falla')
+  assert.ok(mutErr('note', 'user@host.synthetic').length > 0, 'note email falla')
+  assert.ok(mutErr('note', 'https://host.synthetic/path').length > 0, 'note URL falla')
+  // 13-14) dominios demo reservados pasan
+  assert.deepEqual(mutErr('note', 'demo.invalid'), [], 'note=demo.invalid pasa')
+  assert.deepEqual(mutErr('description', 'https://demo.invalid/path'), [], 'description=demo.invalid URL pasa')
 })
 
-test('P2-B: modelos Odoo permitidos por CLAVE explícita; mover res_model→note cambia el resultado', () => {
-  // claves de modelo: valor con gramática Odoo ⇒ permitido
-  for (const [key, val] of [['res_model', 'sale.order'], ['model', 'stock.picking'],
-    ['technical_model', 'gf.route.plan']]) {
-    const c = structuredClone(DC_GOLDEN); c.routes[0][key] = val
-    assert.deepEqual(syntheticFixtureErrors(c), [], `${key}='${val}' permitido`)
-  }
-  // MOVER el valor de res_model → note cambia permitido a RECHAZADO (contexto por clave)
-  const allowed = structuredClone(DC_GOLDEN); allowed.routes[0].res_model = 'sale.example'
-  assert.deepEqual(syntheticFixtureErrors(allowed), [], 'res_model=sale.example permitido (clave de modelo)')
-  const rejected = structuredClone(DC_GOLDEN); rejected.routes[0].note = 'sale.example'
-  assert.ok(syntheticFixtureErrors(rejected).length > 0, 'note=sale.example rechazado (no es clave de modelo)')
+test('DecA — metadato contractual (data_notes/contract) por PROCEDENCIA', () => {
+  // 15) data_notes con nombres técnicos del golden (bare a.b) ⇒ pasa por procedencia
+  assert.deepEqual(mutErr(null, 'La vista sale.order y stock.picking y gf.route.incident', 'data_notes'), [],
+    'data_notes con modelos desnudos pasa (procedencia)')
+  // 16) contract canónico del radar ⇒ pasa
+  assert.deepEqual(mutErr('contract', 'gf.salesops.supervisor.radar/1', 'contract'), [], 'contract radar canónico pasa')
+  // 17-18) email/URL no .invalid en data_notes ⇒ falla
+  assert.ok(mutErr(null, 'reportar a x@empresa-ficticia.com', 'data_notes').length > 0, 'email en data_notes falla')
+  assert.ok(mutErr(null, 'ver https://portal-ficticio.net/x', 'data_notes').length > 0, 'URL en data_notes falla')
+  // 19) endpoint/host EXPLÍCITO (puerto o path) no .invalid en contract ⇒ falla
+  assert.ok(mutErr('contract', 'host.synthetic:8080', 'contract').length > 0, 'contract con host:puerto falla')
+  assert.ok(mutErr('contract', 'sub.host.synthetic/path', 'contract').length > 0, 'contract con host/path falla')
+  // 20) golden completo sigue verde (sin modificaciones)
+  assert.deepEqual(syntheticFixtureErrors(DC_GOLDEN), [])
+  assert.deepEqual(syntheticFixtureErrors(RADAR_GOLDEN), [])
 })
 
-test('P2-B: contactLeak estricto — .invalid + allowlist exacta pasan; todo lo demás muerde', () => {
-  for (const ok of ['demo.invalid', 'sub.demo.invalid', 'user@demo.invalid',
-    'https://demo.invalid/path', 'ver demo.invalid ahora',
-    'sale.order', 'stock.picking', 'gf.tower.m1.route.backlog.cash']) { // allowlist exacta
-    assert.equal(contactLeak(ok), null, `${ok} debe permitirse`)
+test('DecA — contraste: el MISMO "sale.order" cambia según la clave/procedencia', () => {
+  // 21) bajo res_model ⇒ permitido
+  assert.deepEqual(mutErr('res_model', 'sale.order'), [], 'res_model=sale.order permitido')
+  // 22) bajo note (texto libre) ⇒ RECHAZADO (sin allowlist global)
+  assert.ok(mutErr('note', 'sale.order').length > 0, 'note=sale.order rechazado (texto libre, sin allowlist)')
+  // 23) en data_notes (metadato contractual) ⇒ permitido por procedencia (no por token)
+  assert.deepEqual(mutErr(null, 'El modelo sale.order procesa la venta', 'data_notes'), [],
+    'data_notes con sale.order pasa por procedencia contractual')
+})
+
+test('DecA — no queda ningún bypass global de tokens de modelo', () => {
+  // el MISMO modelo en un campo ordinario (no modelo, no data_notes/contract) ⇒ muerde
+  for (const [k, v] of [['url', 'sale.order'], ['host', 'stock.picking'], ['gateway', 'gf.route.plan']]) {
+    assert.ok(mutErr(k, v).length > 0, `${k}="${v}" (campo ordinario) debe morder — sin allowlist`)
   }
-  // SIN excepción por root: sale./stock./route./gf. ya no evaden; ni un a.b arbitrario
-  for (const bad of ['sale.example', 'stock.examplecustom', 'route.synthetic', 'gf.example',
-    'gf.route.plan', 'demo.synthetic', 'host.unknownsuffix', 'sub.host.examplecustom',
-    'HTTPS://HOST.SYNTHETIC/path', 'user@host.synthetic', 'host.synthetic:8080']) {
-    assert.ok(contactLeak(bad), `${bad} debe morder`)
+  // contactLeak estricto: .invalid pasa; cualquier a.b (incl. modelos) muerde
+  for (const ok of ['demo.invalid', 'sub.demo.invalid', 'user@demo.invalid', 'https://demo.invalid/path']) {
+    assert.equal(contactLeak(ok), null, `${ok} pasa`)
+  }
+  for (const bad of ['sale.order', 'stock.picking', 'gf.route.plan', 'sale.example',
+    'host.synthetic:8080', 'user@host.synthetic', 'HTTPS://HOST.SYNTHETIC/path']) {
+    assert.ok(contactLeak(bad), `${bad} muerde en texto libre`)
   }
 })
