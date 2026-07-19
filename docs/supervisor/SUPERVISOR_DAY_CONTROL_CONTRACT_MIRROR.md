@@ -1,5 +1,10 @@
 # SUPERVISOR_DAY_CONTROL_CONTRACT_MIRROR — consumo frontend
 
+> **Ancla canónica (head backend actual):** `52308bb1` — este valor DEBE coincidir
+> con `contracts/CONTRACT_SOURCE.json` → `source.head` (lo verifica un test de
+> drift). Los heads de rondas anteriores viven SOLO en el registro histórico del
+> PR, no aquí. La referencia canónica del preámbulo es SIEMPRE la de esta línea.
+
 **La autoridad del contrato es el JSON Schema versionado**, no este Markdown ni
 el del backend: copias locales verificables en
 `src/modules/supervisor-ventas/dayControl/contracts/`
@@ -8,7 +13,8 @@ golden fixtures y `CONTRACT_SOURCE.json` con sha256 + procedencia = backend PR
 GrupoVeniu/GrupoFrio#220). `tests/supervisorContractDrift.test.mjs` verifica:
 integridad sha256 de las copias, deep-equal de los fixtures JS contra los
 golden, conformidad de golden/fixtures con el schema (mini-validador que
-muerde) y ausencia de PII en los artefactos.
+muerde), ausencia de PII (sintético por estructura) y **consistencia del head
+canónico** (mirror == CONTRACT_SOURCE).
 
 ## Reglas de consumo (frontend)
 
@@ -55,13 +61,17 @@ muerde) y ausencia de PII en los artefactos.
 - `priorities[]`: se muestran con su `reason` y severidad, agrupadas SIN
   reordenar; sin tipos inventados; enum desconocido ⇒ neutral. **P1-B/P2**: cada
   prioridad porta `count` (≥1). El backend YA deduplica `load_pending_acceptance`
-  **por ruta** con dedup ROBUSTA (por `picking_id`; `count` = pickings ÚNICOS;
-  `occurred_at` = `created_at` válido más antiguo, `null` si ninguno válido): una
-  ruta con N refills pendientes emite UNA prioridad con `count=N` y `reason` en
-  plural ("2 refills pendientes…"); el frontend pinta UNA tarjeta con un chip `×N`
-  (`priorityCountChip`), JAMÁS N tarjetas. **`related_entity_ids` fue ELIMINADO del
-  contrato v1** (RED-2 P2): sin consumidor runtime ni deep-link autorizado;
-  `count` basta. No se reemplaza por otro array de ids.
+  **por ruta** con dedup ROBUSTA e **INDEPENDIENTE DEL ORDEN** (RED-2 P2-B: min
+  por INSTANTE sobre TODAS las filas por `picking_id`; `count` = pickings ÚNICOS;
+  filas duplicadas no inflan count): una ruta con N refills pendientes emite UNA
+  prioridad con `count=N` y `reason` en plural ("2 refills pendientes…"); el
+  frontend pinta UNA tarjeta con un chip `×N` (`priorityCountChip`), JAMÁS N
+  tarjetas. **`related_entity_ids` fue ELIMINADO del contrato v1** (RED-2 P2): sin
+  consumidor runtime ni deep-link autorizado; `count` basta. No se reemplaza por
+  otro array de ids. **`priority.occurred_at`** es un instante **UTC canónico**
+  `"YYYY-MM-DDTHH:MM:SSZ"` (o `null`) ya normalizado server-side desde naive
+  Odoo (=UTC), `Z` u offset (`parse_timestamp`/`serialize_timestamp_utc`); el
+  frontend lo muestra tal cual, **sin** re-parsear con `Date`/`Intl`.
 - **Timezone (P1-C/P3)**: `timezone` + `timezone_source` (`branch|company|
   system_fallback`) vienen RESUELTOS server-side. `timezone` **puede** ser `UTC`
   si esa es la config canónica de company/branch (RED-2 P3: se acepta cualquier

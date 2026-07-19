@@ -783,7 +783,9 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "format": "date-time",
+            "description": "Instante en UTC canónico 'YYYY-MM-DDTHH:MM:SSZ' (segundos, sufijo Z) o null. Normalizado server-side desde naive Odoo (=UTC), 'Z' u offset; nunca el string de origen sin validar."
           },
           "data_as_of": {
             "type": [

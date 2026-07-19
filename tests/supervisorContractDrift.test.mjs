@@ -144,7 +144,22 @@ test('P1/P3: timezone_source + prioridades con SOLO count (related_entity_ids el
   }
 })
 
-test('P1-B/P2: UNA prioridad load_pending_acceptance por ruta (dedup) con reason agregado', () => {
+// Normaliza cualquier timestamp (naive Odoo=UTC, Z, offset) al instante UTC en ms.
+// Cómputo INDEPENDIENTE del backend (usa getUTC*, sin tz del SO) — no copia la impl.
+function instantMs(ts) {
+  const iso = /[T ]/.test(ts) ? ts.replace(' ', 'T') : ts
+  const withTz = /[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z' // naive ⇒ UTC
+  const ms = Date.parse(withTz)
+  return Number.isFinite(ms) ? ms : null
+}
+const CANONICAL_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
+function toCanonical(ms) {
+  const d = new Date(ms)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}Z`
+}
+
+test('P1-B/P2: dedup por ruta + occurred_at = mínimo por INSTANTE en UTC canónico', () => {
   const routesById = new Map(DC_GOLDEN.routes.map((r) => [r.plan_id, r]))
   const loadPrios = DC_GOLDEN.priorities.filter((p) => p.type === 'load_pending_acceptance')
   const routeIds = loadPrios.map((p) => p.route_id)
@@ -155,12 +170,27 @@ test('P1-B/P2: UNA prioridad load_pending_acceptance por ruta (dedup) con reason
       (l) => l.load_kind === 'refill' && l.status === 'pending_acceptance')
     const uniquePickings = new Set(pend.map((l) => l.picking_id))
     assert.equal(p.count, uniquePickings.size, 'count = picking_ids únicos pendientes')
-    assert.equal(p.occurred_at, pend.map((l) => l.created_at).sort()[0], 'timestamp = más antiguo')
+    // occurred_at = mínimo por INSTANTE (no por string), en forma canónica
+    const oldestMs = Math.min(...pend.map((l) => instantMs(l.created_at)).filter((x) => x !== null))
+    assert.match(p.occurred_at, CANONICAL_TS_RE, 'occurred_at canónico YYYY-MM-DDTHH:MM:SSZ')
+    assert.equal(p.occurred_at, toCanonical(oldestMs), 'occurred_at = instante más antiguo normalizado')
     const expected = p.count === 1
       ? `1 refill pendiente de aceptación del chofer en la ruta ${route.route_name}.`
       : `${p.count} refills pendientes de aceptación del chofer en la ruta ${route.route_name}.`
     assert.equal(p.reason, expected)
   }
+  // toda prioridad: occurred_at es canónico o null
+  for (const p of DC_GOLDEN.priorities) {
+    if (p.occurred_at !== null) assert.match(p.occurred_at, CANONICAL_TS_RE)
+  }
+})
+
+test('P3-C: el head canónico del mirror doc == CONTRACT_SOURCE.source.head (no divergen)', () => {
+  const MIRROR = fileURLToPath(new URL('../docs/supervisor/SUPERVISOR_DAY_CONTROL_CONTRACT_MIRROR.md', import.meta.url))
+  const doc = readFileSync(MIRROR, 'utf8')
+  const m = /Ancla canónica \(head backend actual\):\*\*\s*`([0-9a-f]{7,40})`/.exec(doc)
+  assert.ok(m, 'el mirror debe declarar el head backend canónico actual')
+  assert.equal(m[1], SOURCE.source.head, 'head del mirror diverge de CONTRACT_SOURCE.source.head')
 })
 
 test('van.* y vocabulario descartado NO reaparecen en contrato ni fixtures (P7 ban)', () => {
@@ -211,13 +241,15 @@ const SYNTHETIC_ID_BANDS = Object.freeze({
   picking_id: [9000, 9999],
   id: [4100, 4199], // 'id' pelón solo aparece bajo vehicle
 })
-const DEMO_ID_MAX = 100000 // regla demo GENERAL para claves id no mapeadas
-// helper solicitado: isSyntheticId(key, value)
+const DEMO_ID_MAX = 100000 // regla demo GENERAL documentada: entero en [1, 99999]
+// helper solicitado: isSyntheticId(key, value). RED-2 P3-A: escalar DEBE ser number,
+// integer, positivo, NO bool (Number.isInteger(true)===false), dentro de banda
+// específica o de la banda demo general. Rechaza "1001"/true/1.5/0/-1/null/obj/array.
 function isSyntheticId(key, value) {
-  if (!Number.isInteger(value) || value <= 0) return false // bool ⇒ Number.isInteger false
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return false
   const band = SYNTHETIC_ID_BANDS[key]
   if (band) return value >= band[0] && value <= band[1]
-  return value < DEMO_ID_MAX // regla general documentada
+  return value < DEMO_ID_MAX // banda demo general documentada [1, 99999]
 }
 const isIdKey = (k) => /^id$|_id$/.test(k)
 const isIdArrayKey = (k) => /(_ids|Ids)$/.test(k)
@@ -258,24 +290,44 @@ function isDemoIdentityString(s) {
   return DEMO_NAME_PATTERNS.some((re) => re.test(s))
 }
 
-// (F) CORREOS/URLS/DOMINIOS — solo dominios reservados `.invalid` (RFC 6761).
-// Cualquier TLD real reprueba, con o sin protocolo, insensible a mayúsculas y
-// detectando subdominios. Los nombres punteados de Odoo (sale.order, gf.route.…)
-// NO terminan en un TLD real ⇒ no colisionan.
+// (F) CORREOS/URLS/DOMINIOS (RED-2 P3-B) — SIN lista de TLD. Regla POSITIVA: el
+// único hostname permitido en datos demo es un dominio que termina exactamente en
+// `.invalid` (RFC 6761). Se detecta cualquier cosa con FORMA de hostname/dominio/
+// URL/email — con o sin protocolo, TLD desconocido, mayúsculas, subdominios,
+// puerto, path, dentro de texto — y se reprueba si NO es `.invalid`. Los nombres
+// TÉCNICOS de Odoo/contrato se excluyen por PATRÓN ESTRUCTURAL (no por TLD): raíz
+// de modelo conocida, snake_case, o identificador de contrato con '/'.
 const RESERVED_TLD_RE = /\.invalid$/i
-const REAL_TLDS = ['com', 'mx', 'net', 'org', 'io', 'co', 'gov', 'edu', 'info',
-  'biz', 'us', 'es', 'dev', 'app', 'xyz', 'online', 'site', 'store', 'tv', 'ai', 'cloud']
-const REAL_DOMAIN_RE = new RegExp(
-  String.raw`\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)*\.(?:${REAL_TLDS.join('|')})\b`, 'i')
-const URL_HOST_RE = /\bhttps?:\/\/([^\s/]+)/i
-const EMAIL_DOMAIN_RE = /[\w.+-]+@([a-z0-9.-]+\.[a-z]{2,})/i
+const ODOO_TECH_ROOT_RE = /^(gf|sale|stock|res|ir|account|hr|product|mrp|pos|purchase|crm|mail|base|uom|fleet|project|website|delivery|payment|report|analytic|tower|route|salesops|ops|plan|picking|partner|incident|employee|order|line|config|van)\./i
+function isOdooTechnicalName(token) {
+  // snake_case (campo), '/' (id de contrato/path), o raíz de modelo Odoo ⇒ técnico.
+  // Los hostnames DNS no pueden contener '_' ⇒ cualquier '_' delata un nombre técnico.
+  return token.includes('_') || token.includes('/') || ODOO_TECH_ROOT_RE.test(token)
+}
+function hostAllowed(host) {
+  const bare = host.replace(/:\d+.*$/, '').replace(/\/.*$/, '') // quita puerto/path
+  return RESERVED_TLD_RE.test(bare) || isOdooTechnicalName(bare)
+}
+// candidatos: URL, email, y hostname suelto (labels separados por punto, puerto/path opc.)
+const URL_RE = /\bhttps?:\/\/([^\s/:]+(?::\d+)?)/gi
+const EMAIL_RE = /[a-z0-9._%+-]+@([a-z0-9.-]+\.[a-z][a-z0-9-]*)/gi
+const HOST_RE = /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z][a-z0-9-]*(?::\d+)?(?:\/[^\s]*)?/gi
 function contactLeak(s) {
-  const url = URL_HOST_RE.exec(s)
-  if (url && !RESERVED_TLD_RE.test(url[1])) return `URL con host real: ${url[1]}`
-  const email = EMAIL_DOMAIN_RE.exec(s)
-  if (email && !RESERVED_TLD_RE.test(email[1])) return `email con dominio real: ${email[1]}`
-  const dom = REAL_DOMAIN_RE.exec(s)
-  if (dom) return `dominio con TLD real: ${dom[0]}`
+  for (const m of s.matchAll(URL_RE)) {
+    if (!hostAllowed(m[1])) return `URL con host no-.invalid: ${m[1]}`
+  }
+  for (const m of s.matchAll(EMAIL_RE)) {
+    if (!RESERVED_TLD_RE.test(m[1])) return `email con dominio no-.invalid: ${m[1]}`
+  }
+  for (const m of s.matchAll(HOST_RE)) {
+    // adyacencia a '_' (antes/después del match) ⇒ fragmento snake_case, no hostname
+    const before = s[m.index - 1]
+    const after = s[m.index + m[0].length]
+    if (before === '_' || after === '_') continue
+    const tok = m[0]
+    if (hostAllowed(tok) || isOdooTechnicalName(tok)) continue
+    return `hostname no-.invalid: ${tok}`
+  }
   return null
 }
 
@@ -302,12 +354,15 @@ function auditSynthetic(node, path, errs) {
     }
     for (const [k, v] of Object.entries(node)) {
       const p = `${path}.${k}`
-      if (isIdArrayKey(k) && Array.isArray(v)) {
-        v.forEach((id, i) => {
-          if (!isSyntheticId(k, id)) errs.push(`${p}[${i}]: id ${id} fuera de banda demo`)
-        })
-      } else if (isIdKey(k) && typeof v === 'number') {
-        if (!isSyntheticId(k, v)) errs.push(`${p}: id ${v} fuera de banda demo`)
+      if (isIdArrayKey(k)) {
+        // RED-2 P3-A: *_ids/*Ids DEBE ser array homogéneo de ids sintéticos —
+        // sin strings/floats/null/negativos/bools/mixtos, y no un no-array.
+        if (!Array.isArray(v) || !v.every((id) => isSyntheticId(k, id))) {
+          errs.push(`${p}: se esperaba array homogéneo de ids sintéticos, hay ${JSON.stringify(v)}`)
+        }
+      } else if (isIdKey(k)) {
+        // valida SIEMPRE (cualquier tipo): un id de tipo no-numérico/float/bool falla
+        if (!isSyntheticId(k, v)) errs.push(`${p}: id no sintético ${JSON.stringify(v)}`)
       } else if (CURRENCY_CODE_KEYS.has(k) && (typeof v === 'string' || v === null)) {
         if (!isSyntheticCurrency(v)) errs.push(`${p}: moneda no sintética '${v}'`)
       } else if (IDENTITY_NAME_KEYS.has(k) && typeof v === 'string') {
@@ -360,6 +415,19 @@ test('los validadores sintéticos MUERDEN — datos ARTIFICIALES fuera de banda 
   bites.push(mut((c) => { c.routes[0].driver.employee_id = 424242 }))
   // company_id (Codex lo pidió explícito): fuera de la banda demo [3000,3099]
   bites.push(mut((c) => { c.routes[0].driver.company_id = 88888 }))
+  // RED-2 P3-A: id de TIPO no numérico / float / bool / cero / negativo / null
+  bites.push(mut((c) => { c.routes[0].driver.employee_id = '1001' }))     // string
+  bites.push(mut((c) => { c.routes[0].driver.employee_id = true }))       // bool
+  bites.push(mut((c) => { c.routes[0].driver.employee_id = 1.5 }))        // float
+  bites.push(mut((c) => { c.routes[0].driver.employee_id = 0 }))          // cero
+  bites.push(mut((c) => { c.routes[0].driver.employee_id = -1 }))         // negativo
+  bites.push(mut((c) => { c.routes[0].driver.employee_id = null }))       // null
+  // campos id DESCONOCIDOS (regla general): escalar inválido y array no homogéneo
+  bites.push(mut((c) => { c.routes[0].mystery_id = '5' }))                // desconocido string
+  bites.push(mut((c) => { c.routes[0].custom_entity_id = true }))         // desconocido bool
+  bites.push(mut((c) => { c.routes[0].arbitrary_ids = [1001, '2', 3] }))  // array mixto
+  bites.push(mut((c) => { c.routes[0].arbitrary_ids = 'no-array' }))      // *_ids no-array
+  bites.push(mut((c) => { c.routes[0].stops.nested_unknown_id = -7 }))    // anidado negativo
   // coordenada fuera de la zona sintética (otro continente, artificial)
   assert.ok(!isSyntheticCoordinate(51.5, -0.12))
   bites.push(mut((c) => { c.routes[0].position.latitude = 51.5; c.routes[0].position.longitude = -0.12 }))
@@ -368,29 +436,41 @@ test('los validadores sintéticos MUERDEN — datos ARTIFICIALES fuera de banda 
   bites.push(mut((c) => { c.summary.sales_day_currency = 'EUR' }))
   // nombre arbitrario (no demo)
   bites.push(mut((c) => { c.routes[0].driver.name = 'Persona Cualquiera' }))
-  // email con dominio real (artificial, TLD real)
-  bites.push(mut((c) => { c.routes[0].driver.name = 'buzon@casillero-ficticio.com' }))
-  // dominio SIN protocolo, en MAYÚSCULAS y con SUBDOMINIO (artificial, TLD real)
-  bites.push(mut((c) => { c.data_notes.leak_probe = 'visita SUB.EMPRESA-FICTICIA.MX ya' }))
-  // URL con host real (artificial)
-  bites.push(mut((c) => { c.data_notes.leak_probe = 'ver https://portal-ficticio.net/x' }))
+  // RED-2 P3-B: hostnames SIN protocolo / TLD desconocido / mayúsculas / subdominio /
+  // puerto / path / email — todos ARTIFICIALES, ninguno .invalid (deben fallar)
+  for (const probe of ['demo.synthetic', 'host.unknownsuffix', 'sub.host.examplecustom',
+    'HTTPS://HOST.SYNTHETIC/path', 'user@host.synthetic', 'host.synthetic:8080']) {
+    bites.push(mut((c) => { c.data_notes.leak_probe = `nota ${probe} fin` }))
+  }
   // fecha fuera del día demo (genérica)
   bites.push(mut((c) => { c.routes[0].data_as_of.generated_at = '1999-12-31 10:00:00' }))
 
   bites.forEach((errs, i) => assert.ok(errs.length > 0, `mutación #${i} debió MORDER`))
 })
 
-test('dominios reservados .invalid SÍ pasan; nombres punteados de Odoo no son dominios', () => {
-  // .invalid es el único dominio permitido para pruebas (RFC 6761)
-  assert.equal(contactLeak('correo@ejemplo.invalid'), null)
-  assert.equal(contactLeak('https://host.invalid/x'), null)
-  assert.equal(contactLeak('ver ejemplo.invalid'), null)
-  // nombres de modelo/campo de Odoo NO terminan en TLD real ⇒ no son dominios
-  for (const s of ['sale.order', 'gf.route.plan', 'ir.config_parameter',
-    'gf.tower.m1.route.backlog.cash', 'America/Mexico_City', 'v_gf_tower_m1_route_backlog_cash']) {
-    assert.equal(contactLeak(s), null, `${s} no debe marcarse como dominio`)
+test('campo id desconocido con valor demo VÁLIDO pasa (regla general)', () => {
+  const c = structuredClone(DC_GOLDEN)
+  c.routes[0].mystery_id = 42          // entero positivo < 100000
+  c.routes[0].custom_entity_id = 5100  // entero positivo
+  c.routes[0].arbitrary_ids = [10, 20, 30]  // array homogéneo de enteros positivos
+  assert.deepEqual(syntheticFixtureErrors(c), [])
+})
+
+test('P3-B: hostnames — solo .invalid pasa; Odoo/contrato no son dominios; TLD desconocido reprueba', () => {
+  // permitidos (RFC 6761): SOLO *.invalid, con o sin protocolo/subdominio/path
+  for (const ok of ['demo.invalid', 'sub.demo.invalid', 'user@demo.invalid',
+    'https://demo.invalid/path', 'ver demo.invalid ahora']) {
+    assert.equal(contactLeak(ok), null, `${ok} debe permitirse`)
   }
-  // pero un dominio real (artificial) con TLD real SÍ se detecta
-  assert.ok(contactLeak('empresa-ficticia.com'))
-  assert.ok(contactLeak('MAIL.EMPRESA-FICTICIA.MX')) // mayúsculas + subdominio
+  // nombres técnicos de Odoo/contrato: NO son dominios (exclusión estructural)
+  for (const tech of ['sale.order', 'gf.route.plan', 'stock.picking', 'ir.config_parameter',
+    'gf.tower.m1.route.backlog.cash', 'gf.salesops.supervisor.day_control/1',
+    'America/Mexico_City', 'v_gf_tower_m1_route_backlog_cash', 'hr.employee.latest_latitude']) {
+    assert.equal(contactLeak(tech), null, `${tech} no debe marcarse como dominio`)
+  }
+  // TLD DESCONOCIDO (no está en ninguna lista) igual se detecta (regla positiva)
+  for (const bad of ['demo.synthetic', 'host.unknownsuffix', 'sub.host.examplecustom',
+    'HTTPS://HOST.SYNTHETIC/path', 'user@host.synthetic', 'host.synthetic:8080']) {
+    assert.ok(contactLeak(bad), `${bad} debe detectarse como hostname no-.invalid`)
+  }
 })
