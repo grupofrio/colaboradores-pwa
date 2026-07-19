@@ -1,0 +1,867 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "gf.salesops.supervisor.day_control/1",
+  "title": "Supervisor Day Control v1 — payload de éxito",
+  "x-error-codes": [
+    "FEATURE_DISABLED",
+    "UNAUTHORIZED",
+    "FORBIDDEN",
+    "SERVER_MISCONFIG",
+    "VALIDATION_ERROR",
+    "NO_BRANCH_SCOPE",
+    "MULTI_BRANCH",
+    "DATE_NOT_ALLOWED"
+  ],
+  "x-banned-terms": [
+    "van.refill.request",
+    "van.unload.request",
+    "waiting_approval",
+    "approved_by_supervisor",
+    "approved_by_inventory",
+    "received_by_salesperson",
+    "not_approved",
+    "refill_request"
+  ],
+  "x-error-envelope": {
+    "status": "error",
+    "code": "<uno de x-error-codes>",
+    "user_message": "string",
+    "data": "object",
+    "meta": "object"
+  },
+  "type": "object",
+  "required": [
+    "ok",
+    "contract",
+    "generated_at",
+    "date",
+    "timezone",
+    "timezone_source",
+    "branch",
+    "summary",
+    "routes",
+    "priorities",
+    "data_notes",
+    "capabilities",
+    "rejected_params",
+    "tolerance",
+    "counters"
+  ],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "enum": [
+        true
+      ]
+    },
+    "contract": {
+      "type": "string",
+      "enum": [
+        "gf.salesops.supervisor.day_control/1"
+      ]
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "timezone_source": {
+      "type": "string",
+      "enum": [
+        "branch",
+        "company",
+        "system_fallback"
+      ]
+    },
+    "branch": {
+      "type": "object",
+      "required": [
+        "branch_config_id",
+        "analytic_account_id",
+        "warehouse_id",
+        "name"
+      ],
+      "properties": {
+        "branch_config_id": {
+          "type": "integer"
+        },
+        "analytic_account_id": {
+          "type": "integer"
+        },
+        "warehouse_id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "tolerance": {
+      "type": "object",
+      "required": [
+        "minutes",
+        "source"
+      ],
+      "properties": {
+        "minutes": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "branch",
+            "fallback"
+          ]
+        }
+      }
+    },
+    "counters": {
+      "type": "object",
+      "required": [
+        "positions_invalid",
+        "positions_out_of_window"
+      ],
+      "properties": {
+        "positions_invalid": {
+          "type": "integer"
+        },
+        "positions_out_of_window": {
+          "type": "integer"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "routes_total",
+        "departed",
+        "departed_late",
+        "not_departed",
+        "departure_unknown",
+        "stops_total",
+        "stops_done",
+        "sales_day_amount",
+        "sales_day_currency",
+        "sales_day_available",
+        "sales_day_by_currency",
+        "incident_markers_count",
+        "pending_refill_acceptance",
+        "pending_initial_acceptance",
+        "loads_unknown_status",
+        "close"
+      ],
+      "properties": {
+        "routes_total": {
+          "type": "integer"
+        },
+        "departed": {
+          "type": "integer"
+        },
+        "departed_late": {
+          "type": "integer"
+        },
+        "not_departed": {
+          "type": "integer"
+        },
+        "departure_unknown": {
+          "type": "integer"
+        },
+        "stops_total": {
+          "type": "integer"
+        },
+        "stops_done": {
+          "type": "integer"
+        },
+        "sales_day_amount": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sales_day_currency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sales_day_available": {
+          "type": "boolean"
+        },
+        "sales_day_by_currency": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "currency",
+              "amount"
+            ],
+            "properties": {
+              "currency": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "amount": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "incident_markers_count": {
+          "type": "integer"
+        },
+        "pending_refill_acceptance": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pending_initial_acceptance": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "loads_unknown_status": {
+          "type": "integer"
+        },
+        "close": {
+          "type": "object",
+          "required": [
+            "open",
+            "closed",
+            "corte_done",
+            "liquidated",
+            "validated",
+            "unknown",
+            "cash_pending_amount",
+            "cash_pending_currency",
+            "cash_pending_by_currency"
+          ],
+          "properties": {
+            "open": {
+              "type": "integer"
+            },
+            "closed": {
+              "type": "integer"
+            },
+            "corte_done": {
+              "type": "integer"
+            },
+            "liquidated": {
+              "type": "integer"
+            },
+            "validated": {
+              "type": "integer"
+            },
+            "unknown": {
+              "type": "integer"
+            },
+            "cash_pending_amount": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "cash_pending_currency": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cash_pending_by_currency": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "currency",
+                  "amount"
+                ],
+                "properties": {
+                  "currency": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "amount": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "route_name",
+          "route_date",
+          "state",
+          "driver",
+          "vehicle",
+          "departure",
+          "stops",
+          "sales",
+          "incident_markers",
+          "loads",
+          "close",
+          "position",
+          "data_as_of"
+        ],
+        "properties": {
+          "plan_id": {
+            "type": "integer"
+          },
+          "route_name": {
+            "type": "string"
+          },
+          "route_date": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "in_progress",
+              "closed",
+              "reconciled"
+            ]
+          },
+          "driver": {
+            "type": "object",
+            "required": [
+              "employee_id",
+              "name"
+            ],
+            "properties": {
+              "employee_id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "vehicle": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "departure": {
+            "type": "object",
+            "required": [
+              "target_at",
+              "real_at",
+              "deviation_minutes",
+              "status",
+              "tolerance_minutes",
+              "tolerance_source"
+            ],
+            "properties": {
+              "target_at": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "real_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "deviation_minutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "not_departed",
+                  "on_time",
+                  "late",
+                  "unknown"
+                ]
+              },
+              "tolerance_minutes": {
+                "type": "integer"
+              },
+              "tolerance_source": {
+                "type": "string",
+                "enum": [
+                  "branch",
+                  "fallback"
+                ]
+              }
+            }
+          },
+          "stops": {
+            "type": "object",
+            "required": [
+              "total",
+              "done",
+              "pending",
+              "progress_pct",
+              "next_stop"
+            ],
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "done": {
+                "type": "integer"
+              },
+              "pending": {
+                "type": "integer"
+              },
+              "progress_pct": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "next_stop": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "stop_id",
+                  "sequence",
+                  "name",
+                  "eta"
+                ],
+                "properties": {
+                  "stop_id": {
+                    "type": "integer"
+                  },
+                  "sequence": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "eta": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "sales": {
+            "type": "object",
+            "required": [
+              "day_amount",
+              "currency",
+              "available"
+            ],
+            "properties": {
+              "day_amount": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "currency": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "available": {
+                "type": "boolean"
+              }
+            }
+          },
+          "incident_markers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "incident_type_id",
+                "name",
+                "type",
+                "severity",
+                "requires_follow_up",
+                "stop_id",
+                "recorded_at"
+              ],
+              "properties": {
+                "incident_type_id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "operation",
+                    "customer",
+                    "quality",
+                    "collection",
+                    "vehicle"
+                  ]
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high"
+                  ]
+                },
+                "requires_follow_up": {
+                  "type": "boolean"
+                },
+                "stop_id": {
+                  "type": "integer"
+                },
+                "recorded_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "close": {
+            "type": "object",
+            "required": [
+              "stage",
+              "cash_pending_amount",
+              "cash_pending_currency"
+            ],
+            "properties": {
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "closed",
+                  "corte_done",
+                  "liquidated",
+                  "validated",
+                  "unknown"
+                ]
+              },
+              "cash_pending_amount": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "cash_pending_currency": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "position": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "latitude",
+              "longitude",
+              "captured_at",
+              "age_seconds",
+              "is_moving",
+              "source",
+              "signal_status"
+            ],
+            "properties": {
+              "latitude": {
+                "type": "number"
+              },
+              "longitude": {
+                "type": "number"
+              },
+              "captured_at": {
+                "type": "string"
+              },
+              "age_seconds": {
+                "type": "integer"
+              },
+              "is_moving": {
+                "type": "boolean"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "employee_device"
+                ]
+              },
+              "signal_status": {
+                "type": "string",
+                "enum": [
+                  "recent",
+                  "delayed",
+                  "no_signal"
+                ]
+              }
+            }
+          },
+          "data_as_of": {
+            "type": "object",
+            "required": [
+              "generated_at",
+              "position_captured_at"
+            ],
+            "properties": {
+              "generated_at": {
+                "type": "string"
+              },
+              "position_captured_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "loads": {
+            "type": "object",
+            "required": [
+              "available",
+              "pending_acceptance_count",
+              "items"
+            ],
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "pending_acceptance_count": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "picking_id",
+                    "load_kind",
+                    "status",
+                    "picking_state",
+                    "created_at",
+                    "accepted_at"
+                  ],
+                  "properties": {
+                    "picking_id": {
+                      "type": "integer"
+                    },
+                    "load_kind": {
+                      "type": "string",
+                      "enum": [
+                        "initial",
+                        "refill",
+                        "manual",
+                        "unknown"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "prepared",
+                        "pending_acceptance",
+                        "accepted",
+                        "cancelled",
+                        "unknown"
+                      ]
+                    },
+                    "picking_state": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "accepted_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "priorities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "severity",
+          "reason",
+          "entity_type",
+          "entity_id",
+          "route_id",
+          "count",
+          "occurred_at",
+          "data_as_of"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "route_not_departed",
+              "gps_stale",
+              "closure_pending",
+              "load_pending_acceptance"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "warning",
+              "info"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "route",
+              "employee",
+              "incident"
+            ]
+          },
+          "entity_id": {
+            "type": "integer"
+          },
+          "route_id": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "occurred_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "data_as_of": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "data_notes": {
+      "type": "object"
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "routes_available",
+        "sales_day_available",
+        "sales_consolidated",
+        "closure_cash_available",
+        "positions_available",
+        "incidents_lifecycle_available",
+        "low_execution",
+        "loads_available",
+        "refill_classification_available",
+        "load_acceptance_status_available",
+        "route_return_receipt_available"
+      ],
+      "properties": {
+        "routes_available": {
+          "type": "boolean"
+        },
+        "sales_day_available": {
+          "type": "boolean"
+        },
+        "sales_consolidated": {
+          "type": "boolean"
+        },
+        "closure_cash_available": {
+          "type": "boolean"
+        },
+        "positions_available": {
+          "type": "boolean"
+        },
+        "incidents_lifecycle_available": {
+          "type": "boolean",
+          "enum": [
+            false
+          ]
+        },
+        "low_execution": {
+          "type": "boolean",
+          "enum": [
+            false
+          ]
+        },
+        "loads_available": {
+          "type": "boolean"
+        },
+        "refill_classification_available": {
+          "type": "boolean"
+        },
+        "load_acceptance_status_available": {
+          "type": "boolean"
+        },
+        "route_return_receipt_available": {
+          "type": "boolean",
+          "enum": [
+            false
+          ]
+        }
+      }
+    },
+    "rejected_params": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "ok": true,
+  "contract": "gf.salesops.supervisor.radar/1",
+  "generated_at": "2026-01-15 15:05:00",
+  "date": "2026-01-15",
+  "timezone": "America/Mexico_City",
+  "timezone_source": "system_fallback",
+  "branch": {
+    "branch_config_id": 2001,
+    "analytic_account_id": 2101,
+    "warehouse_id": 4001,
+    "name": "BR-DEMO Sucursal Demo"
+  },
+  "units": [
+    {
+      "employee_id": 1001,
+      "name": "Chofer Demo Uno",
+      "plan_id": 5101,
+      "route_name": "Ruta Demo Uno",
+      "vehicle": {"id": 4101, "name": "Unidad Demo A"},
+      "latitude": 10.5001,
+      "longitude": -35.5001,
+      "captured_at": "2026-01-15 15:01:00",
+      "age_seconds": 240,
+      "is_moving": true,
+      "signal_status": "recent",
+      "position_source": "employee_device",
+      "stops": {
+        "planned": [
+          {"stop_id": 6101, "sequence": 1, "name": "Cliente Demo Uno", "latitude": 10.501, "longitude": -35.501, "done": true},
+          {"stop_id": 6102, "sequence": 2, "name": "Cliente Demo Dos", "latitude": 10.502, "longitude": -35.502, "done": false}
+        ],
+        "planned_total": 10,
+        "done": 4,
+        "pending": 6,
+        "missing_coordinates": 8
+      }
+    },
+    {
+      "employee_id": 1003,
+      "name": "Chofer Demo Tres",
+      "plan_id": 5103,
+      "route_name": "Ruta Demo Tres",
+      "vehicle": {"id": 4103, "name": "Unidad Demo C"},
+      "latitude": null,
+      "longitude": null,
+      "captured_at": null,
+      "age_seconds": null,
+      "is_moving": null,
+      "signal_status": "no_signal",
+      "position_source": "employee_device",
+      "stops": {
+        "planned": [],
+        "planned_total": 6,
+        "done": 0,
+        "pending": 6,
+        "missing_coordinates": 6
+      }
+    }
+  ],
+  "thresholds": {
+    "recent_seconds": 600,
+    "stale_seconds": 2700,
+    "position_max_age_hours": 12,
+    "note": "Política de PRESENTACIÓN inicial (no hechos del dato); configurable vía ir.config_parameter."
+  },
+  "counters": {"positions_invalid": 0, "positions_out_of_window": 0},
+  "capabilities": {
+    "positions_available": true,
+    "planned_stops_geocoded": true,
+    "history_available": false,
+    "realtime": false
+  },
+  "data_notes": {
+    "position_source": "Posición reportada por el dispositivo del RESPONSABLE (empleado), no del vehículo.",
+    "not_realtime": "Las posiciones pueden tener retraso; consulta captured_at. Prohibido presentar como tiempo real.",
+    "privacy": "Sin batería, velocidad, precisión detallada ni histórico; solo jornada operativa actual y sucursal autorizada.",
+    "operational_window": "Posición visible solo si fue capturada el MISMO día operativo local y con edad ≤ gf_salesops.radar_position_max_age_hours (default 12 h); inválidas/fuera de ventana se excluyen y se cuentan."
+  },
+  "rejected_params": []
+}
