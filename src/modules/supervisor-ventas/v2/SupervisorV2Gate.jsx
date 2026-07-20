@@ -3,17 +3,8 @@
 // sin flag global+sucursal (o desconocido) ⇒ legacy. `v2Only` = ruta que no existe
 // en legacy ⇒ redirect seguro a /equipo. El rol ya lo impuso ModuleRoleRoute.
 import { Navigate } from 'react-router-dom'
-import { getSession } from '../../../lib/api.js'
-import { readSupervisorV2FlagRuntime } from './flag.js'
+import { isV2Active } from './gateAccess.js'
 import SupervisorV2Shell from './SupervisorV2Shell.jsx'
-
-// Interno del gate (no se exporta ⇒ el .jsx solo expone el componente).
-function isV2Active() {
-  let session = {}
-  try { session = getSession() || {} } catch { session = {} }
-  const capabilities = session.capabilities || {}
-  return readSupervisorV2FlagRuntime(session, capabilities).enabled
-}
 
 /**
  * @param {{active:string, children:React.ReactNode, legacy?:React.ReactNode, v2Only?:boolean}} p

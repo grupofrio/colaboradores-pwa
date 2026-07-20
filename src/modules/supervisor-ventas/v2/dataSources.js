@@ -1,72 +1,44 @@
 // ─── Supervisor V2 · fuentes de datos canónicas (fuente ÚNICA por dato) ───────
-// Regla dura: cada dato viene de UNA sola fuente. El shell carga los DOS payloads
-// primarios (day-control + radar del contrato #220) una vez y los comparte a las
-// 6 superficies; los drill-downs (paradas por ruta) se piden bajo demanda. Nada
-// se recalcula: la UI solo formatea (presentation.js).
+// Cada dato viene de UNA sola fuente. El shell carga los DOS payloads primarios
+// (day-control + radar del contrato #220) una vez y los comparte a las 6
+// superficies; los drill-downs (paradas por ruta) se piden bajo demanda.
 //
-// Codex P11/P14: clasificación EXPLÍCITA de respuestas — una respuesta
-// malformada NO es `ok []`; DATE_NOT_ALLOWED / unauthorized / network son
-// estados propios (no falso vacío). Autoridades:
-//   · venta / salida / cierre / prioridades / cargas / marcadores → day-control
-//   · posición / paradas planeadas geocodificadas          → radar
-//   · resultado por parada (visitado / no-venta / motivo)  → route-stops
-// Los clientes API se cargan por import DINÁMICO dentro de los fetchers por
-// defecto: así este módulo (lógica pura de clasificación/carga) es importable en
-// tests de node sin arrastrar todo lib/api.js, y las vistas siguen inyectando
-// fetchers. En runtime, vite resuelve el import dinámico normalmente.
+// Codex §4: TODA respuesta pasa por normalizeSupervisorV2Response ⇒ contrato
+// único {phase, data, code, message, partial, source, dataAsOf}. Aquí NO se
+// comprueba res.ok / raw.status / result.result suelto. Autoridades:
+//   · venta/salida/cierre/prioridades/cargas/marcadores → day-control
+//   · posición/paradas planeadas geocodificadas         → radar
+//   · resultado por parada (visitado/no-venta/motivo)   → route-stops (DTO)
+// Los clientes API se cargan por import DINÁMICO (testeable en node sin lib/api).
+import { PHASE, normalizeSupervisorV2Response } from './normalizeResponse.js'
+
+export { PHASE }
+
 async function _apiClient(name) {
   const mod = await import('../api.js')
   return mod[name]
 }
 
-/** Estados canónicos de una respuesta de datos. */
-export const RESULT = Object.freeze({
-  OK: 'ok', EMPTY: 'empty', PARTIAL: 'partial', INVALID: 'invalid',
-  DATE_NOT_ALLOWED: 'date_not_allowed', UNAUTHORIZED: 'unauthorized',
-  NETWORK: 'network', ERROR: 'error',
-})
-
-/** Envelope utilizable = objeto con ok !== false. */
-export function usable(payload) {
-  return !!payload && typeof payload === 'object' && payload.ok !== false
-}
-
-/** Clasifica un payload/erro en un RESULT explícito (no adivina). */
-export function classify(payload, err) {
-  if (err) {
-    const code = String(err.code || err.status || '').toUpperCase()
-    const msg = String(err.message || err || '')
-    if (code === 'DATE_NOT_ALLOWED' || /DATE_NOT_ALLOWED/i.test(msg)) return RESULT.DATE_NOT_ALLOWED
-    if (code === '401' || code === '403' || code === 'FORBIDDEN' || code === 'UNAUTHORIZED') return RESULT.UNAUTHORIZED
-    if (code === 'TYPEERROR' || /network|fetch|failed to fetch/i.test(msg)) return RESULT.NETWORK
-    return RESULT.ERROR
-  }
-  if (payload && typeof payload === 'object' && payload.ok === false) {
-    const code = String(payload.code || '').toUpperCase()
-    if (code === 'DATE_NOT_ALLOWED') return RESULT.DATE_NOT_ALLOWED
-    if (code === 'FORBIDDEN' || code === 'UNAUTHORIZED') return RESULT.UNAUTHORIZED
-    return RESULT.ERROR
-  }
-  return RESULT.OK
-}
-
-function errMsg(e, fallback) {
-  if (!e) return fallback
-  if (typeof e === 'string') return e
-  return e.message || fallback
-}
-
-// Versión de fuente para la clave de caché (fecha + sucursal + generated_at).
+// ── clave de caché canónica (Codex §6): fecha + sucursal + plan + versión ─────
 export function sourceVersion(dayControl) {
   const dc = dayControl || {}
   const branch = dc.branch?.branch_config_id ?? dc.branch?.analytic_account_id ?? 'na'
   return `${dc.date || 'today'}|${branch}|${dc.generated_at || 'na'}`
 }
 
+/** Clave de caché de route-stops: NO usa valores manipulables del cliente como
+ *  autoridad de scope; branchId sale del payload day-control (server-side). */
+export function routeStopsCacheKey({ dayControl, planId } = {}) {
+  const dc = dayControl || {}
+  const branch = dc.branch?.branch_config_id ?? dc.branch?.analytic_account_id ?? 'na'
+  return `stops|${dc.date || 'today'}|${branch}|${Number(planId || 0)}|${dc.generated_at || 'na'}`
+}
+
 /**
  * Carga primaria del día operativo: day-control + radar EN PARALELO.
- * day-control es la fuente primaria; radar es secundario. Clasifica el estado
- * (incl. DATE_NOT_ALLOWED / unauthorized) sin caer a falso vacío.
+ * day-control es la fuente primaria; radar es secundario. La fase se deriva del
+ * normalizador único; DATE_NOT_ALLOWED/unauthorized son fases propias.
+ * @returns {{ok, phase, dayControl, radar, radarError, error}}
  */
 export async function loadOperationalDay({
   date,
@@ -76,61 +48,61 @@ export async function loadOperationalDay({
   const fdc = fetchDayControl || (async () => (await _apiClient('getDayControl'))(date))
   const frd = fetchRadar || (async () => (await _apiClient('getRadar'))(date))
   const [dcRes, radarRes] = await Promise.allSettled([fdc(), frd()])
-  const dayControl = dcRes.status === 'fulfilled' ? dcRes.value : null
-  const radar = radarRes.status === 'fulfilled' ? radarRes.value : null
 
-  if (usable(dayControl)) {
+  const dc = dcRes.status === 'fulfilled'
+    ? normalizeSupervisorV2Response(dcRes.value, null)
+    : normalizeSupervisorV2Response(null, dcRes.reason)
+  const rd = radarRes.status === 'fulfilled'
+    ? normalizeSupervisorV2Response(radarRes.value, null)
+    : normalizeSupervisorV2Response(null, radarRes.reason)
+
+  if (dc.phase === PHASE.OK) {
     return {
-      ok: true, result: RESULT.OK, dayControl,
-      radar: usable(radar) ? radar : null,
-      radarError: usable(radar) ? null : (radarRes.status === 'rejected' ? errMsg(radarRes.reason, 'Radar no disponible.') : 'Radar no disponible en la respuesta.'),
+      ok: true, phase: PHASE.OK, dayControl: dc.data,
+      radar: rd.phase === PHASE.OK ? rd.data : null,
+      radarError: rd.phase === PHASE.OK ? null : (rd.message || 'Radar no disponible.'),
       error: null,
     }
   }
-  // day-control no utilizable ⇒ clasificar el motivo (DATE_NOT_ALLOWED, etc.).
-  const reason = dcRes.status === 'rejected' ? classify(null, dcRes.reason) : classify(dayControl, null)
   return {
-    ok: false, result: reason, dayControl: null, radar: null, radarError: null,
-    error: dcRes.status === 'rejected' ? errMsg(dcRes.reason, 'No se pudo cargar el día operativo.') : (dayControl?.message || 'La respuesta del día operativo no es utilizable.'),
+    ok: false, phase: dc.phase, dayControl: null, radar: null, radarError: null,
+    error: dc.message || 'No se pudo cargar el día operativo.',
   }
 }
 
-/** Forma mínima de una parada válida (P11: malformed ≠ empty). */
+/** Forma mínima de una parada válida (malformed ≠ empty). */
 function isValidStop(st) {
   return !!st && typeof st === 'object' && (st.stop_id != null || st.customer_id != null)
 }
 
 /**
- * Drill-down: paradas de UNA ruta. Fuente = route-stops (gf.route.stop).
- * Clasificación explícita (P11): malformed ⇒ RESULT.INVALID (no `ok []`);
- * arreglo vacío real ⇒ RESULT.EMPTY; error ⇒ NETWORK/UNAUTHORIZED/DATE/ERROR.
- * @returns {{result, stops, error, raw}}
+ * Drill-down: paradas de UNA ruta vía el DTO read-only (#223). Pasa por el
+ * normalizador único; extrae `stops` del DTO; distingue malformed (INVALID) de
+ * empty real. @returns {{phase, stops, dataAsOf, partial, error}}
  */
 export async function loadRouteStops(planId, { fetch = null } = {}) {
   const id = Number(planId || 0)
-  if (!id) return { result: RESULT.INVALID, stops: null, error: 'plan_id requerido' }
+  if (!id) return { phase: PHASE.VALIDATION, stops: null, dataAsOf: null, partial: false, error: 'plan_id requerido' }
   const doFetch = fetch || (async (pid) => (await _apiClient('getRouteStopsV2'))(pid))
-  let res
+  let norm
   try {
-    res = await doFetch(id)
+    norm = normalizeSupervisorV2Response(await doFetch(id), null)
   } catch (e) {
-    return { result: classify(null, e), stops: null, error: errMsg(e, 'No se pudieron cargar las paradas.') }
+    norm = normalizeSupervisorV2Response(null, e)
   }
-  if (res && typeof res === 'object' && res.ok === false) {
-    return { result: classify(res, null), stops: null, error: res.message || 'Respuesta no utilizable.' }
+  if (norm.phase !== PHASE.OK) {
+    return { phase: norm.phase, stops: null, dataAsOf: norm.dataAsOf, partial: false, error: norm.message || 'Respuesta no utilizable.' }
   }
-  const rows = Array.isArray(res) ? res : (res?.data?.stops || res?.stops || res?.data)
-  if (rows === undefined || rows === null) {
-    // Estructura inesperada (ni array ni contenedor conocido) ⇒ malformed.
-    return { result: RESULT.INVALID, stops: null, error: 'Respuesta de paradas con forma inesperada.', raw: res }
+  // DTO OK ⇒ extraer stops. La forma canónica es data.stops (array).
+  const d = norm.data || {}
+  const rows = Array.isArray(d) ? d : d.stops
+  if (rows === undefined || rows === null || !Array.isArray(rows)) {
+    return { phase: PHASE.MALFORMED, stops: null, dataAsOf: norm.dataAsOf, partial: false, error: 'DTO de paradas con forma inesperada.' }
   }
-  if (!Array.isArray(rows)) {
-    return { result: RESULT.INVALID, stops: null, error: 'Paradas no es una lista.', raw: res }
+  const valid = rows.filter(isValidStop)
+  if (rows.length > 0 && valid.length !== rows.length) {
+    // Algunas paradas malformadas ⇒ INVALID (no falso vacío); conserva las válidas.
+    return { phase: PHASE.MALFORMED, stops: valid, dataAsOf: norm.dataAsOf, partial: true, error: 'Algunas paradas llegaron malformadas.' }
   }
-  // Array presente pero con elementos malformados ⇒ INVALID (no falso vacío).
-  const allValid = rows.every(isValidStop)
-  if (rows.length > 0 && !allValid) {
-    return { result: RESULT.INVALID, stops: rows.filter(isValidStop), error: 'Algunas paradas llegaron malformadas.', raw: res }
-  }
-  return { result: rows.length === 0 ? RESULT.EMPTY : RESULT.OK, stops: rows, raw: res }
+  return { phase: rows.length === 0 ? PHASE.EMPTY : PHASE.OK, stops: rows, dataAsOf: norm.dataAsOf, partial: false, error: null }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
+import { civilWeekRange } from './v2/civilWeek.js'
 import { ScreenShell } from '../entregas/components'
 import { getWeeklyScore, getComplianceColor } from './supvService'
 
@@ -49,23 +50,11 @@ export default function ScreenScoreSemanal() {
     return () => { cancelled = true }
   }, [])
 
-  // Determine today's column index.
-  //
-  // FIXME(tz): la "semana" se resuelve en tz del DISPOSITIVO, no de la sucursal.
-  // `todayStr` deriva del reloj local (getFullYear/getMonth/getDate) y el rango
-  // Lun–Dom (`data.weekDays`) se construye igual en supvService.getWeeklyScore().
-  // Para un dispositivo en una zona distinta a la sucursal, la columna "hoy"
-  // puede caer en el día equivocado (o en ninguno ⇒ todayIdx = -1). El fix
-  // correcto es que el SERVIDOR indique el rango de la semana y cuál weekDay es
-  // "hoy" en tz de sucursal. No se refactoriza a ciegas aquí: la tz de sucursal
-  // no está disponible en el cliente y `weekDays` viene del servicio (fuera de
-  // este archivo), que hoy comparte esta misma convención local — cambiar solo
-  // `todayStr` lo desincronizaría de `weekDays`. Solo se documenta el sesgo.
-  const todayStr = useMemo(() => {
-    const d = new Date()
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  }, [])
+  // Determine today's column index. Codex §14: se usa la MISMA base civil
+  // tz-neutral (UTC) que supvService.getWeeklyScore().weekDays vía civilWeekRange,
+  // eliminando el sesgo de `new Date()` local y la desincronización. IDEAL
+  // (follow-up): rango de semana devuelto por el backend en tz de sucursal.
+  const todayStr = useMemo(() => civilWeekRange().ref, [])
 
   const todayIdx = useMemo(() => {
     if (!data) return -1

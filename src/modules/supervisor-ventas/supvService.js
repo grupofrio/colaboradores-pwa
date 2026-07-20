@@ -24,6 +24,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { api, getSession } from '../../lib/api.js'
+import { civilWeekRange } from './v2/civilWeek.js'
 import {
   resolveEmployeeMonthlySalesActual,
   resolveMonthlySalesActual,
@@ -256,17 +257,11 @@ export async function getWeeklyScore() {
     byDriver[did].routes.push(r)
   })
 
-  // Build week days (Mon-Sun)
-  const today = new Date()
-  const dayOfWeek = today.getDay()
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-  const weekDays = []
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    weekDays.push(fmtDate(d))
-  }
+  // Build week days (Mon-Sun) — Codex §14: rango CIVIL tz-neutral (base UTC), no
+  // `new Date().getDay()` local del dispositivo. La pantalla usa la MISMA base
+  // (civilWeekRange().ref) ⇒ sin desincronización. IDEAL (follow-up): rango de
+  // semana devuelto por el backend en tz de sucursal.
+  const { days: weekDays } = civilWeekRange()
 
   // Build score per vendor per day
   const vendorScores = team.map((emp) => {

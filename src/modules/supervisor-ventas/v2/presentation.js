@@ -65,12 +65,15 @@ export function deriveSituation(dayControl) {
     const sig = safeSignalStatus(r?.position || {})
     if (r?.position == null || sig === 'no_signal' || sig === 'invalid') sinSenal += 1
   }
+  // §11: el bloque `close` puede faltar ⇒ conteo NO disponible (no "0"). Solo si
+  // el objeto close existe con al menos una etapa numérica se computa el total.
+  const closeStages = ['open', 'closed', 'corte_done', 'liquidated', 'validated']
+  const closeAvailable = !!s.close && typeof s.close === 'object' && closeStages.some((k) => num(close[k]) !== null)
+  const sumStages = (keys) => keys.reduce((acc, k) => acc + (num(close[k]) || 0), 0)
   // "cerradas" = etapas de cierre != open (closed/corte_done/liquidated/validated).
-  const cerradas = ['closed', 'corte_done', 'liquidated', 'validated']
-    .reduce((acc, k) => acc + (num(close[k]) || 0), 0)
+  const cerradas = sumStages(['closed', 'corte_done', 'liquidated', 'validated'])
   // cierres pendientes = cerradas pero sin validar (closed+corte_done+liquidated).
-  const cierresPendientes = ['closed', 'corte_done', 'liquidated']
-    .reduce((acc, k) => acc + (num(close[k]) || 0), 0)
+  const cierresPendientes = sumStages(['closed', 'corte_done', 'liquidated'])
   // cargas pendientes = refill + inicial (nullable ⇒ honesto).
   const refill = num(s.pending_refill_acceptance)
   const inicial = num(s.pending_initial_acceptance)
@@ -87,11 +90,11 @@ export function deriveSituation(dayControl) {
     activas: { value: activas, available: routes.length > 0 },
     // "regresando" no tiene señal canónica en day_control/1 ⇒ no se inventa.
     regresando: { value: null, available: regresandoAvailable },
-    cerradas: { value: cerradas, available: true },
+    cerradas: { value: closeAvailable ? cerradas : null, available: closeAvailable },
     conIncidencia: { value: conIncidencia, available: routes.length > 0 },
     sinSenal: { value: sinSenal, available: routes.length > 0 },
     cargasPendientes,
-    cierresPendientes: { value: cierresPendientes, available: true },
+    cierresPendientes: { value: closeAvailable ? cierresPendientes : null, available: closeAvailable },
   }
 }
 

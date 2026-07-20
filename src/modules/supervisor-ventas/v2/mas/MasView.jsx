@@ -7,11 +7,16 @@
 // Regla anti-placeholder: un tile sin `route` (sin fuente real) NO se renderiza;
 // por eso el render filtra por `route`. Hoy TODAS las rutas existen (legacy).
 //
-// Nota (follow-up documentado — FUERA de alcance aquí, aquí solo se ENLAZA):
-//  · La fusión de "Notas" + "Nota rápida" en una sola superficie de captura
-//    queda pendiente de diseño; por ahora son dos accesos separados.
-//  · El desglose del monolito "Pronóstico" en sus vistas componentes también
-//    queda como follow-up; aquí se enlaza la pantalla existente tal cual.
+// EXCLUSIONES de Supervisor V2 (Codex §2/§3), NO enlazadas aquí:
+//  · Tareas / Notas / Nota rápida: sus endpoints legacy (/pwa-supv/tasks|notes)
+//    son api_key+sudo SIN rol/scope. Existen endpoints V2 protegidos, pero las
+//    PANTALLAS legacy aún no están migradas ⇒ no se enlazan desde V2 (quedan
+//    accesibles solo con la experiencia legacy, flag V2 OFF). Con V2 ON, un deep
+//    link a esas rutas cae en V2ExcludedRoute (pantalla "no disponible", sin
+//    fetch legacy).
+//  · Bajas: su backend NO está localizado/auditado en estos repos ⇒ no se enlaza
+//    ni se monta desde V2 (misma protección de deep link).
+// Follow-up (fuera de alcance): fusión Notas+Nota rápida y desglose de Pronóstico.
 import { TOKENS } from '../../../../tokens'
 
 const C = TOKENS.colors
@@ -35,23 +40,9 @@ const GROUPS = [
     ],
   },
   {
-    title: 'Coaching',
-    tiles: [
-      { label: 'Tareas', desc: 'Asigna y da seguimiento a tareas', route: '/equipo/tareas' },
-      { label: 'Notas', desc: 'Notas de coaching por vendedor o cliente', route: '/equipo/notas' },
-      { label: 'Nota rápida', desc: 'Registra una nota breve', route: '/equipo/nota-rapida' },
-    ],
-  },
-  {
     title: 'Clientes',
     tiles: [
       { label: 'Recuperación', desc: 'Clientes por recuperar', route: '/equipo/recuperacion' },
-    ],
-  },
-  {
-    title: 'Administración',
-    tiles: [
-      { label: 'Bajas', desc: 'Bajas controladas de clientes', route: '/equipo/bajas' },
     ],
   },
 ]
