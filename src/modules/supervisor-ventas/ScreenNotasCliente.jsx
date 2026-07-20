@@ -1,8 +1,6 @@
 // ─── ScreenNotasCliente — notas de coaching por vendedor o cliente ─────────
 // Selector de sujeto (vendedor o cliente), crear/ver/eliminar notas.
-//
-// ⚠️ STUB MODE: los datos viven en localStorage hasta que backend exponga
-// /pwa-supv/notes/*. Se muestra banner informativo al usuario.
+// Backend real vía /pwa-supv/notes/* (gf_pwa_admin).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -10,13 +8,11 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { useToast } from '../../components/Toast'
 import { Loader, EmptyState } from '../../components/Loader'
-import AuthBanner from '../../components/AuthBanner'
 import { getTeam } from './api'
 import {
   listNotes,
   createNote,
   deleteNote,
-  isStubMode,
 } from './notasService'
 
 export default function ScreenNotasCliente() {
@@ -137,18 +133,6 @@ export default function ScreenNotasCliente() {
           </button>
           <span style={{ ...typo.title, color: TOKENS.colors.textSoft, flex: 1 }}>Notas de coaching</span>
         </div>
-
-        {/* Stub banner */}
-        {isStubMode() && (
-          <div style={{ marginBottom: 14 }}>
-            <AuthBanner
-              level="info"
-              title="Módulo en modo temporal"
-              reason="Las notas se almacenan en este dispositivo mientras se despliega el backend."
-              details="No se sincronizan entre dispositivos. Pronto se migrarán automáticamente."
-            />
-          </div>
-        )}
 
         {/* Subject type toggle */}
         <div style={{
