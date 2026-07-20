@@ -8469,13 +8469,14 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: true, status: 'ok', message: 'Sin cambios', data: shapeSupervisorCustomer(customer) }
     }
 
-    await createUpdate({
-      model: 'res.partner',
-      method: 'update',
-      ids: [customerId],
-      dict: updates,
-      sudo: 1,
-      app: 'pwa_colaboradores',
+    // SEGURIDAD (B8): el write va por controller DEDICADO con guard #220
+    // (rol supervisor_ventas + scope de sucursal server-side), NO por ORM
+    // genérico con sudo del cliente. Los pre-checks de arriba quedan como
+    // fail-fast de UX; la AUTORIDAD es server-side. Requiere el controller
+    // /gf/salesops/supervisor/v2/customers/update desplegado (gate externo).
+    await odooJson('/gf/salesops/supervisor/v2/customers/update', {
+      meta: supervisorMeta(),
+      data: { customer_id: customerId, values: updates },
     })
 
     const refreshedRows = await readSupervisorCustomerRows([['id', '=', customerId]], 1)
@@ -8622,13 +8623,13 @@ async function directSupervisorVentas(method, path, body) {
     }
 
     try {
-      await createUpdate({
-        model: 'gf.route.plan',
-        method: 'function',
-        ids: [routePlanId],
-        function: 'action_publish',
-        sudo: 1,
-        app: 'pwa_colaboradores',
+      // SEGURIDAD (B8): publicación por controller DEDICADO con guard #220
+      // (rol + scope server-side + transición permitida), NO por función ORM
+      // genérica con sudo del cliente. Requiere /gf/salesops/supervisor/v2/
+      // route_plan/publish desplegado (gate externo).
+      await odooJson('/gf/salesops/supervisor/v2/route_plan/publish', {
+        meta: supervisorMeta(),
+        data: { route_plan_id: routePlanId },
       })
     } catch (e) {
       return { ok: false, status: 'error', code: 'route_plan_publish_failed', message: e?.message || 'No se pudo publicar el plan.' }
@@ -8871,14 +8872,15 @@ async function directSupervisorVentas(method, path, body) {
             channel: normalizeChannel(l.channel),
           }))
       : []
-    // (5,0,0) removes all existing lines; (0,0,{...}) creates each new one
-    const lineCommands = [[5, 0, 0], ...lines.map((l) => [0, 0, l])]
-    await createUpdate({
-      model: 'gf.saleops.forecast',
-      method: 'update',
-      ids: [forecastId],
-      dict: { line_ids: lineCommands },
-      sudo: 1,
+    // SEGURIDAD (B8): el reemplazo de líneas va por controller DEDICADO con
+    // guard #220 (rol + dueño/scope del forecast server-side), NO por ORM
+    // genérico con sudo del cliente (antes NO había ni pre-check de scope). El
+    // servidor construye los comandos ORM; el cliente solo manda datos
+    // funcionales mínimos. Requiere /gf/salesops/supervisor/v2/forecast/
+    // update_lines desplegado (gate externo).
+    await odooJson('/gf/salesops/supervisor/v2/forecast/update_lines', {
+      meta: supervisorMeta(),
+      data: { forecast_id: forecastId, lines },
     })
     return { success: true, updated: true, forecast_id: forecastId }
   }
