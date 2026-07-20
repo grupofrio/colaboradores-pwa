@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "gf.salesops.supervisor.radar/1",
+  "title": "Supervisor Radar v1 — payload de éxito (SOLO fecha operativa actual)",
+  "x-error-codes": ["FEATURE_DISABLED", "UNAUTHORIZED", "FORBIDDEN", "SERVER_MISCONFIG", "VALIDATION_ERROR", "NO_BRANCH_SCOPE", "MULTI_BRANCH", "DATE_NOT_ALLOWED"],
+  "type": "object",
+  "required": ["ok", "contract", "generated_at", "date", "timezone", "timezone_source", "branch", "units", "thresholds", "counters", "capabilities", "data_notes", "rejected_params"],
+  "properties": {
+    "ok": {"type": "boolean", "enum": [true]},
+    "contract": {"type": "string", "enum": ["gf.salesops.supervisor.radar/1"]},
+    "generated_at": {"type": "string"},
+    "date": {"type": "string"},
+    "timezone": {"type": "string"},
+    "timezone_source": {"type": "string", "enum": ["branch", "company", "system_fallback"]},
+    "branch": {
+      "type": "object",
+      "required": ["branch_config_id", "analytic_account_id", "warehouse_id", "name"],
+      "properties": {
+        "branch_config_id": {"type": "integer"},
+        "analytic_account_id": {"type": "integer"},
+        "warehouse_id": {"type": "integer"},
+        "name": {"type": "string"}
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["employee_id", "name", "plan_id", "route_name", "vehicle", "latitude", "longitude", "captured_at", "age_seconds", "is_moving", "signal_status", "position_source", "stops"],
+        "properties": {
+          "employee_id": {"type": "integer"},
+          "name": {"type": "string"},
+          "plan_id": {"type": "integer"},
+          "route_name": {"type": "string"},
+          "vehicle": {
+            "type": "object",
+            "required": ["id", "name"],
+            "properties": {"id": {"type": "integer"}, "name": {"type": "string"}}
+          },
+          "latitude": {"type": ["number", "null"]},
+          "longitude": {"type": ["number", "null"]},
+          "captured_at": {"type": ["string", "null"]},
+          "age_seconds": {"type": ["integer", "null"]},
+          "is_moving": {"type": ["boolean", "null"]},
+          "signal_status": {"type": "string", "enum": ["recent", "delayed", "no_signal"]},
+          "position_source": {"type": "string", "enum": ["employee_device"]},
+          "stops": {
+            "type": "object",
+            "required": ["planned", "planned_total", "done", "pending", "missing_coordinates"],
+            "properties": {
+              "planned": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["stop_id", "sequence", "name", "latitude", "longitude", "done"],
+                  "properties": {
+                    "stop_id": {"type": "integer"},
+                    "sequence": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "latitude": {"type": "number"},
+                    "longitude": {"type": "number"},
+                    "done": {"type": "boolean"}
+                  }
+                }
+              },
+              "planned_total": {"type": "integer"},
+              "done": {"type": "integer"},
+              "pending": {"type": "integer"},
+              "missing_coordinates": {"type": "integer"}
+            }
+          }
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "required": ["recent_seconds", "stale_seconds", "position_max_age_hours", "note"],
+      "properties": {
+        "recent_seconds": {"type": "integer"},
+        "stale_seconds": {"type": "integer"},
+        "position_max_age_hours": {"type": "integer"},
+        "note": {"type": "string"}
+      }
+    },
+    "counters": {
+      "type": "object",
+      "required": ["positions_invalid", "positions_out_of_window"],
+      "properties": {
+        "positions_invalid": {"type": "integer"},
+        "positions_out_of_window": {"type": "integer"}
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "required": ["positions_available", "planned_stops_geocoded", "history_available", "realtime"],
+      "properties": {
+        "positions_available": {"type": "boolean"},
+        "planned_stops_geocoded": {"type": "boolean"},
+        "history_available": {"type": "boolean", "enum": [false]},
+        "realtime": {"type": "boolean", "enum": [false]}
+      }
+    },
+    "data_notes": {"type": "object"},
+    "rejected_params": {"type": "array", "items": {"type": "string"}}
+  }
+}
