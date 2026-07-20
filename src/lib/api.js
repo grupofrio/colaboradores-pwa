@@ -8383,6 +8383,24 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  // Day Control / Radar v2 (backend gf_saleops · GrupoVeniu/GrupoFrio#220).
+  // La fecha operativa la resuelve el backend con la timezone de la sucursal;
+  // `date` es opcional (solo override explícito). Devuelve el payload del
+  // contrato day_control/1 · radar/1 tal cual (odooJson desenvuelve .result).
+  if (cleanPath === '/pwa-supv/day-control' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/day-control', {
+      meta: supervisorMeta(),
+      data: { date: query.get('date') || undefined },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/radar' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/radar', {
+      meta: supervisorMeta(),
+      data: { date: query.get('date') || undefined },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/customers/search' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/customers/search', {
       meta: supervisorMeta(),

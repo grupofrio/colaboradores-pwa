@@ -143,6 +143,7 @@ const ScreenClientesSinVisitar = lazy(() => import('./modules/supervisor-ventas/
 const ScreenScoreSemanal       = lazy(() => import('./modules/supervisor-ventas/ScreenScoreSemanal'))
 const ScreenCierreOperativo    = lazy(() => import('./modules/supervisor-ventas/ScreenCierreOperativo'))
 const ScreenNotaRapida         = lazy(() => import('./modules/supervisor-ventas/ScreenNotaRapida'))
+const ScreenOperacionesHoy     = lazy(() => import('./modules/supervisor-ventas/ScreenOperacionesHoy'))
 // Torres de Control — Validación de Requisiciones
 const ScreenTorreRequisiciones = lazy(() => import('./modules/torre/ScreenTorreRequisiciones'))
 const ScreenTorreDetail        = lazy(() => import('./modules/torre/ScreenTorreDetail'))
@@ -668,6 +669,7 @@ export default function App() {
             {/* ── Supervisor de Ventas ─────────────────────────────────── */}
             {/* Supervisor Ventas V2 — Centro de Control Comercial */}
             <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenControlComercial /></ModuleRoleRoute>} />
+            <Route path="/equipo/hoy" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenOperacionesHoy /></ModuleRoleRoute>} />
             <Route path="/equipo/bajas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasHub /></ModuleRoleRoute>} />
             <Route path="/equipo/bajas/sugey" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugey /></ModuleRoleRoute>} />
             <Route path="/equipo/bajas/sugey/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugeyDetail /></ModuleRoleRoute>} />
