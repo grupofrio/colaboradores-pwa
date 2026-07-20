@@ -2,7 +2,7 @@
 // Patrón canónico de pestaña: usa el hook de día operativo (fuente compartida),
 // gestiona estados con StateScreen y delega el render a la vista PURA HoyView.
 import { useNavigate } from 'react-router-dom'
-import StateScreen from '../../../../components/kold/StateScreen'
+import DayStateGate from '../dayStateGate'
 import HoyView from '../hoy/HoyView'
 import { useOperationalDay } from '../useOperationalDay'
 
@@ -12,8 +12,7 @@ export default function HoyTab() {
   const navigate = useNavigate()
   const day = useOperationalDay({ demoEnabled: DEMO })
 
-  if (day.status === 'loading') return <StateScreen title="Cargando el día operativo…" detail="Venta, rutas y pendientes." tone="neutral" />
-  if (day.status === 'error') return <StateScreen title="No se pudo cargar el día operativo" detail={day.error} tone="error" actionLabel="Reintentar" onAction={day.reload} />
+  if (day.status !== 'live' && day.status !== 'demo') return <DayStateGate day={day} loadingTitle="Cargando el día operativo…" />
 
   return (
     <HoyView

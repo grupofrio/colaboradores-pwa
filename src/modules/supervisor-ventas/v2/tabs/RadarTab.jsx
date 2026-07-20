@@ -4,7 +4,7 @@
 // vista PURA RadarView. El estado de orden/selección vive aquí (la vista es pura).
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import StateScreen from '../../../../components/kold/StateScreen'
+import DayStateGate from '../dayStateGate'
 import RadarView from '../radar/RadarView'
 import { useOperationalDay } from '../useOperationalDay'
 
@@ -16,8 +16,7 @@ export default function RadarTab() {
   const [order, setOrder] = useState('urgente')
   const [selectedId, setSelectedId] = useState(null)
 
-  if (day.status === 'loading') return <StateScreen title="Cargando el radar de la jornada…" detail="Última posición conocida de cada unidad." tone="neutral" />
-  if (day.status === 'error') return <StateScreen title="No se pudo cargar el día operativo" detail={day.error} tone="error" actionLabel="Reintentar" onAction={day.reload} />
+  if (day.status !== 'live' && day.status !== 'demo') return <DayStateGate day={day} loadingTitle="Cargando el radar de la jornada…" />
 
   return (
     <RadarView

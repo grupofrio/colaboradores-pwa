@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import StateScreen from '../../../../components/kold/StateScreen'
+import DayStateGate from '../dayStateGate'
 import RutasView from '../rutas/RutasView'
 import RutaDetalle from '../rutas/RutaDetalle'
 import { useOperationalDay } from '../useOperationalDay'
@@ -46,8 +47,7 @@ export default function RutasTab() {
     return () => { cancelled = true }
   }, [planId, day.source])
 
-  if (day.status === 'loading') return <StateScreen title="Cargando rutas…" tone="neutral" />
-  if (day.status === 'error') return <StateScreen title="No se pudieron cargar las rutas" detail={day.error} tone="error" actionLabel="Reintentar" onAction={day.reload} />
+  if (day.status !== 'live' && day.status !== 'demo') return <DayStateGate day={day} loadingTitle="Cargando rutas…" />
 
   if (planId) {
     const route = (day.dayControl?.routes || []).find((r) => Number(r.plan_id) === planId) || null

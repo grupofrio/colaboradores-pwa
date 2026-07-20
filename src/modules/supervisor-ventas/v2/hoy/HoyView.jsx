@@ -4,6 +4,7 @@
 // detalle. Sin window/fetch/hooks ⇒ SSR-testeable. Reglas: null≠0, error≠0,
 // unknown≠incumplimiento, sin señal≠detenido.
 import { TOKENS } from '../../../../tokens'
+import RowButton from '../components/RowButton'
 import {
   operationalDateLabel, timezoneSourceLabel, moneyText, moneyByCurrencyTexts,
   groupPriorities, priorityCountChip, closeStageLabel, CLOSE_STAGE_ORDER,
@@ -141,13 +142,15 @@ export default function HoyView({
                   const chip = priorityCountChip(p)
                   const clickable = !!onOpenPriority && p.route_id != null
                   return (
-                    <div key={i} data-testid="hoy-priority-item" role={clickable ? 'button' : undefined} tabIndex={clickable ? 0 : undefined}
+                    <RowButton key={i} testid="hoy-priority-item" ariaLabel={clickable ? `Abrir prioridad: ${p.reason || 'pendiente'}` : undefined}
                       onClick={clickable ? () => onOpenPriority(p) : undefined}
-                      style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '7px 0', borderTop: i === 0 ? 'none' : `1px solid ${C.border}`, cursor: clickable ? 'pointer' : 'default' }}>
-                      <span style={{ fontSize: 13, color: C.textSoft, flex: 1 }}>{p.reason || 'Pendiente'}</span>
-                      {chip.show && <Chip text={chip.text} tone={SEV[sev].tone} />}
-                      {clickable && <span aria-hidden style={{ color: C.blue3, fontSize: 13 }}>›</span>}
-                    </div>
+                      style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.border}`, borderRadius: 0 }}>
+                      <span style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '7px 0' }}>
+                        <span style={{ fontSize: 13, color: C.textSoft, flex: 1 }}>{p.reason || 'Pendiente'}</span>
+                        {chip.show && <Chip text={chip.text} tone={SEV[sev].tone} />}
+                        {clickable && <span aria-hidden style={{ color: C.blue3, fontSize: 13 }}>›</span>}
+                      </span>
+                    </RowButton>
                   )
                 })}
               </div>

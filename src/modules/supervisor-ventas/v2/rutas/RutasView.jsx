@@ -2,6 +2,7 @@
 // Lista de rutas del día desde deriveRouteRows(dayControl). Sin window/fetch.
 // null≠0 (pendingLoads null ⇒ "sin dato"), unknown≠incumplimiento.
 import { TOKENS } from '../../../../tokens'
+import RowButton from '../components/RowButton'
 import {
   deriveRouteRows, departureLabel, departureTone, deviationText, closeStageLabel,
   moneyText, signalLabel,
@@ -21,9 +22,10 @@ function RouteRow({ row, onOpen }) {
   const sales = moneyText(row.sales.amount, row.sales.currency, row.sales.available)
   const sigTone = row.signalStatus === 'recent' || row.signalStatus === 'delayed' ? S.signal : S.no_evaluable
   return (
-    <div data-testid="v2-ruta-row" role={onOpen ? 'button' : undefined} tabIndex={onOpen ? 0 : undefined}
+    <RowButton testid="v2-ruta-row" ariaLabel={onOpen ? `Abrir ruta ${row.routeName}` : undefined}
       onClick={onOpen ? () => onOpen(row.planId) : undefined}
-      style={{ padding: '12px 14px', marginBottom: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg, cursor: onOpen ? 'pointer' : 'default' }}>
+      style={{ marginBottom: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg }}>
+      <div style={{ padding: '12px 14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{row.routeName}</div>
         <Chip text={departureLabel(row.departureStatus)} tone={depTone} />
@@ -39,7 +41,8 @@ function RouteRow({ row, onOpen }) {
         <Chip text={closeStageLabel(row.closeStage)} tone={S.no_evaluable} />
       </div>
       {row.nextStopName && <div style={{ fontSize: 11.5, color: C.textLow, marginTop: 6 }}>Siguiente: {row.nextStopName}</div>}
-    </div>
+      </div>
+    </RowButton>
   )
 }
 
