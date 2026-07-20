@@ -40,8 +40,8 @@ const BLOCKER_ROUTE = {
   open_cycles: { route: '/supervision/turno', label: 'Ir a turno' },
   balance: { route: '/supervision/merma', label: 'Revisar merma' },
   shift_state: { route: '/supervision/turno', label: 'Ir a turno' },
-  haccp: { route: '/produccion/checklist', label: 'Ir a checklist', state: { backTo: '/supervision' } },
-  checklist: { route: '/produccion/checklist', label: 'Ir a checklist', state: { backTo: '/supervision' } },
+  haccp: { route: '/supervision/checklist', label: 'Ir a checklist', state: { backTo: '/supervision' } },
+  checklist: { route: '/supervision/checklist', label: 'Ir a checklist', state: { backTo: '/supervision' } },
 }
 
 const STATUS_COLORS = {
@@ -127,6 +127,17 @@ export default function ScreenSupervision() {
   const warnings = readiness?.warnings || []
   const canClose = !!readiness?.canClose
   const hasProblems = blockers.length > 0
+
+  // Navega a la ruta del blocker/warning. Para el checklist inyecta el shift
+  // activo en el state porque el supervisor NO tiene "mi turno" (getMyShift no
+  // devuelve id): sin este shift el checklist mostraría "Sin turno activo".
+  function navigateToBlocker(code) {
+    const target = BLOCKER_ROUTE[code]
+    if (!target) return
+    const state = { ...(target.state || {}) }
+    if (shift?.id) state.shift = shift
+    navigate(target.route, { state })
+  }
 
   function openBrineReading(tank) {
     setSelectedTank(tank)
@@ -324,7 +335,7 @@ export default function ScreenSupervision() {
                     code={b.code}
                     message={b.message}
                     typo={typo}
-                    onGo={BLOCKER_ROUTE[b.code] ? () => navigate(BLOCKER_ROUTE[b.code].route, { state: BLOCKER_ROUTE[b.code].state }) : null}
+                    onGo={BLOCKER_ROUTE[b.code] ? () => navigateToBlocker(b.code) : null}
                     goLabel={BLOCKER_ROUTE[b.code]?.label}
                   />
                 ))}
@@ -340,7 +351,7 @@ export default function ScreenSupervision() {
                     code={w.code}
                     message={w.message}
                     typo={typo}
-                    onGo={BLOCKER_ROUTE[w.code] ? () => navigate(BLOCKER_ROUTE[w.code].route, { state: BLOCKER_ROUTE[w.code].state }) : null}
+                    onGo={BLOCKER_ROUTE[w.code] ? () => navigateToBlocker(w.code) : null}
                     goLabel={BLOCKER_ROUTE[w.code]?.label}
                   />
                 ))}

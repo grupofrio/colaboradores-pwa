@@ -615,6 +615,10 @@ export default function App() {
             <Route path="/supervision/energia" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenEnergia /></ModuleRoleRoute>} />
             <Route path="/supervision/mantenimiento" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenMantenimiento /></ModuleRoleRoute>} />
             <Route path="/supervision/turno" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenControlTurno /></ModuleRoleRoute>} />
+            {/* Checklist HACCP visto por el supervisor: mismo screen que el operador,
+                pero gated por el módulo de supervisión (el supervisor no pertenece a
+                registro_produccion). El shift viaja por navegación (location.state.shift). */}
+            <Route path="/supervision/checklist" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenChecklist /></ModuleRoleRoute>} />
 
             {/* ── Admin Sucursal (POS + Gastos + Requisiciones) ────────── */}
             <Route path="/admin" element={<ModuleRoleRoute moduleId="admin_sucursal"><AdminThemeScope /></ModuleRoleRoute>}>

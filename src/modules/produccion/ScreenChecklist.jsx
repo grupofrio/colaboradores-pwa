@@ -35,15 +35,24 @@ export default function ScreenChecklist() {
   const productionState = activeRole ? { selected_role: activeRole } : undefined
   const backTo = resolveChecklistBackTarget(location.state)
 
+  // Resuelve el shift_id. El supervisor entra sin "mi turno" y el shift viaja
+  // por navegación (location.state.shift). El operador cae al getMyShift().
+  async function resolveShiftId() {
+    const navShiftId = Number(location.state?.shift?.id || location.state?.shift_id || 0) || 0
+    if (navShiftId) return navShiftId
+    const shift = await getMyShift()
+    return Number(shift?.id || 0) || 0
+  }
+
   // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadChecklist() }, [])
 
   async function loadChecklist() {
     setLoading(true)
     try {
-      const shift = await getMyShift()
-      if (!shift?.id) { setError('Sin turno activo'); return }
-      const data = await getChecklist(shift.id, activeRole)
+      const shiftId = await resolveShiftId()
+      if (!shiftId) { setError('Sin turno activo'); return }
+      const data = await getChecklist(shiftId, activeRole)
       setError('')
       setChecklist(data)
       setChecks((data?.checks || []).map(c => {
@@ -151,8 +160,8 @@ export default function ScreenChecklist() {
         if (!needsSave) continue
         const ok = await saveCheck(idx)
         if (!ok) return
-        const shiftSnapshot = await getMyShift()
-        const latest = await getChecklist(shiftSnapshot.id, activeRole)
+        const shiftSnapshotId = await resolveShiftId()
+        const latest = await getChecklist(shiftSnapshotId, activeRole)
         currentChecks = (latest?.checks || []).map(c2 => ({
           ...c2,
           localValue: c2.check_type === 'yes_no'
@@ -172,8 +181,8 @@ export default function ScreenChecklist() {
         }))
       }
 
-      const shift = await getMyShift()
-      const fresh = await getChecklist(shift.id, activeRole)
+      const shiftId = await resolveShiftId()
+      const fresh = await getChecklist(shiftId, activeRole)
       const pending = (fresh?.checks || []).filter(c => !c.passed)
       if (pending.length) {
         setChecklist(fresh)
