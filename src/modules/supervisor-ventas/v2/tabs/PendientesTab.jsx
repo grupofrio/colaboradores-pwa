@@ -5,7 +5,7 @@
 // (autoridad única por tipo). El filtro de tipo vive como estado local de UI.
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import StateScreen from '../../../../components/kold/StateScreen'
+import DayStateGate from '../dayStateGate'
 import PendientesView from '../pendientes/PendientesView'
 import { useOperationalDay } from '../useOperationalDay'
 import { derivePendientes } from '../presentation.js'
@@ -17,8 +17,7 @@ export default function PendientesTab() {
   const [filterType, setFilterType] = useState(null) // null = todos
   const day = useOperationalDay({ demoEnabled: DEMO })
 
-  if (day.status === 'loading') return <StateScreen title="Cargando pendientes…" detail="Excepciones consolidadas de la jornada." tone="neutral" />
-  if (day.status === 'error') return <StateScreen title="No se pudieron cargar los pendientes" detail={day.error} tone="error" actionLabel="Reintentar" onAction={day.reload} />
+  if (day.status !== 'live' && day.status !== 'demo') return <DayStateGate day={day} loadingTitle="Cargando pendientes…" />
 
   const items = derivePendientes(day.dayControl)
 

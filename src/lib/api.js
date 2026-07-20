@@ -9049,6 +9049,16 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   // ── Route Stops (detalle de paradas de una ruta) ──
+  // Supervisor V2: paradas por el DTO read-only guardado (#223), NO por ORM
+  // genérico con sudo. El cliente solo manda route_plan_id; el servidor limita
+  // campos y scope. Requiere el endpoint desplegado (gate externo).
+  if (cleanPath === '/pwa-supv/route-stops-v2' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/route_stops', {
+      meta: supervisorMeta(),
+      data: { route_plan_id: Number(query.get('plan_id') || query.get('route_plan_id') || 0) },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/route-stops' && method === 'GET') {
     const scope = await supervisorAnalyticScope()
     if (!scope.analyticAccountId) return []

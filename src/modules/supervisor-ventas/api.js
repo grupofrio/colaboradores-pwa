@@ -47,6 +47,12 @@ export function getRadar(date) {
   return api('GET', `/pwa-supv/radar${qs}`)
 }
 
+/** Supervisor V2: paradas de una ruta vía DTO read-only guardado (#223), sin
+ *  ORM/sudo en el cliente. Devuelve el envelope {status,data:{stops,...}}. */
+export function getRouteStopsV2(planId) {
+  return api('GET', `/pwa-supv/route-stops-v2?plan_id=${Number(planId || 0)}`)
+}
+
 // ── Pronóstico ───────────────────────────────────────────────────────────────
 
 /** Productos disponibles para forecast */

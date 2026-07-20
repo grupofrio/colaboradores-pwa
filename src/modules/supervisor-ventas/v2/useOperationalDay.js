@@ -44,6 +44,10 @@ export function useOperationalDay({ date = null, demoEnabled = false } = {}) {
     const promise = (async () => {
       const live = await loadOperationalDay({ date })
       if (live.ok) return { ...live, status: 'live', source: 'live', provenance: null }
+      // DATE_NOT_ALLOWED es estado PROPIO: no cae a demo ni a fecha anterior.
+      if (live.result === 'date_not_allowed') {
+        return { ...live, status: 'date_not_allowed', source: null, provenance: null }
+      }
       if (demoEnabled) {
         const demo = await demoLoad()
         if (demo) return { ...demo, status: 'demo' }

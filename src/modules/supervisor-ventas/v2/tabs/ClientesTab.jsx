@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StateScreen from '../../../../components/kold/StateScreen'
+import DayStateGate from '../dayStateGate'
 import ClientesView from '../clientes/ClientesView'
 import { useOperationalDay } from '../useOperationalDay'
 import { loadRouteStops } from '../dataSources'
@@ -72,8 +73,9 @@ export default function ClientesTab() {
 
   useEffect(() => {
     let cancelled = false
-    if (dayStatus === 'loading') { setStopsState({ status: 'loading', stops: [], failures: 0 }); return undefined }
-    if (dayStatus === 'error') { setStopsState({ status: 'error', stops: [], failures: 0 }); return undefined }
+    // Solo cargamos paradas cuando el día está live/demo. En loading/error/
+    // date_not_allowed NO se piden paradas (evita falso vacío y respeta la fecha).
+    if (dayStatus !== 'live' && dayStatus !== 'demo') { setStopsState({ status: dayStatus === 'loading' ? 'loading' : 'idle', stops: [], failures: 0 }); return undefined }
 
     setStopsState((s) => ({ ...s, status: 'loading' }))
     ;(async () => {
@@ -99,11 +101,8 @@ export default function ClientesTab() {
     navigate(`/equipo/clientes?cid=${encodeURIComponent(customerId)}`)
   }
 
-  if (dayStatus === 'loading') {
-    return <StateScreen title="Cargando el día operativo…" detail="Rutas del día y sus clientes." tone="neutral" />
-  }
-  if (dayStatus === 'error') {
-    return <StateScreen title="No se pudo cargar el día operativo" detail={day.error} tone="error" actionLabel="Reintentar" onAction={day.reload} />
+  if (dayStatus !== 'live' && dayStatus !== 'demo') {
+    return <DayStateGate day={day} loadingTitle="Cargando el día operativo…" />
   }
   if (stopsState.status === 'loading' || stopsState.status === 'idle') {
     return <StateScreen title="Cargando clientes de las rutas…" detail="Agregando las paradas de cada ruta del día." tone="neutral" />
