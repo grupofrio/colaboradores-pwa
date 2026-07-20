@@ -28,7 +28,8 @@ import { useLocation } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { createLatestRequestGate } from '../../lib/latestRequestGate'
 import { demoFixtureAvailable, loadM4DemoFixture } from 'virtual:m4-demo-fixture'
-import { fetchM4Latest, fetchM4Findings } from './m4/m4Api'
+import { fetchM4Latest, fetchM4Findings, resolveM4DemoLatest } from './m4/m4Api'
+import { isRenderableM4Payload } from './m4/contract'
 import { isM4DemoAllowed } from './m4/demoGate'
 import { buildM4EffectivePayload, startM4StaleMonitor } from './m4/staleClock'
 import { applyFindingFilters, paginate, M4_DEFAULT_FILTERS, M4_PAGE_SIZE } from './m4/filters'
@@ -182,14 +183,18 @@ function Header({ demo, technical, payload }) {
   )
 }
 
-export default function ScreenVentasM4({ session }) {
+// `initialLoadForTesting`: semilla INMUTABLE de montaje, exclusiva para tests (permite
+// renderizar el componente real en un estado determinista bajo SSR, donde useEffect no
+// corre). No debe pasarse desde App/router (el montaje productivo solo pasa `session`);
+// se lee una sola vez en useState y NO se sincroniza si cambia después.
+export default function ScreenVentasM4({ session, initialLoadForTesting }) {
   const location = useLocation()
   const demoAllowed = demoFixtureAvailable && isM4DemoAllowed(import.meta.env)
   const demo = useMemo(
     () => demoAllowed && new URLSearchParams(location.search).get('demo') === '1',
     [demoAllowed, location.search],
   )
-  const [load, setLoad] = useState({ phase: 'loading' })
+  const [load, setLoad] = useState(initialLoadForTesting || { phase: 'loading' })
   const [filters, setFilters] = useState(M4_DEFAULT_FILTERS)
   const [page, setPage] = useState(1)
   const [table, setTable] = useState({ phase: 'idle', items: [], total: 0, pages: 1 })
@@ -205,16 +210,20 @@ export default function ScreenVentasM4({ session }) {
   // ── /latest ────────────────────────────────────────────────────────────────
   useEffect(() => {
     let current = true
+    // Con la semilla de test inyectada no se dispara el fetch real (el estado ya viene
+    // determinado por initialLoadForTesting). Es inmutable, así que no re-siembra.
+    if (initialLoadForTesting) return undefined
     if (demo) {
       setLoad({ phase: 'loading' })
       loadM4DemoFixture().then((fixture) => {
         if (!current || !aliveRef.current) return
-        if (fixture?.payload && fixture?.provenance) {
-          setLoad({
-            phase: 'ok', payload: fixture.payload, provenance: fixture.provenance, demo: true,
-          })
+        // El fixture demo pasa por la MISMA autoridad contractual que /latest
+        // (validar + canonicalizar, sin red): un fixture malformado NO entra a 'ok'.
+        const result = resolveM4DemoLatest(fixture)
+        if (result.state === 'ok') {
+          setLoad({ phase: 'ok', payload: result.payload, provenance: result.provenance, demo: true })
         } else {
-          setLoad({ phase: 'unavailable' })
+          setLoad({ phase: result.state, errors: result.errors || [] })
         }
       })
       return () => { current = false }
@@ -226,9 +235,20 @@ export default function ScreenVentasM4({ session }) {
       else setLoad({ phase: result.state, errors: result.errors || [] })
     })
     return () => { current = false }
-  }, [demo])
+  }, [demo, initialLoadForTesting])
 
-  const payload = load.phase === 'ok' ? load.payload : null
+  // Guard de renderizabilidad (defensa en profundidad). Ambos caminos de entrada validan
+  // y canonicalizan el envelope antes de 'ok' (fetchM4Latest en el real, resolveM4DemoLatest
+  // en el demo), así que en operación normal el payload ya trae la estructura del contrato.
+  // Este guard permanece como última línea ante una regresión futura, una inyección de test
+  // o un envelope inesperado: si el payload no es renderizable NO debe desreferenciarse aguas
+  // abajo (payload.run.* / rule_results.filter reventarían con un TypeError → loop de
+  // ErrorBoundary). Se trata como 'invalid' ANTES de cualquier dereference y la vista cae al
+  // estado controlado de más abajo, sin inventar datos ni ceros.
+  const rawPayload = load.phase === 'ok' ? load.payload : null
+  const payloadRenderable = isRenderableM4Payload(rawPayload)
+  const payload = payloadRenderable ? rawPayload : null
+  const displayPhase = load.phase === 'ok' && !payloadRenderable ? 'invalid' : load.phase
   const runsCount = payload?.history?.runs_count ?? 0
   const hasHistory = runsCount >= 2
   const [staleState, setStaleState] = useState({ stale: false, ageDays: null })
@@ -330,9 +350,9 @@ export default function ScreenVentasM4({ session }) {
       session_expired: ['Sesión expirada', 'Vuelve a iniciar sesión para consultar M4.'],
       forbidden: ['Sin permiso M4', 'Tu sesión no tiene acceso M4 (direccion_general / admin_plataforma). El acceso es fail-closed.'],
       schema_mismatch: ['Versión de contrato no soportada', 'El backend publica una versión de kold.os.m4.api que esta UI no soporta. Actualiza la PWA (no se intenta adivinar la estructura).'],
-      invalid: ['Respuesta inválida del backend', 'El envelope no validó el contrato kold.os.m4.api/1; no se muestra nada derivado de datos corruptos.'],
+      invalid: ['Respuesta inválida de la fuente de datos', 'El envelope no cumple el contrato kold.os.m4.api/1; no se muestra información derivada y no se inventan métricas.'],
       error: ['Error de red o servidor', 'No fue posible consultar la API de M4. Reintenta más tarde.'],
-    }[load.phase] || ['Estado desconocido', 'No fue posible determinar el estado de la fuente M4.']
+    }[displayPhase] || ['Estado desconocido', 'No fue posible determinar el estado de la fuente M4.']
     return (
       <div style={wrap}>
         <Header demo={false} technical="UNAVAILABLE" payload={null} />
