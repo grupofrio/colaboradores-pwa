@@ -49,7 +49,18 @@ export default function ScreenScoreSemanal() {
     return () => { cancelled = true }
   }, [])
 
-  // Determine today's column index
+  // Determine today's column index.
+  //
+  // FIXME(tz): la "semana" se resuelve en tz del DISPOSITIVO, no de la sucursal.
+  // `todayStr` deriva del reloj local (getFullYear/getMonth/getDate) y el rango
+  // Lun–Dom (`data.weekDays`) se construye igual en supvService.getWeeklyScore().
+  // Para un dispositivo en una zona distinta a la sucursal, la columna "hoy"
+  // puede caer en el día equivocado (o en ninguno ⇒ todayIdx = -1). El fix
+  // correcto es que el SERVIDOR indique el rango de la semana y cuál weekDay es
+  // "hoy" en tz de sucursal. No se refactoriza a ciegas aquí: la tz de sucursal
+  // no está disponible en el cliente y `weekDays` viene del servicio (fuera de
+  // este archivo), que hoy comparte esta misma convención local — cambiar solo
+  // `todayStr` lo desincronizaría de `weekDays`. Solo se documenta el sesgo.
   const todayStr = useMemo(() => {
     const d = new Date()
     const pad = (n) => String(n).padStart(2, '0')
