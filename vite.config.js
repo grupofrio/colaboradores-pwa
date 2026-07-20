@@ -18,6 +18,12 @@ export default defineConfig(({ mode }) => {
       : './src/modules/supervisor-ventas/dayControl/demoLoader.prod.js',
     import.meta.url,
   ))
+  const supervisorV2Demo = fileURLToPath(new URL(
+    mode === 'development' || mode === 'test'
+      ? './src/modules/supervisor-ventas/v2/demoLoader.dev.js'
+      : './src/modules/supervisor-ventas/v2/demoLoader.prod.js',
+    import.meta.url,
+  ))
 
   return {
     resolve: {
@@ -30,6 +36,7 @@ export default defineConfig(({ mode }) => {
         )),
         'virtual:m4-demo-fixture': demoFixtureLoader,
         'virtual:supervisor-daycontrol-demo': supervisorDayControlDemo,
+        'virtual:supervisor-v2-demo': supervisorV2Demo,
       },
     },
     plugins: [
