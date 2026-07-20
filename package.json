@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\"",
-    "build": "vite build && node scripts/check_m3_dist_leaks.mjs && node scripts/check_m4_fixture_leak.mjs",
+    "build": "vite build && node scripts/check_m3_dist_leaks.mjs && node scripts/check_m4_fixture_leak.mjs && node scripts/check_supervisor_daycontrol_leak.mjs",
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "test": "node --test tests/**/*.test.mjs"

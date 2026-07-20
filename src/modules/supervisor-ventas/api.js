@@ -29,6 +29,24 @@ export function getTeamRoutes(date) {
   return api('GET', `/pwa-supv/team-routes${qs}`)
 }
 
+// ── Día operativo · Day Control / Radar (backend #220) ───────────────────────
+// La fecha operativa la resuelve el backend con la timezone de la sucursal; el
+// argumento `date` es un override opcional. Retornan el payload del contrato
+// (day_control/1 · radar/1) sin transformar. NO existe fallback local: si el
+// endpoint no está desplegado, api() rechaza y la capa superior decide.
+
+/** Control del día operativo (venta, salida, cierre, prioridades). */
+export function getDayControl(date) {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : ''
+  return api('GET', `/pwa-supv/day-control${qs}`)
+}
+
+/** Radar de posiciones read-only (no tiempo real; ver captured_at). */
+export function getRadar(date) {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : ''
+  return api('GET', `/pwa-supv/radar${qs}`)
+}
+
 // ── Pronóstico ───────────────────────────────────────────────────────────────
 
 /** Productos disponibles para forecast */
