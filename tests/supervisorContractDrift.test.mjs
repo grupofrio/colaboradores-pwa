@@ -428,6 +428,55 @@ function metadataLeak(s) {
   return null
 }
 
+// (G) YELLOW-6 — dentro de data_notes/contract, validación CONTEXTUAL POR NOMBRE DE
+// CLAVE (no un detector heurístico universal de secretos/PII). Normaliza snake_case /
+// camelCase y es case-insensitive. Fuera de data_notes/contract NO se aplica (rige la
+// regla más estricta de texto libre). Los identificadores canónicos bajo claves
+// documentales NO tipadas siguen permitidos.
+const norm = (k) => String(k).toLowerCase().replace(/[_-]/g, '')
+const NETWORK_KEYS = new Set(['host', 'hostname', 'endpoint', 'url', 'uri', 'baseurl',
+  'apiurl', 'callbackurl', 'webhookurl', 'server'])
+const SECRET_KEYS = new Set(['password', 'passwd', 'secret', 'apikey', 'accesstoken',
+  'refreshtoken', 'privatekey', 'clientsecret', 'authorization', 'authtoken', 'bearertoken'])
+const PII_EMAIL_KEYS = new Set(['email', 'contactemail'])
+const PII_PHONE_KEYS = new Set(['phone', 'mobile', 'telephone', 'contactphone'])
+const isSensitiveMetaKey = (k) => {
+  const n = norm(k)
+  return NETWORK_KEYS.has(n) || SECRET_KEYS.has(n) || PII_EMAIL_KEYS.has(n) || PII_PHONE_KEYS.has(n)
+}
+// Teléfono demo: null/'' o el ÚNICO placeholder sintético documentado; cualquier otra
+// cosa (incl. secuencias telefónicas ordinarias) se rechaza. Regla explícita y segura.
+const DEMO_PHONE_PLACEHOLDER = 'TEL-DEMO-INVALID'
+const isSyntheticPhone = (v) => v === null || v === '' || v === DEMO_PHONE_PLACEHOLDER
+// scope y clave inmediata a partir del path recursivo.
+const inMetaScope = (path) => /(^|\.)data_notes([.[]|$)/.test(path) || /(^|\.)contract([.[]|$)/.test(path)
+const immediateKey = (path) => {
+  const seg = path.slice(path.lastIndexOf('.') + 1)
+  return seg.replace(/\[\d+\]$/, '') // quita índice de array final
+}
+// clasifica un valor bajo una clave SENSIBLE dentro de data_notes/contract. Los mensajes
+// de error NUNCA reproducen secretos/PII; solo la clave/ruta.
+function metaSensitiveErr(key, value) {
+  const n = norm(key)
+  if (SECRET_KEYS.has(n)) {
+    return (value === null || value === '') ? null : `clave sensible '${key}' con valor no vacío (redactado)`
+  }
+  if (PII_PHONE_KEYS.has(n)) {
+    return isSyntheticPhone(value) ? null : `clave PII de teléfono '${key}' con valor no sintético (redactado)`
+  }
+  if (PII_EMAIL_KEYS.has(n)) {
+    if (value === null || value === '') return null
+    if (typeof value !== 'string') return `clave PII de email '${key}' con valor no-string (redactado)`
+    return contactLeak(value) ? `clave PII de email '${key}' con dominio/host no reservado (redactado)` : null
+  }
+  if (NETWORK_KEYS.has(n)) {
+    if (typeof value !== 'string') return null // un no-string bajo clave de red no es hostname
+    const l = contactLeak(value) // estricto: hostname suelto también muerde
+    return l ? `clave de red '${key}': ${l}` : null
+  }
+  return null
+}
+
 // helper solicitado: isDemoBranch(branch) — marca demo + ids en banda.
 function isDemoBranch(branch) {
   return !!branch && isDemoIdentityString(branch.name)
@@ -451,7 +500,13 @@ function auditSynthetic(node, path, errs) {
     }
     for (const [k, v] of Object.entries(node)) {
       const p = `${path}.${k}`
-      if (isIdArrayKey(k)) {
+      if (inMetaScope(p) && isSensitiveMetaKey(k)) {
+        // YELLOW-6: clave de red/secreto/PII dentro de data_notes/contract ⇒ validación
+        // contextual por nombre de clave (cualquier tipo de valor). No se recurre dentro
+        // (evita caminar objetos de secretos); el error nunca reproduce el valor.
+        const e = metaSensitiveErr(k, v)
+        if (e) errs.push(`${p}: ${e}`)
+      } else if (isIdArrayKey(k)) {
         // RED-2 P3-A: *_ids/*Ids DEBE ser array homogéneo de ids sintéticos —
         // sin strings/floats/null/negativos/bools/mixtos, y no un no-array.
         if (!Array.isArray(v) || !v.every((id) => isSyntheticId(k, id))) {
@@ -484,10 +539,10 @@ function auditSynthetic(node, path, errs) {
     return
   }
   if (typeof node === 'string') {
-    // decisión A por PROCEDENCIA: data_notes = metadato contractual (email/URL/endpoint
-    // explícito; a.b desnudo NO es host). Todo lo demás (texto libre) = estricto.
-    const isMetadata = /(^|\.)data_notes(\.|$)/.test(path)
-    const leak = isMetadata ? metadataLeak(node) : contactLeak(node)
+    // PROCEDENCIA: dentro de data_notes/contract bajo clave documental NO tipada ⇒
+    // metadato (email/URL/endpoint explícito; a.b desnudo pasa). Las claves sensibles
+    // (red/secreto/PII) ya se resolvieron en el object-loop. Fuera ⇒ texto libre estricto.
+    const leak = inMetaScope(path) ? metadataLeak(node) : contactLeak(node)
     if (leak) errs.push(`${path}: ${leak}`)
     if (/^\d{4}-\d{2}-\d{2}/.test(node) && !isSyntheticDate(node)) errs.push(`${path}: fecha no demo '${node}'`)
   }
@@ -648,4 +703,69 @@ test('DecA — no queda ningún bypass global de tokens de modelo', () => {
     'host.synthetic:8080', 'user@host.synthetic', 'HTTPS://HOST.SYNTHETIC/path']) {
     assert.ok(contactLeak(bad), `${bad} muerde en texto libre`)
   }
+})
+
+// YELLOW-6 — validación CONTEXTUAL POR CLAVE dentro de data_notes/contract.
+const dn = (key, val) => { const c = structuredClone(DC_GOLDEN); c.data_notes[key] = val; return syntheticFixtureErrors(c) }
+const ct = (key, val) => { const c = structuredClone(DC_GOLDEN); c.contract = { [key]: val }; return syntheticFixtureErrors(c) }
+
+test('YELLOW-6 red/endpoint: clave de red exige hostname/email/URL estricto (.invalid)', () => {
+  // 1-4) fallan
+  assert.ok(dn('host', 'host.synthetic').length > 0, '1 data_notes.host')
+  assert.ok(dn('endpoint', 'host.synthetic').length > 0, '2 data_notes.endpoint')
+  assert.ok(ct('server', 'host.synthetic').length > 0, '3 contract.server')
+  assert.ok(ct('api_url', 'https://host.synthetic').length > 0, '4 contract.api_url')
+  // 5-6) pasan (.invalid) — incl. camelCase/snake_case
+  assert.deepEqual(dn('host', 'demo.invalid'), [], '5 data_notes.host=.invalid')
+  assert.deepEqual(dn('url', 'https://demo.invalid/path'), [], '6 data_notes.url .invalid')
+  assert.deepEqual(dn('callbackUrl', 'https://demo.invalid/cb'), [], 'camelCase callbackUrl .invalid')
+  // 7) objeto anidado con endpoint no-.invalid ⇒ falla
+  assert.ok(dn('cfg', { endpoint: 'host.synthetic' }).length > 0, '7 anidado endpoint')
+  // 8) array con objeto que contiene host no-.invalid ⇒ falla
+  assert.ok(dn('nodes', [{ host: 'host.synthetic' }]).length > 0, '8 array de objetos host')
+})
+
+test('YELLOW-6 secretos: clave sensible con valor no vacío falla; el error NO reproduce el valor', () => {
+  const SECRET = 'ARTIFICIAL-nonempty-9f3a2b'
+  // 9-13) fallan (string no vacío / objeto / array)
+  for (const [k, v] of [['password', SECRET], ['api_key', SECRET], ['accessToken', SECRET],
+    ['client_secret', SECRET], ['privateKey', { a: 1 }], ['refresh_token', [1, 2]]]) {
+    const errs = ct(k, v)
+    assert.ok(errs.length > 0, `secreto ${k} no vacío debe fallar`)
+    assert.ok(!errs.join('').includes(String(v)), `14 el error NO reproduce el secreto (${k})`)
+    assert.ok(errs.some((e) => norm(e).includes(norm(k))), `el error menciona la clave (${k})`)
+  }
+  // null / vacío ⇒ permitido
+  assert.deepEqual(dn('password', null), [], 'password null permitido')
+  assert.deepEqual(dn('api_key', ''), [], 'api_key vacío permitido')
+})
+
+test('YELLOW-6 PII email/teléfono: solo .invalid / placeholder; el error NO reproduce el valor', () => {
+  // 15-17) email
+  assert.deepEqual(dn('email', 'user@demo.invalid'), [], '15 email .invalid pasa')
+  const badEmail = 'persona.real@host.synthetic'
+  const eErrs = dn('email', badEmail)
+  assert.ok(eErrs.length > 0, '16 email no-.invalid falla')
+  assert.ok(!eErrs.join('').includes(badEmail), '20a error no reproduce email completo')
+  assert.ok(ct('contactEmail', 'x@host.synthetic').length > 0, '17 contact_email anidado no-.invalid falla')
+  // 18-19) teléfono
+  const badPhone = '+52 55 8765 4321'
+  const pErrs = dn('phone', badPhone)
+  assert.ok(pErrs.length > 0, '18 phone ordinario falla')
+  assert.ok(!pErrs.join('').includes(badPhone), '20b error no reproduce teléfono')
+  assert.deepEqual(dn('phone', 'TEL-DEMO-INVALID'), [], '19a placeholder sintético pasa')
+  assert.deepEqual(dn('mobile', null), [], '19b null pasa')
+})
+
+test('YELLOW-6 golden intacto y canónicos permitidos (procedencia)', () => {
+  // 21-22) golden verde
+  assert.deepEqual(syntheticFixtureErrors(DC_GOLDEN), [])
+  assert.deepEqual(syntheticFixtureErrors(RADAR_GOLDEN), [])
+  // 23) data_notes.sales_source="sale.order" sigue permitido (clave documental no tipada)
+  assert.deepEqual(dn('sales_source', 'sale.order'), [], '23 sales_source=sale.order permitido')
+  assert.deepEqual(dn('loads_source', 'stock.picking'), [], 'loads_source=stock.picking permitido')
+  // 24) contract canónico string sigue permitido
+  const cc = structuredClone(DC_GOLDEN); cc.contract = 'gf.salesops.supervisor.day_control/1'
+  assert.deepEqual(syntheticFixtureErrors(cc), [], '24 contract canónico permitido')
+  // 25 (schema/golden/hashes sin cambios) lo cubre el test sha256 + la ausencia de diffs en contracts/
 })
