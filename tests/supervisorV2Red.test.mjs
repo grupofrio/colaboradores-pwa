@@ -8,8 +8,9 @@ import {
   isValidLat, isValidLng, isValidLatLng, validPoints, computeBounds,
 } from '../src/modules/supervisor-ventas/v2/radar/mapProjection.js'
 import {
-  RESULT, classify, loadRouteStops, loadOperationalDay, sourceVersion,
+  PHASE, loadRouteStops, loadOperationalDay, sourceVersion, routeStopsCacheKey,
 } from '../src/modules/supervisor-ventas/v2/dataSources.js'
+import { normalizeSupervisorV2Response } from '../src/modules/supervisor-ventas/v2/normalizeResponse.js'
 
 const render = (C, props) => renderToStaticMarkup(createElement(C, props))
 
@@ -52,37 +53,54 @@ test('PositionMap: marcador clicable es role=button + tabindex (teclado)', () =>
   assert.match(html, /no es mapa vial/) // se declara vista geoespacial
 })
 
-// ── Clasificación de respuestas (P11/P14) ────────────────────────────────────
-test('classify: DATE_NOT_ALLOWED / unauthorized / network / error', () => {
-  assert.equal(classify(null, { code: 'DATE_NOT_ALLOWED' }), RESULT.DATE_NOT_ALLOWED)
-  assert.equal(classify({ ok: false, code: 'DATE_NOT_ALLOWED' }), RESULT.DATE_NOT_ALLOWED)
-  assert.equal(classify(null, { code: 'FORBIDDEN' }), RESULT.UNAUTHORIZED)
-  assert.equal(classify(null, { message: 'Failed to fetch' }), RESULT.NETWORK)
-  assert.equal(classify({ ok: true }), RESULT.OK)
+// ── Normalizador único (§4) — ENVELOPES REALES ───────────────────────────────
+test('normalizeSupervisorV2Response: envelope de servicio real {status,code,data}', () => {
+  assert.equal(normalizeSupervisorV2Response({ status: 'ok', code: 'OK', data: { stops: [] } }).phase, PHASE.OK)
+  assert.equal(normalizeSupervisorV2Response({ status: 'error', code: 'DATE_NOT_ALLOWED', user_message: 'x' }).phase, PHASE.DATE_NOT_ALLOWED)
+  assert.equal(normalizeSupervisorV2Response({ status: 'error', code: 'FORBIDDEN' }).phase, PHASE.UNAUTHORIZED)
+  assert.equal(normalizeSupervisorV2Response({ status: 'error', code: 'FEATURE_DISABLED' }).phase, PHASE.FEATURE_DISABLED)
+  assert.equal(normalizeSupervisorV2Response({ status: 'busy', code: 'LOCKED' }).phase, PHASE.CONFLICT)
+  assert.equal(normalizeSupervisorV2Response({ status: 'error', code: 'CONFLICT' }).phase, PHASE.CONFLICT)
 })
-test('loadRouteStops: malformed ≠ empty; ok:false clasificado; empty real', async () => {
-  const bad = await loadRouteStops(5101, { fetch: async () => ({ nope: 1 }) })
-  assert.equal(bad.result, RESULT.INVALID)
-  const notList = await loadRouteStops(5101, { fetch: async () => ({ data: { stops: 'x' } }) })
-  assert.equal(notList.result, RESULT.INVALID)
-  const partial = await loadRouteStops(5101, { fetch: async () => ({ data: { stops: [{ stop_id: 1 }, { junk: 1 }] } }) })
-  assert.equal(partial.result, RESULT.INVALID) // alguna malformada ⇒ invalid, no vacío
-  const empty = await loadRouteStops(5101, { fetch: async () => ({ data: { stops: [] } }) })
-  assert.equal(empty.result, RESULT.EMPTY)
-  const ok = await loadRouteStops(5101, { fetch: async () => ({ data: { stops: [{ stop_id: 1 }] } }) })
-  assert.equal(ok.result, RESULT.OK)
-  const denied = await loadRouteStops(5101, { fetch: async () => ({ ok: false, code: 'FORBIDDEN' }) })
-  assert.equal(denied.result, RESULT.UNAUTHORIZED)
+test('normalizeSupervisorV2Response: payload crudo day-control {ok:true|false}', () => {
+  assert.equal(normalizeSupervisorV2Response({ ok: true, contract: 'x', generated_at: '2026-01-15 15:05:00' }).phase, PHASE.OK)
+  assert.equal(normalizeSupervisorV2Response({ ok: false, code: 'DATE_NOT_ALLOWED' }).phase, PHASE.DATE_NOT_ALLOWED)
+})
+test('normalizeSupervisorV2Response: throw y forma inesperada', () => {
+  const e = new Error('nope'); e.code = 'DATE_NOT_ALLOWED'
+  assert.equal(normalizeSupervisorV2Response(null, e).phase, PHASE.DATE_NOT_ALLOWED)
+  assert.equal(normalizeSupervisorV2Response(null, { message: 'Failed to fetch' }).phase, PHASE.NETWORK)
+  assert.equal(normalizeSupervisorV2Response({ weird: 1 }).phase, PHASE.MALFORMED)
+})
+test('loadRouteStops: envelope real ⇒ malformed ≠ empty; empty real; denied', async () => {
+  const svcOk = (stops) => ({ status: 'ok', code: 'OK', data: { stops, data_as_of: '2026-01-15T15:05:00Z' } })
+  const okR = await loadRouteStops(5101, { fetch: async () => svcOk([{ stop_id: 1 }]) })
+  assert.equal(okR.phase, PHASE.OK)
+  assert.equal(okR.dataAsOf, '2026-01-15T15:05:00Z')
+  const empty = await loadRouteStops(5101, { fetch: async () => svcOk([]) })
+  assert.equal(empty.phase, PHASE.EMPTY)
+  const notList = await loadRouteStops(5101, { fetch: async () => svcOk('x') })
+  assert.equal(notList.phase, PHASE.MALFORMED)
+  const partial = await loadRouteStops(5101, { fetch: async () => svcOk([{ stop_id: 1 }, { junk: 1 }]) })
+  assert.equal(partial.phase, PHASE.MALFORMED) // alguna malformada ⇒ NO vacío
+  assert.equal(partial.partial, true)
+  assert.equal(partial.stops.length, 1) // conserva la válida
+  const denied = await loadRouteStops(5101, { fetch: async () => ({ status: 'error', code: 'FORBIDDEN' }) })
+  assert.equal(denied.phase, PHASE.UNAUTHORIZED)
   const badId = await loadRouteStops(0)
-  assert.equal(badId.result, RESULT.INVALID)
+  assert.equal(badId.phase, PHASE.VALIDATION)
 })
-test('loadOperationalDay: DATE_NOT_ALLOWED se clasifica (no falso vacío)', async () => {
+test('loadOperationalDay: DATE_NOT_ALLOWED es fase propia (no falso vacío)', async () => {
   const r = await loadOperationalDay({
-    fetchDayControl: async () => { const e = new Error('nope'); e.code = 'DATE_NOT_ALLOWED'; throw e },
+    fetchDayControl: async () => ({ ok: false, code: 'DATE_NOT_ALLOWED' }),
     fetchRadar: async () => null,
   })
   assert.equal(r.ok, false)
-  assert.equal(r.result, RESULT.DATE_NOT_ALLOWED)
+  assert.equal(r.phase, PHASE.DATE_NOT_ALLOWED)
+})
+test('routeStopsCacheKey incluye fecha+sucursal+plan+generated_at', () => {
+  const k = routeStopsCacheKey({ dayControl: { date: '2026-01-15', branch: { branch_config_id: 2001 }, generated_at: 'g1' }, planId: 5101 })
+  assert.match(k, /2026-01-15/); assert.match(k, /2001/); assert.match(k, /5101/); assert.match(k, /g1/)
 })
 test('sourceVersion incluye fecha+sucursal+generated_at', () => {
   const v = sourceVersion({ date: '2026-01-15', branch: { branch_config_id: 2001 }, generated_at: '2026-01-15 15:05:00' })

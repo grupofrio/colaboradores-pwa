@@ -9,13 +9,13 @@
 //   · en DEMO (dev/preview) las paradas vienen del módulo virtual sintético;
 //   · 0 paradas ⇒ estado honesto (vacío o "no se pudo cargar"), nunca una lista
 //     fantasma.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StateScreen from '../../../../components/kold/StateScreen'
 import DayStateGate from '../dayStateGate'
 import ClientesView from '../clientes/ClientesView'
 import { useOperationalDay } from '../useOperationalDay'
-import { loadRouteStops } from '../dataSources'
+import { loadRouteStops, sourceVersion, PHASE } from '../dataSources'
 import { segmentCustomers } from '../presentation.js'
 
 const DEMO = (() => { try { return import.meta.env?.DEV === true } catch { return false } })()
@@ -43,19 +43,23 @@ async function loadDemoStops() {
   }
 }
 
-// LIVE: una petición route-stops por plan; carga parcial tolerada. loadRouteStops
-// ya captura sus errores (resuelve {ok:false}); contamos como fallo todo lo que
-// no sea {ok:true}.
+// LIVE: una petición route-stops por plan; carga parcial tolerada. Se cuenta como
+// FALLIDA solo una ruta realmente fallida (§5): phase OK/EMPTY = éxito; una ruta
+// parcial (malformed con algunas válidas) conserva sus válidas y cuenta como fallo
+// declarado; cualquier otra fase (unauthorized/network/…) cuenta como fallo.
 async function loadLiveStops(planIds) {
   if (planIds.length === 0) return { stops: [], failures: 0 }
   const results = await Promise.allSettled(planIds.map((id) => loadRouteStops(id)))
   const stops = []
   let failures = 0
   for (const res of results) {
-    if (res.status === 'fulfilled' && res.value?.ok) {
-      for (const st of res.value.stops || []) stops.push(st)
+    const v = res.status === 'fulfilled' ? res.value : null
+    if (v && (v.phase === PHASE.OK || v.phase === PHASE.EMPTY)) {
+      for (const st of v.stops || []) stops.push(st)
     } else {
       failures += 1
+      // partial: conserva las paradas válidas que sí llegaron.
+      if (v && v.partial) for (const st of v.stops || []) stops.push(st)
     }
   }
   return { stops, failures }
@@ -66,26 +70,28 @@ export default function ClientesTab() {
   const day = useOperationalDay({ demoEnabled: DEMO })
   const [activeSegment, setActiveSegment] = useState('pendientes')
   const [stopsState, setStopsState] = useState({ status: 'idle', stops: [], failures: 0 })
+  const reqIdRef = useRef(0)
 
   const dayStatus = day.status
   const daySource = day.source
   const dayControl = day.dayControl
+  const dayVersion = sourceVersion(dayControl)
 
   useEffect(() => {
-    let cancelled = false
-    // Solo cargamos paradas cuando el día está live/demo. En loading/error/
-    // date_not_allowed NO se piden paradas (evita falso vacío y respeta la fecha).
+    // §6: re-carga al cambiar día/source/versión de fuente; request-id monotónico
+    // ⇒ una respuesta vieja NUNCA pisa la nueva; cambio de scope/fecha limpia.
     if (dayStatus !== 'live' && dayStatus !== 'demo') { setStopsState({ status: dayStatus === 'loading' ? 'loading' : 'idle', stops: [], failures: 0 }); return undefined }
-
-    setStopsState((s) => ({ ...s, status: 'loading' }))
+    const myId = ++reqIdRef.current
+    setStopsState((s) => ({ ...s, status: 'loading', stops: [], failures: 0 }))
     ;(async () => {
       const out = daySource === 'demo'
         ? await loadDemoStops()
         : await loadLiveStops(planIdsOf(dayControl))
-      if (!cancelled) setStopsState({ status: 'ready', stops: out.stops, failures: out.failures })
+      if (myId !== reqIdRef.current) return // respuesta obsoleta ⇒ ignorar
+      setStopsState({ status: 'ready', stops: out.stops, failures: out.failures })
     })()
-    return () => { cancelled = true }
-  }, [dayStatus, daySource, dayControl])
+    return () => { reqIdRef.current += 1 } // unmount/cambio ⇒ invalida en curso
+  }, [dayStatus, daySource, dayControl, dayVersion])
 
   const segments = useMemo(() => segmentCustomers(stopsState.stops), [stopsState.stops])
   const counts = useMemo(

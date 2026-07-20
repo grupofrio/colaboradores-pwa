@@ -1,10 +1,6 @@
 // Cobertura SSR de la vista PURA MasView (Supervisor V2 · superficie "Más").
-// Renderiza el .jsx REAL con el harness esbuild (sin jsdom) y verifica:
-//   1) el contenedor con su testid;
-//   2) los 5 grupos de accesos secundarios (Planeación, Desempeño, Coaching,
-//      Clientes, Administración);
-//   3) los 10 tiles con su label y su ruta legacy (data-route), sin placeholders;
-//   4) onNavigate es opcional / puede pasarse como no-op sin romper el render.
+// Post-RED (Codex §2/§3): Tareas/Notas/Nota rápida (endpoints legacy inseguros)
+// y Bajas (backend no auditado) fueron RETIRADAS de Más V2 ⇒ NO deben aparecer.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
@@ -20,28 +16,33 @@ const EXPECTED_TILES = [
   { label: 'Metas', route: '/equipo/metas' },
   { label: 'Score', route: '/equipo/score-semanal' },
   { label: 'Dashboard', route: '/equipo/dashboard' },
-  { label: 'Tareas', route: '/equipo/tareas' },
-  { label: 'Notas', route: '/equipo/notas' },
-  { label: 'Nota rápida', route: '/equipo/nota-rapida' },
   { label: 'Recuperación', route: '/equipo/recuperacion' },
-  { label: 'Bajas', route: '/equipo/bajas' },
 ]
 
-const GROUPS = ['Planeación', 'Desempeño', 'Coaching', 'Clientes', 'Administración']
+const GROUPS = ['Planeación', 'Desempeño', 'Clientes']
+// Excluidas de V2 (§2/§3): no deben enlazarse desde Más.
+const EXCLUDED_ROUTES = ['/equipo/tareas', '/equipo/notas', '/equipo/nota-rapida', '/equipo/bajas']
 
 test('MasView: contenedor con testid supervisor-v2-mas', () => {
   const html = render({ onNavigate: () => {} })
   assert.match(html, /data-testid="supervisor-v2-mas"/)
 })
 
-test('MasView: renderiza los 5 grupos de accesos secundarios', () => {
+test('MasView: renderiza los grupos vigentes (sin Coaching/Administración)', () => {
   const html = render({ onNavigate: () => {} })
   for (const group of GROUPS) {
     assert.ok(html.includes(group), `falta el grupo "${group}"`)
   }
-  // Exactamente 5 secciones de grupo (ninguna vacía se renderiza).
+  assert.ok(!html.includes('Coaching'), 'Coaching NO debe aparecer')
   const groupSections = html.match(/data-testid="supervisor-v2-mas-group"/g) || []
   assert.equal(groupSections.length, GROUPS.length)
+})
+
+test('MasView: Tareas/Notas/Nota rápida/Bajas NO se enlazan (§2/§3)', () => {
+  const html = render({ onNavigate: () => {} })
+  for (const route of EXCLUDED_ROUTES) {
+    assert.ok(!html.includes(`data-route="${route}"`), `${route} NO debe enlazarse desde V2`)
+  }
 })
 
 test('MasView: cada tile expone su label y su ruta legacy', () => {
@@ -52,7 +53,7 @@ test('MasView: cada tile expone su label y su ruta legacy', () => {
   }
 })
 
-test('MasView: exactamente 10 tiles, sin placeholders sin fuente', () => {
+test('MasView: solo los tiles vigentes, sin placeholders sin fuente', () => {
   const html = render({ onNavigate: () => {} })
   const tiles = html.match(/data-testid="supervisor-v2-mas-tile"/g) || []
   assert.equal(tiles.length, EXPECTED_TILES.length)

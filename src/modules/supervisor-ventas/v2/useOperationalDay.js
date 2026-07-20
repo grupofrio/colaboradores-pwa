@@ -4,7 +4,9 @@
 // Refresh manual invalida la caché. Demo (fixtures sintéticos) gated a dev.
 // El hook es SOLO runtime; las vistas puras se testean con props directas.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { loadOperationalDay, usable } from './dataSources'
+import { loadOperationalDay, PHASE } from './dataSources'
+
+const _usable = (p) => !!p && typeof p === 'object' && p.ok !== false
 
 const CACHE_TTL_MS = 45000
 let _cache = null // { key, at, promise }
@@ -18,8 +20,8 @@ async function demoLoad() {
     const mod = await import('virtual:supervisor-v2-demo')
     if (mod?.demoAvailable && typeof mod.loadSupervisorV2Demo === 'function') {
       const demo = await mod.loadSupervisorV2Demo()
-      if (demo && usable(demo.dayControl)) {
-        return { ok: true, dayControl: demo.dayControl, radar: usable(demo.radar) ? demo.radar : null, radarError: null, error: null, source: 'demo', provenance: demo.provenance || null }
+      if (demo && _usable(demo.dayControl)) {
+        return { ok: true, dayControl: demo.dayControl, radar: _usable(demo.radar) ? demo.radar : null, radarError: null, error: null, source: 'demo', provenance: demo.provenance || null }
       }
     }
   } catch { /* stub en prod ⇒ sin demo */ }
@@ -45,7 +47,7 @@ export function useOperationalDay({ date = null, demoEnabled = false } = {}) {
       const live = await loadOperationalDay({ date })
       if (live.ok) return { ...live, status: 'live', source: 'live', provenance: null }
       // DATE_NOT_ALLOWED es estado PROPIO: no cae a demo ni a fecha anterior.
-      if (live.result === 'date_not_allowed') {
+      if (live.phase === PHASE.DATE_NOT_ALLOWED) {
         return { ...live, status: 'date_not_allowed', source: null, provenance: null }
       }
       if (demoEnabled) {
