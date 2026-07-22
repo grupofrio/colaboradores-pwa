@@ -141,19 +141,20 @@ export default function ScreenTicket() {
     return `<!doctype html><html><head><meta charset="utf-8">
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      /* Sólo margin:0 (sin 'size': el largo lo limita el papel Ticket72 del
-         driver, que es lo que ya funciona). Definir 'size' reintroducía la tira
-         gigante con algunas medidas. */
+      /* Sólo margin:0 (sin 'size': el largo lo limita el papel del driver). */
       @page { margin: 0; }
-      html, body { width: 72mm; background: #fff; color: #000; font-family: 'Segoe UI', Arial, sans-serif; }
+      /* Lienzo a 80mm = ancho FÍSICO real del papel (la etiqueta dice 80mm).
+         El área imprimible es ~72mm y arranca con un margen físico a la
+         IZQUIERDA, por eso el contenido se cortaba de ese lado. Al usar el ancho
+         físico completo (80mm) y centrar el contenido, éste cae dentro de la
+         zona imprimible sin cortarse.
+         IMPORTANTE: el form de papel del driver debe tener ANCHO 80mm (no 72mm)
+         para que el printer use este mismo espacio de 80mm. */
+      html, body { width: 80mm; background: #fff; color: #000; font-family: 'Segoe UI', Arial, sans-serif; }
       .ticket > :first-child { margin-top: 0 !important; }
-      /* El área imprimible real del driver es menor que los 72mm del papel y
-         reserva un margen físico a los lados: si el contenido usa los 72mm
-         completos, se corta a la izquierda y a la derecha. El contenido usa
-         68mm CENTRADO (margin auto) — deja ~2mm de aire a cada lado, dentro del
-         área imprimible, aprovechando casi todo el ancho sin cortarse.
-         El tamaño de papel del driver debe ser "Ticket72" (limita el largo). */
-      .ticket { width: 68mm; margin: 0 auto; padding: 1.5mm 1mm; }
+      /* Contenido a 70mm CENTRADO en los 80mm → ~5mm de aire a cada lado,
+         holgadamente dentro del área imprimible de 72mm. */
+      .ticket { width: 70mm; margin: 0 auto; padding: 1.5mm 1mm; }
       .center { text-align: center; }
       .brand { font-size: 15px; font-weight: 700; margin-top: 4px; }
       .sub { font-size: 10px; color: #444; }
