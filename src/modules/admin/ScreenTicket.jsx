@@ -106,7 +106,7 @@ export default function ScreenTicket() {
   }
 
   return (
-    <div style={{
+    <div id="ticket-root" style={{
       minHeight: '100dvh',
       background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)',
@@ -117,14 +117,33 @@ export default function ScreenTicket() {
         button { border: none; background: none; cursor: pointer; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @media print {
+          /* Hoja de rollo térmico: 80mm de ancho, alto = lo que mida el ticket.
+             Área imprimible real ~72mm; el ticket se limita a 72mm para no
+             cortarse a la derecha. Sin @page el navegador usaba una hoja larga
+             fija (80x210) y generaba tiras/páginas en blanco repetidas. */
+          @page { size: 72mm auto; margin: 0; }
+          html, body {
+            width: 72mm !important; height: auto !important;
+            margin: 0 !important; padding: 0 !important;
+            background: white !important;
+          }
+          /* Colapsa los contenedores de pantalla: sin 100dvh ni gradiente,
+             que eran los que empujaban páginas en blanco enormes y repetidas. */
+          #ticket-root, #ticket-wrap {
+            min-height: 0 !important; height: auto !important;
+            background: white !important; padding: 0 !important; margin: 0 !important;
+            max-width: none !important; display: block !important;
+          }
+          /* Oculta TODO por defecto y sólo muestra el ticket, sacándolo del
+             layout de pantalla que causaba páginas extra. */
           body * { visibility: hidden !important; }
           #ticket-card, #ticket-card * { visibility: visible !important; }
           #ticket-card {
             position: absolute !important; left: 0 !important; top: 0 !important;
-            width: 80mm !important; max-width: 80mm !important;
+            width: 72mm !important; max-width: 72mm !important;
             background: white !important; color: black !important;
             box-shadow: none !important; border: none !important;
-            border-radius: 0 !important; padding: 4mm !important;
+            border-radius: 0 !important; padding: 2mm !important;
             margin: 0 !important;
           }
           #ticket-card * { color: black !important; background: transparent !important; }
@@ -132,7 +151,7 @@ export default function ScreenTicket() {
         }
       `}</style>
 
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
+      <div id="ticket-wrap" style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
           <button onClick={() => navigate('/admin/pos')} style={{
