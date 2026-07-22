@@ -142,7 +142,14 @@ export default function ScreenTicket() {
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       html, body { width: 72mm; background: #fff; color: #000; font-family: 'Segoe UI', Arial, sans-serif; }
-      .ticket { width: 72mm; padding: 3mm 3mm 4mm; }
+      /* Ancho 72mm: sale centrado y hasta los bordes con el papel del driver
+         "80(72) x 3276mm". Padding lateral pequeño para respirar. La única
+         corrección que hace el código es el ALTO (ver printTicket): mide el
+         ticket e inyecta @page con la altura exacta para no imprimir la tira
+         gigante que trae ese papel (3276mm). El tamaño de papel debe quedar
+         en el driver como "80(72) x 3276mm" (NO un formato personalizado, que
+         descuadra el ancho). */
+      .ticket { width: 72mm; padding: 2mm 3mm; }
       .center { text-align: center; }
       .brand { font-size: 15px; font-weight: 700; margin-top: 4px; }
       .sub { font-size: 10px; color: #444; }
@@ -215,7 +222,7 @@ export default function ScreenTicket() {
         // y no la tira gigante que el driver usaba con "auto".
         const el = doc.querySelector('.ticket')
         const px = el ? el.getBoundingClientRect().height : 0
-        const heightMm = Math.max(40, Math.ceil(px / 96 * 25.4) + 4) // px→mm (@96dpi) + 4mm
+        const heightMm = Math.max(40, Math.ceil(px / 96 * 25.4) + 2) // px→mm (@96dpi) + 2mm gracia
         const style = doc.createElement('style')
         style.textContent = `@page { size: 72mm ${heightMm}mm; margin: 0; }`
         doc.head.appendChild(style)
