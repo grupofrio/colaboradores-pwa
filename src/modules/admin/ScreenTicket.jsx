@@ -141,14 +141,14 @@ export default function ScreenTicket() {
     return `<!doctype html><html><head><meta charset="utf-8">
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { margin: 0; }
       html, body { width: 72mm; background: #fff; color: #000; font-family: 'Segoe UI', Arial, sans-serif; }
-      /* Ancho 72mm: sale centrado y hasta los bordes con el papel del driver
-         "80(72) x 3276mm". Padding lateral pequeño para respirar. La única
-         corrección que hace el código es el ALTO (ver printTicket): mide el
-         ticket e inyecta @page con la altura exacta para no imprimir la tira
-         gigante que trae ese papel (3276mm). El tamaño de papel debe quedar
-         en el driver como "80(72) x 3276mm" (NO un formato personalizado, que
-         descuadra el ancho). */
+      .ticket > :first-child { margin-top: 0 !important; }
+      /* Ancho 72mm: sale centrado y hasta los bordes con el papel de la familia
+         80(72) del driver. NO inyectamos @page height: el tamaño de la hoja lo
+         controla el papel del driver (recomendado: "80(72) x 210mm"). La
+         inyección dinámica de altura causaba resultados impredecibles (tira
+         gigante o, al revés, hoja vacía cortada antes de imprimir). */
       .ticket { width: 72mm; padding: 2mm 3mm; }
       .center { text-align: center; }
       .brand { font-size: 15px; font-weight: 700; margin-top: 4px; }
@@ -215,27 +215,19 @@ export default function ScreenTicket() {
     doc.write(buildTicketHtml())
     doc.close()
 
+    // Sólo imprime. El tamaño de la hoja lo controla el papel del driver
+    // (80(72) x 210mm). NO se inyecta @page height: medir e inyectar la altura
+    // provocaba resultados impredecibles con este driver POS-80 — a veces tira
+    // gigante en blanco, a veces una hoja minúscula cortada antes de imprimir.
     const doPrint = () => {
-      try {
-        // Mide el alto REAL del ticket renderizado e inyecta @page con esa altura
-        // exacta (+ pequeño margen para el corte). Así la hoja mide justo el ticket
-        // y no la tira gigante que el driver usaba con "auto".
-        const el = doc.querySelector('.ticket')
-        const px = el ? el.getBoundingClientRect().height : 0
-        const heightMm = Math.max(40, Math.ceil(px / 96 * 25.4) + 2) // px→mm (@96dpi) + 2mm gracia
-        const style = doc.createElement('style')
-        style.textContent = `@page { size: 72mm ${heightMm}mm; margin: 0; }`
-        doc.head.appendChild(style)
-      } catch { /* si algo falla, imprime igual con el alto por defecto */ }
       win.focus()
       win.print()
     }
 
-    // Espera a que el layout esté listo (fuentes/render) antes de medir e imprimir.
     if (doc.readyState === 'complete') {
-      setTimeout(doPrint, 60)
+      setTimeout(doPrint, 80)
     } else {
-      win.addEventListener('load', () => setTimeout(doPrint, 60))
+      win.addEventListener('load', () => setTimeout(doPrint, 80))
     }
   }
 
