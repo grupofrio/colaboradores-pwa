@@ -75,6 +75,19 @@ function wrap(text, width = LINE_WIDTH) {
 }
 
 const dashes = '-'.repeat(LINE_WIDTH)
+const doubleLine = '='.repeat(LINE_WIDTH)
+
+/** Recuadro centrado alrededor de un texto, con caracteres de caja ASCII. */
+function boxed(text, innerWidth = 22) {
+  const t = String(text ?? '')
+  const pad = Math.max(0, innerWidth - t.length)
+  const left = Math.floor(pad / 2)
+  const right = pad - left
+  const top = '+' + '-'.repeat(innerWidth + 2) + '+'
+  const mid = '|' + ' '.repeat(left + 1) + t + ' '.repeat(right + 1) + '|'
+  const bot = top
+  return [top, mid, bot]
+}
 
 /**
  * Construye el ticket como array de comandos ESC/POS.
@@ -96,13 +109,14 @@ export function buildEscPosTicket(t) {
   const out = []
   out.push(INIT)
 
-  // Encabezado
+  // Encabezado (el logo se antepone como imagen en printTicketViaQz)
   out.push(ALIGN_CENTER, SIZE_DOUBLE, BOLD_ON, 'GRUPO FRIO\n', BOLD_OFF, SIZE_NORMAL)
   out.push(sucursal + '\n')
+  out.push('\n')
   out.push(ALIGN_LEFT)
   out.push(lr(`Fecha: ${dateStr}`, `Hora: ${timeStr}`) + '\n')
   out.push(BOLD_ON, `Folio: ${folio}\n`, BOLD_OFF)
-  out.push(dashes + '\n')
+  out.push(doubleLine + '\n')
 
   // Productos
   for (const l of lines) {
@@ -119,14 +133,19 @@ export function buildEscPosTicket(t) {
   out.push(dashes + '\n')
   out.push(lr('Subtotal', fmt(subtotal)) + '\n')
   out.push(BOLD_ON, SIZE_DOUBLE, lr('TOTAL', fmt(total), LINE_WIDTH / 2) + '\n', SIZE_NORMAL, BOLD_OFF)
-  out.push(ALIGN_CENTER, `Metodo de pago: ${paymentLabel}\n`)
-  out.push('\n')
+  out.push(ALIGN_LEFT, lr('Metodo de pago:', paymentLabel) + '\n')
+  out.push(doubleLine + '\n')
 
-  // Folio destacado
-  out.push(BOLD_ON, SIZE_DOUBLE, folio + '\n', SIZE_NORMAL, BOLD_OFF)
+  // Folio destacado dentro de un recuadro
+  out.push(ALIGN_CENTER)
+  out.push('TICKET\n')
+  out.push(BOLD_ON)
+  for (const row of boxed(folio, 20)) out.push(row + '\n')
+  out.push(BOLD_OFF)
   out.push('\n')
   out.push('Presente este ticket en almacen\n')
   out.push('para recoger su producto\n')
+  out.push(dashes + '\n')
   out.push(BOLD_ON, 'Gracias por su compra\n', BOLD_OFF)
 
   // Avance final + corte de cuchilla
@@ -144,17 +163,30 @@ export function buildEscPosTicket(t) {
 export async function printTicketViaQz(ticketData, printerName) {
   await ensureConnection()
 
-  const config = qz.configs.create(
-    printerName || (await qz.printers.getDefault()),
-    { encoding: 'CP850', copies: 1 },
-  )
-  const data = buildEscPosTicket(ticketData).map((cmd) => ({
-    type: 'raw',
-    format: 'command',
-    flavor: 'plain',
-    data: cmd,
+  const printer = printerName || (await qz.printers.getDefault())
+  const config = qz.configs.create(printer, { encoding: 'CP850', copies: 1 })
+
+  const bodyData = buildEscPosTicket(ticketData).map((cmd) => ({
+    type: 'raw', format: 'command', flavor: 'plain', data: cmd,
   }))
-  await qz.print(config, data)
+
+  // Intento 1: con logo (isotipo en negro sólido) centrado arriba. Si el
+  // conversor de imagen de QZ falla con este equipo, reintenta SIN logo para
+  // no dejar al usuario sin ticket.
+  const logoUrl = `${window.location.origin}/icons/logo-grupo-frio-ticket.svg`
+  const withLogo = [
+    { type: 'raw', format: 'command', flavor: 'plain', data: INIT + ALIGN_CENTER },
+    { type: 'raw', format: 'image', flavor: 'file', data: logoUrl,
+      options: { language: 'escpos', dotDensity: 'double' } },
+    { type: 'raw', format: 'command', flavor: 'plain', data: '\n' },
+    ...bodyData,
+  ]
+
+  try {
+    await qz.print(config, withLogo)
+  } catch {
+    await qz.print(config, bodyData)
+  }
 }
 
 /** Lista de impresoras (para permitir elegir cuál). No lanza. */
