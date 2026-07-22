@@ -141,15 +141,19 @@ export default function ScreenTicket() {
     return `<!doctype html><html><head><meta charset="utf-8">
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      /* Sólo margin:0 (sin 'size': el largo lo limita el papel Ticket72 del
+         driver, que es lo que ya funciona). Definir 'size' reintroducía la tira
+         gigante con algunas medidas. */
       @page { margin: 0; }
       html, body { width: 72mm; background: #fff; color: #000; font-family: 'Segoe UI', Arial, sans-serif; }
       .ticket > :first-child { margin-top: 0 !important; }
-      /* Ancho 72mm: sale centrado y hasta los bordes con el papel de la familia
-         80(72) del driver. NO inyectamos @page height: el tamaño de la hoja lo
-         controla el papel del driver (recomendado: "80(72) x 210mm"). La
-         inyección dinámica de altura causaba resultados impredecibles (tira
-         gigante o, al revés, hoja vacía cortada antes de imprimir). */
-      .ticket { width: 72mm; padding: 2mm 3mm; }
+      /* El área imprimible real del driver es menor que los 72mm del papel y
+         reserva un margen físico a los lados: si el contenido usa los 72mm
+         completos, se corta a la izquierda y a la derecha. El contenido usa
+         68mm CENTRADO (margin auto) — deja ~2mm de aire a cada lado, dentro del
+         área imprimible, aprovechando casi todo el ancho sin cortarse.
+         El tamaño de papel del driver debe ser "Ticket72" (limita el largo). */
+      .ticket { width: 68mm; margin: 0 auto; padding: 1.5mm 1mm; }
       .center { text-align: center; }
       .brand { font-size: 15px; font-weight: 700; margin-top: 4px; }
       .sub { font-size: 10px; color: #444; }
