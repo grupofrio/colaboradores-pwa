@@ -75,9 +75,17 @@ export default function ScreenTicket() {
   const lines = order?.lines || order?.order_lines || []
   const { subtotal, total } = computePosSummary(lines)
 
-  const now = order?.date_order ? new Date(order.date_order) : new Date()
-  const dateStr = now.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' })
-  const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  // Odoo devuelve date_order en UTC sin sufijo (ej. "2026-07-22 17:15:00"). Si se
+  // parsea directo, el navegador lo toma como hora local y el ticket salía con
+  // desfase (+6h). Lo interpretamos como UTC (append 'Z') y lo mostramos SIEMPRE
+  // en hora de México, sin depender de la zona del equipo. Mismo patrón que
+  // AdminGastosForm / liquidacionesResponse.
+  const MX_TZ = 'America/Mexico_City'
+  const now = order?.date_order
+    ? new Date(String(order.date_order).replace(' ', 'T') + 'Z')
+    : new Date()
+  const dateStr = now.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: MX_TZ })
+  const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: MX_TZ })
   const folio = order?.name || `S${String(orderId).padStart(5, '0')}`
 
   // Mapping completo de métodos de pago (alineado con gf_pwa_admin.sale-create
@@ -117,36 +125,35 @@ export default function ScreenTicket() {
         button { border: none; background: none; cursor: pointer; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @media print {
-          /* Hoja de rollo térmico: 80mm de ancho, alto = lo que mida el ticket.
-             Área imprimible real ~72mm; el ticket se limita a 72mm para no
-             cortarse a la derecha. Sin @page el navegador usaba una hoja larga
-             fija (80x210) y generaba tiras/páginas en blanco repetidas. */
+          /* Hoja de rollo térmico: 72mm imprimibles, alto = lo que mida el ticket. */
           @page { size: 72mm auto; margin: 0; }
           html, body {
             width: 72mm !important; height: auto !important;
             margin: 0 !important; padding: 0 !important;
             background: white !important;
           }
-          /* Colapsa los contenedores de pantalla: sin 100dvh ni gradiente,
-             que eran los que empujaban páginas en blanco enormes y repetidas. */
-          #ticket-root, #ticket-wrap {
+          /* CAUSA RAÍZ de la tira larga en blanco:
+             El panel admin (#admin-theme-scope) y los wrappers tienen
+             min-height:100dvh, que empujaba una página GIGANTE con el ticket al
+             fondo (metros de papel en blanco antes del contenido). Colapsamos la
+             altura de TODOS los ancestros a auto para que la hoja mida sólo el
+             ticket. Conservamos el filter:invert del scope: en pantalla ya deja
+             el ticket con colores correctos al imprimir (logo/texto oscuros). */
+          #admin-theme-scope, #ticket-root, #ticket-wrap {
             min-height: 0 !important; height: auto !important;
-            background: white !important; padding: 0 !important; margin: 0 !important;
             max-width: none !important; display: block !important;
+            padding: 0 !important; margin: 0 !important;
           }
-          /* Oculta TODO por defecto y sólo muestra el ticket, sacándolo del
-             layout de pantalla que causaba páginas extra. */
+          /* Oculta todo y saca el ticket del flujo para que no herede layout. */
           body * { visibility: hidden !important; }
           #ticket-card, #ticket-card * { visibility: visible !important; }
           #ticket-card {
             position: absolute !important; left: 0 !important; top: 0 !important;
             width: 72mm !important; max-width: 72mm !important;
-            background: white !important; color: black !important;
             box-shadow: none !important; border: none !important;
             border-radius: 0 !important; padding: 2mm !important;
             margin: 0 !important;
           }
-          #ticket-card * { color: black !important; background: transparent !important; }
           #ticket-actions { display: none !important; }
         }
       `}</style>
