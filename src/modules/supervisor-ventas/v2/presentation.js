@@ -21,10 +21,14 @@ export {
 }
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
-/** Métrica honesta: value numérico o null; available=false ⇒ "Sin dato". */
-const metric = (v) => {
+/** Métrica honesta (Codex §11): value numérico o null; available=false ⇒
+ *  "Sin dato". Lleva `source` y `dataAsOf` para que la UI cite su procedencia y
+ *  frescura (nunca un 0 fabricado sin fuente). */
+const metric = (v, source = null, dataAsOf = null) => {
   const n = num(v)
-  return n === null ? { value: null, available: false } : { value: n, available: true }
+  return n === null
+    ? { value: null, available: false, source, dataAsOf }
+    : { value: n, available: true, source, dataAsOf }
 }
 
 // ── Frescura global de la carga ──────────────────────────────────────────────
@@ -51,6 +55,9 @@ export function deriveSituation(dayControl) {
   const s = dayControl?.summary || {}
   const routes = Array.isArray(dayControl?.routes) ? dayControl.routes : []
   const close = s.close || {}
+  const asOf = dayControl?.generated_at || null
+  const SRC_SUM = 'day_control.summary'
+  const SRC_CLOSE = 'day_control.summary.close'
 
   // activas = con salida registrada y cierre aún abierto (en calle).
   let activas = 0
@@ -65,36 +72,46 @@ export function deriveSituation(dayControl) {
     const sig = safeSignalStatus(r?.position || {})
     if (r?.position == null || sig === 'no_signal' || sig === 'invalid') sinSenal += 1
   }
-  // §11: el bloque `close` puede faltar ⇒ conteo NO disponible (no "0"). Solo si
-  // el objeto close existe con al menos una etapa numérica se computa el total.
-  const closeStages = ['open', 'closed', 'corte_done', 'liquidated', 'validated']
-  const closeAvailable = !!s.close && typeof s.close === 'object' && closeStages.some((k) => num(close[k]) !== null)
-  const sumStages = (keys) => keys.reduce((acc, k) => acc + (num(close[k]) || 0), 0)
+  // §11: el bloque `close` puede faltar ⇒ conteo NO disponible (no "0"). Suma
+  // HONESTA: solo se totaliza sobre etapas presentes; si falta alguna requerida
+  // la suma es PARCIAL (partial=true + `missing`), NUNCA se coacciona null a 0
+  // (antes: `num(close[k]) || 0`, que fabricaba una suma "completa" falsa).
+  const sumStagesHonest = (keys) => {
+    const present = keys.filter((k) => num(close[k]) !== null)
+    const missing = keys.filter((k) => num(close[k]) === null)
+    if (present.length === 0) {
+      return { value: null, available: false, partial: false, missing, source: SRC_CLOSE, dataAsOf: asOf }
+    }
+    const knownSum = present.reduce((acc, k) => acc + num(close[k]), 0)
+    return { value: knownSum, available: true, partial: missing.length > 0, missing, source: SRC_CLOSE, dataAsOf: asOf }
+  }
   // "cerradas" = etapas de cierre != open (closed/corte_done/liquidated/validated).
-  const cerradas = sumStages(['closed', 'corte_done', 'liquidated', 'validated'])
+  const cerradas = sumStagesHonest(['closed', 'corte_done', 'liquidated', 'validated'])
   // cierres pendientes = cerradas pero sin validar (closed+corte_done+liquidated).
-  const cierresPendientes = sumStages(['closed', 'corte_done', 'liquidated'])
-  // cargas pendientes = refill + inicial (nullable ⇒ honesto).
+  const cierresPendientes = sumStagesHonest(['closed', 'corte_done', 'liquidated'])
+  // cargas pendientes = refill + inicial. Si AMBAS faltan ⇒ no disponible; si solo
+  // una falta ⇒ suma parcial declarada (no se coacciona a 0 la faltante).
   const refill = num(s.pending_refill_acceptance)
   const inicial = num(s.pending_initial_acceptance)
+  const cargasMissing = [refill === null ? 'refill' : null, inicial === null ? 'inicial' : null].filter(Boolean)
   const cargasPendientes = refill === null && inicial === null
-    ? { value: null, available: false }
-    : { value: (refill || 0) + (inicial || 0), available: true }
+    ? { value: null, available: false, partial: false, missing: cargasMissing, source: SRC_SUM, dataAsOf: asOf }
+    : { value: (refill || 0) + (inicial || 0), available: true, partial: cargasMissing.length > 0, missing: cargasMissing, source: SRC_SUM, dataAsOf: asOf }
 
   return {
-    planeadas: metric(s.routes_total),
-    salieron: metric(s.departed),
-    tarde: metric(s.departed_late),
-    sinSalir: metric(s.not_departed),
-    sinDatoSalida: metric(s.departure_unknown),
-    activas: { value: activas, available: routes.length > 0 },
+    planeadas: metric(s.routes_total, SRC_SUM, asOf),
+    salieron: metric(s.departed, SRC_SUM, asOf),
+    tarde: metric(s.departed_late, SRC_SUM, asOf),
+    sinSalir: metric(s.not_departed, SRC_SUM, asOf),
+    sinDatoSalida: metric(s.departure_unknown, SRC_SUM, asOf),
+    activas: { value: activas, available: routes.length > 0, source: 'day_control.routes', dataAsOf: asOf },
     // "regresando" no tiene señal canónica en day_control/1 ⇒ no se inventa.
-    regresando: { value: null, available: regresandoAvailable },
-    cerradas: { value: closeAvailable ? cerradas : null, available: closeAvailable },
-    conIncidencia: { value: conIncidencia, available: routes.length > 0 },
-    sinSenal: { value: sinSenal, available: routes.length > 0 },
+    regresando: { value: null, available: regresandoAvailable, source: null, dataAsOf: asOf },
+    cerradas,
+    conIncidencia: { value: conIncidencia, available: routes.length > 0, source: 'day_control.routes', dataAsOf: asOf },
+    sinSenal: { value: sinSenal, available: routes.length > 0, source: 'day_control.routes', dataAsOf: asOf },
     cargasPendientes,
-    cierresPendientes: { value: closeAvailable ? cierresPendientes : null, available: closeAvailable },
+    cierresPendientes,
   }
 }
 

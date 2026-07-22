@@ -7,16 +7,22 @@
 // Regla anti-placeholder: un tile sin `route` (sin fuente real) NO se renderiza;
 // por eso el render filtra por `route`. Hoy TODAS las rutas existen (legacy).
 //
-// EXCLUSIONES de Supervisor V2 (Codex §2/§3), NO enlazadas aquí:
-//  · Tareas / Notas / Nota rápida: sus endpoints legacy (/pwa-supv/tasks|notes)
-//    son api_key+sudo SIN rol/scope. Existen endpoints V2 protegidos, pero las
-//    PANTALLAS legacy aún no están migradas ⇒ no se enlazan desde V2 (quedan
-//    accesibles solo con la experiencia legacy, flag V2 OFF). Con V2 ON, un deep
-//    link a esas rutas cae en V2ExcludedRoute (pantalla "no disponible", sin
-//    fetch legacy).
-//  · Bajas: su backend NO está localizado/auditado en estos repos ⇒ no se enlaza
-//    ni se monta desde V2 (misma protección de deep link).
-// Follow-up (fuera de alcance): fusión Notas+Nota rápida y desglose de Pronóstico.
+// EXCLUSIONES de Supervisor V2, NO enlazadas aquí:
+//  · Tareas / Notas / Nota rápida (Codex §2/§3): endpoints legacy api_key+sudo
+//    sin rol/scope; pantallas no migradas.
+//  · Bajas (§3): backend no localizado/auditado en estos repos.
+//  · Planeación — Pronóstico y Agregar cliente (Codex §1/§3/§4, esta ronda):
+//    sus PANTALLAS legacy están PARCIALMENTE migradas — "Pronóstico" mezcla
+//    forecast/upsert|confirm (legacy, guard _guard_and_cfg NO token-only) con
+//    forecast/update_lines (seguro); "Agregar cliente" usa route_plan/ensure y
+//    customers/search legacy (scope company). El backend endureció
+//    route_plan/active y route_plan/add_customer (token-only + canonical
+//    effective_branch_config_id), pero como las pantallas dependen de más
+//    endpoints legacy no migrados, se aplica "capacidad menor pero segura":
+//    NO se enlazan desde V2. Quedan accesibles solo con la experiencia legacy
+//    (flag V2 OFF); con V2 ON, un deep link cae en V2ExcludedRoute.
+// Todas estas rutas están protegidas por V2ExcludedRoute en App.jsx (deep-link
+// seguro: V2 ON ⇒ "no disponible" sin fetch; V2 OFF ⇒ pantalla legacy).
 import { TOKENS } from '../../../../tokens'
 
 const C = TOKENS.colors
@@ -24,13 +30,6 @@ const C = TOKENS.colors
 // Accesos SECUNDARIOS agrupados por intención. `route` es obligatorio (fuente
 // real); sin él, el tile se considera placeholder y se omite en el render.
 const GROUPS = [
-  {
-    title: 'Planeación',
-    tiles: [
-      { label: 'Pronóstico', desc: 'Proyección de venta del equipo', route: '/equipo/pronostico' },
-      { label: 'Agregar cliente', desc: 'Alta de cliente en el plan', route: '/equipo/planes/clientes' },
-    ],
-  },
   {
     title: 'Desempeño',
     tiles: [

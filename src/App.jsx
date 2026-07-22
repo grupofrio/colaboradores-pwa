@@ -696,8 +696,8 @@ export default function App() {
             <Route path="/equipo/score-semanal" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenScoreSemanal /></ModuleRoleRoute>} />
             <Route path="/equipo/cierre" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenCierreOperativo /></ModuleRoleRoute>} />
             <Route path="/equipo/dashboard" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDashboardVentas /></ModuleRoleRoute>} />
-            <Route path="/equipo/pronostico" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPronostico /></ModuleRoleRoute>} />
-            <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPlanDiarioClientes /></ModuleRoleRoute>} />
+            <Route path="/equipo/pronostico" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenPronostico />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenPlanDiarioClientes />} /></ModuleRoleRoute>} />
             <Route path="/equipo/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="clientes" legacy={<ScreenClientesSupervisor />}><ClientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/metas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenMetasVendedores /></ModuleRoleRoute>} />
             <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenTareasSupervisor />} /></ModuleRoleRoute>} />
