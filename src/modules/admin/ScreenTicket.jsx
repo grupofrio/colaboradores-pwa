@@ -135,12 +135,14 @@ export default function ScreenTicket() {
       </div>`
     }).join('')
 
+    // OJO: sin @page aquí. La altura exacta se inyecta en printTicket() tras medir
+    // el contenido, porque "size: 72mm auto" hacía que el driver usara su alto por
+    // defecto (3276mm) y salía una tira gigante en blanco.
     return `<!doctype html><html><head><meta charset="utf-8">
     <style>
-      @page { size: 72mm auto; margin: 0; }
       * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       html, body { width: 72mm; background: #fff; color: #000; font-family: 'Segoe UI', Arial, sans-serif; }
-      .ticket { width: 72mm; padding: 3mm 3mm 6mm; }
+      .ticket { width: 72mm; padding: 3mm 3mm 4mm; }
       .center { text-align: center; }
       .brand { font-size: 15px; font-weight: 700; margin-top: 4px; }
       .sub { font-size: 10px; color: #444; }
@@ -159,7 +161,7 @@ export default function ScreenTicket() {
       .box .f { font-size: 15px; font-weight: 700; }
       .foot { text-align: center; font-size: 9px; color: #444; line-height: 1.35; margin-top: 4px; }
       .foot.b { font-size: 10px; font-weight: 700; color: #000; margin-top: 4px; }
-    </style></head><body onload="window.focus();window.print();">
+    </style></head><body>
       <div class="ticket">
         <div class="center brand">GRUPO FRIO</div>
         <div class="center sub">${esc(session?.warehouse_name || 'Sucursal')}</div>
@@ -185,23 +187,49 @@ export default function ScreenTicket() {
     iframe.style.position = 'fixed'
     iframe.style.right = '0'
     iframe.style.bottom = '0'
-    iframe.style.width = '0'
-    iframe.style.height = '0'
+    // Ancho real (no 0) para que el contenido haga layout y podamos MEDIR su alto.
+    // Queda fuera de vista por el translate; no molesta al usuario.
+    iframe.style.width = '72mm'
+    iframe.style.height = '1px'
+    iframe.style.opacity = '0'
     iframe.style.border = '0'
+    iframe.style.transform = 'translateY(1000vh)'
     document.body.appendChild(iframe)
 
     const cleanup = () => {
-      // Deja tiempo a que el diálogo de impresión tome el contenido antes de quitar el iframe.
       setTimeout(() => { try { document.body.removeChild(iframe) } catch { /* noop */ } }, 1000)
     }
 
-    const doc = iframe.contentWindow?.document
-    if (!doc) { cleanup(); return }
-    // El onload del body dispara focus()+print(). Escuchamos afterprint para limpiar.
-    iframe.contentWindow.addEventListener('afterprint', cleanup)
+    const win = iframe.contentWindow
+    const doc = win?.document
+    if (!win || !doc) { cleanup(); return }
+    win.addEventListener('afterprint', cleanup)
     doc.open()
     doc.write(buildTicketHtml())
     doc.close()
+
+    const doPrint = () => {
+      try {
+        // Mide el alto REAL del ticket renderizado e inyecta @page con esa altura
+        // exacta (+ pequeño margen para el corte). Así la hoja mide justo el ticket
+        // y no la tira gigante que el driver usaba con "auto".
+        const el = doc.querySelector('.ticket')
+        const px = el ? el.getBoundingClientRect().height : 0
+        const heightMm = Math.max(40, Math.ceil(px / 96 * 25.4) + 4) // px→mm (@96dpi) + 4mm
+        const style = doc.createElement('style')
+        style.textContent = `@page { size: 72mm ${heightMm}mm; margin: 0; }`
+        doc.head.appendChild(style)
+      } catch { /* si algo falla, imprime igual con el alto por defecto */ }
+      win.focus()
+      win.print()
+    }
+
+    // Espera a que el layout esté listo (fuentes/render) antes de medir e imprimir.
+    if (doc.readyState === 'complete') {
+      setTimeout(doPrint, 60)
+    } else {
+      win.addEventListener('load', () => setTimeout(doPrint, 60))
+    }
   }
 
   return (
