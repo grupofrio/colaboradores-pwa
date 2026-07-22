@@ -5,6 +5,7 @@ import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
 import { computePosSummary } from './posPricing'
+import { printTicketViaQz } from './ticketPrinter'
 
 export default function ScreenTicket() {
   const { session } = useSession()
@@ -15,6 +16,7 @@ export default function ScreenTicket() {
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [printMsg, setPrintMsg] = useState('')
 
   // Sale cancel flow (Sprint 4)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -143,18 +145,15 @@ export default function ScreenTicket() {
       * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       /* Sólo margin:0 (sin 'size': el largo lo limita el papel del driver). */
       @page { margin: 0; }
-      /* Lienzo a 80mm = ancho FÍSICO real del papel (la etiqueta dice 80mm).
-         El área imprimible es ~72mm y arranca con un margen físico a la
-         IZQUIERDA, por eso el contenido se cortaba de ese lado. Al usar el ancho
-         físico completo (80mm) y centrar el contenido, éste cae dentro de la
-         zona imprimible sin cortarse.
-         IMPORTANTE: el form de papel del driver debe tener ANCHO 80mm (no 72mm)
-         para que el printer use este mismo espacio de 80mm. */
-      html, body { width: 80mm; background: #fff; color: #000; font-family: 'Segoe UI', Arial, sans-serif; }
+      /* El driver topa el lienzo a 72mm (no acepta forms más anchos) y el printer
+         arranca a imprimir con un OFFSET físico a la izquierda, que se comía el
+         borde izquierdo del ticket. Como no podemos ensanchar el lienzo, hacemos
+         el contenido más angosto (62mm) y lo EMPUJAMOS A LA DERECHA (margen
+         izquierdo mayor que el derecho) para compensar ese offset. Así el texto
+         cae completo dentro del área imprimible. */
+      html, body { width: 72mm; background: #fff; color: #000; font-family: 'Segoe UI', Arial, sans-serif; }
       .ticket > :first-child { margin-top: 0 !important; }
-      /* Contenido a 70mm CENTRADO en los 80mm → ~5mm de aire a cada lado,
-         holgadamente dentro del área imprimible de 72mm. */
-      .ticket { width: 70mm; margin: 0 auto; padding: 1.5mm 1mm; }
+      .ticket { width: 62mm; margin: 0 2mm 0 8mm; padding: 1.5mm 0; }
       .center { text-align: center; }
       .brand { font-size: 15px; font-weight: 700; margin-top: 4px; }
       .sub { font-size: 10px; color: #444; }
@@ -193,7 +192,32 @@ export default function ScreenTicket() {
     </body></html>`
   }
 
-  function printTicket() {
+  // Impresión: intenta QZ Tray (ESC/POS directo — ancho completo, corte de
+  // cuchilla). Si QZ no está corriendo o falla, cae al método de iframe.
+  async function printTicket() {
+    setPrintMsg('')
+    try {
+      await printTicketViaQz({
+        sucursal: session?.warehouse_name || 'Sucursal',
+        dateStr,
+        timeStr,
+        folio,
+        lines,
+        fmt,
+        subtotal,
+        total,
+        paymentLabel: paymentMethodLabel(order?.payment_method),
+      })
+      return
+    } catch (e) {
+      // QZ no disponible / rechazó → fallback iframe. Avisamos discretamente.
+      setPrintMsg('Impresión directa no disponible, usando modo navegador.')
+      setTimeout(() => setPrintMsg(''), 4000)
+      printTicketFallback()
+    }
+  }
+
+  function printTicketFallback() {
     const iframe = document.createElement('iframe')
     iframe.setAttribute('aria-hidden', 'true')
     iframe.style.position = 'fixed'
@@ -383,6 +407,11 @@ export default function ScreenTicket() {
 
             {/* Action Buttons */}
             <div id="ticket-actions" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 30 }}>
+              {printMsg && (
+                <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, textAlign: 'center', margin: 0 }}>
+                  {printMsg}
+                </p>
+              )}
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={printTicket} style={{
                   flex: 1, padding: '14px 0', borderRadius: TOKENS.radius.md,
