@@ -1833,21 +1833,17 @@ async function directAdmin(method, path, body) {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const orderId = Number(query.get('order_id') || 0)
     if (!orderId) return null
-    const result = await readModel('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'payment_method', 'x_studio_mtodo_de_pago', 'warehouse_id'],
-      domain: [['id', '=', orderId]],
-      many: ['order_line'],
-      file: 'file',
-      limit: 1,
-      sudo: 1,
+    // Usa el endpoint dedicado de Odoo (gf_pwa_admin._sale_detail_payload), que
+    // expande las líneas con qty/price_unit/subtotal y devuelve folio + total.
+    // El readModel genérico /get_records NO expandía order_line ni el total, por
+    // eso el ticket salía sin productos, en $0 y con folio incorrecto (caía al
+    // fallback S{orderId}, que mostraba el id como si fuera el folio).
+    const result = await odooHttp('GET', '/pwa-admin/sale-detail', {
+      order_id: orderId,
     })
-    const order = pickFirstResponse(result)
-    if (!order) return null
-    return normalizeSaleOrder({
-      ...order,
-      total: Number(order.amount_total || 0),
-      customer: order.partner_id?.[1] || '',
-    })
+    const order = result?.data ?? result
+    if (!order || !order.id) return null
+    return normalizeSaleOrder(order)
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
