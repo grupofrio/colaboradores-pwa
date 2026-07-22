@@ -1,6 +1,7 @@
 // Cobertura SSR de la vista PURA MasView (Supervisor V2 · superficie "Más").
-// Post-RED (Codex §2/§3): Tareas/Notas/Nota rápida (endpoints legacy inseguros)
-// y Bajas (backend no auditado) fueron RETIRADAS de Más V2 ⇒ NO deben aparecer.
+// Post-RED: Tareas/Notas/Nota rápida (§2/§3, endpoints legacy inseguros), Bajas
+// (§3, backend no auditado) y Planeación — Pronóstico/Agregar cliente (§1/§3/§4,
+// pantallas parcialmente migradas) fueron RETIRADAS de Más V2 ⇒ NO deben aparecer.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
@@ -11,29 +12,31 @@ const render = (props = {}) => renderToStaticMarkup(createElement(MasView, props
 
 // Contrato: label visible + ruta legacy real. Espejo de los GROUPS de MasView.
 const EXPECTED_TILES = [
-  { label: 'Pronóstico', route: '/equipo/pronostico' },
-  { label: 'Agregar cliente', route: '/equipo/planes/clientes' },
   { label: 'Metas', route: '/equipo/metas' },
   { label: 'Score', route: '/equipo/score-semanal' },
   { label: 'Dashboard', route: '/equipo/dashboard' },
   { label: 'Recuperación', route: '/equipo/recuperacion' },
 ]
 
-const GROUPS = ['Planeación', 'Desempeño', 'Clientes']
-// Excluidas de V2 (§2/§3): no deben enlazarse desde Más.
-const EXCLUDED_ROUTES = ['/equipo/tareas', '/equipo/notas', '/equipo/nota-rapida', '/equipo/bajas']
+const GROUPS = ['Desempeño', 'Clientes']
+// Excluidas de V2: no deben enlazarse desde Más (deep-links protegidos en App.jsx).
+const EXCLUDED_ROUTES = [
+  '/equipo/tareas', '/equipo/notas', '/equipo/nota-rapida', '/equipo/bajas',
+  '/equipo/pronostico', '/equipo/planes/clientes',
+]
 
 test('MasView: contenedor con testid supervisor-v2-mas', () => {
   const html = render({ onNavigate: () => {} })
   assert.match(html, /data-testid="supervisor-v2-mas"/)
 })
 
-test('MasView: renderiza los grupos vigentes (sin Coaching/Administración)', () => {
+test('MasView: renderiza solo los grupos vigentes (sin Planeación/Coaching/Administración)', () => {
   const html = render({ onNavigate: () => {} })
   for (const group of GROUPS) {
     assert.ok(html.includes(group), `falta el grupo "${group}"`)
   }
   assert.ok(!html.includes('Coaching'), 'Coaching NO debe aparecer')
+  assert.ok(!html.includes('Planeación'), 'Planeación NO debe aparecer (retirada §4)')
   const groupSections = html.match(/data-testid="supervisor-v2-mas-group"/g) || []
   assert.equal(groupSections.length, GROUPS.length)
 })

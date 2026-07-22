@@ -5,14 +5,24 @@
 // El hook es SOLO runtime; las vistas puras se testean con props directas.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadOperationalDay, PHASE } from './dataSources'
+import { sessionScopeKey } from './sessionScope'
 
 const _usable = (p) => !!p && typeof p === 'object' && p.ok !== false
 
 const CACHE_TTL_MS = 45000
 let _cache = null // { key, at, promise }
 
+// Clave de caché CANÓNICA (Codex §5): identidad de sesión/sucursal + fecha. Nunca
+// solo `day:${date}` (dos supervisores/sucursales distintas compartirían caché).
 function cacheKey(date) {
-  return `day:${date || 'today'}`
+  return `day:${sessionScopeKey()}:${date || 'today'}`
+}
+
+// Invalidación explícita conectable al ciclo real de sesión (logout / switch de
+// usuario / cambio de sucursal). Codex §5: al cambiar la sesión se limpia la
+// caché para no reutilizar el día operativo de otra identidad.
+export function invalidateOperationalDayCacheForSessionChange() {
+  _cache = null
 }
 
 async function demoLoad() {
@@ -36,6 +46,7 @@ export function useOperationalDay({ date = null, demoEnabled = false } = {}) {
   const [state, setState] = useState({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const nowRef = useRef(Date.now())
+  const reqSeq = useRef(0) // request-id monotónico: solo el más reciente escribe
 
   const run = useCallback(async (force) => {
     const key = cacheKey(date)
@@ -61,11 +72,14 @@ export function useOperationalDay({ date = null, demoEnabled = false } = {}) {
   }, [date, demoEnabled])
 
   useEffect(() => {
-    let cancelled = false
+    const myReq = (reqSeq.current += 1)
     setState({ status: 'loading' })
-    run(attempt > 0).then((res) => { if (!cancelled) setState(res) })
-      .catch((e) => { if (!cancelled) setState({ status: 'error', error: e?.message || 'Error inesperado.' }) })
-    return () => { cancelled = true }
+    // Solo la petición MÁS RECIENTE puede escribir el estado: una respuesta
+    // anterior (de otra fecha/identidad, o de una recarga superada) jamás pinta
+    // encima de datos más nuevos. Codex §5/§6.
+    run(attempt > 0)
+      .then((res) => { if (reqSeq.current === myReq) setState(res) })
+      .catch((e) => { if (reqSeq.current === myReq) setState({ status: 'error', error: e?.message || 'Error inesperado.' }) })
   }, [run, attempt])
 
   const reload = useCallback(() => { _cache = null; setAttempt((n) => n + 1) }, [])

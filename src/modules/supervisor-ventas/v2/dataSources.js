@@ -11,27 +11,36 @@
 //   · resultado por parada (visitado/no-venta/motivo)   → route-stops (DTO)
 // Los clientes API se cargan por import DINÁMICO (testeable en node sin lib/api).
 import { PHASE, normalizeSupervisorV2Response } from './normalizeResponse.js'
+import { sessionScopeKey } from './sessionScope.js'
 
 export { PHASE }
+
+// Versión del contrato del DTO de paradas: al cambiar la forma, la clave cambia.
+const DTO_STOPS_CONTRACT = 'route_stops/1'
 
 async function _apiClient(name) {
   const mod = await import('../api.js')
   return mod[name]
 }
 
-// ── clave de caché canónica (Codex §6): fecha + sucursal + plan + versión ─────
+// ── clave de caché canónica (Codex §6) ───────────────────────────────────────
+// Incluye IDENTIDAD DE SESIÓN (token/empleado) + sucursal + company + fecha +
+// marca de generación. Dos supervisores, sucursales o compañías NUNCA comparten
+// versión de fuente. Nada de esto es manipulable por el cliente (branch/company
+// salen del payload day-control server-side; la sesión, del token).
 export function sourceVersion(dayControl) {
   const dc = dayControl || {}
   const branch = dc.branch?.branch_config_id ?? dc.branch?.analytic_account_id ?? 'na'
-  return `${dc.date || 'today'}|${branch}|${dc.generated_at || 'na'}`
+  const company = dc.branch?.company_id ?? 'na'
+  return `${sessionScopeKey()}|${dc.date || 'today'}|${branch}|${company}|${dc.generated_at || 'na'}`
 }
 
-/** Clave de caché de route-stops: NO usa valores manipulables del cliente como
- *  autoridad de scope; branchId sale del payload day-control (server-side). */
-export function routeStopsCacheKey({ dayControl, planId } = {}) {
+/** Clave de caché de route-stops (§6): toda la identidad de scope (sesión/
+ *  sucursal/company/fecha/generación) vía sourceVersion, más plan, ruta y la
+ *  versión del DTO. NINGUNA autoridad del cliente. */
+export function routeStopsCacheKey({ dayControl, planId, routeId } = {}) {
   const dc = dayControl || {}
-  const branch = dc.branch?.branch_config_id ?? dc.branch?.analytic_account_id ?? 'na'
-  return `stops|${dc.date || 'today'}|${branch}|${Number(planId || 0)}|${dc.generated_at || 'na'}`
+  return ['stops', DTO_STOPS_CONTRACT, sourceVersion(dc), Number(planId || 0), Number(routeId || 0)].join('|')
 }
 
 /**

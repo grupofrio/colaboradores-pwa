@@ -79,9 +79,13 @@ test('wiring: V2 no lee route-stops por ORM/sudo (usa el DTO)', () => {
   assert.ok(!/readModelSorted|get_records|sudo:\s*1/.test(s), 'sin ORM/sudo en V2 dataSources')
   assert.ok(/getRouteStopsV2/.test(s), 'usa el cliente DTO')
 })
-test('wiring: Score usa civilWeekRange server-neutral, no new Date() local', () => {
+test('wiring: Score se ancla en la fecha del SERVIDOR, no en el dispositivo (§14)', () => {
   const svc = src('modules/supervisor-ventas/supvService.js')
-  assert.ok(/civilWeekRange\(\)/.test(svc), 'getWeeklyScore usa civilWeekRange')
+  // RED#4: getWeeklyScore ya NO usa civilWeekRange() no-arg (device); resuelve la
+  // fecha operativa del servidor y ancla la semana en ella (civilWeekRange(server)).
+  assert.ok(/resolveServerOperationalDate/.test(svc), 'resuelve fecha del servidor')
+  assert.ok(!/civilWeekRange\(\)/.test(svc), 'sin civilWeekRange() no-arg (device)')
   const screen = src('modules/supervisor-ventas/ScreenScoreSemanal.jsx')
-  assert.ok(/civilWeekRange\(\)\.ref/.test(screen), 'todayStr usa civilWeekRange().ref')
+  assert.ok(!/civilWeekRange/.test(screen), 'la pantalla ya no usa civilWeek del dispositivo')
+  assert.ok(/data\?\.serverDate/.test(screen), 'todayStr usa data.serverDate')
 })
