@@ -272,6 +272,9 @@ export default function ScreenPronostico() {
   const [forecastLinesCache, setForecastLinesCache] = useState({})
   const [forecastLinesLoading, setForecastLinesLoading] = useState(null)
   const [editingForecastId, setEditingForecastId] = useState(null)
+  // Codex §7/§9: write_date del forecast leído del backend, para enviarlo como
+  // expected_write_date (control de concurrencia). NO se inventa en el frontend.
+  const [editingWriteDate, setEditingWriteDate] = useState(null)
   const [editLines, setEditLines] = useState([])
   const [editProductLineIdx, setEditProductLineIdx] = useState(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
@@ -374,10 +377,12 @@ export default function ScreenPronostico() {
         }))
       : [{ product_id: '', channel: 'Van', qty: '' }])
     setEditingForecastId(forecast.id)
+    setEditingWriteDate(forecast.write_date || null)
   }
 
   function handleCancelEdit() {
     setEditingForecastId(null)
+    setEditingWriteDate(null)
     setEditLines([])
   }
 
@@ -397,13 +402,35 @@ export default function ScreenPronostico() {
   async function handleSaveEdit(forecastId) {
     const validLines = editLines.filter(l => l.product_id && Number(l.qty) > 0)
     if (validLines.length === 0) { flashMsg('Agrega al menos un producto'); return }
+    // Codex §7/§9: sin la versión del backend NO se escribe (evita pisar cambios).
+    if (!editingWriteDate) {
+      flashMsg('No se pudo determinar la versión del pronóstico; recarga la lista.', 5000)
+      return
+    }
     setEditSubmitting(true)
     try {
-      await updateForecastLines(forecastId, validLines)
-      // Refresh lines cache for this forecast
+      const result = await updateForecastLines(forecastId, validLines, {
+        expectedWriteDate: editingWriteDate,
+        confirmReplaceAll: true,
+      })
+      // Codex §8: el envelope MANDA — error/busy/conflict/validation/etc. NUNCA es
+      // éxito. No se limpia el formulario ni se muestra "actualizado" ante fallo.
+      if (!result || result.ok !== true) {
+        if (result?.phase === 'conflict') {
+          // §10: el forecast cambió ⇒ recargar líneas antes de reintentar (no pisar).
+          const reloaded = await getForecastLines(forecastId).catch(() => null)
+          if (reloaded) setForecastLinesCache(prev => ({ ...prev, [forecastId]: reloaded }))
+          flashMsg('El pronóstico cambió; recargué las líneas. Revisa y vuelve a guardar.', 6000)
+        } else {
+          flashMsg(result?.message || 'No se pudo guardar el pronóstico.', 5000)
+        }
+        return
+      }
+      // Solo con éxito REAL: refrescar caché, cerrar edición y confirmar.
       const refreshed = await getForecastLines(forecastId)
       setForecastLinesCache(prev => ({ ...prev, [forecastId]: refreshed }))
       setEditingForecastId(null)
+      setEditingWriteDate(null)
       setEditLines([])
       flashMsg('Pronostico actualizado')
     } catch (e) {

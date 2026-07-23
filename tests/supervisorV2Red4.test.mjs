@@ -147,7 +147,9 @@ test('wiring: ≥3 writes V2 pasan por normalizeWriteResponse (§7)', () => {
 })
 test('wiring: useOperationalDay con identidad de sesión + invalidador + reqSeq (§5)', () => {
   const s = src('modules/supervisor-ventas/v2/useOperationalDay.js')
-  assert.ok(/sessionScopeKey/.test(s))
+  // RED#5: la identidad ya no es una lectura imperativa aislada, sino el snapshot
+  // REACTIVO useSessionScope (scope.scopeKey en la clave de caché).
+  assert.ok(/useSessionScope/.test(s) && /scope\.scopeKey/.test(s))
   assert.ok(/invalidateOperationalDayCacheForSessionChange/.test(s))
   assert.ok(/reqSeq/.test(s))
 })

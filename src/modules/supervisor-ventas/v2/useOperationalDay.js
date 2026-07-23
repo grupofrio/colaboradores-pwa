@@ -5,25 +5,26 @@
 // El hook es SOLO runtime; las vistas puras se testean con props directas.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadOperationalDay, PHASE } from './dataSources'
-import { sessionScopeKey } from './sessionScope'
+import { useSessionScope, registerSessionScopedCache } from '../../../lib/sessionStore.js'
 
 const _usable = (p) => !!p && typeof p === 'object' && p.ok !== false
 
 const CACHE_TTL_MS = 45000
 let _cache = null // { key, at, promise }
 
-// Clave de caché CANÓNICA (Codex §5): identidad de sesión/sucursal + fecha. Nunca
-// solo `day:${date}` (dos supervisores/sucursales distintas compartirían caché).
-function cacheKey(date) {
-  return `day:${sessionScopeKey()}:${date || 'today'}`
+// Clave de caché CANÓNICA (Codex §5/§6): identidad de sesión (snapshot reactivo) +
+// fecha. Nunca solo `day:${date}` (dos supervisores/sucursales compartirían caché).
+function cacheKey(scopeKey, date) {
+  return `day:${scopeKey}:${date || 'today'}`
 }
 
-// Invalidación explícita conectable al ciclo real de sesión (logout / switch de
-// usuario / cambio de sucursal). Codex §5: al cambiar la sesión se limpia la
-// caché para no reutilizar el día operativo de otra identidad.
+// Invalidación de la caché de day-control. Codex §5: se CONECTA al ciclo real de
+// sesión vía sessionStore (abajo) ⇒ al cambiar identidad/logout/expiración se
+// limpia automáticamente, no solo tras publish.
 export function invalidateOperationalDayCacheForSessionChange() {
   _cache = null
 }
+registerSessionScopedCache(invalidateOperationalDayCacheForSessionChange)
 
 async function demoLoad() {
   try {
@@ -43,13 +44,18 @@ async function demoLoad() {
  * @returns {{status, dayControl, radar, radarError, error, source, provenance, reload, nowMs}}
  */
 export function useOperationalDay({ date = null, demoEnabled = false } = {}) {
+  // §2/§3: snapshot REACTIVO de scope. Al cambiar sesión/token/empleado/sucursal/
+  // company, `scope.scopeKey` cambia ⇒ `run` es nuevo ⇒ el efecto re-corre:
+  // limpia el estado visible anterior, la caché ya fue invalidada por el store, y
+  // se hace refetch del nuevo scope (la respuesta anterior no escribe, ver reqSeq).
+  const scope = useSessionScope()
   const [state, setState] = useState({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const nowRef = useRef(Date.now())
   const reqSeq = useRef(0) // request-id monotónico: solo el más reciente escribe
 
   const run = useCallback(async (force) => {
-    const key = cacheKey(date)
+    const key = cacheKey(scope.scopeKey, date)
     nowRef.current = Date.now()
     if (!force && _cache && _cache.key === key && (nowRef.current - _cache.at) < CACHE_TTL_MS) {
       return _cache.promise
@@ -69,7 +75,7 @@ export function useOperationalDay({ date = null, demoEnabled = false } = {}) {
     })()
     _cache = { key, at: nowRef.current, promise }
     return promise
-  }, [date, demoEnabled])
+  }, [date, demoEnabled, scope.scopeKey])
 
   useEffect(() => {
     const myReq = (reqSeq.current += 1)
@@ -83,5 +89,5 @@ export function useOperationalDay({ date = null, demoEnabled = false } = {}) {
   }, [run, attempt])
 
   const reload = useCallback(() => { _cache = null; setAttempt((n) => n + 1) }, [])
-  return { ...state, reload, nowMs: nowRef.current }
+  return { ...state, reload, nowMs: nowRef.current, scopeKey: scope.scopeKey }
 }

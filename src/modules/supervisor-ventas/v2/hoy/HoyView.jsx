@@ -58,14 +58,36 @@ function SituationGrid({ situation }) {
   ]
   return (
     <div data-testid="hoy-situacion" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 8 }}>
-      {items.map((it) => (
-        <div key={it.k} style={{ textAlign: 'center', padding: '9px 6px', background: C.surfaceSoft, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.md }}>
-          <div style={{ fontSize: 19, fontWeight: 800, color: it.m.available ? (it.tone.fg || C.text) : C.textMuted }}>
-            {it.m.available ? it.m.value : '—'}
+      {items.map((it) => {
+        const m = it.m || {}
+        // §13: una suma PARCIAL no se presenta como total definitivo. `missing`
+        // son ETAPAS (no rutas); se muestran tal cual, sin convertirlas a cero ni
+        // afirmar un conteo de rutas. `available===false` ⇒ "Sin dato" (—).
+        const partial = m.available === true && m.partial === true
+        const missing = Array.isArray(m.missing) ? m.missing : []
+        const detail = [
+          m.source ? `fuente: ${m.source}` : null,
+          m.dataAsOf ? `datos: ${m.dataAsOf}` : null,
+          partial && missing.length ? `sin dato de: ${missing.join(', ')}` : null,
+        ].filter(Boolean).join(' · ')
+        return (
+          <div key={it.k} title={detail || undefined} data-partial={partial ? '1' : undefined}
+               style={{ textAlign: 'center', padding: '9px 6px', background: C.surfaceSoft, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.md }}>
+            <div style={{ fontSize: 19, fontWeight: 800, color: m.available ? (it.tone.fg || C.text) : C.textMuted }}>
+              {m.available ? m.value : '—'}
+            </div>
+            <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>{it.k}</div>
+            {partial && (
+              <div data-testid="hoy-situacion-partial" style={{ fontSize: 9.5, color: C.warning, marginTop: 1, fontWeight: 700 }}>
+                Info. parcial
+              </div>
+            )}
+            {!m.available && (
+              <div style={{ fontSize: 9.5, color: C.textMuted, marginTop: 1 }}>Sin dato</div>
+            )}
           </div>
-          <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>{it.k}</div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

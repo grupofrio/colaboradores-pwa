@@ -32,7 +32,7 @@ export default function RutasTab() {
   const day = useOperationalDay({ demoEnabled: DEMO })
   const [stops, setStops] = useState({ status: 'idle', stops: null, error: null, phase: null })
   const reqIdRef = useRef(0)
-  const dayVersion = sourceVersion(day.dayControl)
+  const dayVersion = sourceVersion(day.dayControl, day.scopeKey)
 
   useEffect(() => {
     // §6: request-id monotónico ⇒ una respuesta vieja NUNCA pisa la nueva; el
