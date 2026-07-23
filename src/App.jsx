@@ -485,6 +485,11 @@ export default function App() {
     } else {
       localStorage.removeItem('gf_session')
     }
+    // Codex §2/§3: notifica a la capa reactiva de scope (sessionStore) que la
+    // sesión cambió EN ESTA pestaña (los writes de localStorage de la misma
+    // pestaña NO disparan `storage`). Al cambiar la identidad, los hooks de datos
+    // limpian su estado visible, invalidan caché y refetch.
+    try { window.dispatchEvent(new Event('gf:session-changed')) } catch { /* noop */ }
   }, [session])
 
   // Global listener: any api.js that detects expired/missing token fires this.

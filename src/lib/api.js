@@ -8859,7 +8859,10 @@ async function directSupervisorVentas(method, path, body) {
       fields: [
         'id', 'name', 'date_target', 'state', 'company_id',
         'analytic_account_id', 'created_by_employee_id', 'confirmed_by_employee_id',
-        'confirmed_at', 'employee_id', 'line_ids',
+        // write_date: versión canónica del backend para el control de concurrencia
+        // (Codex §7/§9). La pantalla la reenvía como expected_write_date; NO se
+        // inventa una versión en el frontend.
+        'confirmed_at', 'employee_id', 'line_ids', 'write_date',
       ],
       domain,
       sort_column: 'date_target',
@@ -8925,8 +8928,10 @@ async function directSupervisorVentas(method, path, body) {
     // SEGURIDAD (B8): reemplazo por controller DEDICADO con guard #220 (rol +
     // dueño/scope del forecast server-side + advisory lock). Codex §7/§10: el
     // envelope MANDA — status:error/busy/malformed NUNCA es éxito; en CONFLICT la
-    // UI debe RECARGAR y re-confirmar (nunca pisar a ciegas). idempotency_key va
-    // en meta (supervisorMeta) para reintentos de red.
+    // UI debe RECARGAR y re-confirmar (nunca pisar a ciegas). Concurrencia de ESTE
+    // endpoint = lock + expected_write_date; forecast/update_lines NO usa el
+    // idempotency_service (que sí existe y usan los flujos PT/warehouse de main.py)
+    // ⇒ NO se declara idempotencia/retry idempotente para forecast (Codex §10).
     let fRes
     try {
       fRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/forecast/update_lines', {

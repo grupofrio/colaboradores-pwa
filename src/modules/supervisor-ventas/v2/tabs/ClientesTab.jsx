@@ -75,7 +75,7 @@ export default function ClientesTab() {
   const dayStatus = day.status
   const daySource = day.source
   const dayControl = day.dayControl
-  const dayVersion = sourceVersion(dayControl)
+  const dayVersion = sourceVersion(dayControl, day.scopeKey)
 
   useEffect(() => {
     // §6: re-carga al cambiar día/source/versión de fuente; request-id monotónico

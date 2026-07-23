@@ -28,19 +28,23 @@ async function _apiClient(name) {
 // marca de generación. Dos supervisores, sucursales o compañías NUNCA comparten
 // versión de fuente. Nada de esto es manipulable por el cliente (branch/company
 // salen del payload day-control server-side; la sesión, del token).
-export function sourceVersion(dayControl) {
+// `sessionKey` = clave del SNAPSHOT reactivo de sesión (la pasa el contenedor
+// desde useOperationalDay().scopeKey, Codex §6). Fallback a la lectura pura solo
+// para llamadas directas/tests; en runtime SIEMPRE llega el snapshot reactivo.
+export function sourceVersion(dayControl, sessionKey = null) {
   const dc = dayControl || {}
   const branch = dc.branch?.branch_config_id ?? dc.branch?.analytic_account_id ?? 'na'
   const company = dc.branch?.company_id ?? 'na'
-  return `${sessionScopeKey()}|${dc.date || 'today'}|${branch}|${company}|${dc.generated_at || 'na'}`
+  const sk = sessionKey || sessionScopeKey()
+  return `${sk}|${dc.date || 'today'}|${branch}|${company}|${dc.generated_at || 'na'}`
 }
 
-/** Clave de caché de route-stops (§6): toda la identidad de scope (sesión/
+/** Clave de caché de route-stops (§6): toda la identidad de scope (sesión reactiva/
  *  sucursal/company/fecha/generación) vía sourceVersion, más plan, ruta y la
  *  versión del DTO. NINGUNA autoridad del cliente. */
-export function routeStopsCacheKey({ dayControl, planId, routeId } = {}) {
+export function routeStopsCacheKey({ dayControl, planId, routeId, sessionKey } = {}) {
   const dc = dayControl || {}
-  return ['stops', DTO_STOPS_CONTRACT, sourceVersion(dc), Number(planId || 0), Number(routeId || 0)].join('|')
+  return ['stops', DTO_STOPS_CONTRACT, sourceVersion(dc, sessionKey), Number(planId || 0), Number(routeId || 0)].join('|')
 }
 
 /**

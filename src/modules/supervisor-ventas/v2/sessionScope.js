@@ -22,16 +22,23 @@ export function readSessionRaw() {
   }
 }
 
-// Huella estable del token de empleado (identidad de sesión) SIN exponer el token
-// completo en la clave: solo su longitud + últimos 10 caracteres.
-function tokenFingerprint(session) {
-  const t = String(session.odoo_employee_token || session.gf_employee_token || '')
-  return t ? `${t.length}_${t.slice(-10)}` : ''
+// Huella de sesión NO sensible (Codex §4/§6): se usa el `odoo_employee_session_id`
+// que el backend (magic-link) ya provee como identificador de sesión — cambia por
+// login y no es el token ni deriva de él (no longitud/sufijo/hash improvisado). Si
+// no existe, cae a otros ids de sesión no sensibles; nunca al token de empleado.
+// La seguridad NO depende de esta huella: solo separa cachés por sesión.
+function sessionFingerprint(session) {
+  return String(
+    session.odoo_employee_session_id
+    || session.gf_employee_session_id
+    || session.session_id
+    || '',
+  )
 }
 
 /**
  * Clave de identidad de scope (string estable). Cambia si cambia CUALQUIERA de:
- * token de empleado, employee id, warehouse/branch, company, versión de contrato.
+ * sesión (session_id), employee id, warehouse/branch, company, versión de contrato.
  * @param {object|null} session  sesión inyectable (null ⇒ lee gf_session)
  * @returns {string}
  */
@@ -40,6 +47,18 @@ export function sessionScopeKey(session = null) {
   const emp = s.employee_id || (s.employee && s.employee.id) || ''
   const wh = s.warehouse_id || s.plant_warehouse_id || ''
   const company = s.company_id || ''
-  const branch = s.analytic_account_id || s.branch_config_id || ''
-  return [CACHE_CONTRACT_VERSION, tokenFingerprint(s), emp, wh, company, branch].join(':')
+  const branch = s.branch_config_id || s.analytic_account_id || ''
+  return [CACHE_CONTRACT_VERSION, sessionFingerprint(s), emp, wh, company, branch].join(':')
+}
+
+/** Snapshot de campos de scope (sin credenciales) para la capa reactiva §2. */
+export function sessionScopeFields(session = null) {
+  const s = session || readSessionRaw()
+  return {
+    employeeId: s.employee_id || (s.employee && s.employee.id) || null,
+    effectiveBranchConfigId: s.branch_config_id || s.analytic_account_id || null,
+    warehouseId: s.warehouse_id || s.plant_warehouse_id || null,
+    companyId: s.company_id || null,
+    tokenFingerprint: sessionFingerprint(s) || null,
+  }
 }
