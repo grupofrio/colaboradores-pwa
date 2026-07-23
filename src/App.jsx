@@ -144,6 +144,15 @@ const ScreenScoreSemanal       = lazy(() => import('./modules/supervisor-ventas/
 const ScreenCierreOperativo    = lazy(() => import('./modules/supervisor-ventas/ScreenCierreOperativo'))
 const ScreenNotaRapida         = lazy(() => import('./modules/supervisor-ventas/ScreenNotaRapida'))
 const ScreenOperacionesHoy     = lazy(() => import('./modules/supervisor-ventas/ScreenOperacionesHoy'))
+// Supervisor V2 — shell de 6 superficies (gated por flag fail-closed).
+const HoyTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/HoyTab'))
+const RadarTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RadarTab'))
+const RutasTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RutasTab'))
+const ClientesTab   = lazy(() => import('./modules/supervisor-ventas/v2/tabs/ClientesTab'))
+const PendientesTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/PendientesTab'))
+const MasTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/MasTab'))
+import SupervisorV2Gate from './modules/supervisor-ventas/v2/SupervisorV2Gate'
+import V2ExcludedRoute from './modules/supervisor-ventas/v2/V2ExcludedRoute'
 // Torres de Control — Validación de Requisiciones
 const ScreenTorreRequisiciones = lazy(() => import('./modules/torre/ScreenTorreRequisiciones'))
 const ScreenTorreDetail        = lazy(() => import('./modules/torre/ScreenTorreDetail'))
@@ -476,6 +485,11 @@ export default function App() {
     } else {
       localStorage.removeItem('gf_session')
     }
+    // Codex §2/§3: notifica a la capa reactiva de scope (sessionStore) que la
+    // sesión cambió EN ESTA pestaña (los writes de localStorage de la misma
+    // pestaña NO disparan `storage`). Al cambiar la identidad, los hooks de datos
+    // limpian su estado visible, invalidan caché y refetch.
+    try { window.dispatchEvent(new Event('gf:session-changed')) } catch { /* noop */ }
   }, [session])
 
   // Global listener: any api.js that detects expired/missing token fires this.
@@ -668,26 +682,33 @@ export default function App() {
 
             {/* ── Supervisor de Ventas ─────────────────────────────────── */}
             {/* Supervisor Ventas V2 — Centro de Control Comercial */}
-            <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenControlComercial /></ModuleRoleRoute>} />
+            {/* Supervisor V2 shell (flag fail-closed; OFF ⇒ legacy/redirect). */}
+            <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="hoy" legacy={<ScreenControlComercial />}><HoyTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/radar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="radar" v2Only><RadarTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/rutas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="rutas" v2Only><RutasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/pendientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="pendientes" v2Only><PendientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/mas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="mas" v2Only><MasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            {/* /equipo/hoy y /equipo/clientes: legacy directo (deep-link compat). */}
             <Route path="/equipo/hoy" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenOperacionesHoy /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasHub /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/sugey" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugey /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/sugey/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugeyDetail /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/angelica" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasAngelica /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/angelica/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasAngelicaDetail /></ModuleRoleRoute>} />
+            {/* Bajas: EXCLUIDA de V2 (backend no auditado). V2 ON ⇒ no disponible sin fetch; V2 OFF ⇒ legacy. */}
+            <Route path="/equipo/bajas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasHub />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/sugey" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasSugey />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/sugey/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasSugeyDetail />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/angelica" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasAngelica />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/angelica/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasAngelicaDetail />} /></ModuleRoleRoute>} />
             <Route path="/equipo/vendedor/:vendedorId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDetalleVendedor /></ModuleRoleRoute>} />
             <Route path="/equipo/sin-visitar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesSinVisitar /></ModuleRoleRoute>} />
             <Route path="/equipo/score-semanal" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenScoreSemanal /></ModuleRoleRoute>} />
             <Route path="/equipo/cierre" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenCierreOperativo /></ModuleRoleRoute>} />
             <Route path="/equipo/dashboard" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDashboardVentas /></ModuleRoleRoute>} />
-            <Route path="/equipo/pronostico" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPronostico /></ModuleRoleRoute>} />
-            <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPlanDiarioClientes /></ModuleRoleRoute>} />
-            <Route path="/equipo/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesSupervisor /></ModuleRoleRoute>} />
+            <Route path="/equipo/pronostico" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenPronostico />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenPlanDiarioClientes />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="clientes" legacy={<ScreenClientesSupervisor />}><ClientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/metas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenMetasVendedores /></ModuleRoleRoute>} />
-            <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenTareasSupervisor /></ModuleRoleRoute>} />
-            <Route path="/equipo/notas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenNotasCliente /></ModuleRoleRoute>} />
+            <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenTareasSupervisor />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/notas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenNotasCliente />} /></ModuleRoleRoute>} />
             <Route path="/equipo/recuperacion" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesRecuperacion /></ModuleRoleRoute>} />
-            <Route path="/equipo/nota-rapida" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenNotaRapida /></ModuleRoleRoute>} />
+            <Route path="/equipo/nota-rapida" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenNotaRapida />} /></ModuleRoleRoute>} />
             {/* V1 legacy routes */}
             <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />
             <Route path="/equipo/control" element={<Navigate to="/equipo" replace />} />

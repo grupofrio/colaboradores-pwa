@@ -49,6 +49,7 @@ import {
 } from '../modules/produccion/checklistContext.js'
 import { sumRolitoLocationStock } from '../modules/produccion/rolitoBagMath.js'
 import { normalizeChecklistPhotoValue } from '../modules/shared/checklistPhoto.js'
+import { normalizeWriteResponse, WRITE_PHASE } from '../modules/supervisor-ventas/v2/normalizeWriteResponse.js'
 import {
   addLocalPackingEntry,
   getLocalPackingEntries,
@@ -8469,19 +8470,38 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: true, status: 'ok', message: 'Sin cambios', data: shapeSupervisorCustomer(customer) }
     }
 
-    await createUpdate({
-      model: 'res.partner',
-      method: 'update',
-      ids: [customerId],
-      dict: updates,
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
+    // SEGURIDAD (B8): el write va por controller DEDICADO con guard #220
+    // (rol supervisor_ventas + scope de sucursal server-side), NO por ORM
+    // genérico con sudo del cliente. Los pre-checks de arriba quedan como
+    // fail-fast de UX; la AUTORIDAD es server-side. Requiere el controller
+    // /gf/salesops/supervisor/v2/customers/update desplegado (gate externo).
+    // Codex §7: el envelope MANDA — status:error/busy/malformed NUNCA es éxito
+    // (antes se ignoraba la respuesta y se devolvía ok:true optimista).
+    let writeRes
+    try {
+      writeRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/customers/update', {
+        meta: supervisorMeta(),
+        data: { customer_id: customerId, values: updates },
+      }), null)
+    } catch (writeErr) {
+      writeRes = normalizeWriteResponse(null, writeErr)
+    }
+    if (!writeRes.ok) {
+      return {
+        ok: false,
+        status: 'error',
+        phase: writeRes.phase,
+        code: writeRes.code,
+        message: writeRes.message || 'No se pudo actualizar el cliente.',
+        retryable: writeRes.retryable,
+      }
+    }
 
     const refreshedRows = await readSupervisorCustomerRows([['id', '=', customerId]], 1)
     return {
       ok: true,
       status: 'ok',
+      phase: writeRes.phase,
       message: 'Cliente actualizado.',
       data: shapeSupervisorCustomer(refreshedRows[0] || { ...customer, ...updates, id: customerId }),
     }
@@ -8621,24 +8641,40 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, status: 'error', code: 'no_customers_found', message: 'No hay clientes para publicar.' }
     }
 
+    // SEGURIDAD (B8): publicación por controller DEDICADO con guard #220
+    // (rol + scope server-side + transición permitida), NO por función ORM
+    // genérica con sudo del cliente. Codex §8: el envelope MANDA — todos los
+    // estados (DATE_NOT_ALLOWED/FEATURE_DISABLED/FORBIDDEN/CONFLICT/LOCKED/
+    // VALIDATION/NOT_FOUND/network/malformed) ⇒ NO éxito (antes: éxito optimista).
+    let publishRes
     try {
-      await createUpdate({
-        model: 'gf.route.plan',
-        method: 'function',
-        ids: [routePlanId],
-        function: 'action_publish',
-        sudo: 1,
-        app: 'pwa_colaboradores',
-      })
+      publishRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/route_plan/publish', {
+        meta: supervisorMeta(),
+        data: { route_plan_id: routePlanId },
+      }), null)
     } catch (e) {
-      return { ok: false, status: 'error', code: 'route_plan_publish_failed', message: e?.message || 'No se pudo publicar el plan.' }
+      publishRes = normalizeWriteResponse(null, e)
     }
+    if (!publishRes.ok) {
+      // Estado previo intacto (no se marca publicado, no se borra nada).
+      return {
+        ok: false, status: 'error', phase: publishRes.phase, code: publishRes.code,
+        message: publishRes.message || 'No se pudo publicar el plan.', retryable: publishRes.retryable,
+      }
+    }
+    // §8: tras publicar con éxito, invalida la caché compartida de day-control
+    // para que la UI refresque con el MISMO scope y no conserve el plan en draft.
+    try {
+      const dayMod = await import('../modules/supervisor-ventas/v2/useOperationalDay.js')
+      dayMod.invalidateOperationalDayCacheForSessionChange?.()
+    } catch { /* sin caché que invalidar (p.ej. SSR) */ }
 
     return {
       ok: true,
       status: 'ok',
+      phase: publishRes.phase,
       message: 'Plan diario publicado',
-      data: { route_plan_id: routePlanId, state: 'published' },
+      data: (publishRes.data && (publishRes.data.route_plan_id ? publishRes.data : publishRes.data.data)) || { route_plan_id: routePlanId, state: 'published' },
       meta: supervisorMeta(),
     }
   }
@@ -8823,7 +8859,10 @@ async function directSupervisorVentas(method, path, body) {
       fields: [
         'id', 'name', 'date_target', 'state', 'company_id',
         'analytic_account_id', 'created_by_employee_id', 'confirmed_by_employee_id',
-        'confirmed_at', 'employee_id', 'line_ids',
+        // write_date: versión canónica del backend para el control de concurrencia
+        // (Codex §7/§9). La pantalla la reenvía como expected_write_date; NO se
+        // inventa una versión en el frontend.
+        'confirmed_at', 'employee_id', 'line_ids', 'write_date',
       ],
       domain,
       sort_column: 'date_target',
@@ -8856,7 +8895,17 @@ async function directSupervisorVentas(method, path, body) {
 
   if (cleanPath === '/pwa-supv/forecast-update-lines' && method === 'POST') {
     const forecastId = Number(body?.forecast_id || 0)
-    if (!forecastId) return { success: false, error: 'forecast_id requerido' }
+    if (!forecastId) return { ok: false, success: false, phase: WRITE_PHASE.VALIDATION, code: 'VALIDATION_ERROR', error: 'forecast_id requerido' }
+    // Codex §9: concurrencia OBLIGATORIA (espejo del backend). Sin la marca de
+    // versión leída, no se puede escribir sin pisar a ciegas.
+    const expectedWriteDate = body?.expected_write_date
+    if (!expectedWriteDate || typeof expectedWriteDate !== 'string') {
+      return { ok: false, success: false, phase: WRITE_PHASE.VALIDATION, code: 'VALIDATION_ERROR', error: 'expected_write_date requerido (recarga el forecast).' }
+    }
+    // §9: el reemplazo TOTAL es destructivo ⇒ confirmación explícita del cliente.
+    if (body?.confirm_replace_all !== true) {
+      return { ok: false, success: false, phase: WRITE_PHASE.VALIDATION, code: 'CONFIRM_REQUIRED', error: 'Confirma el reemplazo total (confirm_replace_all).' }
+    }
     const normalizeChannel = (ch) => {
       const raw = String(ch || '').trim().toLowerCase()
       if (raw === 'mostrador' || raw === 'counter') return 'counter'
@@ -8871,16 +8920,41 @@ async function directSupervisorVentas(method, path, body) {
             channel: normalizeChannel(l.channel),
           }))
       : []
-    // (5,0,0) removes all existing lines; (0,0,{...}) creates each new one
-    const lineCommands = [[5, 0, 0], ...lines.map((l) => [0, 0, l])]
-    await createUpdate({
-      model: 'gf.saleops.forecast',
-      method: 'update',
-      ids: [forecastId],
-      dict: { line_ids: lineCommands },
-      sudo: 1,
-    })
-    return { success: true, updated: true, forecast_id: forecastId }
+    // §9: vaciar TODAS las líneas exige 2.ª confirmación (no vaciar por un error
+    // de carga o una lista incompleta).
+    if (lines.length === 0 && body?.confirm_empty_replace !== true) {
+      return { ok: false, success: false, phase: WRITE_PHASE.VALIDATION, code: 'CONFIRM_EMPTY_REQUIRED', error: 'Vaciar el forecast requiere confirmación explícita.' }
+    }
+    // SEGURIDAD (B8): reemplazo por controller DEDICADO con guard #220 (rol +
+    // dueño/scope del forecast server-side + advisory lock). Codex §7/§10: el
+    // envelope MANDA — status:error/busy/malformed NUNCA es éxito; en CONFLICT la
+    // UI debe RECARGAR y re-confirmar (nunca pisar a ciegas). Concurrencia de ESTE
+    // endpoint = lock + expected_write_date; forecast/update_lines NO usa el
+    // idempotency_service (que sí existe y usan los flujos PT/warehouse de main.py)
+    // ⇒ NO se declara idempotencia/retry idempotente para forecast (Codex §10).
+    let fRes
+    try {
+      fRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/forecast/update_lines', {
+        meta: supervisorMeta(),
+        data: {
+          forecast_id: forecastId,
+          lines,
+          confirm_replace_all: true,
+          expected_write_date: expectedWriteDate,
+          ...(lines.length === 0 ? { confirm_empty_replace: true } : {}),
+        },
+      }), null)
+    } catch (e) {
+      fRes = normalizeWriteResponse(null, e)
+    }
+    if (!fRes.ok) {
+      return {
+        ok: false, success: false, phase: fRes.phase, code: fRes.code,
+        message: fRes.message, retryable: fRes.retryable,
+        reload: fRes.phase === WRITE_PHASE.CONFLICT, // §10: conflict ⇒ recargar
+      }
+    }
+    return { ok: true, success: true, phase: fRes.phase, updated: true, forecast_id: forecastId, data: fRes.data }
   }
 
   if (cleanPath === '/pwa-supv/forecast-confirm' && method === 'POST') {
@@ -9047,6 +9121,16 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   // ── Route Stops (detalle de paradas de una ruta) ──
+  // Supervisor V2: paradas por el DTO read-only guardado (#223), NO por ORM
+  // genérico con sudo. El cliente solo manda route_plan_id; el servidor limita
+  // campos y scope. Requiere el endpoint desplegado (gate externo).
+  if (cleanPath === '/pwa-supv/route-stops-v2' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/route_stops', {
+      meta: supervisorMeta(),
+      data: { route_plan_id: Number(query.get('plan_id') || query.get('route_plan_id') || 0) },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/route-stops' && method === 'GET') {
     const scope = await supervisorAnalyticScope()
     if (!scope.analyticAccountId) return []
@@ -9096,15 +9180,24 @@ async function directSupervisorVentas(method, path, body) {
   if (cleanPath === '/pwa-supv/week-routes' && method === 'GET') {
     const scope = await supervisorAnalyticScope()
     if (!scope.analyticAccountId) return []
-    const today = new Date()
-    const dayOfWeek = today.getDay()
-    const monday = new Date(today)
-    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
+    // Codex §14: si el caller ancla la semana con la fecha del SERVIDOR
+    // (week_start/week_end, derivada de day-control en tz de la sucursal), se usa
+    // esa. El cálculo con `new Date()` del dispositivo queda SOLO como defensa
+    // para llamadas directas sin anclaje (getWeeklyScore ya no lo usa).
     const pad = (n) => String(n).padStart(2, '0')
-    const monStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
-    const sunStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`
+    const isYmd = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))
+    let monStr = query.get('week_start')
+    let sunStr = query.get('week_end')
+    if (!isYmd(monStr) || !isYmd(sunStr)) {
+      const today = new Date()
+      const dayOfWeek = today.getDay()
+      const monday = new Date(today)
+      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+      monStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
+      sunStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`
+    }
 
     const domain = [['date', '>=', monStr], ['date', '<=', sunStr]]
     if (companyId) domain.push(['company_id', '=', companyId])

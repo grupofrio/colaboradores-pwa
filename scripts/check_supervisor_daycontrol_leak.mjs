@@ -13,6 +13,9 @@ export const DAYCONTROL_FIXTURE_MARKERS = Object.freeze([
   'Ruta Demo Dos',
   'Unidad Demo A',
   'Datos de DEMOSTRACIÓN sintéticos (BR-DEMO). NO son operación real.',
+  // Fixture route-stops de Supervisor V2 (Clientes/Rutas) — fuera del bundle prod.
+  'Cliente Demo Once',
+  'Cliente Demo Doce',
 ])
 
 export function findDayControlFixtureLeaks(assets) {
