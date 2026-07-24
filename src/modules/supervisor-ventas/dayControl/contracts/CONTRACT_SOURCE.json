@@ -1,0 +1,19 @@
+{
+  "contract_versions": {
+    "day_control": "gf.salesops.supervisor.day_control/1",
+    "radar": "gf.salesops.supervisor.radar/1"
+  },
+  "source": {
+    "repo": "GrupoVeniu/GrupoFrio",
+    "pr": 220,
+    "head": "52308bb1",
+    "path": "gf_saleops/docs/contracts/"
+  },
+  "note": "Copias locales del contrato canonico (loads via stock.picking; van.* descartado). Ronda YELLOW-2 (RED-2 Codex P2/P3): occurred_at UTC canonico 'YYYY-MM-DDTHH:MM:SSZ' (parse_timestamp acepta naive/Z/offset), dedup INDEPENDIENTE DEL ORDEN (min por instante sobre todas las filas por picking). sha256 = integridad de ESTAS copias; la paridad semantica se verifica por deep-equal.",
+  "sha256": {
+    "supervisor_day_control_v1.schema.json": "c8753e5f00e5eced5c95676842b57be7a951a973e12533be71b11f05bcb2d209",
+    "supervisor_radar_v1.schema.json": "de4336bc8d8c65d3e296d27fbde2efec098dd005194c1940406eafeeab405c90",
+    "day_control_v1.golden.json": "2408f9c95f38a714abc69db756ade7dc74e9f145a68f18d172bb884db203337f",
+    "radar_v1.golden.json": "8b4428048a7b93b31d229fcc36c61600d22be450f9a9bfb1105dd03e9a97b57e"
+  }
+}
