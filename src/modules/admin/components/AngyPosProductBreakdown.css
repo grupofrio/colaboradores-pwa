@@ -3,6 +3,7 @@
   max-width: 100%;
   overflow: hidden;
   padding: 22px;
+  margin-bottom: 28px;
   color: #fff;
   background:
     radial-gradient(circle at top right, rgba(43, 143, 224, 0.13), transparent 38%),

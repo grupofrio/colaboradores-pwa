@@ -335,6 +335,10 @@ test('keeps the required copy and responsive table-card CSS contract', async () 
   assert.match(component, /productsWithoutWeight/)
   assert.doesNotMatch(component, /style=\{\{/)
   assert.doesNotMatch(component, /POLL_MS/)
+  assert.match(
+    css,
+    /^\.angy-pos-breakdown\s*\{(?=[^}]*\bmargin-bottom:\s*28px;)[^}]*\}/m,
+  )
   assert.match(css, /@media\s*\(max-width:\s*720px\)/)
   assert.match(css, /\.angy-pos-breakdown__table/)
   assert.match(css, /\.angy-pos-breakdown__cards/)
