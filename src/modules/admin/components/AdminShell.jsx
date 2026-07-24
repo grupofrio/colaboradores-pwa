@@ -70,6 +70,10 @@ export default function AdminShell({
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const typo = useMemo(() => getTypo(sw), [sw])
   const isDesktop = sw >= 1024
+  // Feed de actividad (320px) solo con ancho holgado: bajo 1366px el rail
+  // global compacto (76px) + sidebar interno (220px) + feed dejarían el
+  // contenido comprimido (hallazgo Codex PR #66 — triple panel a 1024–1280).
+  const showActivityFeed = !hideActivityFeed && sw >= 1366
 
   // Filtrar módulos según rol del usuario
   const visibleNavItems = useMemo(
@@ -138,6 +142,22 @@ export default function AdminShell({
           )}
         </div>
 
+        <button
+          onClick={() => window.location.reload()}
+          title="Refrescar página"
+          aria-label="Refrescar página"
+          style={{
+            width: 38, height: 38, borderRadius: TOKENS.radius.md,
+            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+
         <CompanySelector />
 
         {isDesktop && employeeName && (
@@ -165,7 +185,7 @@ export default function AdminShell({
       {isDesktop ? (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: hideActivityFeed ? '220px 1fr' : '220px 1fr 320px',
+          gridTemplateColumns: showActivityFeed ? '220px 1fr 320px' : '220px 1fr',
           minHeight: 'calc(100dvh - 68px)',
         }}>
           {/* Sidebar izquierda */}
@@ -231,11 +251,12 @@ export default function AdminShell({
           </main>
 
           {/* Feed derecho — oculto en vistas que lo desactivan (ej: Requisiciones) */}
-          {!hideActivityFeed && <ActivityFeed moduleId={activeBlock} />}
+          {showActivityFeed && <ActivityFeed moduleId={activeBlock} />}
         </div>
       ) : (
-        // Mobile fallback — columna simple
-        <main style={{ maxWidth: 520, margin: '0 auto', padding: '16px' }}>
+        // Mobile fallback — columna simple. Holgura inferior para no quedar
+        // tapado por la barra global (AppNav overlay 64px) — Codex PR #66.
+        <main style={{ maxWidth: 520, margin: '0 auto', padding: '16px', paddingBottom: 'calc(env(safe-area-inset-bottom) + 72px)' }}>
           {children}
         </main>
       )}

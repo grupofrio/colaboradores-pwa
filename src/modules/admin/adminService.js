@@ -155,6 +155,21 @@ function unwrap(res) {
   return res
 }
 
+/** Extrae SIEMPRE un array de la respuesta, sin importar cómo venga envuelta:
+ *  array directo | { data: [...] } | { data: { items } } | { data: { orders } }
+ *  | { items } | { orders }. today-sales devuelve { data: { items, orders } }
+ *  (un objeto), por eso unwrap solo no bastaba y las tarjetas quedaban en $0. */
+function toList(res) {
+  const d = unwrap(res)
+  if (Array.isArray(d)) return d
+  if (d && typeof d === 'object') {
+    if (Array.isArray(d.items)) return d.items
+    if (Array.isArray(d.orders)) return d.orders
+    if (Array.isArray(d.transfers)) return d.transfers
+  }
+  return []
+}
+
 // ── Dashboard (Hub principal) ───────────────────────────────────────────────
 
 /** Trae los datos del dashboard del día filtrados por razón social.
@@ -173,8 +188,10 @@ export async function getDashboardData({ warehouseId, companyId }) {
   ])
 
   // Safety-net: aún aplicamos filterByCompany por si el endpoint es legacy.
-  const sales = filterByCompany(unwrap(salesRaw), companyId)
-  const expenses = filterByCompany(unwrap(expensesRaw), companyId)
+  // toList extrae el array real: today-sales devuelve { data: { items/orders } }
+  // (objeto, no array), por lo que unwrap por sí solo dejaba las tarjetas en $0.
+  const sales = filterByCompany(toList(salesRaw), companyId)
+  const expenses = filterByCompany(toList(expensesRaw), companyId)
 
   const kpis = {
     ventasHoy: { count: sales.length, total: sumAmount(sales, 'amount_total') },

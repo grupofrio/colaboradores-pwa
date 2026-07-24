@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../App";
 import { normalizeSessionRoleContext } from "../lib/roleContext";
+import { buildSessionEmployee } from "../modules/torre/e1/employeeSessionFields";
 
 // ── Login directo a Odoo ──────────────────────────────────────────────────
 const ODOO_SIGN_IN_URL = "/api-odoo/employee-sign-in";
@@ -162,6 +163,10 @@ function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
     module_role_contexts: {},
     job_title: jobTitle,
     employee_id: employeeId,
+    // M1-D prereq C.1: el gate /torre lee session.employee.tower_status; el
+    // backend YA lo entrega en result.employee y aquí se persiste saneado
+    // (fail-closed: no-string/vacío => null; la allowlist vive en el gate).
+    employee: buildSessionEmployee(employee, employeeId),
     name: employee?.name || result?.message?.replace(/^Bienvenido,\s*/, "") || "Empleado",
     company_id: companyId,
     company,

@@ -27,7 +27,7 @@ export default function ScreenAdminPanel() {
 
   return (
     <AdminProvider>
-      <AdminShell activeBlock="hub" title="Administración de sucursal">
+      <AdminShell activeBlock="hub" title="Administración de sucursal" hideActivityFeed>
         <HubV2 />
       </AdminShell>
     </AdminProvider>

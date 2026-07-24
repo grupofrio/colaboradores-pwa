@@ -6,6 +6,35 @@ import {
   withExpectedFreezeField,
 } from '../modules/produccion/cycleTiming.js'
 import {
+  TOWER_M1_BACKLOG_PATH,
+  isTowerM1Path,
+  filterTowerM1Params,
+} from './towerM1Route.js'
+import {
+  isKoldOsM2Path,
+  filterKoldOsM2Params,
+} from './koldOsM2Route.js'
+import {
+  isKoldOsM3Path,
+  filterKoldOsM3Params,
+} from './koldOsM3Route.js'
+import {
+  isKoldOsM4Path,
+  filterKoldOsM4Params,
+} from './koldOsM4Route.js'
+import {
+  isKoldOsM5Path,
+  filterKoldOsM5Params,
+} from './koldOsM5Route.js'
+import {
+  isKoldOsM6Path,
+  filterKoldOsM6Params,
+} from './koldOsM6Route.js'
+import {
+  isKoldOsM7Path,
+  filterKoldOsM7Params,
+} from './koldOsM7Route.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -613,7 +642,9 @@ const IGUALA_COMPANY_ID = 35
 const UNIT_UOM_ID = 1
 const POS_CUSTOMER_ANALYTIC_PLAN_ID = 2
 const POS_CUSTOMER_ANALYTIC_CODE = 'IGU'
+const POS_CUSTOMER_ANALYTIC_CODES = ['IGU34', POS_CUSTOMER_ANALYTIC_CODE]
 const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
+const POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES = ['IGU34', POS_CUSTOMER_ANALYTIC_NAME]
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
 const ANGELICA_JAIMES_NAME_PARTS = ['angelica', 'jaimes']
 
@@ -992,9 +1023,33 @@ async function resolveAngelicaJaimesSalesScope() {
 }
 
 async function resolvePosCustomerAnalyticUnitId() {
+  const ids = await resolvePosCustomerAnalyticUnitIds()
+  return ids[0] || 0
+}
+
+async function resolvePosCustomerAnalyticUnitIds() {
+  const ids = []
+  const addId = (id) => {
+    const numericId = Number(id || 0)
+    if (numericId && !ids.includes(numericId)) ids.push(numericId)
+  }
+
+  for (const code of POS_CUSTOMER_ANALYTIC_CODES) {
+    const rows = pickListResponse(await readModelSorted('account.analytic.account', {
+      fields: ['id', 'name', 'code'],
+      domain: [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['code', '=', code]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 10,
+      sudo: 1,
+    }))
+    for (const row of rows) addId(row?.id)
+  }
+
   const domains = [
-    [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['code', '=', POS_CUSTOMER_ANALYTIC_CODE]],
-    [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['name', 'ilike', POS_CUSTOMER_ANALYTIC_NAME]],
+    ...POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES.map((name) => (
+      [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['name', 'ilike', name]]
+    )),
   ]
   for (const domain of domains) {
     const rows = pickListResponse(await readModelSorted('account.analytic.account', {
@@ -1002,26 +1057,36 @@ async function resolvePosCustomerAnalyticUnitId() {
       domain,
       sort_column: 'id',
       sort_desc: false,
-      limit: 1,
+      limit: 10,
       sudo: 1,
     }))
-    const analyticUnitId = Number(rows[0]?.id || 0)
-    if (analyticUnitId) return analyticUnitId
+    for (const row of rows) {
+      const code = normalizeScopeText(row?.code)
+      const name = normalizeScopeText(row?.name)
+      const isIgualaUnit = POS_CUSTOMER_ANALYTIC_CODES.some((candidate) => normalizeScopeText(candidate) === code)
+        || name.includes('igu34')
+        || (name.includes('igu') && name.includes('iguala'))
+      if (isIgualaUnit) addId(row?.id)
+    }
   }
-  return 0
+  return ids
 }
 
-function posCustomerAnalyticDomain(analyticUnitId) {
-  const resolvedAnalyticUnitId = Number(analyticUnitId || 0)
-  return resolvedAnalyticUnitId
-    ? [[POS_CUSTOMER_ANALYTIC_FIELD, '=', resolvedAnalyticUnitId]]
+function posCustomerAnalyticDomain(analyticUnitIds) {
+  const ids = (Array.isArray(analyticUnitIds) ? analyticUnitIds : [analyticUnitIds])
+    .map((id) => Number(id || 0))
+    .filter((id, index, list) => id > 0 && list.indexOf(id) === index)
+
+  if (ids.length > 1) return [[POS_CUSTOMER_ANALYTIC_FIELD, 'in', ids]]
+  return ids.length === 1
+    ? [[POS_CUSTOMER_ANALYTIC_FIELD, '=', ids[0]]]
     : [['id', '=', 0]]
 }
 
-function buildPosCustomerBaseDomains(companyId, analyticUnitId) {
+function buildPosCustomerBaseDomains(companyId, analyticUnitIds) {
   const baseDomain = [
     ['active', '=', true],
-    ...posCustomerAnalyticDomain(analyticUnitId),
+    ...posCustomerAnalyticDomain(analyticUnitIds),
   ]
   return companyId
     ? [
@@ -1031,10 +1096,10 @@ function buildPosCustomerBaseDomains(companyId, analyticUnitId) {
     : [baseDomain]
 }
 
-function buildPosCustomerIdBaseDomains(companyId, analyticUnitId) {
+function buildPosCustomerIdBaseDomains(companyId, analyticUnitIds) {
   const baseDomain = [
     ['active', '=', true],
-    ...posCustomerAnalyticDomain(analyticUnitId),
+    ...posCustomerAnalyticDomain(analyticUnitIds),
   ]
   return companyId
     ? [
@@ -1091,8 +1156,8 @@ async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 20
   const safeLimit = Math.min(Number(limit || 200) || 200, 500)
   // Use the plan_id=2 analytic account directly. The session/employee analytic account
   // is the CEDIS account (different plan), not the Unidad de Negocio used in x_analytic_un_id.
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomain = buildSupervisorCustomerDomains(analyticUnitId)
+  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+  const baseDomain = buildSupervisorCustomerDomains(analyticUnitIds)
   const query = String(q || '').trim()
   const rows = []
 
@@ -1121,8 +1186,8 @@ async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 20
 
 async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = {}) {
   const safeLimit = Math.min(Number(limit || 30) || 30, 100)
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0), analyticUnitId)
+  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0), analyticUnitIds)
   const query = String(q || '').trim()
   const rows = []
 
@@ -1134,7 +1199,7 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
   } else {
     const exactId = parsePosCustomerIdQuery(query)
     if (exactId) {
-      const idBaseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0), analyticUnitId)
+      const idBaseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0), analyticUnitIds)
       for (const baseDomain of idBaseDomains) {
         if (rows.length >= safeLimit) break
         addUniquePosCustomers(
@@ -1166,8 +1231,8 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
 
 async function getDefaultPosCustomerFromModels(companyId) {
   const baseCompanyId = Number(companyId || 0)
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomains = buildPosCustomerBaseDomains(baseCompanyId, analyticUnitId)
+  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+  const baseDomains = buildPosCustomerBaseDomains(baseCompanyId, analyticUnitIds)
   let partner = null
   for (const baseDomain of baseDomains) {
     const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', 'VENTA PUBLICO IGUALA']], 1)
@@ -1571,12 +1636,12 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const reqCompanyId = Number(query.get('company_id') || companyId || 0)
     return odooHttp('GET', '/pwa-admin/today-sales', {
       warehouse_id: reqWarehouseId || undefined,
       company_id: reqCompanyId || undefined,
+      date: query.get('date') || undefined,
     })
   }
 
@@ -1768,21 +1833,17 @@ async function directAdmin(method, path, body) {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const orderId = Number(query.get('order_id') || 0)
     if (!orderId) return null
-    const result = await readModel('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'payment_method', 'x_studio_mtodo_de_pago', 'warehouse_id'],
-      domain: [['id', '=', orderId]],
-      many: ['order_line'],
-      file: 'file',
-      limit: 1,
-      sudo: 1,
+    // Usa el endpoint dedicado de Odoo (gf_pwa_admin._sale_detail_payload), que
+    // expande las líneas con qty/price_unit/subtotal y devuelve folio + total.
+    // El readModel genérico /get_records NO expandía order_line ni el total, por
+    // eso el ticket salía sin productos, en $0 y con folio incorrecto (caía al
+    // fallback S{orderId}, que mostraba el id como si fuera el folio).
+    const result = await odooHttp('GET', '/pwa-admin/sale-detail', {
+      order_id: orderId,
     })
-    const order = pickFirstResponse(result)
-    if (!order) return null
-    return normalizeSaleOrder({
-      ...order,
-      total: Number(order.amount_total || 0),
-      customer: order.partner_id?.[1] || '',
-    })
+    const order = result?.data ?? result
+    if (!order || !order.id) return null
+    return normalizeSaleOrder(order)
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
@@ -8343,8 +8404,8 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, status: 'error', code: 'customer_id_required', message: 'customer_id requerido.' }
     }
 
-    const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitId), ['id', '=', customerId]]
+    const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitIds), ['id', '=', customerId]]
     const customer = (await readSupervisorCustomerRows(customerDomain, 1))[0] || null
     if (!customer?.id) {
       return { ok: false, status: 'error', code: 'customer_not_found', message: 'Cliente fuera de tu sucursal o no encontrado.' }
@@ -9242,10 +9303,127 @@ async function directKoldcup(method, path, body) {
   return odooJson(cleanPath, body || {})
 }
 
+// ── KOLD Tower M1 (gf_tower_m1) ── Odoo directo; PROHIBIDO fallback n8n ────
+async function directTower(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isTowerM1Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // el endpoint existe SOLO como GET en Odoo; jamás dejar caer esta ruta a n8n
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // odooHttp usa buildBaseHeaders => hereda X-GF-Employee-Token; errores llegan
+  // como ApiError(status/code) al manejo existente (401/403/400/503/500). Sin retries.
+  return odooHttp('GET', TOWER_M1_BACKLOG_PATH, filterTowerM1Params(query))
+}
+
+// ── KOLD OS M2 (gf_kold_os_m2) ── Odoo directo; PROHIBIDO fallback n8n ─────
+async function directKoldOsM2(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM2Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M2 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1: X-GF-Employee-Token vía
+  // buildBaseHeaders, errores como ApiError(status/code), sin retries.
+  return odooHttp('GET', cleanPath, filterKoldOsM2Params(query))
+}
+
+// ── KOLD OS M3 (gf_kold_os_m3) ── Odoo directo; PROHIBIDO fallback n8n ─────
+async function directKoldOsM3(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM3Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M3 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1 y M2.
+  return odooHttp('GET', cleanPath, filterKoldOsM3Params(query))
+}
+
+// ── KOLD OS M4 (gf_kold_os_m4) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Backend: gf_kold_os_m4 (GrupoVeniu/GrupoFrio PR #205), aún sin desplegar.
+async function directKoldOsM4(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM4Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M4 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1 y M2.
+  return odooHttp('GET', cleanPath, filterKoldOsM4Params(query))
+}
+
+// ── KOLD OS M5 (gf_kold_os_m5) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// KOLD OS M5 backend: cliente autenticado GET-only de inventario y flujo.
+async function directKoldOsM5(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM5Path(cleanPath)) return NO_DIRECT
+  if (method !== 'GET') {
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM5Params(query))
+}
+
+// ── KOLD OS M6 (gf_kold_os_m6) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Direct authenticated GET-only client for the KOLD OS M6 backend (caja,
+// cobranza, conciliación y liquidación). Sin número de PR: el backend está
+// construido en LOCAL y aún no publicado (el repo Odoo migra a grupofrio/gf), y
+// un número de PR en runtime envejece y miente.
+async function directKoldOsM6(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM6Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M6 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM6Params(query))
+}
+
+// ── KOLD OS M7 (gf_kold_os_m7) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Cliente autenticado GET-only del backend M7 (rentabilidad, costos, márgenes).
+// Backend en PR TEMPORAL #211, no desplegado: en producción resuelve unavailable.
+async function directKoldOsM7(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM7Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M7 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM7Params(query, cleanPath))
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
   const directHandlers = [
+    directTower,
+    directKoldOsM2,
+    directKoldOsM3,
+    directKoldOsM4,
+    directKoldOsM5,
+    directKoldOsM6,
+    directKoldOsM7,
     directProfile,
     directGerente,
     directAdmin,

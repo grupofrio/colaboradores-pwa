@@ -3,7 +3,7 @@ import { getAdminThemeScopeStyle } from '../adminTheme'
 
 export default function AdminThemeScope() {
   return (
-    <div style={getAdminThemeScopeStyle()}>
+    <div id="admin-theme-scope" style={getAdminThemeScopeStyle()}>
       <Outlet />
     </div>
   )
