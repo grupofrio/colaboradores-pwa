@@ -6,17 +6,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import { getDashboardData } from '../adminService'
+import { isAngelicaJaimesSession } from '../angyPosSalesBreakdown'
 import ActivityFeed from './ActivityFeed'
+import AngyPosProductBreakdown from './AngyPosProductBreakdown'
 
 const POLL_MS = 60_000
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
 export default function HubV2() {
-  const { warehouseId, companyId, companyLabel } = useAdmin()
+  const { warehouseId, companyId, companyLabel, employeeName } = useAdmin()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
+  const showAngyBreakdown = isAngelicaJaimesSession({ name: employeeName })
 
   useEffect(() => {
     let alive = true
@@ -119,6 +122,10 @@ export default function HubV2() {
           </div>
         ))}
       </div>
+
+      {showAngyBreakdown && (
+        <AngyPosProductBreakdown warehouseId={warehouseId} companyId={companyId} />
+      )}
 
       <ActivityFeed moduleId="hub" variant="embedded" />
 

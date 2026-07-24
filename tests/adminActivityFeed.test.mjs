@@ -31,6 +31,21 @@ test('buildModuleActivityFeed returns only sale events for pos module', () => {
   assert.equal(events.length, 1)
   assert.equal(events[0].type, 'sale')
   assert.equal(events[0].label, 'S14717')
+  assert.equal(events[0].orderId, 11)
+})
+
+test('normalizeSaleEvents exposes orderId from today-sales order_id field', () => {
+  // today-sales (gf_pwa_admin._sale_summary) devuelve `order_id`, no `id`.
+  const events = buildModuleActivityFeed('pos', {
+    sales: [
+      { order_id: 23983, name: 'S24006', amount_total: 21, date_order: '2026-07-22 17:15:00' },
+    ],
+  })
+
+  assert.equal(events.length, 1)
+  assert.equal(events[0].orderId, 23983)
+  assert.equal(events[0].id, 'sale-23983')
+  assert.equal(events[0].label, 'S24006')
 })
 
 test('buildModuleActivityFeed returns only transfer events for traspaso mp module', () => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import { getTodayExpenses, getTodayMpTransfers, getTodaySales } from '../api'
@@ -16,6 +17,7 @@ function normalizeList(payload) {
 
 export default function ActivityFeed({ moduleId = 'hub', variant = 'sidebar' }) {
   const { warehouseId, companyId } = useAdmin()
+  const navigate = useNavigate()
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [lastFetch, setLastFetch] = useState(null)
@@ -118,36 +120,57 @@ export default function ActivityFeed({ moduleId = 'hub', variant = 'sidebar' }) 
               : ev.type === 'transfer'
                 ? TOKENS.colors.blue3
                 : TOKENS.colors.warning
+            const canViewTicket = ev.type === 'sale' && ev.orderId
             return (
               <div key={ev.id} style={{
                 padding: '10px 12px', borderRadius: TOKENS.radius.md,
                 background: TOKENS.colors.surface,
                 border: `1px solid ${TOKENS.colors.border}`,
-                display: 'flex', alignItems: 'flex-start', gap: 10,
+                display: 'flex', flexDirection: 'column', gap: 8,
               }}>
-                <div style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: color, marginTop: 6, flexShrink: 0,
-                }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontSize: 11, fontWeight: 600, color: TOKENS.colors.text,
-                    margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {ev.label}
-                  </p>
-                  {ev.meta && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: color, marginTop: 6, flexShrink: 0,
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{
-                      fontSize: 10, color: TOKENS.colors.textLow, margin: 0, marginTop: 1,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      fontSize: 11, fontWeight: 600, color: TOKENS.colors.text,
+                      margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
-                      {ev.meta}
+                      {ev.label}
                     </p>
-                  )}
+                    {ev.meta && (
+                      <p style={{
+                        fontSize: 10, color: TOKENS.colors.textLow, margin: 0, marginTop: 1,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {ev.meta}
+                      </p>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
+                    {ev.valueLabel || `${ev.type === 'expense' ? '-' : ''}${fmt(ev.amount)}`}
+                  </span>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
-                  {ev.valueLabel || `${ev.type === 'expense' ? '-' : ''}${fmt(ev.amount)}`}
-                </span>
+                {canViewTicket && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/admin/ticket/${ev.orderId}`)}
+                    style={{
+                      alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 5,
+                      padding: '5px 10px', borderRadius: TOKENS.radius.sm,
+                      background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+                      color: TOKENS.colors.blue2, fontSize: 10, fontWeight: 600,
+                      cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+                    </svg>
+                    Ver ticket
+                  </button>
+                )}
               </div>
             )
           })}
