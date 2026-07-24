@@ -1,0 +1,296 @@
+.angy-pos-breakdown {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 22px;
+  color: #fff;
+  background:
+    radial-gradient(circle at top right, rgba(43, 143, 224, 0.13), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+}
+
+.angy-pos-breakdown__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.angy-pos-breakdown__eyebrow {
+  margin: 0 0 5px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.angy-pos-breakdown__header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(19px, 2.4vw, 26px);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.angy-pos-breakdown__date {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.angy-pos-breakdown__date input {
+  min-height: 44px;
+  padding: 9px 12px;
+  color: #fff;
+  color-scheme: dark;
+  background: rgba(3, 8, 17, 0.68);
+  border: 1px solid rgba(97, 178, 255, 0.22);
+  border-radius: 12px;
+}
+
+.angy-pos-breakdown__date input:focus-visible,
+.angy-pos-breakdown__message button:focus-visible {
+  outline: 2px solid #61b2ff;
+  outline-offset: 2px;
+}
+
+.angy-pos-breakdown__table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+}
+
+.angy-pos-breakdown__table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.angy-pos-breakdown__table th,
+.angy-pos-breakdown__table td {
+  padding: 13px 14px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.angy-pos-breakdown__table thead th {
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(3, 8, 17, 0.54);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.angy-pos-breakdown__table tbody td {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.angy-pos-breakdown__table tbody td:nth-child(2) {
+  color: #fff;
+  font-weight: 650;
+}
+
+.angy-pos-breakdown__table tfoot th,
+.angy-pos-breakdown__table tfoot td {
+  color: #fff;
+  background: rgba(43, 143, 224, 0.1);
+  border-bottom: 0;
+  font-weight: 750;
+}
+
+.angy-pos-breakdown__cards {
+  display: none;
+}
+
+.angy-pos-breakdown__card,
+.angy-pos-breakdown__mobile-totals {
+  min-width: 0;
+  padding: 16px;
+  background: rgba(3, 8, 17, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+}
+
+.angy-pos-breakdown__card-header {
+  min-width: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.angy-pos-breakdown__card-header h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #fff;
+  font-size: 15px;
+}
+
+.angy-pos-breakdown__card-header p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: #61b2ff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.angy-pos-breakdown__card-details,
+.angy-pos-breakdown__mobile-totals dl {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.angy-pos-breakdown__card-details div,
+.angy-pos-breakdown__mobile-totals dl div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.angy-pos-breakdown__card-details dt,
+.angy-pos-breakdown__mobile-totals dt {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+}
+
+.angy-pos-breakdown__card-details dd,
+.angy-pos-breakdown__mobile-totals dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.angy-pos-breakdown__mobile-totals {
+  background: rgba(43, 143, 224, 0.11);
+  border-color: rgba(97, 178, 255, 0.18);
+}
+
+.angy-pos-breakdown__mobile-totals > p {
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.angy-pos-breakdown__message,
+.angy-pos-breakdown__empty {
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  padding: 28px 18px;
+  color: rgba(255, 255, 255, 0.66);
+  text-align: center;
+  background: rgba(3, 8, 17, 0.42);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+}
+
+.angy-pos-breakdown__message p,
+.angy-pos-breakdown__empty p {
+  margin: 0;
+}
+
+.angy-pos-breakdown__message--error {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+.angy-pos-breakdown__message button {
+  min-height: 44px;
+  padding: 10px 18px;
+  color: #fff;
+  background: #15499b;
+  border: 1px solid rgba(97, 178, 255, 0.36);
+  border-radius: 12px;
+  font-weight: 750;
+}
+
+.angy-pos-breakdown__empty-totals {
+  display: grid;
+  width: min(100%, 560px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.angy-pos-breakdown__empty-totals div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 12px;
+}
+
+.angy-pos-breakdown__empty-totals span {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 10px;
+}
+
+.angy-pos-breakdown__empty-totals strong {
+  overflow-wrap: anywhere;
+  color: #fff;
+  font-size: 12px;
+}
+
+.angy-pos-breakdown__warning {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.23);
+  border-radius: 12px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .angy-pos-breakdown {
+    padding: 17px;
+    border-radius: 18px;
+  }
+
+  .angy-pos-breakdown__header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .angy-pos-breakdown__date {
+    width: 100%;
+  }
+
+  .angy-pos-breakdown__date input {
+    width: 100%;
+  }
+
+  .angy-pos-breakdown__table-wrap {
+    display: none;
+  }
+
+  .angy-pos-breakdown__cards {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .angy-pos-breakdown__empty-totals {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
