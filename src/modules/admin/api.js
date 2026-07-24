@@ -65,13 +65,13 @@ export function cancelSaleOrder(orderId, reason) {
   })
 }
 
-/** Ventas del día. Acepta { warehouseId, companyId } o un número legacy. */
+/** Ventas POS de un día. Acepta { warehouseId, companyId, date } o un número legacy. */
 export function getTodaySales(arg) {
   if (typeof arg === 'number' || typeof arg === 'string') {
     return api('GET', `/pwa-admin/today-sales?warehouse_id=${arg}`)
   }
-  const { warehouseId, companyId } = arg || {}
-  const qs = toQuery({ warehouse_id: warehouseId, company_id: companyId })
+  const { warehouseId, companyId, date } = arg || {}
+  const qs = toQuery({ warehouse_id: warehouseId, company_id: companyId, date })
   return api('GET', `/pwa-admin/today-sales${qs}`)
 }
 

@@ -1616,12 +1616,12 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const reqCompanyId = Number(query.get('company_id') || companyId || 0)
     return odooHttp('GET', '/pwa-admin/today-sales', {
       warehouse_id: reqWarehouseId || undefined,
       company_id: reqCompanyId || undefined,
+      date: query.get('date') || undefined,
     })
   }
 
