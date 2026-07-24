@@ -5,6 +5,7 @@ import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
 import { computePosSummary } from './posPricing'
+import { printTicketViaQz } from './ticketPrinter'
 
 export default function ScreenTicket() {
   const { session } = useSession()
@@ -15,6 +16,7 @@ export default function ScreenTicket() {
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [printMsg, setPrintMsg] = useState('')
 
   // Sale cancel flow (Sprint 4)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -75,9 +77,17 @@ export default function ScreenTicket() {
   const lines = order?.lines || order?.order_lines || []
   const { subtotal, total } = computePosSummary(lines)
 
-  const now = order?.date_order ? new Date(order.date_order) : new Date()
-  const dateStr = now.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' })
-  const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  // Odoo devuelve date_order en UTC sin sufijo (ej. "2026-07-22 17:15:00"). Si se
+  // parsea directo, el navegador lo toma como hora local y el ticket salía con
+  // desfase (+6h). Lo interpretamos como UTC (append 'Z') y lo mostramos SIEMPRE
+  // en hora de México, sin depender de la zona del equipo. Mismo patrón que
+  // AdminGastosForm / liquidacionesResponse.
+  const MX_TZ = 'America/Mexico_City'
+  const now = order?.date_order
+    ? new Date(String(order.date_order).replace(' ', 'T') + 'Z')
+    : new Date()
+  const dateStr = now.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: MX_TZ })
+  const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: MX_TZ })
   const folio = order?.name || `S${String(orderId).padStart(5, '0')}`
 
   // Mapping completo de métodos de pago (alineado con gf_pwa_admin.sale-create
@@ -105,8 +115,153 @@ export default function ScreenTicket() {
     return PAYMENT_METHOD_LABELS[key] || raw
   }
 
+  // Impresión térmica robusta: en vez de imprimir la página actual (que arrastra
+  // el layout de la app — filter:invert, min-height:100dvh anidados — y provocaba
+  // tira larga en blanco, colores invertidos y ticket incompleto), renderizamos el
+  // ticket como un documento HTML LIMPIO (blanco/negro, 72mm, sin filtros) en un
+  // iframe oculto y ese es el que se manda a la impresora.
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"]/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
+    ))
+  }
+
+  function buildTicketHtml() {
+    const rows = lines.map((l) => {
+      const qty = l.qty || l.product_uom_qty || 0
+      const price = l.price_unit || 0
+      return `<div class="row">
+        <span class="pname">${esc(qty)} x ${esc(l.product_name || l.name || 'Producto')}</span>
+        <span class="pnum">${esc(fmt(price))}</span>
+        <span class="pnum b">${esc(fmt(qty * price))}</span>
+      </div>`
+    }).join('')
+
+    // OJO: sin @page aquí. La altura exacta se inyecta en printTicket() tras medir
+    // el contenido, porque "size: 72mm auto" hacía que el driver usara su alto por
+    // defecto (3276mm) y salía una tira gigante en blanco.
+    return `<!doctype html><html><head><meta charset="utf-8">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      /* Sólo margin:0 (sin 'size': el largo lo limita el papel del driver). */
+      @page { margin: 0; }
+      /* El driver topa el lienzo a 72mm (no acepta forms más anchos) y el printer
+         arranca a imprimir con un OFFSET físico a la izquierda, que se comía el
+         borde izquierdo del ticket. Como no podemos ensanchar el lienzo, hacemos
+         el contenido más angosto (62mm) y lo EMPUJAMOS A LA DERECHA (margen
+         izquierdo mayor que el derecho) para compensar ese offset. Así el texto
+         cae completo dentro del área imprimible. */
+      html, body { width: 72mm; background: #fff; color: #000; font-family: 'Segoe UI', Arial, sans-serif; }
+      .ticket > :first-child { margin-top: 0 !important; }
+      .ticket { width: 62mm; margin: 0 2mm 0 8mm; padding: 1.5mm 0; }
+      .center { text-align: center; }
+      .brand { font-size: 15px; font-weight: 700; margin-top: 4px; }
+      .sub { font-size: 10px; color: #444; }
+      .meta { display: flex; justify-content: space-between; font-size: 10px; color: #333; margin-top: 8px; }
+      .folio { font-size: 11px; font-weight: 700; margin-top: 4px; }
+      .sep { border-top: 1px dashed #999; margin: 8px 0; }
+      .row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; gap: 4px; }
+      .pname { flex: 1; }
+      .pnum { min-width: 44px; text-align: right; }
+      .b { font-weight: 700; }
+      .totals { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 3px; }
+      .total { display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; border-top: 1px solid #000; padding-top: 5px; margin-top: 4px; }
+      .pay { text-align: center; font-size: 10px; color: #333; margin: 8px 0; }
+      .box { width: 88px; height: 88px; border: 2px solid #000; border-radius: 6px; margin: 8px auto; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      .box .t { font-size: 8px; color: #555; }
+      .box .f { font-size: 15px; font-weight: 700; }
+      .foot { text-align: center; font-size: 9px; color: #444; line-height: 1.35; margin-top: 4px; }
+      .foot.b { font-size: 10px; font-weight: 700; color: #000; margin-top: 4px; }
+    </style></head><body>
+      <div class="ticket">
+        <div class="center brand">GRUPO FRIO</div>
+        <div class="center sub">${esc(session?.warehouse_name || 'Sucursal')}</div>
+        <div class="meta"><span>Fecha: ${esc(dateStr)}</span><span>Hora: ${esc(timeStr)}</span></div>
+        <div class="folio">Folio: ${esc(folio)}</div>
+        <div class="sep"></div>
+        ${rows}
+        <div class="sep"></div>
+        <div class="totals"><span>Subtotal</span><span>${esc(fmt(subtotal))}</span></div>
+        <div class="total"><span>TOTAL</span><span>${esc(fmt(total))}</span></div>
+        <div class="pay">Metodo de pago: ${esc(paymentMethodLabel(order?.payment_method))}</div>
+        <div class="sep"></div>
+        <div class="box"><span class="t">TICKET</span><span class="f">${esc(folio)}</span></div>
+        <div class="foot">Presente este ticket en almacen para recoger su producto</div>
+        <div class="foot b">Gracias por su compra</div>
+      </div>
+    </body></html>`
+  }
+
+  // Impresión: intenta QZ Tray (ESC/POS directo — ancho completo, corte de
+  // cuchilla). Si QZ no está corriendo o falla, cae al método de iframe.
+  async function printTicket() {
+    setPrintMsg('')
+    try {
+      await printTicketViaQz({
+        sucursal: session?.warehouse_name || 'Sucursal',
+        dateStr,
+        timeStr,
+        folio,
+        lines,
+        fmt,
+        subtotal,
+        total,
+        paymentLabel: paymentMethodLabel(order?.payment_method),
+      })
+      return
+    } catch (e) {
+      // QZ no disponible / rechazó → fallback iframe. Avisamos discretamente.
+      setPrintMsg('Impresión directa no disponible, usando modo navegador.')
+      setTimeout(() => setPrintMsg(''), 4000)
+      printTicketFallback()
+    }
+  }
+
+  function printTicketFallback() {
+    const iframe = document.createElement('iframe')
+    iframe.setAttribute('aria-hidden', 'true')
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    // Ancho real (no 0) para que el contenido haga layout y podamos MEDIR su alto.
+    // Queda fuera de vista por el translate; no molesta al usuario.
+    iframe.style.width = '72mm'
+    iframe.style.height = '1px'
+    iframe.style.opacity = '0'
+    iframe.style.border = '0'
+    iframe.style.transform = 'translateY(1000vh)'
+    document.body.appendChild(iframe)
+
+    const cleanup = () => {
+      setTimeout(() => { try { document.body.removeChild(iframe) } catch { /* noop */ } }, 1000)
+    }
+
+    const win = iframe.contentWindow
+    const doc = win?.document
+    if (!win || !doc) { cleanup(); return }
+    win.addEventListener('afterprint', cleanup)
+    doc.open()
+    doc.write(buildTicketHtml())
+    doc.close()
+
+    // Sólo imprime. El tamaño de la hoja lo controla el papel del driver
+    // (80(72) x 210mm). NO se inyecta @page height: medir e inyectar la altura
+    // provocaba resultados impredecibles con este driver POS-80 — a veces tira
+    // gigante en blanco, a veces una hoja minúscula cortada antes de imprimir.
+    const doPrint = () => {
+      win.focus()
+      win.print()
+    }
+
+    if (doc.readyState === 'complete') {
+      setTimeout(doPrint, 80)
+    } else {
+      win.addEventListener('load', () => setTimeout(doPrint, 80))
+    }
+  }
+
   return (
-    <div style={{
+    <div id="ticket-root" style={{
       minHeight: '100dvh',
       background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)',
@@ -116,23 +271,16 @@ export default function ScreenTicket() {
         * { font-family: 'DM Sans', sans-serif; box-sizing: border-box; }
         button { border: none; background: none; cursor: pointer; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        /* La impresión NO usa @media print de esta página: el botón Imprimir
+           renderiza el ticket en un iframe limpio (buildTicketHtml) para evitar
+           el layout de la app (filter:invert + min-height:100dvh) que causaba
+           tira en blanco, colores invertidos y ticket incompleto. */
         @media print {
-          body * { visibility: hidden !important; }
-          #ticket-card, #ticket-card * { visibility: visible !important; }
-          #ticket-card {
-            position: absolute !important; left: 0 !important; top: 0 !important;
-            width: 80mm !important; max-width: 80mm !important;
-            background: white !important; color: black !important;
-            box-shadow: none !important; border: none !important;
-            border-radius: 0 !important; padding: 4mm !important;
-            margin: 0 !important;
-          }
-          #ticket-card * { color: black !important; background: transparent !important; }
           #ticket-actions { display: none !important; }
         }
       `}</style>
 
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
+      <div id="ticket-wrap" style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
           <button onClick={() => navigate('/admin/pos')} style={{
@@ -259,8 +407,13 @@ export default function ScreenTicket() {
 
             {/* Action Buttons */}
             <div id="ticket-actions" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 30 }}>
+              {printMsg && (
+                <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, textAlign: 'center', margin: 0 }}>
+                  {printMsg}
+                </p>
+              )}
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => window.print()} style={{
+                <button onClick={printTicket} style={{
                   flex: 1, padding: '14px 0', borderRadius: TOKENS.radius.md,
                   background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
                 }}>
