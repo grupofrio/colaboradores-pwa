@@ -287,4 +287,3 @@ La implementación se hará en una rama de trabajo. Al finalizar y verificar:
 4. integrar la rama verificada en `main`;
 5. resolver cualquier conflicto sin descartar trabajo existente;
 6. ejecutar nuevamente la verificación después del merge.
-
