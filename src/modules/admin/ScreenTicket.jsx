@@ -155,23 +155,23 @@ export default function ScreenTicket() {
       .ticket > :first-child { margin-top: 0 !important; }
       .ticket { width: 62mm; margin: 0 2mm 0 8mm; padding: 1.5mm 0; }
       .center { text-align: center; }
-      .brand { font-size: 15px; font-weight: 700; margin-top: 4px; }
-      .sub { font-size: 10px; color: #444; }
-      .meta { display: flex; justify-content: space-between; font-size: 10px; color: #333; margin-top: 8px; }
-      .folio { font-size: 11px; font-weight: 700; margin-top: 4px; }
+      .brand { font-size: 18px; font-weight: 700; margin-top: 4px; }
+      .sub { font-size: 12px; color: #444; }
+      .meta { display: flex; justify-content: space-between; font-size: 12px; color: #333; margin-top: 8px; }
+      .folio { font-size: 13px; font-weight: 700; margin-top: 4px; }
       .sep { border-top: 1px dashed #999; margin: 8px 0; }
-      .row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; gap: 4px; }
+      .row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; gap: 4px; }
       .pname { flex: 1; }
       .pnum { min-width: 44px; text-align: right; }
       .b { font-weight: 700; }
-      .totals { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 3px; }
-      .total { display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; border-top: 1px solid #000; padding-top: 5px; margin-top: 4px; }
-      .pay { text-align: center; font-size: 10px; color: #333; margin: 8px 0; }
+      .totals { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+      .total { display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; border-top: 1px solid #000; padding-top: 5px; margin-top: 4px; }
+      .pay { text-align: center; font-size: 12px; color: #333; margin: 8px 0; }
       .box { width: 88px; height: 88px; border: 2px solid #000; border-radius: 6px; margin: 8px auto; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-      .box .t { font-size: 8px; color: #555; }
-      .box .f { font-size: 15px; font-weight: 700; }
-      .foot { text-align: center; font-size: 9px; color: #444; line-height: 1.35; margin-top: 4px; }
-      .foot.b { font-size: 10px; font-weight: 700; color: #000; margin-top: 4px; }
+      .box .t { font-size: 10px; color: #555; }
+      .box .f { font-size: 18px; font-weight: 700; }
+      .foot { text-align: center; font-size: 11px; color: #444; line-height: 1.35; margin-top: 4px; }
+      .foot.b { font-size: 12px; font-weight: 700; color: #000; margin-top: 4px; }
     </style></head><body>
       <div class="ticket">
         <div class="center brand">GRUPO FRIO</div>
