@@ -5,6 +5,7 @@ import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
 import { computePosSummary } from './posPricing'
+import { resolveTicketCustomerName } from './ticketCustomer'
 import { printTicketViaQz } from './ticketPrinter'
 
 export default function ScreenTicket() {
@@ -89,6 +90,7 @@ export default function ScreenTicket() {
   const dateStr = now.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: MX_TZ })
   const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: MX_TZ })
   const folio = order?.name || `S${String(orderId).padStart(5, '0')}`
+  const customerName = resolveTicketCustomerName(order)
 
   // Mapping completo de métodos de pago (alineado con gf_pwa_admin.sale-create
   // y catálogo de account.payment.method + Odoo 18 POS payment terms)
@@ -159,6 +161,7 @@ export default function ScreenTicket() {
       .sub { font-size: 12px; color: #444; }
       .meta { display: flex; justify-content: space-between; font-size: 12px; color: #333; margin-top: 8px; }
       .folio { font-size: 13px; font-weight: 700; margin-top: 4px; }
+      .customer { font-size: 12px; color: #333; margin-top: 2px; }
       .sep { border-top: 1px dashed #999; margin: 8px 0; }
       .row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; gap: 4px; }
       .pname { flex: 1; }
@@ -178,6 +181,7 @@ export default function ScreenTicket() {
         <div class="center sub">${esc(session?.warehouse_name || 'Sucursal')}</div>
         <div class="meta"><span>Fecha: ${esc(dateStr)}</span><span>Hora: ${esc(timeStr)}</span></div>
         <div class="folio">Folio: ${esc(folio)}</div>
+        <div class="customer">Cliente: ${esc(customerName)}</div>
         <div class="sep"></div>
         ${rows}
         <div class="sep"></div>
@@ -202,6 +206,7 @@ export default function ScreenTicket() {
         dateStr,
         timeStr,
         folio,
+        customerName,
         lines,
         fmt,
         subtotal,
@@ -346,6 +351,9 @@ export default function ScreenTicket() {
               </div>
               <div style={{ marginBottom: 12 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>Folio: {folio}</span>
+                <div style={{ fontSize: 12, color: '#333', marginTop: 2 }}>
+                  Cliente: {customerName}
+                </div>
               </div>
 
               {/* Separator */}

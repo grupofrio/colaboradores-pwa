@@ -79,11 +79,26 @@ test('enlarges every browser-fallback ticket text style without changing paper g
     source.indexOf('  async function printTicket()'),
   )
 
+  assert.match(
+    printHtml,
+    /<div class="customer">Cliente: \$\{esc\(customerName\)\}<\/div>/,
+  )
+  assert.match(
+    source,
+    /<div[^>]*>\s*Cliente: \{customerName\}\s*<\/div>/,
+  )
+  assert.match(
+    source,
+    /customerName,\s*lines,/,
+    'QZ ticket payload must receive the normalized customer name',
+  )
+
   const expectedSizes = [
     [/\.brand \{ font-size: 18px;/, 'brand'],
     [/\.sub \{ font-size: 12px;/, 'branch'],
     [/\.meta \{[^}]*font-size: 12px;/, 'date and time'],
     [/\.folio \{ font-size: 13px;/, 'folio'],
+    [/\.customer \{ font-size: 12px;/, 'customer'],
     [/\.row \{[^}]*font-size: 12px;/, 'product rows'],
     [/\.totals \{[^}]*font-size: 12px;/, 'subtotal'],
     [/\.total \{[^}]*font-size: 18px;/, 'total'],
