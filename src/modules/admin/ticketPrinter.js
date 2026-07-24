@@ -23,6 +23,7 @@ const ALIGN_CENTER = ESC + 'a' + '\x01'
 const BOLD_ON = ESC + 'E' + '\x01'
 const BOLD_OFF = ESC + 'E' + '\x00'
 const SIZE_NORMAL = GS + '!' + '\x00'  // 1x1
+const SIZE_DOUBLE_HEIGHT = GS + '!' + '\x10' // 1x ancho + 2x alto
 const SIZE_DOUBLE = GS + '!' + '\x11'  // 2x ancho + 2x alto
 const FEED_AND_CUT = GS + 'V' + '\x42' + '\x00' // feed + corte parcial
 
@@ -110,7 +111,14 @@ export function buildEscPosTicket(t) {
   out.push(INIT)
 
   // Encabezado (el logo se antepone como imagen en printTicketViaQz)
-  out.push(ALIGN_CENTER, SIZE_DOUBLE, BOLD_ON, 'GRUPO FRIO\n', BOLD_OFF, SIZE_NORMAL)
+  out.push(
+    ALIGN_CENTER,
+    SIZE_DOUBLE,
+    BOLD_ON,
+    'GRUPO FRIO\n',
+    BOLD_OFF,
+    SIZE_DOUBLE_HEIGHT,
+  )
   out.push(sucursal + '\n')
   out.push('\n')
   out.push(ALIGN_LEFT)
@@ -132,7 +140,13 @@ export function buildEscPosTicket(t) {
 
   out.push(dashes + '\n')
   out.push(lr('Subtotal', fmt(subtotal)) + '\n')
-  out.push(BOLD_ON, SIZE_DOUBLE, lr('TOTAL', fmt(total), LINE_WIDTH / 2) + '\n', SIZE_NORMAL, BOLD_OFF)
+  out.push(
+    BOLD_ON,
+    SIZE_DOUBLE,
+    lr('TOTAL', fmt(total), LINE_WIDTH / 2) + '\n',
+    SIZE_DOUBLE_HEIGHT,
+    BOLD_OFF,
+  )
   out.push(ALIGN_LEFT, lr('Metodo de pago:', paymentLabel) + '\n')
   out.push(doubleLine + '\n')
 
@@ -150,6 +164,7 @@ export function buildEscPosTicket(t) {
 
   // Avance final + corte de cuchilla
   out.push('\n\n')
+  out.push(SIZE_NORMAL)
   out.push(FEED_AND_CUT)
 
   return out
