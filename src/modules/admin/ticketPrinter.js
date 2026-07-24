@@ -100,6 +100,7 @@ export function buildEscPosTicket(t) {
     dateStr = '',
     timeStr = '',
     folio = '',
+    customerName = 'VENTA PUBLICO',
     lines = [],
     fmt = (n) => String(n),
     subtotal = 0,
@@ -124,6 +125,9 @@ export function buildEscPosTicket(t) {
   out.push(ALIGN_LEFT)
   out.push(lr(`Fecha: ${dateStr}`, `Hora: ${timeStr}`) + '\n')
   out.push(BOLD_ON, `Folio: ${folio}\n`, BOLD_OFF)
+  for (const row of wrap(`Cliente: ${customerName}`, LINE_WIDTH)) {
+    out.push(row + '\n')
+  }
   out.push(doubleLine + '\n')
 
   // Productos
