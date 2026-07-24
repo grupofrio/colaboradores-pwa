@@ -150,6 +150,144 @@ export const MODULES = [
     navPriority: 10,
   },
 
+  // ── KOLD OS · M2 — Planeación y readiness (observatorio read-only) ───────
+  // Evidencia incumplimientos de planeación (territorio/solver/capacidad/
+  // carga/snapshots/resultado real) desde la API autenticada gf_kold_os_m2.
+  // accessPolicy 'm2': tarjeta, nav Y clic se deciden con readM2Access
+  // (direccion_general x_job_key o admin_plataforma tower_status — misma
+  // verdad, ver access.js), NUNCA por roles genéricos. `roles` queda SOLO
+  // como documentación; isModuleVisibleForRoles excluye módulos con política.
+  // M2PlaneacionRoute (App.jsx) revalida como autoridad final de la ruta.
+  {
+    id:     'planeacion',
+    label:  'Planeación',
+    shortLabel: 'Planeación',
+    route:  '/planeacion',
+    tone:   'steel',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm2',
+    status: 'live',
+    icon:   'supervision',
+    navPriority: 13,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
+  // ── KOLD OS · M3 — Ejecución de rutas (observatorio read-only) ────────────
+  // Evidencia incumplimientos de EJECUCIÓN (arranque/paradas/comercial/carga/
+  // incidentes/cierre/plan-vs-real) desde la API autenticada gf_kold_os_m3.
+  // accessPolicy 'm3': misma mecánica que M2 — se resuelve por el registro
+  // ACCESS_POLICY_RESOLVERS de navModel, NUNCA por roles genéricos.
+  // M3EjecucionRoute (App.jsx) revalida como autoridad final.
+  {
+    id:     'ejecucion',
+    label:  'Ejecución de rutas',
+    shortLabel: 'Ejecución',
+    route:  '/ejecucion',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm3',
+    status: 'live',
+    icon:   'ruta',
+    navPriority: 14,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
+  // ── KOLD OS · M4 — Ventas y clientes (observatorio read-only) ────────────
+  // Evidencia de la operación comercial (maestro de clientes, canal, leads,
+  // pedidos confirmados, precio/descuento, recurrencia, portafolio,
+  // pérdida/recompra, señal M4→M2) desde la API autenticada gf_kold_os_m4
+  // (aún sin instalación ni validación runtime).
+  // accessPolicy 'm4': tarjeta, nav Y clic se deciden con readM4Access
+  // mediante ACCESS_POLICY_RESOLVERS en navModel, NUNCA por roles
+  // genéricos. `roles` queda SOLO como documentación. M4VentasRoute (App.jsx)
+  // revalida como autoridad final de la ruta.
+  {
+    id:     'ventas-clientes',
+    label:  'Ventas y clientes',
+    shortLabel: 'Ventas',
+    route:  '/ventas-clientes',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm4',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 15,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
+  // ── KOLD OS · M5 — Inventario y flujo (observatorio read-only) ───────────
+  // M5 observa carga, salidas, devoluciones y señales de conciliación sin
+  // modificar inventario, pickings, planes ni conciliaciones.
+  {
+    id:     'inventario-flujo',
+    label:  'Inventario y flujo',
+    shortLabel: 'Inventario',
+    route:  '/inventario-flujo',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm5',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 16,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
+  // ── KOLD OS · M6 — Caja y conciliación (observatorio read-only) ───────────
+  // Señales del ESTADO FINANCIERO/ADMINISTRATIVO de caja: facturación y cuentas
+  // por cobrar, pagos, caja de ruta, cierre de caja, cierre administrativo,
+  // conciliación, cartera y aging. M6 NO afirma un cuadre: presenta señales
+  // reportadas, cobertura de instrumentación y capacidades no disponibles.
+  //
+  // La disponibilidad se confirma únicamente con la API autenticada y su flag;
+  // la PWA no infiere instalación ni habilitación desde el cliente.
+  //
+  // accessPolicy 'm6': tarjeta, nav Y clic se deciden con readM6Access (misma
+  // mecánica inline que M2), NUNCA por roles genéricos. `roles` queda SOLO como
+  // documentación. M6CajaRoute (App.jsx) revalida como autoridad final.
+  //
+  // OJO — a diferencia de M2, M6 NO acepta `admin_plataforma`: su backend sólo
+  // valida el job key `direccion_general`. Aceptarlo aquí mostraría la tarjeta a
+  // quien el backend responde 403 (el bug de M1).
+  {
+    id:     'cash-reconciliation',
+    label:  'Caja y conciliación',
+    shortLabel: 'Caja',
+    route:  '/caja-conciliacion',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm6',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 17,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
+  // ── KOLD OS · M7 — Rentabilidad y costos (observatorio read-only) ─────────
+  // Rentabilidad, costos, márgenes y desempeño económico. M7 v1 sólo alcanza
+  // NIVEL L1 (ingreso observable por moneda): NO afirma utilidad, margen real ni
+  // rentabilidad completa. accessPolicy 'm7' se resuelve con readM7Access (misma
+  // autoridad que tarjeta, nav, clic y route guard). Como M6, NO acepta
+  // `admin_plataforma`: el backend #211 sólo valida `direccion_general`.
+  {
+    id:     'profitability-costs',
+    label:  'Rentabilidad y costos',
+    shortLabel: 'Rentabilidad',
+    route:  '/rentabilidad-costos',
+    tone:   'blueDeep',
+    roles:  ['direccion_general'],
+    accessPolicy: 'm7',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 18,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',
@@ -175,13 +313,38 @@ export const MODULES = [
     icon:   'admin',
     navPriority: 12,
   },
+
+  // ── KOLD Tower M1 — superficie de supervisión (read-only) ────────────────
+  // towerGated: la visibilidad NO se decide por x_job_key sino por el rol
+  // AUTORITATIVO tower_status (session.employee.tower_status), vía
+  // readAuthoritativeTowerStatus (allowlist dura admin_plataforma/
+  // supervisor_ventas). `roles` queda SOLO como documentación/coherencia; el
+  // gate real de visibilidad es towerGated. TowerRoute sigue siendo la
+  // autoridad final de la ruta. La pantalla muestra feature_disabled si el
+  // flag backend gf_tower.m1.enabled está OFF.
+  {
+    id:     'torre_operativa',
+    label:  'Torre operativa',
+    shortLabel: 'Torre',
+    route:  '/torre/backlog',
+    tone:   'blue',
+    roles:  ['admin_plataforma', 'supervisor_ventas'],
+    towerGated: true,
+    showOnHome: true,   // explícito: tarjeta en el home (autoridad = tower_status)
+    showInNav:  true,   // explícito: entrada en la navegación global
+    status: 'live',
+    icon:   'torres',
+    navPriority: 15,
+  },
 ]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** ¿el módulo es visible para alguno de estos roles? (fail-closed) */
+/** ¿el módulo es visible para alguno de estos roles (x_job_key)? (fail-closed)
+ *  Los módulos `towerGated` o con `accessPolicy` NUNCA son visibles por rol
+ *  genérico: su autoridad vive en navModel.isModuleVisibleForSession. */
 export function isModuleVisibleForRoles(module, roles = []) {
-  if (!module || !Array.isArray(module.roles)) return false
+  if (!module || module.towerGated || module.accessPolicy || !Array.isArray(module.roles)) return false
   return module.roles.includes('*') || roles.some((role) => module.roles.includes(role))
 }
 

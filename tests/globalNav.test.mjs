@@ -56,13 +56,14 @@ test('orden determinista: mismas roles => mismo orden en llamadas repetidas', ()
   assert.deepEqual(a, b)
 })
 
-// ── Tower nunca aparece ─────────────────────────────────────────────────────
-test('ningún rol ve Tower en la navegación (no está en el registry)', () => {
+// ── Tower solo aparece con tower_status autoritativo (NO por x_job_key) ──────
+test('sin tower_status: ningún rol (por x_job_key) ve Torre en la navegación', () => {
   const isTowerRoute = (r) => r === '/torre' || String(r).startsWith('/torre/')
+  // Sesiones con SOLO role (x_job_key), sin session.employee.tower_status.
   for (const role of ['supervisor_ventas', 'gerente_sucursal', 'jefe_ruta', 'direccion_general', 'auxiliar_admin', 'operador_torres']) {
     const nav = getNavModules(s(role))
-    assert.ok(nav.every((m) => !isTowerRoute(m.route)), `Tower (/torre) ausente para ${role}`)
-    assert.ok(!ids(nav).includes('torre_backlog') && !ids(nav).includes('torre_operativa'))
+    assert.ok(nav.every((m) => !isTowerRoute(m.route)), `Torre ausente para ${role} sin tower_status`)
+    assert.ok(!ids(nav).includes('torre_operativa'), `torre_operativa oculta para ${role}`)
   }
 })
 

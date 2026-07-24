@@ -11,6 +11,30 @@ import {
   filterTowerM1Params,
 } from './towerM1Route.js'
 import {
+  isKoldOsM2Path,
+  filterKoldOsM2Params,
+} from './koldOsM2Route.js'
+import {
+  isKoldOsM3Path,
+  filterKoldOsM3Params,
+} from './koldOsM3Route.js'
+import {
+  isKoldOsM4Path,
+  filterKoldOsM4Params,
+} from './koldOsM4Route.js'
+import {
+  isKoldOsM5Path,
+  filterKoldOsM5Params,
+} from './koldOsM5Route.js'
+import {
+  isKoldOsM6Path,
+  filterKoldOsM6Params,
+} from './koldOsM6Route.js'
+import {
+  isKoldOsM7Path,
+  filterKoldOsM7Params,
+} from './koldOsM7Route.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -1132,8 +1156,8 @@ async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 20
   const safeLimit = Math.min(Number(limit || 200) || 200, 500)
   // Use the plan_id=2 analytic account directly. The session/employee analytic account
   // is the CEDIS account (different plan), not the Unidad de Negocio used in x_analytic_un_id.
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomain = buildSupervisorCustomerDomains(analyticUnitId)
+  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+  const baseDomain = buildSupervisorCustomerDomains(analyticUnitIds)
   const query = String(q || '').trim()
   const rows = []
 
@@ -1809,21 +1833,17 @@ async function directAdmin(method, path, body) {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const orderId = Number(query.get('order_id') || 0)
     if (!orderId) return null
-    const result = await readModel('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'payment_method', 'x_studio_mtodo_de_pago', 'warehouse_id'],
-      domain: [['id', '=', orderId]],
-      many: ['order_line'],
-      file: 'file',
-      limit: 1,
-      sudo: 1,
+    // Usa el endpoint dedicado de Odoo (gf_pwa_admin._sale_detail_payload), que
+    // expande las líneas con qty/price_unit/subtotal y devuelve folio + total.
+    // El readModel genérico /get_records NO expandía order_line ni el total, por
+    // eso el ticket salía sin productos, en $0 y con folio incorrecto (caía al
+    // fallback S{orderId}, que mostraba el id como si fuera el folio).
+    const result = await odooHttp('GET', '/pwa-admin/sale-detail', {
+      order_id: orderId,
     })
-    const order = pickFirstResponse(result)
-    if (!order) return null
-    return normalizeSaleOrder({
-      ...order,
-      total: Number(order.amount_total || 0),
-      customer: order.partner_id?.[1] || '',
-    })
+    const order = result?.data ?? result
+    if (!order || !order.id) return null
+    return normalizeSaleOrder(order)
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
@@ -8384,8 +8404,8 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, status: 'error', code: 'customer_id_required', message: 'customer_id requerido.' }
     }
 
-    const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitId), ['id', '=', customerId]]
+    const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitIds), ['id', '=', customerId]]
     const customer = (await readSupervisorCustomerRows(customerDomain, 1))[0] || null
     if (!customer?.id) {
       return { ok: false, status: 'error', code: 'customer_not_found', message: 'Cliente fuera de tu sucursal o no encontrado.' }
@@ -9299,11 +9319,111 @@ async function directTower(method, path) {
   return odooHttp('GET', TOWER_M1_BACKLOG_PATH, filterTowerM1Params(query))
 }
 
+// ── KOLD OS M2 (gf_kold_os_m2) ── Odoo directo; PROHIBIDO fallback n8n ─────
+async function directKoldOsM2(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM2Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M2 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1: X-GF-Employee-Token vía
+  // buildBaseHeaders, errores como ApiError(status/code), sin retries.
+  return odooHttp('GET', cleanPath, filterKoldOsM2Params(query))
+}
+
+// ── KOLD OS M3 (gf_kold_os_m3) ── Odoo directo; PROHIBIDO fallback n8n ─────
+async function directKoldOsM3(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM3Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M3 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1 y M2.
+  return odooHttp('GET', cleanPath, filterKoldOsM3Params(query))
+}
+
+// ── KOLD OS M4 (gf_kold_os_m4) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Backend: gf_kold_os_m4 (GrupoVeniu/GrupoFrio PR #205), aún sin desplegar.
+async function directKoldOsM4(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM4Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M4 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1 y M2.
+  return odooHttp('GET', cleanPath, filterKoldOsM4Params(query))
+}
+
+// ── KOLD OS M5 (gf_kold_os_m5) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// KOLD OS M5 backend: cliente autenticado GET-only de inventario y flujo.
+async function directKoldOsM5(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM5Path(cleanPath)) return NO_DIRECT
+  if (method !== 'GET') {
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM5Params(query))
+}
+
+// ── KOLD OS M6 (gf_kold_os_m6) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Direct authenticated GET-only client for the KOLD OS M6 backend (caja,
+// cobranza, conciliación y liquidación). Sin número de PR: el backend está
+// construido en LOCAL y aún no publicado (el repo Odoo migra a grupofrio/gf), y
+// un número de PR en runtime envejece y miente.
+async function directKoldOsM6(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM6Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M6 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM6Params(query))
+}
+
+// ── KOLD OS M7 (gf_kold_os_m7) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Cliente autenticado GET-only del backend M7 (rentabilidad, costos, márgenes).
+// Backend en PR TEMPORAL #211, no desplegado: en producción resuelve unavailable.
+async function directKoldOsM7(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM7Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M7 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM7Params(query, cleanPath))
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
   const directHandlers = [
     directTower,
+    directKoldOsM2,
+    directKoldOsM3,
+    directKoldOsM4,
+    directKoldOsM5,
+    directKoldOsM6,
+    directKoldOsM7,
     directProfile,
     directGerente,
     directAdmin,

@@ -12,6 +12,12 @@ import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext
 import { isValidAuthenticatedSession } from './lib/session'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
+import { readM2Access } from './modules/planeacion/m2/access'
+import { readM3Access } from './modules/ejecucion/m3/access'
+import { readM4Access } from './modules/ventas/m4/access'
+import { readM5Access } from './modules/inventario/m5/access'
+import { readM6Access } from './modules/caja-conciliacion/m6/access'
+import { readM7Access } from './modules/rentabilidad-costos/m7/access'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -27,6 +33,18 @@ const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente
 const ScreenKoldTowerE1 = lazy(() => import('./modules/torre/e1/ScreenKoldTowerE1'))
 // M1-D — Backlog M1 read-only (mismo gate TowerRoute; SIN menú, solo ruta directa)
 const ScreenM1Backlog = lazy(() => import('./modules/torre/m1/ScreenM1Backlog'))
+// KOLD OS · M2 — Planeación y readiness (observatorio read-only, gate propio M2PlaneacionRoute)
+const ScreenPlaneacionM2 = lazy(() => import('./modules/planeacion/ScreenPlaneacionM2'))
+// KOLD OS · M3 — Ejecución de rutas (observatorio read-only, gate propio M3EjecucionRoute)
+const ScreenEjecucionM3 = lazy(() => import('./modules/ejecucion/ScreenEjecucionM3'))
+// KOLD OS · M4 — Ventas y clientes (observatorio read-only, gate propio M4VentasRoute)
+const ScreenVentasM4 = lazy(() => import('./modules/ventas/ScreenVentasM4'))
+// KOLD OS · M5 — Inventario y flujo (observatorio read-only, gate propio M5InventarioRoute)
+const ScreenInventarioM5 = lazy(() => import('./modules/inventario/ScreenInventarioM5'))
+// KOLD OS · M6 — Caja y conciliación (observatorio read-only, gate propio M6CajaRoute)
+const ScreenCajaConciliacionM6 = lazy(() => import('./modules/caja-conciliacion/ScreenCajaConciliacionM6'))
+// KOLD OS · M7 — Rentabilidad y costos (observatorio read-only, gate propio M7RentabilidadRoute)
+const ScreenRentabilidadCostosM7 = lazy(() => import('./modules/rentabilidad-costos/ScreenRentabilidadCostosM7'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -220,6 +238,99 @@ function ScreenKoldTowerE1Mount() {
 function ScreenM1BacklogMount() {
   const { session } = useSession()
   return <ScreenM1Backlog session={session} />
+}
+
+// KOLD OS · M2 (Planeación) — gate fail-closed PROPIO (NO reutiliza el de Tower):
+// direccion_general (x_job_key efectivo) o admin_plataforma (tower_status
+// AUTORITATIVO). Cualquier otra sesión => redirect seguro a "/". Cero writes.
+function M2PlaneacionRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM2Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+// KOLD OS · M6 (Caja y conciliación) — gate fail-closed PROPIO: SÓLO
+// direccion_general (x_job_key efectivo). Cualquier otra sesión => redirect
+// seguro a "/". Cero writes.
+//
+// OJO — a diferencia de M2PlaneacionRoute, aquí NO se acepta el tower_status
+// `admin_plataforma`: el backend M6 sólo valida el job key. Si el frontend fuera
+// más permisivo, la tarjeta se vería y el endpoint respondería 403 (bug de M1).
+function M6CajaRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM6Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenCajaConciliacionM6Mount() {
+  const { session } = useSession()
+  return <ScreenCajaConciliacionM6 session={session} />
+}
+
+// KOLD OS · M7 (Rentabilidad y costos) — gate fail-closed PROPIO: SÓLO
+// direccion_general. Como M6, NO acepta admin_plataforma: el backend #211 sólo
+// valida el job key; ser más permisivo mostraría la tarjeta con endpoint 403.
+function M7RentabilidadRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM7Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenRentabilidadCostosM7Mount() {
+  const { session } = useSession()
+  return <ScreenRentabilidadCostosM7 session={session} />
+}
+
+function ScreenPlaneacionM2Mount() {
+  const { session } = useSession()
+  return <ScreenPlaneacionM2 session={session} />
+}
+
+// KOLD OS · M3 (Ejecución de rutas) — gate fail-closed PROPIO, misma mecánica
+// que M2 y sin reutilizar el de Tower: cada módulo revalida con SU contrato.
+// El route guard es la autoridad FINAL, independiente de lo que decida la nav.
+function M3EjecucionRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM3Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenEjecucionM3Mount() {
+  const { session } = useSession()
+  return <ScreenEjecucionM3 session={session} />
+}
+
+// KOLD OS · M4 (Ventas y clientes) — gate fail-closed PROPIO, misma mecánica
+// que M2 y sin reutilizar el de Tower: cada módulo revalida con SU contrato.
+// El route guard es la autoridad FINAL, independiente de lo que decida la nav.
+function M4VentasRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM4Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenVentasM4Mount() {
+  const { session } = useSession()
+  return <ScreenVentasM4 session={session} />
+}
+
+// KOLD OS · M5 (Inventario y flujo) — gate fail-closed propio. La autoridad
+// final coincide con la tarjeta y la navegación: readM5Access(session).
+function M5InventarioRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readM5Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function ScreenInventarioM5Mount() {
+  const { session } = useSession()
+  return <ScreenInventarioM5 session={session} />
 }
 
 function ProductionOperatorRoute({ children, allowDelivered = false }) {
@@ -522,6 +633,10 @@ export default function App() {
             <Route path="/supervision/energia" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenEnergia /></ModuleRoleRoute>} />
             <Route path="/supervision/mantenimiento" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenMantenimiento /></ModuleRoleRoute>} />
             <Route path="/supervision/turno" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenControlTurno /></ModuleRoleRoute>} />
+            {/* Checklist HACCP visto por el supervisor: mismo screen que el operador,
+                pero gated por el módulo de supervisión (el supervisor no pertenece a
+                registro_produccion). El shift viaja por navegación (location.state.shift). */}
+            <Route path="/supervision/checklist" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenChecklist /></ModuleRoleRoute>} />
 
             {/* ── Admin Sucursal (POS + Gastos + Requisiciones) ────────── */}
             <Route path="/admin" element={<ModuleRoleRoute moduleId="admin_sucursal"><AdminThemeScope /></ModuleRoleRoute>}>
@@ -596,6 +711,19 @@ export default function App() {
             {/* V1 legacy routes */}
             <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />
             <Route path="/equipo/control" element={<Navigate to="/equipo" replace />} />
+
+            {/* ── KOLD OS · M2 — Planeación y readiness (read-only) ────── */}
+            <Route path="/planeacion" element={<M2PlaneacionRoute><ScreenPlaneacionM2Mount /></M2PlaneacionRoute>} />
+            {/* ── KOLD OS · M3 — Ejecución de rutas (read-only) ────────── */}
+            <Route path="/ejecucion" element={<M3EjecucionRoute><ScreenEjecucionM3Mount /></M3EjecucionRoute>} />
+            {/* ── KOLD OS · M4 — Ventas y clientes (read-only) ─────────── */}
+            <Route path="/ventas-clientes" element={<M4VentasRoute><ScreenVentasM4Mount /></M4VentasRoute>} />
+            {/* ── KOLD OS · M5 — Inventario y flujo (read-only) ────────── */}
+            <Route path="/inventario-flujo" element={<M5InventarioRoute><ScreenInventarioM5Mount /></M5InventarioRoute>} />
+            {/* ── KOLD OS · M6 — Caja y conciliación (read-only) ───────── */}
+            <Route path="/caja-conciliacion" element={<M6CajaRoute><ScreenCajaConciliacionM6Mount /></M6CajaRoute>} />
+            {/* ── KOLD OS · M7 — Rentabilidad y costos (read-only) ─────── */}
+            <Route path="/rentabilidad-costos" element={<M7RentabilidadRoute><ScreenRentabilidadCostosM7Mount /></M7RentabilidadRoute>} />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />
