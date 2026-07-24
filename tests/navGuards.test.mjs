@@ -177,8 +177,29 @@ test('Admin hub embeds today activity in the main content instead of action card
 
   assert.match(screen, /<AdminShell activeBlock="hub" title="Administración de sucursal" hideActivityFeed>/)
   assert.match(hub, /import ActivityFeed from '\.\/ActivityFeed'/)
+  assert.match(hub, /import \{ isAngelicaJaimesSession \} from '\.\.\/angyPosSalesBreakdown'/)
+  assert.match(hub, /import AngyPosProductBreakdown from '\.\/AngyPosProductBreakdown'/)
+  assert.match(hub, /const \{ warehouseId, companyId, companyLabel, employeeName \} = useAdmin\(\)/)
+  assert.match(hub, /const showAngyBreakdown = isAngelicaJaimesSession\(\{ name: employeeName \}\)/)
+  assert.match(
+    hub,
+    /\{showAngyBreakdown && \(\s*<AngyPosProductBreakdown\s+warehouseId=\{warehouseId\}\s+companyId=\{companyId\}\s*\/>\s*\)\}/,
+  )
   assert.match(hub, /<ActivityFeed moduleId="hub" variant="embedded" \/>/)
   assert.doesNotMatch(hub, /ACCIONES OPERATIVAS/)
+  assert.doesNotMatch(hub, /\bselectedDate\b/)
+  assert.doesNotMatch(hub, /\bdate\s*=/)
+  assert.equal((hub.match(/\buseEffect\s*\(/g) || []).length, 1, 'sin effects adicionales')
+  assert.equal((hub.match(/\bsetInterval\s*\(/g) || []).length, 1, 'sin polling adicional')
+  assert.equal((hub.match(/\bPOLL_MS\b/g) || []).length, 2, 'sin otro intervalo POLL_MS')
+
+  const kpiStripIdx = hub.indexOf('{kpis.map')
+  const angyBreakdownIdx = hub.indexOf('{showAngyBreakdown && (')
+  const activityFeedIdx = hub.indexOf('<ActivityFeed moduleId="hub"')
+  assert.ok(
+    kpiStripIdx !== -1 && kpiStripIdx < angyBreakdownIdx && angyBreakdownIdx < activityFeedIdx,
+    'desglose Angy después de KPIs y antes de ActivityFeed',
+  )
 })
 
 // ── Registry sano: todo módulo con ruta y roles no-vacíos ────────────────────
