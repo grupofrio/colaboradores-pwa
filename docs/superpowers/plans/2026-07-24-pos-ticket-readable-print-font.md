@@ -322,4 +322,3 @@ Review must check:
 
 For each valid finding, tighten a focused test, confirm RED, implement the
 smallest fix, confirm GREEN, and rerun Task 3.
-

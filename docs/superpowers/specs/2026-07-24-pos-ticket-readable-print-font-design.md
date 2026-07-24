@@ -1,7 +1,7 @@
 # Diseño: tipografía legible para el ticket POS impreso
 
-**Fecha:** 2026-07-24  
-**Alcance:** ticket POS usado por la gerenta  
+**Fecha:** 2026-07-24
+**Alcance:** ticket POS usado por la gerenta
 **Estado:** aprobado en conversación
 
 ## Objetivo
