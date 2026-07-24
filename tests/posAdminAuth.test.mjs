@@ -715,7 +715,7 @@ test('today sales delegates employee scope to the Odoo backend endpoint', async 
     const payload = options.body ? JSON.parse(options.body) : null
     calls.push({ url, options, payload })
 
-    if (url === '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34') {
+    if (url === '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34&date=2026-07-23') {
       return createJsonResponse(200, {
         ok: true,
         message: 'OK',
@@ -737,7 +737,7 @@ test('today sales delegates employee scope to the Odoo backend endpoint', async 
     return createJsonResponse(500, { error: `Unexpected ${url}` })
   }
 
-  const result = await api('GET', '/pwa-admin/today-sales?warehouse_id=89&company_id=34')
+  const result = await api('GET', '/pwa-admin/today-sales?warehouse_id=89&company_id=34&date=2026-07-23')
 
   const call = calls.find((entry) => entry.url.startsWith('/odoo-api/pwa-admin/today-sales'))
   assert.ok(call, 'today sales did not call the Odoo backend endpoint')
