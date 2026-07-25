@@ -1,7 +1,7 @@
 // --- AdminPosForm — Venta mostrador V2 (desktop) --------------------------
 // Backend: `gf_pwa_admin.sale-create` + `pos-products` + `customers`.
 // Mobile legacy sigue en ScreenPOS.jsx < 1024px.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
@@ -23,12 +23,21 @@ import {
 } from '../posCart'
 import {
   canRefreshCustomerPricelist,
+  hasValidPosCustomer,
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
+  toPositiveSafeIntegerId,
 } from '../posCustomers'
 import { logScreenError } from '../../shared/logScreenError'
 import { computePosSummary } from '../posPricing'
+import {
+  ADMIN_POS_FLOW,
+  buildPosTicketPath,
+  canOpenPosPayment,
+  classifyPosSaleCreateError,
+  normalizePosSaleResult,
+} from '../posFlow'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -39,7 +48,7 @@ export const POS_THRESHOLDS = {
   DIRECTOR_AUTH: 50000,
 }
 
-export default function AdminPosForm() {
+export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   const navigate = useNavigate()
   const { companyId, companyLabel, warehouseId, sucursal } = useAdmin()
 
@@ -52,6 +61,8 @@ export default function AdminPosForm() {
   const [cart, setCart] = useState([])
   const [customer, setCustomer] = useState({ id: null, name: 'VENTA PUBLICO' })
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
+  const [catalogCustomerId, setCatalogCustomerId] = useState(null)
+  const catalogRequestSeq = useRef(0)
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
@@ -61,6 +72,9 @@ export default function AdminPosForm() {
   const toast = useToast()
 
   const loadCatalog = useCallback(async (selectedPartnerId) => {
+    const requestId = ++catalogRequestSeq.current
+    const requestedCustomerId = toPositiveSafeIntegerId(selectedPartnerId) || null
+    setCatalogCustomerId(null)
     if (!warehouseId) {
       setProducts([])
       setPricelist({ id: null, name: '' })
@@ -77,6 +91,7 @@ export default function AdminPosForm() {
         companyId,
         partnerId: selectedPartnerId || undefined,
       })
+      if (requestId !== catalogRequestSeq.current) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
       setProducts(list)
       setPricelist({
@@ -84,12 +99,14 @@ export default function AdminPosForm() {
         name: catalog?.pricelist_name || '',
       })
       setCart((prev) => repriceCartFromCatalog(prev, list))
+      setCatalogCustomerId(requestedCustomerId)
       return true
     } catch (e) {
+      if (requestId !== catalogRequestSeq.current) return false
       setError(e?.message || 'Error cargando productos')
       return false
     } finally {
-      setLoading(false)
+      if (requestId === catalogRequestSeq.current) setLoading(false)
     }
   }, [companyId, warehouseId])
 
@@ -108,6 +125,7 @@ export default function AdminPosForm() {
         }
       } catch (e) {
         logScreenError('AdminPosForm', 'getDefaultCustomer', e)
+        setError(e?.message || 'No se pudo cargar el cliente predeterminado.')
       }
     })()
     return () => { alive = false }
@@ -140,6 +158,10 @@ export default function AdminPosForm() {
   }
 
   const { subtotal, total } = computePosSummary(cart)
+  const canOpenPayment = canOpenPosPayment(cart, customer, {
+    loading,
+    catalogCustomerId,
+  })
 
   const doCustomerSearch = useCallback(async (q) => {
     if (!shouldLoadCustomerSuggestions(q)) {
@@ -169,10 +191,18 @@ export default function AdminPosForm() {
   }, [showCustomerSearch, customerQuery, doCustomerSearch])
 
   function selectCustomer(c) {
+    const selectedCustomerId = toPositiveSafeIntegerId(c.id)
+    const isSameCustomer = selectedCustomerId === toPositiveSafeIntegerId(customer.id)
+    catalogRequestSeq.current += 1
+    setCatalogCustomerId(null)
+    setPayConfirm(null)
+    setLoading(true)
     setCustomer({ id: c.id, name: c.name })
+    setError('')
     setShowCustomerSearch(false)
     setCustomerQuery('')
     setCustomerResults([])
+    if (isSameCustomer) loadCatalog(selectedCustomerId)
   }
 
   async function refreshPricelistForCustomer() {
@@ -183,6 +213,17 @@ export default function AdminPosForm() {
 
   async function confirmPay() {
     if (!payConfirm || cart.length === 0) return
+    if (!hasValidPosCustomer(customer)) {
+      setError('Selecciona un cliente antes de cobrar.')
+      return
+    }
+    if (!canOpenPosPayment(cart, customer, {
+      loading,
+      catalogCustomerId,
+    })) {
+      setError('Espera a que termine de cargar la lista de precios del cliente antes de cobrar.')
+      return
+    }
 
     if (payConfirm === 'card') {
       const ref = cardRef.trim()
@@ -209,16 +250,32 @@ export default function AdminPosForm() {
           price_unit: c.price_unit,
         })),
       })
-      const data = result?.data ?? result
-      const orderId = data?.order_id || data?.id
-      if (orderId) {
+      const saleResult = normalizePosSaleResult(result)
+      if (saleResult.status === 'error') {
+        setError(saleResult.message)
+        return
+      }
+      if (saleResult.status === 'uncertain') {
+        setCart([])
+        setPayConfirm(null)
+        setError(saleResult.message || 'Venta creada pero sin folio. No vuelvas a cobrar; verifica la venta.')
+        return
+      }
+      const orderId = saleResult.orderId
+      const ticketPath = buildPosTicketPath(flow, orderId)
+      if (ticketPath) {
         toast.success('Venta registrada')
-        navigate(`/admin/ticket/${orderId}`, { state: { order_id: orderId } })
+        navigate(ticketPath, { state: { order_id: orderId } })
       } else {
         setError('Venta creada pero sin folio')
       }
     } catch (e) {
-      setError(e?.message || 'Error al crear venta')
+      const saleError = classifyPosSaleCreateError(e)
+      if (saleError.status === 'uncertain') {
+        setCart([])
+        setPayConfirm(null)
+      }
+      setError(saleError.message)
     } finally {
       setSubmitting(false)
       setPayConfirm(null)
@@ -802,8 +859,8 @@ export default function AdminPosForm() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
-                onClick={() => cart.length > 0 && setPayConfirm('cash')}
-                disabled={cart.length === 0}
+                onClick={() => canOpenPayment && setPayConfirm('cash')}
+                disabled={!canOpenPayment}
                 style={{
                   flex: 1,
                   padding: '14px 0',
@@ -812,8 +869,8 @@ export default function AdminPosForm() {
                     ? TOKENS.colors.surface
                     : `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
                   border: cart.length === 0 ? `1px solid ${TOKENS.colors.border}` : 'none',
-                  opacity: cart.length === 0 ? 0.5 : 1,
-                  cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: canOpenPayment ? 1 : 0.5,
+                  cursor: canOpenPayment ? 'pointer' : 'not-allowed',
                   fontSize: 13,
                   fontWeight: 700,
                   color: 'white',
@@ -824,8 +881,8 @@ export default function AdminPosForm() {
               </button>
               <button
                 type="button"
-                onClick={() => cart.length > 0 && setPayConfirm('card')}
-                disabled={cart.length === 0}
+                onClick={() => canOpenPayment && setPayConfirm('card')}
+                disabled={!canOpenPayment}
                 style={{
                   flex: 1,
                   padding: '14px 0',
@@ -834,8 +891,8 @@ export default function AdminPosForm() {
                     ? TOKENS.colors.surface
                     : `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
                   border: cart.length === 0 ? `1px solid ${TOKENS.colors.border}` : 'none',
-                  opacity: cart.length === 0 ? 0.5 : 1,
-                  cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: canOpenPayment ? 1 : 0.5,
+                  cursor: canOpenPayment ? 'pointer' : 'not-allowed',
                   fontSize: 13,
                   fontWeight: 700,
                   color: 'white',

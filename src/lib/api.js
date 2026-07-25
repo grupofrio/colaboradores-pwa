@@ -14,6 +14,8 @@ import {
   isKoldOsM2Path,
   filterKoldOsM2Params,
 } from './koldOsM2Route.js'
+import { toPositiveSafeIntegerId } from '../modules/admin/posCustomers.js'
+import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
 import {
   isKoldOsM3Path,
   filterKoldOsM3Params,
@@ -647,6 +649,8 @@ const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
 const POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES = ['IGU34', POS_CUSTOMER_ANALYTIC_NAME]
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
 const ANGELICA_JAIMES_NAME_PARTS = ['angelica', 'jaimes']
+const POS_DEFAULT_CUSTOMER_NAME = 'VENTA PUBLICO IGUALA'
+const NIGHT_POS_DEFAULT_CUSTOMER_NAME = 'VENTA PUBLICO IGUALA NOCHE'
 
 function shapePosCustomer(row = {}) {
   const pricelist = row.pricelist_id || row.property_product_pricelist
@@ -1230,16 +1234,26 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
 }
 
 async function getDefaultPosCustomerFromModels(companyId) {
+  const nightPos = canAccessHectorNightPos(getSession())
+  const targetName = nightPos
+    ? NIGHT_POS_DEFAULT_CUSTOMER_NAME
+    : POS_DEFAULT_CUSTOMER_NAME
   const baseCompanyId = Number(companyId || 0)
   const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
   const baseDomains = buildPosCustomerBaseDomains(baseCompanyId, analyticUnitIds)
   let partner = null
   for (const baseDomain of baseDomains) {
-    const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', 'VENTA PUBLICO IGUALA']], 1)
+    const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', targetName]], 1)
     if (exactRows[0]) {
       partner = exactRows[0]
       break
     }
+  }
+  if (!partner && nightPos) {
+    throw new ApiError('No se encontró el cliente Venta Publico Iguala Noche.', {
+      status: 404,
+      code: 'night_pos_default_customer_missing',
+    })
   }
   if (!partner) {
     const fallbackNames = ['PUBLICO', 'PUBLIC', 'MOSTRADOR']
@@ -1831,8 +1845,10 @@ async function directAdmin(method, path, body) {
 
   if (cleanPath === '/pwa-admin/sale-detail' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
-    const orderId = Number(query.get('order_id') || 0)
-    if (!orderId) return null
+    const orderId = toPositiveSafeIntegerId(query.get('order_id'))
+    if (!orderId) {
+      return { ok: false, error: 'order_id requerido' }
+    }
     // Usa el endpoint dedicado de Odoo (gf_pwa_admin._sale_detail_payload), que
     // expande las líneas con qty/price_unit/subtotal y devuelve folio + total.
     // El readModel genérico /get_records NO expandía order_line ni el total, por
@@ -1843,7 +1859,10 @@ async function directAdmin(method, path, body) {
     })
     const order = result?.data ?? result
     if (!order || !order.id) return null
-    return normalizeSaleOrder(order)
+    const normalizedOrder = normalizeSaleOrder(order)
+    return result?.data
+      ? { ...result, data: normalizedOrder }
+      : normalizedOrder
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
@@ -2248,19 +2267,15 @@ async function directAdmin(method, path, body) {
 
   // ── Sale cancel ─────────────────────────────────────────────────────────
   if (cleanPath === '/pwa-admin/sale-cancel' && method === 'POST') {
-    const id = Number(body?.order_id || 0)
-    if (!id) return { ok: false, error: 'order_id requerido' }
-    await createUpdate({
-      model: 'sale.order',
-      method: 'update',
-      ids: [id],
-      dict: {
-        state: 'cancel',
-      },
-      sudo: 1,
-      app: 'pwa_colaboradores',
+    const id = toPositiveSafeIntegerId(body?.order_id)
+    if (!id) {
+      return { ok: false, error: 'order_id requerido' }
+    }
+    return odooJson('/pwa-admin/sale-cancel', {
+      order_id: id,
+      reason: body?.reason || '',
+      employee_id: getSession().employee_id || undefined,
     })
-    return { ok: true, data: { id, state: 'cancel' } }
   }
 
   // ── Expense attachments (ir.attachment) ─────────────────────────────────

@@ -18,6 +18,8 @@ import { readM4Access } from './modules/ventas/m4/access'
 import { readM5Access } from './modules/inventario/m5/access'
 import { readM6Access } from './modules/caja-conciliacion/m6/access'
 import { readM7Access } from './modules/rentabilidad-costos/m7/access'
+import { canAccessHectorNightPos } from './modules/admin/nightPosAccess'
+import { NIGHT_POS_FLOW } from './modules/admin/posFlow'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -284,6 +286,13 @@ function M7RentabilidadRoute({ children }) {
 function ScreenRentabilidadCostosM7Mount() {
   const { session } = useSession()
   return <ScreenRentabilidadCostosM7 session={session} />
+}
+
+function NightPosRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (!canAccessHectorNightPos(session)) return <Navigate to="/" replace />
+  return children
 }
 
 function ScreenPlaneacionM2Mount() {
@@ -590,6 +599,10 @@ export default function App() {
             <Route path="/torre" element={<TowerRoute><ScreenKoldTowerE1Mount /></TowerRoute>} />
             {/* ── M1-D — Backlog M1 (read-only, mismo gate; SIN menú, ruta directa) ── */}
             <Route path="/torre/backlog" element={<TowerRoute><ScreenM1BacklogMount /></TowerRoute>} />
+
+            {/* ── POS nocturno — acceso nominal fail-closed, fuera de Admin ── */}
+            <Route path="/pos-nocturno" element={<NightPosRoute><ScreenPOS flow={NIGHT_POS_FLOW} /></NightPosRoute>} />
+            <Route path="/pos-nocturno/ticket/:orderId" element={<NightPosRoute><ScreenTicket flow={NIGHT_POS_FLOW} /></NightPosRoute>} />
 
             {/* ── Producción — Operadores ─────────────────────────────────── */}
             <Route path="/produccion" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenMiTurno /></ProductionOperatorRoute></ModuleRoleRoute>} />
