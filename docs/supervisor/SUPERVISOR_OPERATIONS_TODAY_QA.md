@@ -3,7 +3,7 @@
 ## Automatizado
 
 - [x] pruebas enfocadas — 193/193
-- [x] suite completa — 1479/1479
+- [x] suite completa — 1515/1515
 - [x] lint — 0 warnings
 - [x] build + leak guards — M3, M4, M7 y Supervisor verdes
 
