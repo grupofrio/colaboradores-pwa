@@ -52,7 +52,7 @@ Do not modify the dirty PWA checkout at
 
 ---
 
-### Task 1: Define the backend nocturnal cancellation decision
+### Task 1: Define the backend nocturnal scope and cancellation decision
 
 **Files:**
 
@@ -100,9 +100,18 @@ NIGHT_CANCEL_BLOCK_CODES = {
 Test one eligible `sale` order and every blocking branch. Assert that an order
 at exactly the configured threshold is `manager_required`.
 
+Create independent scope cases for: wrong `x_pwa_employee_id`, disallowed
+company, warehouse different from Héctor's assigned warehouse, warehouse whose
+company differs from the order company, missing/mismatched employee analytic,
+missing/mismatched warehouse analytic, and missing/mismatched order
+`x_analytic_account_id`. Every dimension must fail closed. Add a Mexico-day
+boundary case while `request.env.user.tz` is `UTC`; an order inside the current
+`America/Mexico_City` day must remain eligible and an adjacent-day order must
+be `not_today`.
+
 - [ ] **Step 2: Run the focused backend test and verify RED**
 
-If a runnable Odoo test environment is available:
+Run the real focused HttpCase when an Odoo test runtime is available:
 
 ```bash
 python3 odoo-bin -d <test-db> --test-enable --stop-after-init \
@@ -111,10 +120,12 @@ python3 odoo-bin -d <test-db> --test-enable --stop-after-init \
 
 Expected: FAIL because the constants and decision helper do not exist.
 
-If the local checkout still lacks `odoo`, `pytz`, `odoo-bin`, or a test DB,
-extract the pure helper source with `ast`, run it against record stubs, and
-record the HttpCase as a CI/runtime gate. The RED run must still demonstrate
-the missing behavior rather than an import failure.
+If the local checkout lacks `odoo`, `pytz`, `odoo-bin`, or a disposable test
+DB, extract the pure helper source with `ast` and run the same decision matrix
+against record stubs. The RED run must demonstrate missing behavior rather
+than an import failure. This fallback supports local iteration only; Task 7
+still requires the real HttpCase before the feature may be declared complete
+or merged.
 
 - [ ] **Step 3: Add the canonical constants and a single decision helper**
 
@@ -172,7 +183,50 @@ message for ownership/scope/date failures, and return the `invalid_state`
 message for an unknown code. Keep the PWA's display-copy mapping separate; the
 backend helper is authoritative for rejected mutation responses.
 
+Add two fail-closed scope helpers:
+
+```python
+def _night_employee_sale_scope(self, employee):
+    # Require Héctor identity, an assigned warehouse, a warehouse company that
+    # is allowed for the employee, and matching non-empty employee/warehouse
+    # analytics. Return trusted company, warehouse, analytic; otherwise False.
+
+def _night_sale_order_scope_block_code(self, employee, order):
+    # Exact x_pwa_employee_id or `not_owner`.
+    # Exact trusted company + warehouse, warehouse/company consistency, and
+    # exact non-empty order analytic equal to the trusted analytic, otherwise
+    # `out_of_scope`. Return None only when every dimension matches.
+```
+
+The second helper is the only order-scope decision for nocturnal history
+summaries, ticket detail, and cancellation. Do not reuse legacy attribution or
+allow client `company_id`/`warehouse_id` to define Héctor's scope.
+
+Keep the administrative timezone behavior unchanged by extending the shared
+bounds helper compatibly:
+
+```python
+def _sales_day_utc_bounds(self, selected_date, timezone=None):
+    timezone = timezone or self._sales_timezone()
+    ...
+
+def _night_sales_today(self):
+    return fields.Date.context_today(
+        request.env.user.with_context(tz=self._mexico_tz.zone)
+    )
+```
+
+The nocturnal decision must call
+`_sales_day_utc_bounds(today or _night_sales_today(), timezone=self._mexico_tz)`.
+Normal admin callers continue omitting `timezone`, preserving the API user's
+existing timezone behavior.
+
 - [ ] **Step 4: Run GREEN tests and static compilation**
+
+Rerun the exact focused HttpCase command from Step 2 and require it to pass. If
+using the local AST fallback, rerun the same decision/scope/timezone matrix and
+require it to pass, while keeping the real HttpCase open as the Task 7 gate.
+Then run:
 
 ```bash
 python3 -m py_compile \
@@ -181,7 +235,8 @@ python3 -m py_compile \
 git diff --check
 ```
 
-Expected: decision harness/HttpCase passes and compilation exits 0.
+Expected: focused decision tests (real or local fallback) pass and compilation
+exits 0.
 
 - [ ] **Step 5: Commit the backend decision primitive**
 
@@ -218,6 +273,12 @@ Assert:
 - summaries expose `can_cancel` and `cancel_block_code`;
 - direct detail for another employee, yesterday, or legacy returns the same
   generic 403 envelope;
+- manipulated `company_id`/`warehouse_id` cannot expand the history, and a
+  mismatch is rejected instead of becoming the query scope;
+- an order with wrong company, warehouse, warehouse/company pairing, employee
+  analytic, warehouse analytic, or order analytic is excluded/rejected;
+- with the API user timezone set to UTC, both history and detail still use the
+  current `America/Mexico_City` day;
 - eligible detail returns the server decision fields;
 - normal admin `today-sales` date behavior remains unchanged.
 
@@ -242,20 +303,41 @@ Apply the same optional enrichment to `_sale_detail_payload`.
 
 - [ ] **Step 4: Add the nocturnal branch to `api_today_sales`**
 
-Parse `night_pos` strictly (`"1"` only). When enabled:
+Parse `night_pos` strictly (`"1"` only). When enabled, derive the company,
+warehouse, and analytic from `_night_employee_sale_scope(employee)`. Treat the
+client values only as consistency assertions: if supplied `company_id` or
+`warehouse_id` differs from the trusted values, reject the request. Never use
+those parameters to define nocturnal scope.
+
+Build the branch as follows:
 
 ```python
 if not self._has_hector_tapia_identity(employee):
     raise AccessError("No tienes acceso al historial nocturno.")
 
-selected_date = self._requested_sales_date({})  # server today; ignore client date
-domain.append(("x_pwa_employee_id", "=", employee.id))
+trusted_scope = self._night_employee_sale_scope(employee)
+if not trusted_scope:
+    raise AccessError("No tienes acceso al historial nocturno.")
+company, warehouse, analytic = trusted_scope
+selected_date = self._night_sales_today()
+today_str, tomorrow_str = self._sales_day_utc_bounds(
+    selected_date,
+    timezone=self._mexico_tz,
+)
+domain.extend([
+    ("company_id", "=", company.id),
+    ("warehouse_id", "=", warehouse.id),
+    ("x_analytic_account_id", "=", analytic.id),
+    ("x_pwa_employee_id", "=", employee.id),
+])
 allowed_states = ["sale", "done", "cancel"]
 ```
 
 Keep the existing employee-domain/date behavior when `night_pos` is absent.
 Do not combine the manager analytic expansion with the exact Héctor domain.
-Enrich each nocturnal summary with `_night_sale_cancel_decision()`.
+Keep the existing POS-channel exclusions. Enrich each nocturnal summary with
+`_night_sale_cancel_decision()`, which must call the single strict order-scope
+helper again so history, detail, and mutation cannot drift.
 
 - [ ] **Step 5: Harden `api_sale_detail` for Héctor**
 
@@ -275,6 +357,11 @@ Do not return the distinct ownership/date block code in the 403 response.
 
 - [ ] **Step 6: Run tests, compile, and commit**
 
+Rerun the focused history/detail HttpCases from Step 1 and require GREEN. If a
+local Odoo runtime is unavailable, rerun an HTTP/controller harness covering
+the same trusted-scope and Mexico-boundary matrix; this does not waive Task 7's
+real HttpCase gate.
+
 ```bash
 python3 -m py_compile gf_pwa_admin/controllers/pwa_admin_api.py gf_pwa_admin/tests/test_pwa_admin_api.py
 git diff --check
@@ -282,8 +369,9 @@ git add gf_pwa_admin/controllers/pwa_admin_api.py gf_pwa_admin/tests/test_pwa_ad
 git commit -m "feat(pos): expose Hector today sales"
 ```
 
-Expected: focused decision/history/detail tests pass or are documented as the
-CI/runtime gate when Odoo cannot run locally.
+Expected: focused decision/history/detail tests pass in the available local
+runner, compilation passes, and the real HttpCase remains mandatory at Task 7
+if the local run used a harness.
 
 ---
 
@@ -300,7 +388,8 @@ Cover:
 
 - four valid `reason_code` values cancel an eligible own sale and store the
   canonical label in chatter;
-- empty, unknown, free-text-only, and mismatched code/label payloads fail;
+- empty, unknown, free-text-only, and code-plus-`reason` payloads fail (even if
+  `reason_code` itself is valid); Héctor accepts `reason_code` only;
 - spoofed `employee_id` cannot activate Héctor authorization;
 - other employee, yesterday, legacy, `draft`, `sent`, `done`, `cancel`, and
   amount exactly at/above threshold fail without state mutation;
@@ -329,6 +418,8 @@ is_hector_night = (
 )
 
 if is_hector_night:
+    if "reason" in data:
+        raise ValidationError("El POS nocturno solo acepta un código de cancelación.")
     reason_code = str(data.get("reason_code") or "").strip()
     reason = self._night_cancel_reason_labels.get(reason_code)
     if not reason:
@@ -342,6 +433,9 @@ else:
 
 Browse and validate the order before calling the decision. Re-run the decision
 immediately before `action_cancel()`; the UI's earlier `can_cancel` is advisory.
+The decision must use `_night_sale_order_scope_block_code()` and the explicit
+Mexico timezone path from Task 1. Do not call the legacy order-scope helper in
+the nocturnal branch.
 
 - [ ] **Step 4: Keep mutation and chatter shared**
 
@@ -357,6 +451,11 @@ Return both `reason` (canonical label for Héctor) and `reason_code` (only when
 the nocturnal branch was used). Do not duplicate stock-reversal logic.
 
 - [ ] **Step 5: Run checks and commit**
+
+Rerun the exact focused cancellation and administrative-regression HttpCases
+from Step 1 and require GREEN. If only the local controller harness is
+available, rerun the full payload/token/ownership/reason/state/threshold matrix
+through that harness and retain the real HttpCases as a blocking Task 7 gate.
 
 ```bash
 python3 -m py_compile gf_pwa_admin/controllers/pwa_admin_api.py gf_pwa_admin/tests/test_pwa_admin_api.py
@@ -384,6 +483,7 @@ Assert the exact night flow contract:
 
 ```js
 NIGHT_POS_FLOW.salesRoute === '/pos-nocturno/ventas'
+NIGHT_POS_FLOW.allowSaleCancellation === true
 NIGHT_POS_FLOW.cancellationMode === 'closed-reasons'
 NIGHT_POS_FLOW.cancelReasons === [
   { code: 'duplicate', label: 'Duplicidad' },
@@ -395,6 +495,12 @@ NIGHT_POS_FLOW.cancelReasons === [
 
 Assert `ADMIN_POS_FLOW.cancellationMode === 'free-text'` and its route behavior
 is unchanged.
+
+Add a focused submission-helper test that passes a spy `cancelFn` and proves
+the actual function used by `ScreenTicket.doCancel()` submits
+`(orderId, { reasonCode })` for night mode while admin submits
+`(orderId, reason.trim())`. This guards against the current early return on
+`allowSaleCancellation` even if static flow assertions pass.
 
 For `nightPosSales.js`, test normalization of `data.items`, `data.orders`, and
 direct arrays; stable status labels (`sale → Activa`, `done → Cerrada`,
@@ -415,10 +521,18 @@ node --test tests/posFlow.test.mjs tests/nightPosSales.test.mjs tests/posAdminAu
 
 Expected: missing route, reasons, normalizer, and API request behavior.
 
-- [ ] **Step 3: Implement the flow and pure normalizer**
+- [ ] **Step 3: Implement the flow, submission helper, and pure normalizer**
 
-Freeze the reason objects/array and `NIGHT_POS_FLOW`. Keep state labels and
-block copy in `nightPosSales.js`, not inside JSX.
+Set `NIGHT_POS_FLOW.allowSaleCancellation = true`; freeze the reason
+objects/array and `NIGHT_POS_FLOW`. Keep state labels and block copy in
+`nightPosSales.js`, not inside JSX.
+
+Add a small exported `submitPosCancellation({ flow, orderId, reasonCode,
+reason, cancelFn })` helper in `posFlow.js`. It must enforce the active flow,
+require one closed reason for night mode, preserve trimmed free text for admin,
+and call the injected `cancelFn`. `ScreenTicket.doCancel()` will use this exact
+helper in Task 6, making the submission contract directly testable without
+duplicating handler logic.
 
 - [ ] **Step 4: Add API functions without breaking admin callers**
 
@@ -574,6 +688,8 @@ Test:
 - admin textarea remains;
 - confirm is disabled with no selection;
 - night submits `{ reasonCode }`; admin submits free text;
+- the real `submitPosCancellation` helper used by `doCancel()` does not return
+  early for `NIGHT_POS_FLOW` and invokes the API spy exactly once;
 - reloaded cancelled detail hides the action and shows `Cancelada`;
 - `manager_required` displays the manager message without a cancel button.
 
@@ -603,14 +719,19 @@ the existing admin `cancelReason` text.
 Submit:
 
 ```js
-await cancelSaleOrder(orderId, { reasonCode: cancelReasonCode })
+await submitPosCancellation({
+  flow,
+  orderId,
+  reasonCode: cancelReasonCode,
+  reason: cancelReason,
+  cancelFn: cancelSaleOrder,
+})
 ```
 
-For admin mode, preserve:
-
-```js
-await cancelSaleOrder(orderId, cancelReason.trim())
-```
+The helper preserves the existing admin call
+`cancelSaleOrder(orderId, cancelReason.trim())`. Remove the old independent
+early-return condition from `doCancel()` or make it delegate only to the helper;
+there must be one active-flow guard, not two guards that can drift.
 
 Reset reason state after success/close and keep the current reload/error flow.
 
@@ -669,6 +790,26 @@ checks pass, no whitespace errors, clean worktree.
 
 - [ ] **Step 3: Run backend gates**
 
+Run the real Odoo HttpCases for the decision, strict scope, Mexico-day
+boundaries, today history, direct detail, nocturnal cancellation, token
+precedence, closed reasons, and existing administrative cancellation
+regression. Use a disposable database/runtime with the repository's supported
+Odoo command, for example:
+
+```bash
+python3 odoo-bin -d <test-db> --test-enable --stop-after-init \
+  -i gf_pwa_admin --test-tags /gf_pwa_admin:TestPWAAdminAPI
+```
+
+The exact test class may be narrowed while iterating, but the full affected
+class must be GREEN here. An AST harness, `py_compile`, skipped tests caused by
+missing required fixture fields, or a pending CI job does **not** satisfy this
+final gate. If no real Odoo test runtime is available, stop publication and
+report the feature as blocked on this gate; do not declare completion and do
+not merge.
+
+After the real suite passes, run the static checks:
+
 ```bash
 python3 -m py_compile \
   gf_pwa_admin/controllers/pwa_admin_api.py \
@@ -677,9 +818,8 @@ git diff --check origin/GrupoFrio..HEAD
 git status --short --branch
 ```
 
-Run the focused Odoo HttpCases in a real Odoo test runtime or leave them as an
-explicit CI/runtime gate if the local environment still lacks dependencies.
-Do not report them as passing when only `py_compile` or an AST harness ran.
+Record the command, database/runtime, and passing result for the handoff. Do
+not report HttpCases as passing when only `py_compile` or an AST harness ran.
 
 - [ ] **Step 4: Refresh the required backend graph**
 
@@ -712,3 +852,5 @@ all blocking findings through the same TDD cycle, then rerun the relevant gates.
 
 When requested, push backend to the intended Odoo branch and update PWA PR
 `#106`. Verify the remote SHAs, mergeability, and CI/Vercel status after push.
+Do not merge until the real backend HttpCase gate above and all PWA gates are
+green.
