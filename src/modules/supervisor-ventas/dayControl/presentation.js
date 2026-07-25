@@ -1,3 +1,5 @@
+import { isOperationalDate } from './operationalDate.js'
+
 // ─── Day Control · helpers PUROS de presentación (PREP · post-RED) ───────────
 // Espejo de PRESENTACIÓN del contrato day_control/1 + radar/1 (autoridad = JSON
 // Schema en ./contracts/). Reglas duras (RED Codex P14):
@@ -252,9 +254,6 @@ export function timezoneSourceLabel(source) {
   return TIMEZONE_SOURCE_LABELS[source] || 'Zona horaria no especificada'
 }
 
-const _isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
-const _DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-
 /**
  * Fecha operativa presentable: SIEMPRE la string del payload (resuelta server-side
  * con la timezone de la sucursal). El cliente NUNCA la deriva de su navegador.
@@ -264,15 +263,9 @@ const _DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
  * navegador). Cualquier cosa fuera de contrato ⇒ copy neutral.
  */
 export function operationalDateLabel(payloadDate) {
-  const NEUTRAL = 'Fecha operativa no disponible'
-  if (typeof payloadDate !== 'string') return NEUTRAL
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(payloadDate)
-  if (!m) return NEUTRAL
-  const year = Number(m[1]), month = Number(m[2]), day = Number(m[3])
-  if (month < 1 || month > 12 || day < 1) return NEUTRAL
-  const maxDay = month === 2 && _isLeapYear(year) ? 29 : _DAYS_IN_MONTH[month - 1]
-  if (day > maxDay) return NEUTRAL
-  return payloadDate
+  return isOperationalDate(payloadDate)
+    ? payloadDate
+    : 'Fecha operativa no disponible'
 }
 
 /** Resumen del mini-mapa: unidades con señal presentable vs sin señal/ inválida. */
