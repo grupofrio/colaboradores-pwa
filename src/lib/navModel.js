@@ -23,6 +23,7 @@ import { readM4Access } from '../modules/ventas/m4/access.js'
 import { readM5Access } from '../modules/inventario/m5/access.js'
 import { readM6Access } from '../modules/caja-conciliacion/m6/access.js'
 import { readM7Access } from '../modules/rentabilidad-costos/m7/access.js'
+import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
 // Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
@@ -34,6 +35,9 @@ import { readM7Access } from '../modules/rentabilidad-costos/m7/access.js'
 // readAuthoritativeTowerStatus (M1 intacto — no se convierte a x_job_key ni a
 // accessPolicy).
 export const ACCESS_POLICY_RESOLVERS = Object.freeze({
+  hectorNightPos: (session) => ({
+    level: canAccessHectorNightPos(session) ? 'global' : 'none',
+  }),
   m2: readM2Access,
   m3: readM3Access,
   m4: readM4Access,
@@ -186,7 +190,7 @@ export function getModuleEntryDecisionForSession(module, session) {
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
-  // accessPolicy (m2/m3/m4/m5/m6): entra o se deniega por SU contrato, sin role-context.
+  // Toda accessPolicy registrada entra o se deniega por SU contrato, sin role-context.
   // Una política desconocida no tiene resolver ⇒ resolveAccessPolicy deniega.
   if (module?.accessPolicy) {
     return resolveAccessPolicy(module.accessPolicy, session)
