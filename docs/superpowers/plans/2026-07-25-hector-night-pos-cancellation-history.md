@@ -267,6 +267,10 @@ GET /pwa-admin/sale-detail?order_id=<id>
 Assert:
 
 - `night_pos=1` rejects a non-Héctor token;
+- a Héctor token always selects the strict nocturnal branch even when
+  `night_pos` is omitted; supplying `night_pos=0`, an empty value, or a
+  malformed value is rejected as an inconsistent request rather than falling
+  back to admin behavior;
 - a manipulated `date` cannot expose yesterday;
 - only exact `x_pwa_employee_id = Héctor` rows from today appear;
 - `sale`, `done`, and `cancel` rows remain present;
@@ -301,43 +305,63 @@ def _sale_summary(self, order, cancel_decision=None):
 
 Apply the same optional enrichment to `_sale_detail_payload`.
 
-- [ ] **Step 4: Add the nocturnal branch to `api_today_sales`**
+- [ ] **Step 4: Add the identity-selected nocturnal branch to `api_today_sales`**
 
-Parse `night_pos` strictly (`"1"` only). When enabled, derive the company,
-warehouse, and analytic from `_night_employee_sale_scope(employee)`. Treat the
-client values only as consistency assertions: if supplied `company_id` or
-`warehouse_id` differs from the trusted values, reject the request. Never use
-those parameters to define nocturnal scope.
+Resolve the token employee before choosing request behavior. The authoritative
+branch selector is `_has_hector_tapia_identity(employee)`, never the
+client-controlled `night_pos` flag:
+
+- every Héctor token uses strict today-only nocturnal behavior even when the
+  flag is omitted;
+- if Héctor supplies `night_pos`, require its exact string value to be `"1"`;
+  reject `0`, empty, booleans, or malformed values without admin fallback;
+- if a non-Héctor supplies `night_pos=1`, reject access;
+- only non-Héctor employees with no nocturnal flag use the existing admin
+  branch and date behavior.
+
+In the Héctor branch, derive company, warehouse, and analytic from
+`_night_employee_sale_scope(employee)`. Treat client `company_id` and
+`warehouse_id` only as consistency assertions: if supplied values differ from
+the trusted values, reject the request. Never use those parameters to define
+nocturnal scope.
 
 Build the branch as follows:
 
 ```python
-if not self._has_hector_tapia_identity(employee):
-    raise AccessError("No tienes acceso al historial nocturno.")
+night_flag_supplied = "night_pos" in params
+is_hector = self._has_hector_tapia_identity(employee)
 
-trusted_scope = self._night_employee_sale_scope(employee)
-if not trusted_scope:
+if is_hector:
+    if night_flag_supplied and params.get("night_pos") != "1":
+        raise ValidationError("Solicitud nocturna inválida.")
+    trusted_scope = self._night_employee_sale_scope(employee)
+    if not trusted_scope:
+        raise AccessError("No tienes acceso al historial nocturno.")
+    company, warehouse, analytic = trusted_scope
+    selected_date = self._night_sales_today()
+    today_str, tomorrow_str = self._sales_day_utc_bounds(
+        selected_date,
+        timezone=self._mexico_tz,
+    )
+    domain.extend([
+        ("company_id", "=", company.id),
+        ("warehouse_id", "=", warehouse.id),
+        ("x_analytic_account_id", "=", analytic.id),
+        ("x_pwa_employee_id", "=", employee.id),
+    ])
+    allowed_states = ["sale", "done", "cancel"]
+elif night_flag_supplied:
     raise AccessError("No tienes acceso al historial nocturno.")
-company, warehouse, analytic = trusted_scope
-selected_date = self._night_sales_today()
-today_str, tomorrow_str = self._sales_day_utc_bounds(
-    selected_date,
-    timezone=self._mexico_tz,
-)
-domain.extend([
-    ("company_id", "=", company.id),
-    ("warehouse_id", "=", warehouse.id),
-    ("x_analytic_account_id", "=", analytic.id),
-    ("x_pwa_employee_id", "=", employee.id),
-])
-allowed_states = ["sale", "done", "cancel"]
+else:
+    # Preserve the existing administrative implementation unchanged.
 ```
 
-Keep the existing employee-domain/date behavior when `night_pos` is absent.
-Do not combine the manager analytic expansion with the exact Héctor domain.
-Keep the existing POS-channel exclusions. Enrich each nocturnal summary with
-`_night_sale_cancel_decision()`, which must call the single strict order-scope
-helper again so history, detail, and mutation cannot drift.
+Keep the existing employee-domain/date behavior only for non-Héctor employees
+without the nocturnal flag. Do not combine the manager analytic expansion with
+the exact Héctor domain. Keep the existing POS-channel exclusions. Enrich each
+nocturnal summary with `_night_sale_cancel_decision()`, which must call the
+single strict order-scope helper again so history, detail, and mutation cannot
+drift.
 
 - [ ] **Step 5: Harden `api_sale_detail` for Héctor**
 
