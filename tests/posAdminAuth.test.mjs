@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { api } from '../src/lib/api.js'
+import { ApiError, api } from '../src/lib/api.js'
 
 const originalLocalStorage = globalThis.localStorage
 const originalFetch = globalThis.fetch
@@ -49,6 +49,56 @@ function setSession(session = {}) {
     warehouse_id: 89,
     ...session,
   }))
+}
+
+function domainHasExactName(domain, name) {
+  return domain.some((term) => (
+    Array.isArray(term)
+    && term[0] === 'name'
+    && term[1] === '=ilike'
+    && term[2] === name
+  ))
+}
+
+function installDefaultCustomerFixture(partner) {
+  const partnerDomains = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    const params = payload?.params || {}
+    if (params.model === 'account.analytic.account') {
+      const isIguala = params.domain.some((term) => (
+        Array.isArray(term)
+        && (
+          (term[0] === 'code' && term[1] === '=' && term[2] === 'IGU')
+          || (term[0] === 'name' && term[1] === 'ilike' && term[2] === 'Iguala')
+        )
+      ))
+      return createJsonResponse(200, {
+        result: {
+          response: isIguala
+            ? [{ id: 201, name: '[IGU] Iguala', code: 'IGU' }]
+            : [],
+        },
+      })
+    }
+
+    assert.equal(params.model, 'res.partner')
+    partnerDomains.push(params.domain)
+    const exactNameMatches = partner
+      && partner.active !== false
+      && domainHasExactName(params.domain, partner.name)
+    return createJsonResponse(200, {
+      result: { response: exactNameMatches ? [partner] : [] },
+    })
+  }
+
+  return { partnerDomains }
 }
 
 test.beforeEach(() => {
@@ -699,6 +749,119 @@ test('pos customer search can find a customer by exact Odoo id', async () => {
       pricelist_name: 'Lista cliente',
     }],
   })
+})
+
+test('default customer uses the Iguala night customer for Hector', async () => {
+  setSession({
+    employee_id: 730,
+    name: 'Héctor Tapia',
+    role: 'almacenista_entregas',
+  })
+  const fixture = installDefaultCustomerFixture({
+    id: 62001,
+    name: 'VENTA PUBLICO IGUALA NOCHE',
+    property_product_pricelist: [92, 'Iguala Noche'],
+    x_analytic_un_id: [201, '[IGU] Iguala'],
+  })
+
+  const result = await api('GET', '/pwa-admin/default-customer?company_id=34')
+
+  assert.equal(result.data.id, 62001)
+  assert.equal(result.data.name, 'VENTA PUBLICO IGUALA NOCHE')
+  assert.equal(result.data.pricelist_id, 92)
+  assert.equal(
+    fixture.partnerDomains.some((domain) => domainHasExactName(domain, 'VENTA PUBLICO IGUALA NOCHE')),
+    true,
+  )
+  assert.equal(
+    fixture.partnerDomains.some((domain) => domainHasExactName(domain, 'VENTA PUBLICO IGUALA')),
+    false,
+  )
+})
+
+test('default customer keeps the Iguala daytime customer for Angelica', async () => {
+  setSession({
+    employee_id: 700,
+    name: 'Angélica Jaimes',
+    role: 'gerente_sucursal',
+  })
+  const fixture = installDefaultCustomerFixture({
+    id: 61000,
+    name: 'VENTA PUBLICO IGUALA',
+    property_product_pricelist: [81, 'Iguala'],
+    x_analytic_un_id: [201, '[IGU] Iguala'],
+  })
+
+  const result = await api('GET', '/pwa-admin/default-customer?company_id=34')
+
+  assert.equal(result.data.id, 61000)
+  assert.equal(result.data.name, 'VENTA PUBLICO IGUALA')
+  assert.equal(
+    fixture.partnerDomains.some((domain) => domainHasExactName(domain, 'VENTA PUBLICO IGUALA')),
+    true,
+  )
+  assert.equal(
+    fixture.partnerDomains.some((domain) => domainHasExactName(domain, 'VENTA PUBLICO IGUALA NOCHE')),
+    false,
+  )
+})
+
+test('missing Hector night default customer rejects without daytime fallback', async () => {
+  setSession({
+    employee_id: 730,
+    name: 'Héctor Tapia',
+    role: 'almacenista_entregas',
+  })
+  const fixture = installDefaultCustomerFixture({
+    id: 61000,
+    name: 'VENTA PUBLICO IGUALA',
+    property_product_pricelist: [81, 'Iguala'],
+    x_analytic_un_id: [201, '[IGU] Iguala'],
+  })
+
+  await assert.rejects(
+    api('GET', '/pwa-admin/default-customer?company_id=34'),
+    (error) => {
+      assert.equal(error instanceof ApiError, true)
+      assert.equal(error.status, 404)
+      assert.equal(error.code, 'night_pos_default_customer_missing')
+      assert.equal(error.message, 'No se encontró el cliente Venta Publico Iguala Noche.')
+      return true
+    },
+  )
+  assert.equal(
+    fixture.partnerDomains.some((domain) => domainHasExactName(domain, 'VENTA PUBLICO IGUALA')),
+    false,
+  )
+})
+
+test('inactive Hector night default customer is treated as missing', async () => {
+  setSession({
+    employee_id: 730,
+    name: 'Héctor Tapia',
+    role: 'almacenista_entregas',
+  })
+  const fixture = installDefaultCustomerFixture({
+    id: 62001,
+    name: 'VENTA PUBLICO IGUALA NOCHE',
+    active: false,
+    property_product_pricelist: [92, 'Iguala Noche'],
+    x_analytic_un_id: [201, '[IGU] Iguala'],
+  })
+
+  await assert.rejects(
+    api('GET', '/pwa-admin/default-customer?company_id=34'),
+    (error) => {
+      assert.equal(error instanceof ApiError, true)
+      assert.equal(error.status, 404)
+      assert.equal(error.code, 'night_pos_default_customer_missing')
+      return true
+    },
+  )
+  assert.equal(
+    fixture.partnerDomains.some((domain) => domainHasExactName(domain, 'VENTA PUBLICO IGUALA')),
+    false,
+  )
 })
 
 test('today sales delegates employee scope to the Odoo backend endpoint', async () => {
