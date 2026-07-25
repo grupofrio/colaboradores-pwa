@@ -62,6 +62,24 @@ export function towerStatusUrl(role, base = ALLOWED_PROD_BASE, { allowCustom = f
   return `${base}/tower.status.${role}.json`;
 }
 
+// Errores tipados del loader: el usuario ve copy simple; el detalle va a logging.
+// NOT_PUBLISHED: 404 o asset servido como index.html (SPA rewrite) — estado esperado
+// hoy (E1-A no publicado). HTTP_ERROR: 4xx/5xx. INVALID_RESPONSE: JSON inválido/vacío.
+export const TOWER_STATUS_ERROR_KINDS = Object.freeze({
+  NOT_PUBLISHED: "TOWER_STATUS_NOT_PUBLISHED",
+  HTTP_ERROR: "TOWER_STATUS_HTTP_ERROR",
+  INVALID_RESPONSE: "TOWER_STATUS_INVALID_RESPONSE",
+});
+
+function towerErr(kind, message, extra = {}) {
+  const err = new Error(message);
+  err.kind = kind;
+  Object.assign(err, extra);
+  return err;
+}
+
+const LOOKS_HTML_RE = /^\s*(<!doctype|<html|<)/i;
+
 export async function fetchTowerStatus(role, { base = ALLOWED_PROD_BASE, fetchImpl } = {}) {
   // Sólo se permite base custom cuando hay fetchImpl inyectado (test/dev). En prod: "/e1".
   const allowCustom = Boolean(fetchImpl);
@@ -69,8 +87,41 @@ export async function fetchTowerStatus(role, { base = ALLOWED_PROD_BASE, fetchIm
   const impl = fetchImpl || (typeof fetch !== "undefined" ? fetch : null);
   if (!impl) throw new Error("fetch no disponible");
   const res = await impl(url, { method: "GET" });
-  if (!res.ok) throw new Error(`tower.status ${role}: HTTP ${res.status}`);
-  return validateTowerStatus(await res.json());
+
+  // 1) status
+  if (!res.ok) {
+    const kind = res.status === 404
+      ? TOWER_STATUS_ERROR_KINDS.NOT_PUBLISHED
+      : TOWER_STATUS_ERROR_KINDS.HTTP_ERROR;
+    throw towerErr(kind, `tower.status ${role}: HTTP ${res.status}`, { status: res.status });
+  }
+  // 2) content-type
+  const ctype = (res.headers && typeof res.headers.get === "function"
+    ? res.headers.get("content-type") : "") || "";
+  // 3) body UNA sola vez como texto (jamás se consume dos veces)
+  const text = typeof res.text === "function" ? await res.text() : "";
+  const trimmed = String(text || "").trim();
+  // 4) vacío
+  if (!trimmed) {
+    throw towerErr(TOWER_STATUS_ERROR_KINDS.INVALID_RESPONSE, `tower.status ${role}: respuesta vacía`);
+  }
+  // 5) HTML (asset faltante servido como index.html por el SPA rewrite) o content-type no-JSON
+  if (LOOKS_HTML_RE.test(trimmed)) {
+    throw towerErr(TOWER_STATUS_ERROR_KINDS.NOT_PUBLISHED,
+      `tower.status ${role}: la respuesta es HTML (artefacto E1 no publicado)`);
+  }
+  if (ctype && !/json/i.test(ctype)) {
+    throw towerErr(TOWER_STATUS_ERROR_KINDS.INVALID_RESPONSE,
+      `tower.status ${role}: content-type inesperado (${ctype})`);
+  }
+  // 6) parse dentro de try/catch
+  let doc;
+  try {
+    doc = JSON.parse(trimmed);
+  } catch {
+    throw towerErr(TOWER_STATUS_ERROR_KINDS.INVALID_RESPONSE, `tower.status ${role}: JSON inválido`);
+  }
+  return validateTowerStatus(doc);
 }
 
 // Blocker 2 (Codex): decisión de render PURA y testeable. Default seguro: gated = BLOQUEADO.

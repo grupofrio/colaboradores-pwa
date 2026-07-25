@@ -46,6 +46,18 @@ import {
 } from './m6/m6Meta'
 import { resolveM6Metric } from './m6/contract'
 import { M6_API_FIXTURE_PROVENANCE, M6_API_LATEST_FIXTURE } from './m6/fixtures/apiLatestFixture'
+import EvidenceSection from '../../components/kold/EvidenceSection'
+import DataFreshness from '../../components/kold/DataFreshness'
+import { readM6PresentationMeta } from '../../lib/presentationMeta/adapters'
+
+// Etapa 0A · Gate 5 — copy de negocio CURADO para razones de "no soportado" que en
+// el contrato traen referencias internas (docs/*.md). Mapeo EXPLÍCITO por clave (no
+// un transformador genérico): el payload queda intacto; sólo cambia lo que se pinta.
+const M6_UNSUPPORTED_REASON_COPY = Object.freeze({
+  corrected: 'El ciclo de vida no puede afirmar que algo se corrigió: que un hallazgo '
+    + 'desaparezca no prueba una corrección (pudo cambiar el alcance, faltar la fuente o '
+    + 'no haberse evaluado la regla).',
+})
 
 const C = TOKENS.colors
 const STATUS_COLORS = {
@@ -241,17 +253,25 @@ function Header({ demo, payload }) {
         {demo && <Pill color="#f59e0b">DEMO</Pill>}
       </div>
       {run && (
-        <p style={{ fontSize: 11.5, color: C.textMuted, marginTop: 6, lineHeight: 1.55 }}>
-          KOLD OS · M6 (caja, cobranza, conciliación y liquidación) · observatorio de SEÑALES del estado
-          financiero — corte {fmtDateTime(run.finished_at)} · ventana [{scope.window_start} → {scope.window_end_exclusive})
-          · compañías {(scope.company_ids || []).join(', ') || '—'}
-          · sucursales {(scope.branch_ids || []).length ? scope.branch_ids.join(', ') : 'todas (v1 agregado)'}
-          · monedas {(scope.currency_ids || []).join(', ') || '—'}
-          · {(run.executed_queries || []).length} consultas
-          · midió: {shortHash(run.auditor_build_sha)} · empacó: {shortHash(run.contract_build_sha) || 'sin sellar'}
-          · run {shortHash(run.run_id)} · scope {shortHash(run.scope_key)}
-          · fuente: {M6_EVIDENCE_SOURCE_LABELS[run.measurement_method] || run.measurement_method || '—'}
-        </p>
+        <>
+          {/* Capa 1: alcance del negocio (corte/ventana/compañías/monedas). La
+              telemetría forense (consultas/hashes/run/scope/build) baja a Evidencia. */}
+          <p style={{ fontSize: 11.5, color: C.textMuted, marginTop: 6, lineHeight: 1.55 }}>
+            Caja, cobranza, conciliación y liquidación · observatorio de SEÑALES del estado
+            financiero — corte {fmtDateTime(run.finished_at)} · ventana [{scope.window_start} → {scope.window_end_exclusive})
+            · compañías {(scope.company_ids || []).join(', ') || '—'}
+            · sucursales {(scope.branch_ids || []).length ? scope.branch_ids.join(', ') : 'todas (v1 agregado)'}
+            · monedas {(scope.currency_ids || []).join(', ') || '—'}
+          </p>
+          <div style={{ marginTop: 6 }}>
+            <DataFreshness dataAsOf={run.finished_at}
+              source={M6_EVIDENCE_SOURCE_LABELS[run.measurement_method] || run.measurement_method} />
+          </div>
+          <EvidenceSection
+            evidence={readM6PresentationMeta(payload).technicalEvidence}
+            auditor={run.technical_state}
+            source={M6_EVIDENCE_SOURCE_LABELS[run.measurement_method] || run.measurement_method} />
+        </>
       )}
       {nonformal && (
         <div style={{
@@ -640,7 +660,7 @@ export default function ScreenCajaConciliacionM6({ session }) {
           ([estado, razon]) => (
             <UnavailableTile key={estado}
               label={`Ciclo de vida: ${M6_LIFECYCLE_UNAVAILABLE.find((x) => x.key === estado)?.label || estado}`}
-              reason={razon} />
+              reason={M6_UNSUPPORTED_REASON_COPY[estado] || razon} />
           ))}
         {features.consolidated_global_total === false && (
           <UnavailableTile label="Total consolidado global"

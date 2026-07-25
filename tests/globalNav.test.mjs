@@ -116,11 +116,13 @@ test('normalizePath: query/hash/trailing slash', () => {
   assert.equal(normalizePath(''), '/')
 })
 
-test('nav oculta: login y árbol completo de Tower', () => {
+test('nav: /torre (E1) OCULTA exacta; /torre/backlog (M1) recupera nav global (Etapa 0A)', () => {
   assert.equal(isNavHiddenForPath('/login'), true)
+  // /torre (E1 Tower): oculta EXACTA — full-screen, sin artefacto publicado.
   assert.equal(isNavHiddenForPath('/torre'), true)
-  assert.equal(isNavHiddenForPath('/torre/backlog'), true)
-  assert.equal(isNavHiddenForPath('/torre/backlog?state_bucket=open'), true)
+  // /torre/backlog (M1): VISIBLE — recupera el sidebar para volver a otros módulos.
+  assert.equal(isNavHiddenForPath('/torre/backlog'), false)
+  assert.equal(isNavHiddenForPath('/torre/backlog?state_bucket=open'), false)
 })
 
 test('nav oculta: subrutas operativas de captura; la RAÍZ del módulo la conserva', () => {
