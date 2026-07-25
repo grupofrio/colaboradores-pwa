@@ -1,7 +1,8 @@
 # SUPERVISOR_DAY_CONTROL_CONTRACT_MIRROR — consumo frontend
 
-> **Ancla canónica (head backend actual):** `52308bb1` — este valor DEBE coincidir
-> con `contracts/CONTRACT_SOURCE.json` → `source.head` (lo verifica un test de
+> **Ancla canónica (merge head backend):**
+> `0014dc512aa3329b719d9ef24fbd0c8e939c7c8d` — este valor DEBE coincidir con
+> `contracts/CONTRACT_SOURCE.json` → `source.head` (lo verifica un test de
 > drift). Los heads de rondas anteriores viven SOLO en el registro histórico del
 > PR, no aquí. La referencia canónica del preámbulo es SIEMPRE la de esta línea.
 

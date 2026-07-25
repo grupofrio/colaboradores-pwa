@@ -6,7 +6,7 @@
   "source": {
     "repo": "GrupoVeniu/GrupoFrio",
     "pr": 220,
-    "head": "52308bb1",
+    "head": "0014dc512aa3329b719d9ef24fbd0c8e939c7c8d",
     "path": "gf_saleops/docs/contracts/"
   },
   "note": "Copias locales del contrato canonico (loads via stock.picking; van.* descartado). Ronda YELLOW-2 (RED-2 Codex P2/P3): occurred_at UTC canonico 'YYYY-MM-DDTHH:MM:SSZ' (parse_timestamp acepta naive/Z/offset), dedup INDEPENDIENTE DEL ORDEN (min por instante sobre todas las filas por picking). sha256 = integridad de ESTAS copias; la paridad semantica se verifica por deep-equal.",

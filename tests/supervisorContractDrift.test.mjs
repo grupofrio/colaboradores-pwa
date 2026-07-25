@@ -17,6 +17,7 @@ const read = (name) => readFileSync(DIR + name)
 const readJson = (name) => JSON.parse(read(name).toString('utf8'))
 
 const SOURCE = readJson('CONTRACT_SOURCE.json')
+const BACKEND_MERGE_HEAD = '0014dc512aa3329b719d9ef24fbd0c8e939c7c8d'
 const DC_SCHEMA = readJson('supervisor_day_control_v1.schema.json')
 const RADAR_SCHEMA = readJson('supervisor_radar_v1.schema.json')
 const DC_GOLDEN = readJson('day_control_v1.golden.json')
@@ -91,6 +92,10 @@ test('sha256 de las copias del contrato coincide con CONTRACT_SOURCE.json', () =
   assert.equal(SOURCE.contract_versions.day_control, 'gf.salesops.supervisor.day_control/1')
   assert.equal(SOURCE.contract_versions.radar, 'gf.salesops.supervisor.radar/1')
   assert.equal(SOURCE.source.pr, 220)
+})
+
+test('la procedencia contractual apunta al merge head final de backend #220', () => {
+  assert.equal(SOURCE.source.head, BACKEND_MERGE_HEAD)
 })
 
 // ── paridad fixtures ↔ golden ────────────────────────────────────────────────
@@ -261,7 +266,7 @@ test('P1-B/P2: dedup por ruta + occurred_at = mínimo por INSTANTE en UTC canón
 test('P3-C: el head canónico del mirror doc == CONTRACT_SOURCE.source.head (no divergen)', () => {
   const MIRROR = fileURLToPath(new URL('../docs/supervisor/SUPERVISOR_DAY_CONTROL_CONTRACT_MIRROR.md', import.meta.url))
   const doc = readFileSync(MIRROR, 'utf8')
-  const m = /Ancla canónica \(head backend actual\):\*\*\s*`([0-9a-f]{7,40})`/.exec(doc)
+  const m = /Ancla canónica \(merge head backend\):\*\*\s*>\s*`([0-9a-f]{7,40})`/.exec(doc)
   assert.ok(m, 'el mirror debe declarar el head backend canónico actual')
   assert.equal(m[1], SOURCE.source.head, 'head del mirror diverge de CONTRACT_SOURCE.source.head')
 })
