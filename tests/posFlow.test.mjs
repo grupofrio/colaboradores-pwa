@@ -130,6 +130,14 @@ test('classifyPosSaleCreateError treats transport, timeout and 5xx failures as u
   }
 })
 
+test('classifyPosSaleCreateError treats a bare browser fetch TypeError as uncertain', () => {
+  const result = classifyPosSaleCreateError(new TypeError('Failed to fetch'))
+
+  assert.equal(result.status, 'uncertain')
+  assert.match(result.message, /no vuelvas a cobrar/i)
+  assert.match(result.message, /verifica la venta/i)
+})
+
 test('classifyPosSaleCreateError preserves known 4xx backend errors', () => {
   assert.deepEqual(classifyPosSaleCreateError({ status: 400, message: 'Cliente inválido' }), {
     status: 'error',

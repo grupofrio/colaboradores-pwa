@@ -62,7 +62,8 @@ function responseMessage(layers, fallback) {
 export function classifyPosSaleCreateError(error) {
   const code = String(error?.code || '').toLowerCase()
   const status = Number(error?.status)
-  const isUncertain = code === 'network'
+  const isUncertain = error instanceof TypeError
+    || code === 'network'
     || code === 'timeout'
     || status === 0
     || (Number.isFinite(status) && status >= 500 && status < 600)
