@@ -44,6 +44,18 @@ test('usuario común (solo universales): 3 módulos directos, sin "Más"', () =>
   assert.equal(m.overflow.length, 0)
 })
 
+test('Héctor Tapia recibe POS nocturno en nav pero no Admin Sucursal', () => {
+  const nav = ids(getNavModules({
+    employee_id: 730,
+    session_token: 'h.p.s',
+    role: 'almacenista_entregas',
+    name: 'Héctor Tapia',
+  }))
+
+  assert.ok(nav.includes('pos_nocturno'))
+  assert.ok(!nav.includes('admin_sucursal'))
+})
+
 test('jefe_ruta: ve Mi Ruta pero NO admin/gerente/equipo', () => {
   const nav = ids(getNavModules(s('jefe_ruta')))
   assert.ok(nav.includes('cierre_ruta'))
