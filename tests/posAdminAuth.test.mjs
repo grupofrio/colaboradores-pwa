@@ -60,8 +60,102 @@ function domainHasExactName(domain, name) {
   ))
 }
 
+function relationId(value) {
+  const rawValue = Array.isArray(value) ? value[0] : value
+  if (rawValue === false || rawValue === null || rawValue === undefined) return false
+  const numericValue = Number(rawValue)
+  return Number.isFinite(numericValue) ? numericValue : rawValue
+}
+
+function normalizeDefaultCustomerPartner(partner) {
+  if (!partner) return null
+  const normalized = { ...partner }
+  if (normalized.active === undefined) normalized.active = true
+  if (normalized.company_id === undefined) normalized.company_id = [34, 'GLACIEM']
+  if (normalized.x_analytic_un_id === undefined) {
+    normalized.x_analytic_un_id = [201, '[IGU] Iguala']
+  }
+  return normalized
+}
+
+function partnerMatchesDefaultCustomerDomain(partner, domain = []) {
+  if (!partner) return false
+  const terms = domain.filter(Array.isArray)
+  const requiredFields = ['active', 'x_analytic_un_id', 'company_id', 'name']
+  if (!requiredFields.every((field) => terms.some((term) => term[0] === field))) {
+    return false
+  }
+
+  return terms.every(([field, operator, expected]) => {
+    if (field === 'active') {
+      return operator === '=' && partner.active === expected
+    }
+    if (field === 'x_analytic_un_id') {
+      const analyticId = relationId(partner.x_analytic_un_id)
+      if (operator === '=') return analyticId === relationId(expected)
+      if (operator === 'in' && Array.isArray(expected)) {
+        return expected.some((id) => relationId(id) === analyticId)
+      }
+      return false
+    }
+    if (field === 'company_id') {
+      return operator === '=' && relationId(partner.company_id) === relationId(expected)
+    }
+    if (field === 'name') {
+      return operator === '=ilike'
+        && String(partner.name || '').toLowerCase() === String(expected || '').toLowerCase()
+    }
+    return true
+  })
+}
+
+function assertNightDefaultCustomerDomainContract(domains) {
+  const nightDomains = domains.filter((domain) => (
+    domainHasExactName(domain, 'VENTA PUBLICO IGUALA NOCHE')
+  ))
+  assert.equal(nightDomains.length > 0, true, 'night customer exact search was not issued')
+
+  for (const domain of nightDomains) {
+    assert.equal(
+      domain.some((term) => (
+        Array.isArray(term)
+        && term[0] === 'active'
+        && term[1] === '='
+        && term[2] === true
+      )),
+      true,
+      'night customer search did not require active=true',
+    )
+    assert.equal(
+      domain.some((term) => (
+        Array.isArray(term)
+        && term[0] === 'x_analytic_un_id'
+        && (
+          (term[1] === '=' && relationId(term[2]) === 201)
+          || (term[1] === 'in' && term[2].some((id) => relationId(id) === 201))
+        )
+      )),
+      true,
+      'night customer search did not include analytic unit 201',
+    )
+    assert.equal(
+      domain.some((term) => (
+        Array.isArray(term)
+        && term[0] === 'company_id'
+        && term[1] === '='
+        && (relationId(term[2]) === 34 || relationId(term[2]) === false)
+      )),
+      true,
+      'night customer search did not scope company_id to 34 or false',
+    )
+  }
+
+  return nightDomains
+}
+
 function installDefaultCustomerFixture(partner) {
   const partnerDomains = []
+  const normalizedPartner = normalizeDefaultCustomerPartner(partner)
 
   globalThis.fetch = async (url, options = {}) => {
     const payload = options.body ? JSON.parse(options.body) : null
@@ -90,11 +184,9 @@ function installDefaultCustomerFixture(partner) {
 
     assert.equal(params.model, 'res.partner')
     partnerDomains.push(params.domain)
-    const exactNameMatches = partner
-      && partner.active !== false
-      && domainHasExactName(params.domain, partner.name)
+    const partnerMatches = partnerMatchesDefaultCustomerDomain(normalizedPartner, params.domain)
     return createJsonResponse(200, {
-      result: { response: exactNameMatches ? [partner] : [] },
+      result: { response: partnerMatches ? [normalizedPartner] : [] },
     })
   }
 
@@ -110,6 +202,90 @@ test.afterEach(() => {
   globalThis.localStorage = originalLocalStorage
   globalThis.fetch = originalFetch
   globalThis.window = originalWindow
+})
+
+test('default customer domain fixture requires the active scope term', async () => {
+  installDefaultCustomerFixture({
+    id: 62001,
+    name: 'VENTA PUBLICO IGUALA NOCHE',
+  })
+
+  const response = await globalThis.fetch('/odoo-api/get_records_sorted', {
+    body: JSON.stringify({
+      params: {
+        model: 'res.partner',
+        domain: [
+          ['x_analytic_un_id', '=', 201],
+          ['company_id', '=', 34],
+          ['name', '=ilike', 'VENTA PUBLICO IGUALA NOCHE'],
+        ],
+      },
+    }),
+  })
+  const payload = await response.json()
+
+  assert.deepEqual(payload.result.response, [])
+})
+
+test('default customer domain fixture matches every applicable domain term', async () => {
+  const partner = {
+    id: 62001,
+    name: 'VENTA PUBLICO IGUALA NOCHE',
+  }
+  installDefaultCustomerFixture(partner)
+
+  const readPartners = async (domain) => {
+    const response = await globalThis.fetch('/odoo-api/get_records_sorted', {
+      body: JSON.stringify({
+        params: { model: 'res.partner', domain },
+      }),
+    })
+    return (await response.json()).result.response
+  }
+  const validDomain = [
+    ['active', '=', true],
+    ['x_analytic_un_id', '=', 201],
+    ['company_id', '=', 34],
+    ['name', '=ilike', 'venta publico iguala noche'],
+  ]
+
+  const validRows = await readPartners(validDomain)
+  assert.deepEqual(validRows.map((row) => row.id), [62001])
+  assert.deepEqual(validRows[0].company_id, [34, 'GLACIEM'])
+  assert.deepEqual(validRows[0].x_analytic_un_id, [201, '[IGU] Iguala'])
+  assert.deepEqual(await readPartners([
+    ...validDomain.filter((term) => term[0] !== 'x_analytic_un_id'),
+    ['x_analytic_un_id', 'in', [999]],
+  ]), [])
+  assert.deepEqual(await readPartners([
+    ...validDomain.filter((term) => term[0] !== 'company_id'),
+    ['company_id', '=', false],
+  ]), [])
+})
+
+test('default customer domain fixture rejects inactive partners through active domain matching', async () => {
+  installDefaultCustomerFixture({
+    id: 62001,
+    name: 'VENTA PUBLICO IGUALA NOCHE',
+    active: false,
+  })
+
+  const response = await globalThis.fetch('/odoo-api/get_records_sorted', {
+    body: JSON.stringify({
+      params: {
+        model: 'res.partner',
+        domain: [
+          ['active', '=', true],
+          ['x_analytic_un_id', 'in', [201, 301]],
+          ['company_id', '=', 34],
+          ['name', '=ilike', 'VENTA PUBLICO IGUALA NOCHE'],
+        ],
+      },
+    }),
+  })
+  const payload = await response.json()
+
+  assert.deepEqual(payload.result.response, [])
 })
 
 test('pos catalog loads from model reads without requiring the strict admin endpoint', async () => {
@@ -769,6 +945,7 @@ test('default customer uses the Iguala night customer for Hector', async () => {
   assert.equal(result.data.id, 62001)
   assert.equal(result.data.name, 'VENTA PUBLICO IGUALA NOCHE')
   assert.equal(result.data.pricelist_id, 92)
+  assertNightDefaultCustomerDomainContract(fixture.partnerDomains)
   assert.equal(
     fixture.partnerDomains.some((domain) => domainHasExactName(domain, 'VENTA PUBLICO IGUALA NOCHE')),
     true,
@@ -829,6 +1006,7 @@ test('missing Hector night default customer rejects without daytime fallback', a
       return true
     },
   )
+  assertNightDefaultCustomerDomainContract(fixture.partnerDomains)
   assert.equal(
     fixture.partnerDomains.some((domain) => domainHasExactName(domain, 'VENTA PUBLICO IGUALA')),
     false,
@@ -858,6 +1036,7 @@ test('inactive Hector night default customer is treated as missing', async () =>
       return true
     },
   )
+  assertNightDefaultCustomerDomainContract(fixture.partnerDomains)
   assert.equal(
     fixture.partnerDomains.some((domain) => domainHasExactName(domain, 'VENTA PUBLICO IGUALA')),
     false,
