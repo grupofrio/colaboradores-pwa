@@ -44,6 +44,18 @@ test('usuario común (solo universales): 3 módulos directos, sin "Más"', () =>
   assert.equal(m.overflow.length, 0)
 })
 
+test('Héctor Tapia recibe POS nocturno en nav pero no Admin Sucursal', () => {
+  const nav = ids(getNavModules({
+    employee_id: 730,
+    session_token: 'h.p.s',
+    role: 'almacenista_entregas',
+    name: 'Héctor Tapia',
+  }))
+
+  assert.ok(nav.includes('pos_nocturno'))
+  assert.ok(!nav.includes('admin_sucursal'))
+})
+
 test('jefe_ruta: ve Mi Ruta pero NO admin/gerente/equipo', () => {
   const nav = ids(getNavModules(s('jefe_ruta')))
   assert.ok(nav.includes('cierre_ruta'))
@@ -150,6 +162,15 @@ test('nav oculta: POS/ticket/cierre de caja en admin; resto de admin visible', (
   assert.equal(isNavHiddenForPath('/admin/ticket/123'), true)
   assert.equal(isNavHiddenForPath('/admin/cierre'), true)
   assert.equal(isNavHiddenForPath('/admin/cierre/'), true)
+})
+
+test('nav oculta: POS nocturno y tickets, sin capturar prefijos similares', () => {
+  assert.equal(isNavHiddenForPath('/pos-nocturno'), true)
+  assert.equal(isNavHiddenForPath('/pos-nocturno/ticket/9001'), true)
+  assert.equal(isNavHiddenForPath('/POS-NOCTURNO'), true)
+  assert.equal(isNavHiddenForPath('/Pos-Nocturno/Ticket/9001'), true)
+  assert.equal(isNavHiddenForPath('/pos-nocturnos'), false)
+  assert.equal(isNavHiddenForPath('/POS-NOCTURNOS'), false)
 })
 
 test('nav oculta: prefijos similares NO se ocultan por accidente', () => {

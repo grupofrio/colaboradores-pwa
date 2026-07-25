@@ -138,6 +138,20 @@ export const MODULES = [
 
   // ── Administración ───────────────────────────────────────────────────────
   {
+    id: 'pos_nocturno',
+    label: 'POS nocturno',
+    shortLabel: 'POS Noche',
+    route: '/pos-nocturno',
+    tone: 'blueDeep',
+    roles: ['hector_tapia'],
+    accessPolicy: 'hectorNightPos',
+    status: 'live',
+    icon: 'admin',
+    navPriority: 10,
+    showOnHome: true,
+    showInNav: true,
+  },
+  {
     id:     'admin_sucursal',
     label:  'Admin Sucursal',
     shortLabel: 'Admin',

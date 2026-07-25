@@ -7,8 +7,9 @@ import { BACKEND_CAPS } from './adminService'
 import { computePosSummary } from './posPricing'
 import { resolveTicketCustomerName } from './ticketCustomer'
 import { printTicketViaQz } from './ticketPrinter'
+import { ADMIN_POS_FLOW } from './posFlow'
 
-export default function ScreenTicket() {
+export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   const { session } = useSession()
   const navigate = useNavigate()
   const { orderId } = useParams()
@@ -48,6 +49,7 @@ export default function ScreenTicket() {
   }
 
   async function doCancel() {
+    if (flow.allowSaleCancellation !== true) return
     if (!orderId) return
     if (!cancelReason.trim()) { setCancelError('Explica brevemente el motivo'); return }
     setCancelling(true)
@@ -68,6 +70,7 @@ export default function ScreenTicket() {
 
   const orderState = order?.state || ''
   const canCancel =
+    flow.allowSaleCancellation === true &&
     BACKEND_CAPS.saleCancel &&
     order &&
     orderState !== 'cancel' &&
@@ -288,7 +291,7 @@ export default function ScreenTicket() {
       <div id="ticket-wrap" style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-          <button onClick={() => navigate('/admin/pos')} style={{
+          <button onClick={() => navigate(flow.posRoute)} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -427,7 +430,7 @@ export default function ScreenTicket() {
                 }}>
                   <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>Imprimir</span>
                 </button>
-                <button onClick={() => navigate('/admin/pos')} style={{
+                <button onClick={() => navigate(flow.posRoute)} style={{
                   flex: 1, padding: '14px 0', borderRadius: TOKENS.radius.md,
                   background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
                 }}>
