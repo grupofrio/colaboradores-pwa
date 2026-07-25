@@ -48,6 +48,19 @@ function assertCatalogCoherenceContract(source, loaderName) {
   assert.match(selectCustomer, /setPayConfirm\(null\)/)
 }
 
+function assertSaleCreateCatchContract(source) {
+  const confirmPay = sliceFunction(source, 'async function confirmPay()', '\n\n  const ')
+  const catchStart = confirmPay.lastIndexOf('} catch (e) {')
+  assert.notEqual(catchStart, -1, 'createSaleOrder catch missing')
+
+  const catchBlock = confirmPay.slice(catchStart)
+  assert.match(catchBlock, /classifyPosSaleCreateError\(e\)/)
+  assert.match(
+    catchBlock,
+    /saleError\.status === 'uncertain'[\s\S]{0,300}setCart\(\[\]\)[\s\S]{0,300}setPayConfirm\(null\)/,
+  )
+}
+
 test('mobile POS uses configurable flow and defensive sale response wiring', () => {
   assert.match(mobile, /flow = ADMIN_POS_FLOW/)
   assert.match(mobile, /normalizePosSaleResult\(result\)/)
@@ -55,6 +68,7 @@ test('mobile POS uses configurable flow and defensive sale response wiring', () 
   assert.match(mobile, /Venta creada pero sin folio/)
   assert.match(mobile, /saleResult\.status === 'uncertain'[\s\S]{0,300}setCart\(\[\]\)/)
   assertCatalogCoherenceContract(mobile, 'loadProducts')
+  assertSaleCreateCatchContract(mobile)
 })
 
 test('desktop POS uses configurable flow and requires a customer before payment', () => {
@@ -64,6 +78,7 @@ test('desktop POS uses configurable flow and requires a customer before payment'
   assert.match(desktop, /Selecciona un cliente antes de cobrar/)
   assert.match(desktop, /saleResult\.status === 'uncertain'[\s\S]{0,300}setCart\(\[\]\)/)
   assertCatalogCoherenceContract(desktop, 'loadCatalog')
+  assertSaleCreateCatchContract(desktop)
 })
 
 test('ticket and shell respect the active flow standalone configuration', () => {

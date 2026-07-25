@@ -33,6 +33,7 @@ import {
   ADMIN_POS_FLOW,
   buildPosTicketPath,
   canOpenPosPayment,
+  classifyPosSaleCreateError,
   normalizePosSaleResult,
 } from './posFlow'
 
@@ -271,7 +272,12 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         setError('Venta creada pero sin folio')
       }
     } catch (e) {
-      setError(e.message || 'Error al crear venta')
+      const saleError = classifyPosSaleCreateError(e)
+      if (saleError.status === 'uncertain') {
+        setCart([])
+        setPayConfirm(null)
+      }
+      setError(saleError.message)
     } finally { setSubmitting(false); setPayConfirm(null) }
   }
 

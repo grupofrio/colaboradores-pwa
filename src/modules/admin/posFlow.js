@@ -59,6 +59,27 @@ function responseMessage(layers, fallback) {
   return fallback
 }
 
+export function classifyPosSaleCreateError(error) {
+  const code = String(error?.code || '').toLowerCase()
+  const status = Number(error?.status)
+  const isUncertain = code === 'network'
+    || code === 'timeout'
+    || status === 0
+    || (Number.isFinite(status) && status >= 500 && status < 600)
+
+  if (isUncertain) {
+    return {
+      status: 'uncertain',
+      message: 'No vuelvas a cobrar; verifica la venta antes de reintentar porque no se pudo confirmar el resultado.',
+    }
+  }
+
+  return {
+    status: 'error',
+    message: error?.message || 'Error al crear venta',
+  }
+}
+
 export function normalizePosSaleResult(response) {
   const layers = responseLayers(response)
   const explicitError = layers.find((layer) => (
