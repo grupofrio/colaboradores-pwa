@@ -18,6 +18,7 @@ import {
 import { isValidAuthenticatedSession } from './session.js'
 import { readAuthoritativeTowerStatus } from '../modules/torre/e1/loadTowerStatus.js'
 import { readM2Access } from '../modules/planeacion/m2/access.js'
+import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
 
 // Anclas fijas (no son módulos del registry). Siempre presentes con sesión:
 // todos pueden ir a su Inicio y a su perfil.
@@ -83,11 +84,11 @@ export function normalizePath(pathname = '') {
 //    /koldcup/*     → capturas KOLDCUP (compra, producción, corte, traspaso)
 //    /torres/*      → validación de requisiciones (detalle con acciones)
 const NAV_HIDDEN_EXACT = ['/login']
-const NAV_HIDDEN_PREFIXES = ['/torre', '/admin/pos', '/admin/ticket', '/admin/cierre']
+const NAV_HIDDEN_PREFIXES = ['/torre', '/admin/pos', '/admin/ticket', '/admin/cierre', '/pos-nocturno']
 const NAV_HIDDEN_SUBTREES = ['/ruta', '/produccion', '/almacen-pt', '/entregas', '/koldcup', '/torres']
 
 export function isNavHiddenForPath(pathname = '') {
-  const path = normalizePath(pathname)
+  const path = normalizePath(pathname).toLowerCase()
   if (NAV_HIDDEN_EXACT.includes(path)) return true
   if (NAV_HIDDEN_PREFIXES.some((p) => path === p || path.startsWith(p + '/'))) return true
   // Subtrees: solo subrutas (la raíz del módulo conserva la nav global).
@@ -102,7 +103,8 @@ function navPriorityOf(module) {
 // ── Visibilidad SESSION-AWARE (fuente única para tarjeta + nav + clic) ───────
 // Un módulo con accessPolicy declara que su autoridad NO es x_job_key genérico
 // sino un contrato propio (B3: la MISMA función decide tarjeta, nav, Más, rail
-// y clic; el route guard revalida). Hoy: accessPolicy 'm2' => readM2Access.
+// y clic; el route guard revalida). Las políticas conocidas son 'm2' y
+// 'hectorNightPos', cada una resuelta por su helper de acceso específico.
 // FAIL-CLOSED: sesión inválida => nada; política desconocida => oculto.
 // (Mismos nombres/firmas que la mecánica towerGated del PR #67 para que el
 // rebase post-#67 sea una unión mecánica de ramas en la misma función.)
@@ -111,6 +113,7 @@ export function isModuleVisibleForSession(module, session) {
   if (module.showInNav === false && module.showOnHome === false) return false
   if (!isValidAuthenticatedSession(session)) return false
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
+  if (module.accessPolicy === 'hectorNightPos') return canAccessHectorNightPos(session)
   if (module.accessPolicy === 'm2') return readM2Access(session).level === 'global'
   if (module.accessPolicy) return false // política desconocida => fail-closed
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
@@ -142,6 +145,11 @@ export function getHomeModulesForSession(session = null) {
 export function getModuleEntryDecisionForSession(module, session) {
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  if (module?.accessPolicy === 'hectorNightPos') {
+    return canAccessHectorNightPos(session)
+      ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
+      : { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
   if (module?.accessPolicy === 'm2') {
     return readM2Access(session).level === 'global'

@@ -63,6 +63,7 @@ export default function AdminShell({
   children,
   onBack,
   hideActivityFeed = false,
+  hideNavigation = false,
 }) {
   const navigate = useNavigate()
   const { sucursal, employeeName } = useAdmin()
@@ -73,7 +74,7 @@ export default function AdminShell({
   // Feed de actividad (320px) solo con ancho holgado: bajo 1366px el rail
   // global compacto (76px) + sidebar interno (220px) + feed dejarían el
   // contenido comprimido (hallazgo Codex PR #66 — triple panel a 1024–1280).
-  const showActivityFeed = !hideActivityFeed && sw >= 1366
+  const showActivityFeed = !hideNavigation && !hideActivityFeed && sw >= 1366
 
   // Filtrar módulos según rol del usuario
   const visibleNavItems = useMemo(
@@ -169,11 +170,16 @@ export default function AdminShell({
       {isDesktop ? (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: showActivityFeed ? '220px 1fr 320px' : '220px 1fr',
+          gridTemplateColumns: hideNavigation
+            ? 'minmax(0, 1fr)'
+            : showActivityFeed
+              ? '220px 1fr 320px'
+              : '220px 1fr',
           minHeight: 'calc(100dvh - 68px)',
         }}>
           {/* Sidebar izquierda */}
-          <nav style={{
+          {!hideNavigation && (
+            <nav style={{
             padding: '20px 12px', borderRight: `1px solid ${TOKENS.colors.border}`,
             background: TOKENS.colors.surfaceSoft,
           }}>
@@ -227,7 +233,8 @@ export default function AdminShell({
                 )
               })}
             </div>
-          </nav>
+            </nav>
+          )}
 
           {/* Main */}
           <main style={{ padding: '24px 28px', overflowY: 'auto' }}>

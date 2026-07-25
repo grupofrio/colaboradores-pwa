@@ -118,6 +118,27 @@ test('Tower conserva TowerRoute especializado (rol autoritativo) + sesión estri
   assert.match(towerBlock, /isValidAuthenticatedSession/)
 })
 
+test('NightPosRoute exige sesión válida e identidad nominal autorizada', () => {
+  assert.match(appSrc, /function NightPosRoute\(\{ children \}\)/)
+  const nightPosBlock = appSrc.slice(
+    appSrc.indexOf('function NightPosRoute'),
+    appSrc.indexOf('function NightPosRoute') + 400,
+  )
+  assert.match(nightPosBlock, /isValidAuthenticatedSession\(session\)/)
+  assert.match(nightPosBlock, /canAccessHectorNightPos\(session\)/)
+  assert.match(nightPosBlock, /Navigate to="\/login"/)
+  assert.match(nightPosBlock, /Navigate to="\/"/)
+})
+
+test('POS nocturno monta rutas directas con guard propio y NIGHT_POS_FLOW', () => {
+  const posRoute = '<Route path="/pos-nocturno" element={<NightPosRoute><ScreenPOS flow={NIGHT_POS_FLOW} /></NightPosRoute>} />'
+  const ticketRoute = '<Route path="/pos-nocturno/ticket/:orderId" element={<NightPosRoute><ScreenTicket flow={NIGHT_POS_FLOW} /></NightPosRoute>} />'
+
+  assert.ok(appSrc.includes(posRoute), 'ruta exacta del POS nocturno')
+  assert.ok(appSrc.includes(ticketRoute), 'ruta exacta del ticket nocturno')
+  assert.ok(!appSrc.includes('moduleId="pos_nocturno"'), 'no amplía ModuleRoleRoute ni roles de Admin')
+})
+
 test('getStoredSession y PrivateRoute usan la validación estricta única', () => {
   const stored = appSrc.slice(appSrc.indexOf('function getStoredSession'), appSrc.indexOf('function getStoredSession') + 700)
   assert.match(stored, /isValidAuthenticatedSession/, 'getStoredSession valida y limpia sesiones corruptas')
@@ -166,8 +187,8 @@ test('workflow CI ejecuta npm run build (el job "build" compila)', () => {
 // ── AdminShell: feed lateral solo con ancho holgado (≥1366) ──────────────────
 test('AdminShell no compone triple panel en 1024–1365', () => {
   const shell = readFileSync(new URL('../src/modules/admin/components/AdminShell.jsx', import.meta.url), 'utf8')
-  assert.match(shell, /showActivityFeed = !hideActivityFeed && sw >= 1366/)
-  assert.match(shell, /showActivityFeed \? '220px 1fr 320px' : '220px 1fr'/)
+  assert.match(shell, /showActivityFeed = !hideNavigation && !hideActivityFeed && sw >= 1366/)
+  assert.match(shell, /hideNavigation[\s\S]*\? 'minmax\(0, 1fr\)'[\s\S]*: showActivityFeed[\s\S]*\? '220px 1fr 320px'[\s\S]*: '220px 1fr'/)
   assert.match(shell, /\{showActivityFeed && <ActivityFeed/)
 })
 

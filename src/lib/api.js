@@ -14,6 +14,8 @@ import {
   isKoldOsM2Path,
   filterKoldOsM2Params,
 } from './koldOsM2Route.js'
+import { toPositiveSafeIntegerId } from '../modules/admin/posCustomers.js'
+import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
 import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
@@ -627,6 +629,8 @@ const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
 const POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES = ['IGU34', POS_CUSTOMER_ANALYTIC_NAME]
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
 const ANGELICA_JAIMES_NAME_PARTS = ['angelica', 'jaimes']
+const POS_DEFAULT_CUSTOMER_NAME = 'VENTA PUBLICO IGUALA'
+const NIGHT_POS_DEFAULT_CUSTOMER_NAME = 'VENTA PUBLICO IGUALA NOCHE'
 
 function shapePosCustomer(row = {}) {
   const pricelist = row.pricelist_id || row.property_product_pricelist
@@ -1210,16 +1214,26 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
 }
 
 async function getDefaultPosCustomerFromModels(companyId) {
+  const nightPos = canAccessHectorNightPos(getSession())
+  const targetName = nightPos
+    ? NIGHT_POS_DEFAULT_CUSTOMER_NAME
+    : POS_DEFAULT_CUSTOMER_NAME
   const baseCompanyId = Number(companyId || 0)
   const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
   const baseDomains = buildPosCustomerBaseDomains(baseCompanyId, analyticUnitIds)
   let partner = null
   for (const baseDomain of baseDomains) {
-    const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', 'VENTA PUBLICO IGUALA']], 1)
+    const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', targetName]], 1)
     if (exactRows[0]) {
       partner = exactRows[0]
       break
     }
+  }
+  if (!partner && nightPos) {
+    throw new ApiError('No se encontró el cliente Venta Publico Iguala Noche.', {
+      status: 404,
+      code: 'night_pos_default_customer_missing',
+    })
   }
   if (!partner) {
     const fallbackNames = ['PUBLICO', 'PUBLIC', 'MOSTRADOR']
@@ -1811,23 +1825,11 @@ async function directAdmin(method, path, body) {
 
   if (cleanPath === '/pwa-admin/sale-detail' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
-    const orderId = Number(query.get('order_id') || 0)
-    if (!orderId) return null
-    const result = await readModel('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'payment_method', 'x_studio_mtodo_de_pago', 'warehouse_id'],
-      domain: [['id', '=', orderId]],
-      many: ['order_line'],
-      file: 'file',
-      limit: 1,
-      sudo: 1,
-    })
-    const order = pickFirstResponse(result)
-    if (!order) return null
-    return normalizeSaleOrder({
-      ...order,
-      total: Number(order.amount_total || 0),
-      customer: order.partner_id?.[1] || '',
-    })
+    const orderId = toPositiveSafeIntegerId(query.get('order_id'))
+    if (!orderId) {
+      return { ok: false, error: 'order_id requerido' }
+    }
+    return odooHttp('GET', '/pwa-admin/sale-detail', { order_id: orderId })
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
@@ -2232,19 +2234,15 @@ async function directAdmin(method, path, body) {
 
   // ── Sale cancel ─────────────────────────────────────────────────────────
   if (cleanPath === '/pwa-admin/sale-cancel' && method === 'POST') {
-    const id = Number(body?.order_id || 0)
-    if (!id) return { ok: false, error: 'order_id requerido' }
-    await createUpdate({
-      model: 'sale.order',
-      method: 'update',
-      ids: [id],
-      dict: {
-        state: 'cancel',
-      },
-      sudo: 1,
-      app: 'pwa_colaboradores',
+    const id = toPositiveSafeIntegerId(body?.order_id)
+    if (!id) {
+      return { ok: false, error: 'order_id requerido' }
+    }
+    return odooJson('/pwa-admin/sale-cancel', {
+      order_id: id,
+      reason: body?.reason || '',
+      employee_id: getSession().employee_id || undefined,
     })
-    return { ok: true, data: { id, state: 'cancel' } }
   }
 
   // ── Expense attachments (ir.attachment) ─────────────────────────────────
