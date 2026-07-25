@@ -6,6 +6,7 @@ import {
   NIGHT_POS_FLOW,
   buildPosTicketPath,
   canOpenPosPayment,
+  classifyPosSaleCreateError,
   normalizePosSaleResult,
 } from '../src/modules/admin/posFlow.js'
 
@@ -114,4 +115,24 @@ test('normalizePosSaleResult marks missing or invalid ids as uncertain', () => {
     assert.match(result.message, /Venta creada pero sin folio/)
     assert.match(result.message, /no vuelvas a cobrar/i)
   }
+})
+
+test('classifyPosSaleCreateError treats transport, timeout and 5xx failures as uncertain', () => {
+  for (const error of [
+    { code: 'network', status: 0, message: 'Network failed' },
+    { code: 'timeout', message: 'Request timed out' },
+    { status: 503, message: 'Service unavailable' },
+  ]) {
+    const result = classifyPosSaleCreateError(error)
+    assert.equal(result.status, 'uncertain')
+    assert.match(result.message, /no vuelvas a cobrar/i)
+    assert.match(result.message, /verifica la venta/i)
+  }
+})
+
+test('classifyPosSaleCreateError preserves known 4xx backend errors', () => {
+  assert.deepEqual(classifyPosSaleCreateError({ status: 400, message: 'Cliente inválido' }), {
+    status: 'error',
+    message: 'Cliente inválido',
+  })
 })
