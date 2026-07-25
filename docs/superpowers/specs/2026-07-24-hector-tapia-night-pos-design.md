@@ -1,7 +1,7 @@
 # POS nocturno para Héctor Tapia
 
-**Fecha:** 2026-07-24  
-**Estado:** Diseño aprobado por el usuario  
+**Fecha:** 2026-07-24
+**Estado:** Diseño aprobado por el usuario
 **Alcance:** PWA Colaboradores
 
 ## Objetivo
