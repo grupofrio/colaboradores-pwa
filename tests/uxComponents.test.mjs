@@ -2,15 +2,26 @@
 // Verifica: jerga forense NO en capa 1 (ModuleHeader primario), sí dentro de
 // EvidenceSection; caveat de decisión visible; StateScreen sin error crudo;
 // frescura neutral (no rojo de riesgo).
-import test from 'node:test'
+import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
 import { readM6PresentationMeta } from '../src/lib/presentationMeta/adapters.js'
 import { M6_API_LATEST_FIXTURE } from '../src/modules/caja-conciliacion/m6/fixtures/apiLatestFixture.js'
 
-const ModuleHeader = await loadJsxDefault('src/components/kold/ModuleHeader.jsx')
-const StateScreen = await loadJsxDefault('src/components/kold/StateScreen.jsx')
-const DataFreshness = await loadJsxDefault('src/components/kold/DataFreshness.jsx')
+const [
+  { Component: ModuleHeader, cleanup: cleanupModuleHeader },
+  { Component: StateScreen, cleanup: cleanupStateScreen },
+  { Component: DataFreshness, cleanup: cleanupDataFreshness },
+] = await Promise.all([
+  loadJsxDefault(fileURLToPath(new URL('../src/components/kold/ModuleHeader.jsx', import.meta.url))),
+  loadJsxDefault(fileURLToPath(new URL('../src/components/kold/StateScreen.jsx', import.meta.url))),
+  loadJsxDefault(fileURLToPath(new URL('../src/components/kold/DataFreshness.jsx', import.meta.url))),
+])
+
+after(async () => {
+  await Promise.all([cleanupModuleHeader(), cleanupStateScreen(), cleanupDataFreshness()])
+})
 
 const NOW = Date.parse(M6_API_LATEST_FIXTURE.run.finished_at) + 3 * 3600000
 const meta = readM6PresentationMeta(M6_API_LATEST_FIXTURE)

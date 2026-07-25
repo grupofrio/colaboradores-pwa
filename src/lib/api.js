@@ -31,6 +31,10 @@ import {
   filterKoldOsM6Params,
 } from './koldOsM6Route.js'
 import {
+  isKoldOsM7Path,
+  filterKoldOsM7Params,
+} from './koldOsM7Route.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -1632,12 +1636,12 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const reqCompanyId = Number(query.get('company_id') || companyId || 0)
     return odooHttp('GET', '/pwa-admin/today-sales', {
       warehouse_id: reqWarehouseId || undefined,
       company_id: reqCompanyId || undefined,
+      date: query.get('date') || undefined,
     })
   }
 
@@ -1829,21 +1833,17 @@ async function directAdmin(method, path, body) {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const orderId = Number(query.get('order_id') || 0)
     if (!orderId) return null
-    const result = await readModel('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'payment_method', 'x_studio_mtodo_de_pago', 'warehouse_id'],
-      domain: [['id', '=', orderId]],
-      many: ['order_line'],
-      file: 'file',
-      limit: 1,
-      sudo: 1,
+    // Usa el endpoint dedicado de Odoo (gf_pwa_admin._sale_detail_payload), que
+    // expande las líneas con qty/price_unit/subtotal y devuelve folio + total.
+    // El readModel genérico /get_records NO expandía order_line ni el total, por
+    // eso el ticket salía sin productos, en $0 y con folio incorrecto (caía al
+    // fallback S{orderId}, que mostraba el id como si fuera el folio).
+    const result = await odooHttp('GET', '/pwa-admin/sale-detail', {
+      order_id: orderId,
     })
-    const order = pickFirstResponse(result)
-    if (!order) return null
-    return normalizeSaleOrder({
-      ...order,
-      total: Number(order.amount_total || 0),
-      customer: order.partner_id?.[1] || '',
-    })
+    const order = result?.data ?? result
+    if (!order || !order.id) return null
+    return normalizeSaleOrder(order)
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
@@ -9397,6 +9397,22 @@ async function directKoldOsM6(method, path) {
   return odooHttp('GET', cleanPath, filterKoldOsM6Params(query))
 }
 
+// ── KOLD OS M7 (gf_kold_os_m7) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Cliente autenticado GET-only del backend M7 (rentabilidad, costos, márgenes).
+// Backend en PR TEMPORAL #211, no desplegado: en producción resuelve unavailable.
+async function directKoldOsM7(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM7Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M7 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM7Params(query, cleanPath))
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
@@ -9407,6 +9423,7 @@ async function routeDirect(method, path, body) {
     directKoldOsM4,
     directKoldOsM5,
     directKoldOsM6,
+    directKoldOsM7,
     directProfile,
     directGerente,
     directAdmin,
