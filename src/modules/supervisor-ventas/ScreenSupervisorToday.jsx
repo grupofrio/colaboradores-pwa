@@ -56,7 +56,6 @@ const SCREEN_CSS = `
   }
   .supervisor-ops-card {
     box-sizing: border-box;
-    height: 100%;
     border: 1px solid #dce3ec;
     border-radius: 14px;
     padding: 16px;

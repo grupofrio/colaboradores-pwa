@@ -148,6 +148,14 @@ test('CSS SSR conserva selector aria-pressed sin entidades escapadas', () => {
   assert.doesNotMatch(css, /&quot;/)
 })
 
+test('las tarjetas no fuerzan la altura de la fila más alta en escritorio', () => {
+  const html = render()
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)?.[1] || ''
+  const cardRule = css.match(/\.supervisor-ops-card\s*\{([^}]*)\}/)?.[1] || ''
+
+  assert.doesNotMatch(cardRule, /height:\s*100%/)
+})
+
 test('capability apagada o dato null muestra ausencia honesta, nunca un cero monetario falso', () => {
   const capabilityOff = structuredClone(DAY_CONTROL_FIXTURE)
   capabilityOff.capabilities.sales_day_available = false
