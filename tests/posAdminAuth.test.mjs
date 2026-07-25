@@ -751,3 +751,122 @@ test('today sales delegates employee scope to the Odoo backend endpoint', async 
   assert.equal(result.data.items.length, 1)
   assert.equal(result.data.items[0].id, 9001)
 })
+
+test('sale detail delegates employee scope to the secured Odoo controller', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+
+    if (url === '/odoo-api/pwa-admin/sale-detail?order_id=9001') {
+      return createJsonResponse(200, {
+        ok: true,
+        data: { id: 9001, name: 'S09001' },
+      })
+    }
+    if (url === '/odoo-api/get_records') {
+      return createJsonResponse(200, {
+        result: {
+          response: [{
+            id: 9001,
+            name: 'S09001',
+            partner_id: [44, 'Cliente'],
+            amount_total: 100,
+            order_line: [],
+          }],
+        },
+      })
+    }
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  const result = await api('GET', '/pwa-admin/sale-detail?order_id=9001')
+
+  const call = calls.find((entry) => entry.url === '/odoo-api/pwa-admin/sale-detail?order_id=9001')
+  assert.ok(call, 'sale detail did not call the secured Odoo controller')
+  assert.equal(call.options.headers['X-GF-Employee-Token'], 'employee-token-test')
+  assert.equal(calls.some((entry) => entry.url === '/odoo-api/get_records'), false)
+  assert.equal(result.data.id, 9001)
+})
+
+test('sale cancel delegates authorization and cancellation to the secured Odoo controller', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+
+    if (url === '/odoo-api/pwa-admin/sale-cancel') {
+      return createJsonResponse(200, {
+        result: { ok: true, data: { id: 9001, state: 'cancel' } },
+      })
+    }
+    if (url === '/odoo-api/api/create_update') {
+      return createJsonResponse(200, { result: { success: true } })
+    }
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  const result = await api('POST', '/pwa-admin/sale-cancel', {
+    order_id: 9001,
+    reason: 'Captura duplicada',
+  })
+
+  const call = calls.find((entry) => entry.url === '/odoo-api/pwa-admin/sale-cancel')
+  assert.ok(call, 'sale cancel did not call the secured Odoo controller')
+  assert.equal(call.options.headers['X-GF-Employee-Token'], 'employee-token-test')
+  assert.deepEqual(call.payload.params, {
+    order_id: 9001,
+    reason: 'Captura duplicada',
+    employee_id: 699,
+  })
+  assert.equal(calls.some((entry) => entry.url === '/odoo-api/api/create_update'), false)
+  assert.equal(result.data.state, 'cancel')
+})
+
+test('sale detail propagates a secured controller 403', async () => {
+  setSession()
+
+  globalThis.fetch = async (url) => {
+    if (url === '/odoo-api/pwa-admin/sale-detail?order_id=9001') {
+      return createJsonResponse(403, {
+        code: 'forbidden',
+        message: 'Venta fuera del alcance del empleado',
+      })
+    }
+    return createJsonResponse(500, { message: `Unexpected ${url}` })
+  }
+
+  await assert.rejects(
+    api('GET', '/pwa-admin/sale-detail?order_id=9001'),
+    (error) => {
+      assert.equal(error.status, 403)
+      assert.equal(error.code, 'forbidden')
+      assert.equal(error.message, 'Venta fuera del alcance del empleado')
+      return true
+    },
+  )
+})
+
+test('sale detail and cancel reject non-decimal or non-scalar ids before fetch', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url) => {
+    calls.push(url)
+    return createJsonResponse(200, { ok: true })
+  }
+
+  const detail = await api('GET', '/pwa-admin/sale-detail?order_id=1e3')
+  const cancellation = await api('POST', '/pwa-admin/sale-cancel', {
+    order_id: true,
+    reason: 'invalid',
+  })
+
+  assert.deepEqual(detail, { ok: false, error: 'order_id requerido' })
+  assert.deepEqual(cancellation, { ok: false, error: 'order_id requerido' })
+  assert.deepEqual(calls, [])
+})
