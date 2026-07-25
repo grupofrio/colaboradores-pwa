@@ -8028,6 +8028,21 @@ async function directEntregas(method, path, body) {
   return NO_DIRECT
 }
 
+const SUPERVISOR_DAY_CONTROL_PATH =
+  '/gf/salesops/supervisor/v2/day-control'
+
+async function directSupervisorDayControl(method, path, body) {
+  const cleanPath = path.split('?')[0]
+  if (cleanPath !== SUPERVISOR_DAY_CONTROL_PATH) return NO_DIRECT
+  if (method !== 'POST') {
+    throw new ApiError('method_not_allowed', {
+      status: 405,
+      code: 'method_not_allowed',
+    })
+  }
+  return odooJson(cleanPath, body || {})
+}
+
 async function directSupervisorVentas(method, path, body) {
   const query = new URLSearchParams(path.split('?')[1] || '')
   const cleanPath = path.split('?')[0]
@@ -9447,6 +9462,7 @@ async function routeDirect(method, path, body) {
     directSupervision,
     directAlmacenPT,
     directEntregas,
+    directSupervisorDayControl,
     directSupervisorVentas,
     directKoldcup,
   ]
