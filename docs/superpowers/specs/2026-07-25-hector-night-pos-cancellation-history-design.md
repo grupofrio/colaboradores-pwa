@@ -89,12 +89,14 @@ incluirá:
 - folio;
 - cliente;
 - total;
-- estado `Activa` o `Cancelada`.
+- estado `Activa`, `Cerrada` o `Cancelada`.
 
 La pantalla tendrá estados explícitos de carga, lista vacía y error. No tendrá
 selector de fecha ni aceptará un rango: su periodo es siempre el día actual.
 Una fila abrirá el ticket nocturno existente en
-`/pos-nocturno/ticket/:orderId`.
+`/pos-nocturno/ticket/:orderId`. Esa URL no confiará en que la fila provino del
+historial: el controlador de detalle aplicará nuevamente propiedad estricta y
+fecha de hoy antes de devolver datos a Héctor.
 
 ### Cancelación desde el ticket nocturno
 
@@ -103,10 +105,15 @@ permitidas. `ScreenTicket` conservará el textarea actual para el flujo
 administrativo, pero en el flujo nocturno mostrará un selector de una sola
 opción con los cuatro motivos aprobados.
 
-El botón de confirmación estará deshabilitado hasta seleccionar una opción. Una
-venta ya cancelada mostrará su estado y no ofrecerá la acción. Después de una
-cancelación exitosa, el ticket se recargará y el historial mostrará la venta
-como `Cancelada` en su siguiente carga.
+El botón de confirmación estará deshabilitado hasta seleccionar una opción. La
+PWA mostrará la acción solo cuando el detalle devuelto por Odoo incluya
+`can_cancel: true`; no duplicará en JavaScript el umbral configurable ni las
+reglas de estado. Para una venta no elegible, Odoo devolverá también un
+`cancel_block_code` estable que la PWA traducirá a un mensaje seguro.
+
+Una venta cancelada o cerrada mostrará su estado y no ofrecerá la acción.
+Después de una cancelación exitosa, el ticket se recargará y el historial
+mostrará la venta como `Cancelada` en su siguiente carga.
 
 ## Contrato de razones
 
@@ -146,11 +153,36 @@ La PWA no podrá solicitar días anteriores cambiando parámetros. El contrato
 administrativo actual de `/today-sales` conservará la consulta por fecha y su
 scope vigente.
 
+### Detalle de venta nocturna
+
+`/pwa-admin/sale-detail` ya resuelve al empleado desde el token. Cuando el
+empleado autoritativo sea Héctor, el controlador exigirá además:
+
+1. `x_pwa_employee_id` presente e igual a `employee.id`;
+2. `date_order` dentro del día actual de México;
+3. compañía, almacén y analítica dentro del alcance del empleado.
+
+Una orden ajena, anterior o legacy se responderá como fuera de alcance, sin
+revelar si existe. El detalle incluirá `can_cancel` y `cancel_block_code`,
+calculados con el mismo helper de decisión que revalidará `/sale-cancel`. De
+esta forma, una URL directa no amplía lo que muestra el historial y la PWA no
+fija el umbral de $5,000 en el bundle.
+
 ### Cancelación
 
-`/pwa-admin/sale-cancel` resolverá la identidad desde
-`X-GF-Employee-Token`; ningún `employee_id`, nombre o rol enviado en el payload
-podrá autorizar la operación.
+`/pwa-admin/sale-cancel` aplicará esta precedencia de identidad:
+
+1. si existe un `X-GF-Employee-Token` válido, el empleado del token es la única
+   identidad autoritativa y se ignora cualquier identidad del payload;
+2. la autorización especial nocturna solo existe cuando ese token resuelve a
+   Héctor Tapia;
+3. si no existe token, se conserva la resolución legacy exclusivamente para el
+   contrato administrativo existente; esa ruta nunca puede activar la
+   autorización especial de Héctor mediante `employee_id`, nombre o rol del
+   payload.
+
+Para otros empleados que sí presenten token, el empleado del token se evalúa
+con la política administrativa existente de `allow_cancel_sales`.
 
 Para Héctor, el servidor comprobará antes de `action_cancel()`:
 
@@ -159,7 +191,8 @@ Para Héctor, el servidor comprobará antes de `action_cancel()`:
 3. `x_pwa_employee_id` presente e igual al empleado autenticado;
 4. compañía, almacén y analítica dentro de su alcance;
 5. `date_order` dentro del día actual de México;
-6. estado cancelable y distinto de `cancel` o `done`;
+6. estado exactamente `sale`; la única transición nocturna admitida es
+   `sale → cancel`;
 7. importe menor al umbral configurado de cancelación gerencial;
 8. `reason_code` dentro de la allowlist nocturna.
 
@@ -169,6 +202,9 @@ que debe intervenir un gerente.
 
 Para otros empleados, se conserva la política actual basada en
 `allow_cancel_sales`, motivo obligatorio y validación gerencial por importe.
+La decisión nocturna `can_cancel` será una función compartida y pura respecto a
+empleado, orden, fecha actual y configuración; `/sale-detail` la expone y
+`/sale-cancel` la vuelve a ejecutar inmediatamente antes de modificar la orden.
 
 ## Flujo de datos
 
@@ -178,7 +214,8 @@ Para otros empleados, se conserva la política actual basada en
 2. La PWA llama al controlador compartido con la intención nocturna y el token
    de sesión.
 3. Odoo fuerza la fecha de hoy y limita por empleado, compañía y almacén.
-4. La PWA presenta activas y canceladas sin permitir escoger otra fecha.
+4. La PWA presenta ventas `Activa`, `Cerrada` y `Cancelada` sin permitir escoger
+   otra fecha.
 
 ### Cancelación
 
@@ -196,6 +233,8 @@ Para otros empleados, se conserva la política actual basada en
 - Empleado distinto de Héctor en rutas nocturnas: redirección a `/`.
 - Venta ajena o sin atribución PWA: rechazo sin revelar detalles de la orden.
 - Venta de otro día: rechazo; el historial no ofrece acceso a días anteriores.
+- URL directa a ticket ajeno, anterior o legacy: respuesta genérica de fuera de
+  alcance.
 - Venta ya cancelada: mensaje `La orden ya está cancelada` y sin segundo intento.
 - Venta `done`: requiere reversión manual.
 - Venta en o sobre el umbral: mensaje de autorización gerencial.
@@ -214,7 +253,9 @@ Para otros empleados, se conserva la política actual basada en
 - solo se muestran ventas devueltas por el endpoint y se conservan canceladas;
 - una fila abre el ticket nocturno correcto;
 - el ticket nocturno exige un motivo cerrado y nunca envía texto libre;
-- una venta cancelada o `done` no muestra acción de cancelación;
+- el ticket usa `can_cancel` del backend y no fija el umbral en la PWA;
+- una venta cancelada o `done` no muestra acción de cancelación y `done` se
+  etiqueta `Cerrada`;
 - regresiones de navegación, POS, ticket y Angélica siguen verdes.
 
 ### Backend
@@ -222,10 +263,15 @@ Para otros empleados, se conserva la política actual basada en
 - Héctor obtiene solo sus ventas de hoy;
 - una fecha manipulada no expone ventas anteriores;
 - las canceladas se incluyen y conservan estado;
+- `sale-detail` rechaza URL directa a venta ajena, anterior o legacy;
+- `sale-detail` expone `can_cancel` y `cancel_block_code` desde la misma decisión
+  que usa la mutación;
 - una venta propia activa y menor al umbral se cancela con cada código válido;
 - venta ajena, legacy sin atribución, día anterior, razón inválida, `done`,
   cancelada y venta en/sobre el umbral se rechazan;
 - el payload no puede suplantar la identidad del empleado;
+- la resolución legacy administrativa no puede activar el permiso nocturno de
+  Héctor;
 - los empleados administrativos conservan el contrato actual;
 - la cancelación registra empleado y etiqueta canónica en chatter.
 
@@ -234,7 +280,8 @@ Para otros empleados, se conserva la política actual basada en
 1. Héctor abre `Ventas de hoy` desde su POS nocturno.
 2. Solo ve ventas atribuidas a él y pertenecientes al día actual de México.
 3. Las ventas canceladas siguen visibles con estado `Cancelada`.
-4. Solo una venta activa propia y menor al umbral ofrece cancelación.
+4. Solo una venta en estado `sale`, propia, de hoy y menor al umbral devuelve
+   `can_cancel: true` y ofrece cancelación.
 5. La cancelación exige una de las cuatro razones y no permite texto libre.
 6. Odoo rechaza venta ajena, otro día, razón inválida o importe restringido.
 7. Héctor no obtiene acceso a Admin Sucursal.
