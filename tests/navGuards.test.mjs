@@ -166,8 +166,8 @@ test('workflow CI ejecuta npm run build (el job "build" compila)', () => {
 // ── AdminShell: feed lateral solo con ancho holgado (≥1366) ──────────────────
 test('AdminShell no compone triple panel en 1024–1365', () => {
   const shell = readFileSync(new URL('../src/modules/admin/components/AdminShell.jsx', import.meta.url), 'utf8')
-  assert.match(shell, /showActivityFeed = !hideActivityFeed && sw >= 1366/)
-  assert.match(shell, /showActivityFeed \? '220px 1fr 320px' : '220px 1fr'/)
+  assert.match(shell, /showActivityFeed = !hideNavigation && !hideActivityFeed && sw >= 1366/)
+  assert.match(shell, /hideNavigation[\s\S]*\? 'minmax\(0, 1fr\)'[\s\S]*: showActivityFeed[\s\S]*\? '220px 1fr 320px'[\s\S]*: '220px 1fr'/)
   assert.match(shell, /\{showActivityFeed && <ActivityFeed/)
 })
 

@@ -23,12 +23,18 @@ import {
 } from '../posCart'
 import {
   canRefreshCustomerPricelist,
+  hasValidPosCustomer,
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
 } from '../posCustomers'
 import { logScreenError } from '../../shared/logScreenError'
 import { computePosSummary } from '../posPricing'
+import {
+  ADMIN_POS_FLOW,
+  buildPosTicketPath,
+  canOpenPosPayment,
+} from '../posFlow'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -39,7 +45,7 @@ export const POS_THRESHOLDS = {
   DIRECTOR_AUTH: 50000,
 }
 
-export default function AdminPosForm() {
+export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   const navigate = useNavigate()
   const { companyId, companyLabel, warehouseId, sucursal } = useAdmin()
 
@@ -108,6 +114,7 @@ export default function AdminPosForm() {
         }
       } catch (e) {
         logScreenError('AdminPosForm', 'getDefaultCustomer', e)
+        setError(e?.message || 'No se pudo cargar el cliente predeterminado.')
       }
     })()
     return () => { alive = false }
@@ -140,6 +147,7 @@ export default function AdminPosForm() {
   }
 
   const { subtotal, total } = computePosSummary(cart)
+  const canOpenPayment = canOpenPosPayment(cart, customer)
 
   const doCustomerSearch = useCallback(async (q) => {
     if (!shouldLoadCustomerSuggestions(q)) {
@@ -170,6 +178,7 @@ export default function AdminPosForm() {
 
   function selectCustomer(c) {
     setCustomer({ id: c.id, name: c.name })
+    setError('')
     setShowCustomerSearch(false)
     setCustomerQuery('')
     setCustomerResults([])
@@ -183,6 +192,10 @@ export default function AdminPosForm() {
 
   async function confirmPay() {
     if (!payConfirm || cart.length === 0) return
+    if (!hasValidPosCustomer(customer)) {
+      setError('Selecciona un cliente antes de cobrar.')
+      return
+    }
 
     if (payConfirm === 'card') {
       const ref = cardRef.trim()
@@ -211,9 +224,10 @@ export default function AdminPosForm() {
       })
       const data = result?.data ?? result
       const orderId = data?.order_id || data?.id
-      if (orderId) {
+      const ticketPath = buildPosTicketPath(flow, orderId)
+      if (ticketPath) {
         toast.success('Venta registrada')
-        navigate(`/admin/ticket/${orderId}`, { state: { order_id: orderId } })
+        navigate(ticketPath, { state: { order_id: orderId } })
       } else {
         setError('Venta creada pero sin folio')
       }
@@ -802,8 +816,8 @@ export default function AdminPosForm() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
-                onClick={() => cart.length > 0 && setPayConfirm('cash')}
-                disabled={cart.length === 0}
+                onClick={() => canOpenPayment && setPayConfirm('cash')}
+                disabled={!canOpenPayment}
                 style={{
                   flex: 1,
                   padding: '14px 0',
@@ -812,8 +826,8 @@ export default function AdminPosForm() {
                     ? TOKENS.colors.surface
                     : `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
                   border: cart.length === 0 ? `1px solid ${TOKENS.colors.border}` : 'none',
-                  opacity: cart.length === 0 ? 0.5 : 1,
-                  cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: canOpenPayment ? 1 : 0.5,
+                  cursor: canOpenPayment ? 'pointer' : 'not-allowed',
                   fontSize: 13,
                   fontWeight: 700,
                   color: 'white',
@@ -824,8 +838,8 @@ export default function AdminPosForm() {
               </button>
               <button
                 type="button"
-                onClick={() => cart.length > 0 && setPayConfirm('card')}
-                disabled={cart.length === 0}
+                onClick={() => canOpenPayment && setPayConfirm('card')}
+                disabled={!canOpenPayment}
                 style={{
                   flex: 1,
                   padding: '14px 0',
@@ -834,8 +848,8 @@ export default function AdminPosForm() {
                     ? TOKENS.colors.surface
                     : `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
                   border: cart.length === 0 ? `1px solid ${TOKENS.colors.border}` : 'none',
-                  opacity: cart.length === 0 ? 0.5 : 1,
-                  cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: canOpenPayment ? 1 : 0.5,
+                  cursor: canOpenPayment ? 'pointer' : 'not-allowed',
                   fontSize: 13,
                   fontWeight: 700,
                   color: 'white',
