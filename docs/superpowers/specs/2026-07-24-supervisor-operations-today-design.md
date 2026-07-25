@@ -282,8 +282,10 @@ La primera entrega muestra como métricas:
 - venta del día;
 - visitas completadas sobre total.
 
-“Sin venta” y “Recuperación” aparecen como accesos a las pantallas existentes,
-sin conteos inventados porque `day-control/1` no los expone.
+“Sin visitar” y “Recuperación” aparecen como accesos a las pantallas existentes,
+sin conteos inventados. No se crea una tarjeta “Sin venta” porque
+`day-control/1` no expone ese conteo y no existe una superficie dedicada con esa
+semántica.
 
 Venta mensual y meta no son requisitos de esta primera entrega. Si se incorporan
 en un ciclo posterior deberán tener una autoridad explícita; meta ausente se
