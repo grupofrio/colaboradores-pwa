@@ -12,6 +12,14 @@ export default defineConfig(({ mode }) => {
       : './src/modules/ventas/m4/demoFixtureLoader.prod.js',
     import.meta.url,
   ))
+  // M7: mismo patrón que M4 — en build de producción el loader NO importa el
+  // fixture, así el payload financiero agregado nunca entra al bundle productivo.
+  const m7DemoFixtureLoader = fileURLToPath(new URL(
+    mode === 'development' || mode === 'test'
+      ? './src/modules/rentabilidad-costos/m7/demoFixtureLoader.dev.js'
+      : './src/modules/rentabilidad-costos/m7/demoFixtureLoader.prod.js',
+    import.meta.url,
+  ))
 
   return {
     resolve: {
@@ -23,6 +31,7 @@ export default defineConfig(({ mode }) => {
           import.meta.url,
         )),
         'virtual:m4-demo-fixture': demoFixtureLoader,
+        'virtual:m7-demo-fixture': m7DemoFixtureLoader,
       },
     },
     plugins: [

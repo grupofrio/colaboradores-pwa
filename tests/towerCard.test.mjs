@@ -194,10 +194,10 @@ test('estado activo: en /torre/backlog el item Torre resuelve activo', () => {
   assert.equal(resolveActiveId(items, '/torre/backlog?state_bucket=open'), 'torre_operativa')
 })
 
-// ── Política full-screen: /torre/backlog sigue ocultando la nav global ──────
-test('/torre/backlog sigue oculto para la nav global (pantalla full-screen)', () => {
-  assert.equal(isNavHiddenForPath('/torre/backlog'), true)
-  assert.equal(isNavHiddenForPath('/torre'), true)
+// ── Política Etapa 0A: /torre/backlog RECUPERA nav; /torre (E1) sigue oculto ──
+test('/torre/backlog recupera la nav global (M1); /torre (E1) sigue oculto', () => {
+  assert.equal(isNavHiddenForPath('/torre/backlog'), false, 'M1 recupera el sidebar')
+  assert.equal(isNavHiddenForPath('/torre'), true, 'la E1 Tower sigue full-screen/oculta')
 })
 
 // ── ScreenHome usa la fuente única session-aware de Home ────────────────────

@@ -111,6 +111,26 @@ export async function fetchM4Latest({ timeoutMs = M4_TIMEOUT_MS, apiImpl = defau
     : { state: 'invalid', errors: ['canonicalización M4 falló'] }
 }
 
+/**
+ * Resuelve el fixture de DEMO por la MISMA autoridad contractual que /latest
+ * (validar + canonicalizar), sin red. El camino demo NO debe entregar un fixture
+ * malformado al render: si no valida o no canonicaliza, cae a un estado no-ok.
+ * Devuelve la misma forma que fetchM4Latest ({ state, payload?, provenance?, errors? }).
+ */
+export function resolveM4DemoLatest(fixture) {
+  if (!fixture?.payload || !fixture?.provenance) return { state: 'unavailable' }
+  const { ok, errors, schema } = validateM4Latest(fixture.payload)
+  if (!ok) {
+    return schema === 'unsupported'
+      ? { state: 'schema_mismatch', errors }
+      : { state: 'invalid', errors }
+  }
+  const canonical = canonicalizeM4Latest(fixture.payload)
+  return canonical
+    ? { state: 'ok', payload: canonical, provenance: fixture.provenance }
+    : { state: 'invalid', errors: ['canonicalización M4 demo falló'] }
+}
+
 /** GET /pwa-kold-os/m4/findings con filtros del contrato (paginado server-side). */
 export async function fetchM4Findings(params = {}, {
   timeoutMs = M4_TIMEOUT_MS, apiImpl = defaultApi, ruleResults = null, run = null,
