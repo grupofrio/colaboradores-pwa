@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   canRefreshCustomerPricelist,
+  hasValidPosCustomer,
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
@@ -21,6 +22,12 @@ test('shouldLoadCustomerSuggestions waits for at least two characters when query
 test('canRefreshCustomerPricelist enables the list refresh button for selected customers', () => {
   assert.equal(canRefreshCustomerPricelist({ id: 44 }), true)
   assert.equal(canRefreshCustomerPricelist({ id: null }), false)
+})
+
+test('hasValidPosCustomer requires a positive customer id', () => {
+  assert.equal(hasValidPosCustomer({ id: 44 }), true)
+  assert.equal(hasValidPosCustomer({ id: 0 }), false)
+  assert.equal(hasValidPosCustomer({ id: null }), false)
 })
 
 test('normalizeCustomerResults unwraps direct arrays and nested data arrays', () => {

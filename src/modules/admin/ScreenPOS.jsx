@@ -23,13 +23,20 @@ import {
 } from './posCart'
 import {
   canRefreshCustomerPricelist,
+  hasValidPosCustomer,
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
 } from './posCustomers'
+import {
+  ADMIN_POS_FLOW,
+  buildPosTicketPath,
+  canOpenPosPayment,
+} from './posFlow'
 
-export default function ScreenPOS() {
+export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
   const { session } = useSession()
+  const navigate = useNavigate()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const warehouseId = softWarehouse(session)
 
@@ -43,23 +50,29 @@ export default function ScreenPOS() {
     return (
       <SessionErrorState
         error={{ missing: 'warehouse_id' }}
-        backTo="/admin"
+        backTo={flow.backTo}
       />
     )
   }
 
-  if (sw < 1024) return <MobilePOS warehouseId={warehouseId} />
+  if (sw < 1024) return <MobilePOS warehouseId={warehouseId} flow={flow} />
 
   return (
     <AdminProvider>
-      <AdminShell activeBlock="pos" title="Venta mostrador">
-        <AdminPosForm />
+      <AdminShell
+        activeBlock="pos"
+        title={flow.title}
+        onBack={() => navigate(flow.backTo)}
+        hideNavigation={flow.standalone}
+        hideActivityFeed={flow.standalone}
+      >
+        <AdminPosForm flow={flow} />
       </AdminShell>
     </AdminProvider>
   )
 }
 
-function MobilePOS({ warehouseId }) {
+function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const { session } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
@@ -123,7 +136,10 @@ function MobilePOS({ warehouseId }) {
     try {
       const c = normalizeDefaultCustomerResponse(await getDefaultCustomer(companyId))
       if (c && c.id) setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
-    } catch (e) { logScreenError('ScreenPOS', 'getDefaultCustomer', e) }
+    } catch (e) {
+      logScreenError('ScreenPOS', 'getDefaultCustomer', e)
+      setError(e?.message || 'No se pudo cargar el cliente predeterminado.')
+    }
   }, [companyId])
 
   useEffect(() => {
@@ -151,6 +167,7 @@ function MobilePOS({ warehouseId }) {
   }
 
   const { subtotal, total } = computePosSummary(cart)
+  const canOpenPayment = canOpenPosPayment(cart, customer)
 
   // Customer search
   const doCustomerSearch = useCallback(async (q) => {
@@ -178,6 +195,7 @@ function MobilePOS({ warehouseId }) {
 
   function selectCustomer(c) {
     setCustomer({ id: c.id, name: c.name })
+    setError('')
     setShowCustomerSearch(false)
     setCustomerQuery('')
     setCustomerResults([])
@@ -191,6 +209,10 @@ function MobilePOS({ warehouseId }) {
   // Payment
   async function confirmPay() {
     if (!payConfirm || cart.length === 0) return
+    if (!hasValidPosCustomer(customer)) {
+      setError('Selecciona un cliente antes de cobrar.')
+      return
+    }
     setSubmitting(true)
     setError('')
     try {
@@ -202,8 +224,14 @@ function MobilePOS({ warehouseId }) {
         payment_method: payConfirm,
         lines: cart.map(c => ({ product_id: c.product_id, qty: c.qty, price_unit: c.price_unit })),
       })
-      const orderId = result?.order_id || result?.id
-      navigate(`/admin/ticket/${orderId}`, { state: { order_id: orderId } })
+      const data = result?.data ?? result
+      const orderId = data?.order_id || data?.id
+      const ticketPath = buildPosTicketPath(flow, orderId)
+      if (ticketPath) {
+        navigate(ticketPath, { state: { order_id: orderId } })
+      } else {
+        setError('Venta creada pero sin folio')
+      }
     } catch (e) {
       setError(e.message || 'Error al crear venta')
     } finally { setSubmitting(false); setPayConfirm(null) }
@@ -228,7 +256,7 @@ function MobilePOS({ warehouseId }) {
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px', paddingBottom: cart.length > 0 ? 200 : 20 }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-          <button onClick={() => navigate('/admin')} style={{
+          <button onClick={() => navigate(flow.backTo)} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -237,7 +265,7 @@ function MobilePOS({ warehouseId }) {
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>POS Mostrador</span>
+          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>{flow.title}</span>
         </div>
 
         {error && (
@@ -476,16 +504,28 @@ function MobilePOS({ warehouseId }) {
               </div>
             ) : (
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setPayConfirm('cash')} style={{
-                  flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
-                  background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
-                }}>
+                <button
+                  onClick={() => canOpenPayment && setPayConfirm('cash')}
+                  disabled={!canOpenPayment}
+                  style={{
+                    flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
+                    background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
+                    opacity: canOpenPayment ? 1 : 0.5,
+                    cursor: canOpenPayment ? 'pointer' : 'not-allowed',
+                  }}
+                >
                   <span style={{ ...typo.body, color: 'white', fontWeight: 700 }}>Efectivo</span>
                 </button>
-                <button onClick={() => setPayConfirm('card')} style={{
-                  flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
-                  background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
-                }}>
+                <button
+                  onClick={() => canOpenPayment && setPayConfirm('card')}
+                  disabled={!canOpenPayment}
+                  style={{
+                    flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
+                    background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
+                    opacity: canOpenPayment ? 1 : 0.5,
+                    cursor: canOpenPayment ? 'pointer' : 'not-allowed',
+                  }}
+                >
                   <span style={{ ...typo.body, color: 'white', fontWeight: 700 }}>Terminal</span>
                 </button>
               </div>

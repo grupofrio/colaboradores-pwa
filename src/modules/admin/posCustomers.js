@@ -3,8 +3,12 @@ export function shouldLoadCustomerSuggestions(query) {
   return normalized.length === 0 || normalized.length >= 2
 }
 
+export function hasValidPosCustomer(customer) {
+  return Number(customer?.id || 0) > 0
+}
+
 export function canRefreshCustomerPricelist(customer) {
-  return Boolean(Number(customer?.id || 0))
+  return hasValidPosCustomer(customer)
 }
 
 function relationId(value) {
