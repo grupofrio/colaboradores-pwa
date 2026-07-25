@@ -43,9 +43,9 @@ La nueva prueba leerá `package.json` y `package-lock.json` y verificará:
 1. Los cinco paquetes aprobados declaran versión mayor 19.
 2. `react`, `react-dom` y `react-test-renderer` comparten la misma versión 19.2.x resuelta.
 3. `@types/react` y `@types/react-dom` resuelven versiones mayores 19.
-4. No se introducen `overrides` ni opciones que oculten conflictos de peer dependencies.
+4. No se introducen `overrides` ni configuración npm persistida que oculte conflictos de peer dependencies.
 
-El ciclo TDD será rojo con la línea base React 18, verde después de la actualización coordinada y seguido de la suite completa.
+El ciclo TDD será rojo con la línea base React 18, verde después de la actualización coordinada y seguido de la suite completa. La ausencia de flags de instalación inseguros se demostrará ejecutando `npm ci` sin `--force` ni `--legacy-peer-deps`, ya que esos flags de línea de comandos no quedan registrados en los manifiestos.
 
 ## Validación y criterios de aceptación
 
