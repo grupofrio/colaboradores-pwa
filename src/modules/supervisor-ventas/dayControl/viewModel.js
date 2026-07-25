@@ -412,6 +412,9 @@ function mapPriority(priority, routes) {
   const count = rawCount !== null && rawCount > 0 ? rawCount : null
   return {
     type: safeText(priority?.type, 'unknown'),
+    entityType: safeText(priority?.entity_type, 'unknown'),
+    entityId: positiveIntegerId(priority?.entity_id),
+    routeId: positiveIntegerId(priority?.route_id),
     severity: ['critical', 'warning', 'info'].includes(priority?.severity)
       ? priority.severity
       : 'info',

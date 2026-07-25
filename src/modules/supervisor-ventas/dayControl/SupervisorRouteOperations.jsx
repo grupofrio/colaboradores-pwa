@@ -1,4 +1,9 @@
 import { Link } from 'react-router-dom'
+import {
+  markerRenderKey,
+  priorityRenderKey,
+  uniqueRenderEntries,
+} from './renderKeys.js'
 
 function targetTimeLabel(targetAt) {
   if (typeof targetAt !== 'number' || !Number.isFinite(targetAt)) return 'Sin dato'
@@ -57,6 +62,8 @@ function RouteLoads({ loads }) {
 }
 
 function RouteCard({ route }) {
+  const markerEntries = uniqueRenderEntries(route.incidentMarkers, markerRenderKey)
+
   return (
     <article className="supervisor-ops-route">
       <div className="supervisor-ops-route-heading">
@@ -115,8 +122,8 @@ function RouteCard({ route }) {
           <span>Sin marcadores</span>
         ) : (
           <ul className="supervisor-ops-plain-list">
-            {route.incidentMarkers.map((marker) => (
-              <li key={marker.id || `${marker.name}:${marker.stopId || 'route'}`}>
+            {markerEntries.map(({ item: marker, key }) => (
+              <li key={key}>
                 {marker.name}
                 {marker.recordedAt ? ` · ${marker.recordedAt}` : ''}
               </li>
@@ -133,6 +140,8 @@ export default function SupervisorRouteOperations({
   routes,
   routesAvailable,
 }) {
+  const priorityEntries = uniqueRenderEntries(priorities, priorityRenderKey)
+
   return (
     <div className="supervisor-ops-route-operations">
       <section
@@ -147,9 +156,9 @@ export default function SupervisorRouteOperations({
           <p className="supervisor-ops-empty-copy">Sin prioridades para este día.</p>
         ) : (
           <ol className="supervisor-ops-priority-list">
-            {priorities.map((priority) => (
+            {priorityEntries.map(({ item: priority, key }) => (
               <PriorityItem
-                key={`${priority.type}:${priority.href || priority.reason}`}
+                key={key}
                 priority={priority}
               />
             ))}

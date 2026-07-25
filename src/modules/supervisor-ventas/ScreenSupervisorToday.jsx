@@ -49,7 +49,7 @@ const SCREEN_CSS = `
     font-weight: 700;
     cursor: pointer;
   }
-  .supervisor-ops-tabs button[aria-pressed="true"] {
+  .supervisor-ops-tabs button[aria-pressed=true] {
     border-color: #2563eb;
     background: #e9f1ff;
     color: #174ea6;

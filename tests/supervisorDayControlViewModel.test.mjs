@@ -469,6 +469,26 @@ test('prioridades se limitan a cinco sin reordenar y conservan chip agregado', (
   assert.deepEqual(aggregated.countChip, { show: true, text: '×2', count: 2 })
 })
 
+test('prioridades exponen identidad contractual sanitizada para render estable', () => {
+  const payload = structuredClone(DAY_CONTROL_FIXTURE)
+  payload.priorities[0].entity_type = 'route https://backend.invalid/private'
+  payload.priorities[0].entity_id = '5103'
+  payload.priorities[0].route_id = 5103
+
+  const priority = buildDayControlViewModel(payload).priorities[0]
+
+  assert.equal(priority.entityType, 'route')
+  assert.equal(priority.entityId, 5103)
+  assert.equal(priority.routeId, 5103)
+  assert.ok(!JSON.stringify(priority).includes('backend.invalid'))
+
+  payload.priorities[0].entity_id = 0
+  payload.priorities[0].route_id = -1
+  const invalidIds = buildDayControlViewModel(payload).priorities[0]
+  assert.equal(invalidIds.entityId, null)
+  assert.equal(invalidIds.routeId, null)
+})
+
 test('acciones rápidas son una allowlist fija de rutas internas existentes', () => {
   assert.deepEqual(
     buildDayControlViewModel(DAY_CONTROL_FIXTURE)

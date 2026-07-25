@@ -12,6 +12,11 @@ import {
   DAY_CONTROL_FIXTURE,
   DAY_CONTROL_FIXTURE_DEGRADED,
 } from '../src/modules/supervisor-ventas/dayControl/fixtures.js'
+import {
+  markerRenderKey,
+  priorityRenderKey,
+} from '../src/modules/supervisor-ventas/dayControl/renderKeys.js'
+import { stateCopy } from '../src/modules/supervisor-ventas/dayControl/state.js'
 
 const {
   Component: ScreenSupervisorToday,
@@ -135,6 +140,14 @@ test('activeDay fuera de la allowlist usa Hoy y nunca selecciona otro payload', 
   assert.match(html, /aria-pressed="true"[^>]*>Hoy</)
 })
 
+test('CSS SSR conserva selector aria-pressed sin entidades escapadas', () => {
+  const html = render()
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)?.[1] || ''
+
+  assert.match(css, /\[aria-pressed=true\]/)
+  assert.doesNotMatch(css, /&quot;/)
+})
+
 test('capability apagada o dato null muestra ausencia honesta, nunca un cero monetario falso', () => {
   const capabilityOff = structuredClone(DAY_CONTROL_FIXTURE)
   capabilityOff.capabilities.sales_day_available = false
@@ -206,6 +219,44 @@ test('prioridades conservan razón y ×N; todos los links provienen de allowlist
   }
 })
 
+test('keys de prioridades distinguen cierres contractuales de rutas distintas', () => {
+  const first = {
+    type: 'closure_pending',
+    entityType: 'route',
+    entityId: 5101,
+    routeId: 5101,
+    reason: 'Cierre pendiente',
+  }
+  const second = {
+    ...first,
+    entityId: 5102,
+    routeId: 5102,
+  }
+
+  assert.notEqual(priorityRenderKey(first), priorityRenderKey(second))
+  assert.notEqual(
+    priorityRenderKey({ ...first, entityId: null, routeId: null, reason: 'Primera fila' }),
+    priorityRenderKey({ ...first, entityId: null, routeId: null, reason: 'Segunda fila' }),
+  )
+})
+
+test('keys de marcadores combinan tipo de incidencia y stop contractual', () => {
+  const first = {
+    id: 7101,
+    stopId: 6201,
+    name: 'Marcador Demo',
+    recordedAt: 'registrado 14:40',
+  }
+  const second = {
+    ...first,
+    stopId: 6202,
+  }
+
+  assert.notEqual(markerRenderKey(first), markerRenderKey(second))
+  assert.match(markerRenderKey(first), /7101/)
+  assert.match(markerRenderKey(first), /6201/)
+})
+
 test('posición y cargas no disponibles se explican sin superficie de mapa ni promesa realtime', () => {
   const html = render({
     todayState: { kind: 'valid', payload: DAY_CONTROL_FIXTURE_DEGRADED },
@@ -228,24 +279,18 @@ test('usa ModuleHeader y freshness neutral con la procedencia del servidor', () 
   assert.match(html, /Fuente: Control diario del servidor/)
 })
 
-test('loading, error, empty e invalid del día seleccionado usan StateScreen sin filtrar el otro día', () => {
+test('todos los estados no válidos del día seleccionado usan StateScreen sin filtrar el otro día', () => {
   const states = [
     {
-      state: {
-        kind: 'loading',
-        title: 'Cargando la operación',
-        detail: 'Estamos consultando la información del día.',
-        retryable: false,
-      },
+      state: stateCopy('idle'),
+      copy: /Información no disponible/,
+    },
+    {
+      state: stateCopy('loading'),
       copy: /Cargando la operación/,
     },
     {
-      state: {
-        kind: 'error',
-        title: 'No pudimos cargar la operación',
-        detail: 'Intenta nuevamente.',
-        retryable: true,
-      },
+      state: stateCopy('error'),
       copy: /No pudimos cargar la operación/,
     },
     {
@@ -253,13 +298,28 @@ test('loading, error, empty e invalid del día seleccionado usan StateScreen sin
       copy: /No hay rutas para este día/,
     },
     {
-      state: {
-        kind: 'invalid_contract',
-        title: 'La información llegó en un formato no compatible',
-        detail: 'Intenta nuevamente.',
-        retryable: true,
-      },
+      state: stateCopy('invalid_contract'),
       copy: /formato no compatible/,
+    },
+    {
+      state: stateCopy('date_unavailable'),
+      copy: /La fecha no está disponible/,
+    },
+    {
+      state: stateCopy('unauthorized'),
+      copy: /Tu sesión necesita renovarse/,
+    },
+    {
+      state: stateCopy('forbidden'),
+      copy: /No tienes permiso para ver esta operación/,
+    },
+    {
+      state: stateCopy('no_scope'),
+      copy: /No hay una sucursal operativa asignada/,
+    },
+    {
+      state: stateCopy('ambiguous_scope'),
+      copy: /más de una sucursal operativa/,
     },
   ]
 
