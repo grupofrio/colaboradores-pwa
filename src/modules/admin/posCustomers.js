@@ -3,8 +3,17 @@ export function shouldLoadCustomerSuggestions(query) {
   return normalized.length === 0 || normalized.length >= 2
 }
 
+export function toPositiveSafeIntegerId(value) {
+  const id = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^\d+$/.test(value)
+      ? Number(value)
+      : 0
+  return Number.isSafeInteger(id) && id > 0 ? id : 0
+}
+
 export function hasValidPosCustomer(customer) {
-  return Number(customer?.id || 0) > 0
+  return toPositiveSafeIntegerId(customer?.id) > 0
 }
 
 export function canRefreshCustomerPricelist(customer) {
@@ -12,9 +21,13 @@ export function canRefreshCustomerPricelist(customer) {
 }
 
 function relationId(value) {
-  if (Array.isArray(value)) return Number(value[0] || 0) || 0
-  if (value && typeof value === 'object') return Number(value.id || value.partner_id || value.customer_id || 0) || 0
-  return Number(value || 0) || 0
+  if (Array.isArray(value)) return toPositiveSafeIntegerId(value[0])
+  if (value && typeof value === 'object') {
+    return toPositiveSafeIntegerId(value.id)
+      || toPositiveSafeIntegerId(value.partner_id)
+      || toPositiveSafeIntegerId(value.customer_id)
+  }
+  return toPositiveSafeIntegerId(value)
 }
 
 function relationName(value) {

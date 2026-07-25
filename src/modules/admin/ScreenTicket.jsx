@@ -46,6 +46,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   }
 
   async function doCancel() {
+    if (flow.allowSaleCancellation !== true) return
     if (!orderId) return
     if (!cancelReason.trim()) { setCancelError('Explica brevemente el motivo'); return }
     setCancelling(true)
@@ -66,6 +67,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
 
   const orderState = order?.state || ''
   const canCancel =
+    flow.allowSaleCancellation === true &&
     BACKEND_CAPS.saleCancel &&
     order &&
     orderState !== 'cancel' &&

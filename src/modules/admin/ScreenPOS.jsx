@@ -1,7 +1,7 @@
 // ─── ScreenPOS — entrada responsive al POS mostrador ────────────────────────
 // En desktop (≥1024px) usa AdminShell + AdminPosForm (V2 backend live).
 // En mobile se conserva la pantalla legacy como fallback.
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
@@ -27,11 +27,13 @@ import {
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
+  toPositiveSafeIntegerId,
 } from './posCustomers'
 import {
   ADMIN_POS_FLOW,
   buildPosTicketPath,
   canOpenPosPayment,
+  normalizePosSaleResult,
 } from './posFlow'
 
 export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
@@ -89,6 +91,8 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   // Customer
   const [customer, setCustomer] = useState({ id: null, name: 'VENTA PUBLICO' })
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
+  const [catalogCustomerId, setCatalogCustomerId] = useState(null)
+  const catalogRequestSeq = useRef(0)
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
@@ -104,13 +108,18 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   }, [])
 
   const loadProducts = useCallback(async (selectedPartnerId) => {
+    const requestId = ++catalogRequestSeq.current
+    const requestedCustomerId = toPositiveSafeIntegerId(selectedPartnerId) || null
+    setCatalogCustomerId(null)
     setLoading(true)
+    setError('')
     try {
       const catalog = await getPosCatalog({
         warehouseId,
         companyId,
         partnerId: selectedPartnerId || undefined,
       })
+      if (requestId !== catalogRequestSeq.current) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
       setProducts(list)
       setPricelist({
@@ -118,13 +127,15 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         name: catalog?.pricelist_name || '',
       })
       setCart((prev) => repriceCartFromCatalog(prev, list))
+      setCatalogCustomerId(requestedCustomerId)
       return true
     } catch (e) {
+      if (requestId !== catalogRequestSeq.current) return false
       logScreenError('ScreenPOS', 'getPosCatalog', e)
-      setError('Error cargando productos')
+      setError(e?.message || 'Error cargando productos')
       return false
     } finally {
-      setLoading(false)
+      if (requestId === catalogRequestSeq.current) setLoading(false)
     }
   }, [companyId, warehouseId])
 
@@ -167,7 +178,10 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   }
 
   const { subtotal, total } = computePosSummary(cart)
-  const canOpenPayment = canOpenPosPayment(cart, customer)
+  const canOpenPayment = canOpenPosPayment(cart, customer, {
+    loading,
+    catalogCustomerId,
+  })
 
   // Customer search
   const doCustomerSearch = useCallback(async (q) => {
@@ -194,11 +208,18 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   }, [showCustomerSearch, customerQuery, doCustomerSearch])
 
   function selectCustomer(c) {
+    const selectedCustomerId = toPositiveSafeIntegerId(c.id)
+    const isSameCustomer = selectedCustomerId === toPositiveSafeIntegerId(customer.id)
+    catalogRequestSeq.current += 1
+    setCatalogCustomerId(null)
+    setPayConfirm(null)
+    setLoading(true)
     setCustomer({ id: c.id, name: c.name })
     setError('')
     setShowCustomerSearch(false)
     setCustomerQuery('')
     setCustomerResults([])
+    if (isSameCustomer) loadProducts(selectedCustomerId)
   }
 
   function refreshPricelistForCustomer() {
@@ -213,6 +234,13 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
       setError('Selecciona un cliente antes de cobrar.')
       return
     }
+    if (!canOpenPosPayment(cart, customer, {
+      loading,
+      catalogCustomerId,
+    })) {
+      setError('Espera a que termine de cargar la lista de precios del cliente antes de cobrar.')
+      return
+    }
     setSubmitting(true)
     setError('')
     try {
@@ -224,8 +252,18 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         payment_method: payConfirm,
         lines: cart.map(c => ({ product_id: c.product_id, qty: c.qty, price_unit: c.price_unit })),
       })
-      const data = result?.data ?? result
-      const orderId = data?.order_id || data?.id
+      const saleResult = normalizePosSaleResult(result)
+      if (saleResult.status === 'error') {
+        setError(saleResult.message)
+        return
+      }
+      if (saleResult.status === 'uncertain') {
+        setCart([])
+        setPayConfirm(null)
+        setError(saleResult.message || 'Venta creada pero sin folio. No vuelvas a cobrar; verifica la venta.')
+        return
+      }
+      const orderId = saleResult.orderId
       const ticketPath = buildPosTicketPath(flow, orderId)
       if (ticketPath) {
         navigate(ticketPath, { state: { order_id: orderId } })

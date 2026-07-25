@@ -1,7 +1,7 @@
 // --- AdminPosForm — Venta mostrador V2 (desktop) --------------------------
 // Backend: `gf_pwa_admin.sale-create` + `pos-products` + `customers`.
 // Mobile legacy sigue en ScreenPOS.jsx < 1024px.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
@@ -27,6 +27,7 @@ import {
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
+  toPositiveSafeIntegerId,
 } from '../posCustomers'
 import { logScreenError } from '../../shared/logScreenError'
 import { computePosSummary } from '../posPricing'
@@ -34,6 +35,7 @@ import {
   ADMIN_POS_FLOW,
   buildPosTicketPath,
   canOpenPosPayment,
+  normalizePosSaleResult,
 } from '../posFlow'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -58,6 +60,8 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   const [cart, setCart] = useState([])
   const [customer, setCustomer] = useState({ id: null, name: 'VENTA PUBLICO' })
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
+  const [catalogCustomerId, setCatalogCustomerId] = useState(null)
+  const catalogRequestSeq = useRef(0)
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
@@ -67,6 +71,9 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   const toast = useToast()
 
   const loadCatalog = useCallback(async (selectedPartnerId) => {
+    const requestId = ++catalogRequestSeq.current
+    const requestedCustomerId = toPositiveSafeIntegerId(selectedPartnerId) || null
+    setCatalogCustomerId(null)
     if (!warehouseId) {
       setProducts([])
       setPricelist({ id: null, name: '' })
@@ -83,6 +90,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
         companyId,
         partnerId: selectedPartnerId || undefined,
       })
+      if (requestId !== catalogRequestSeq.current) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
       setProducts(list)
       setPricelist({
@@ -90,12 +98,14 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
         name: catalog?.pricelist_name || '',
       })
       setCart((prev) => repriceCartFromCatalog(prev, list))
+      setCatalogCustomerId(requestedCustomerId)
       return true
     } catch (e) {
+      if (requestId !== catalogRequestSeq.current) return false
       setError(e?.message || 'Error cargando productos')
       return false
     } finally {
-      setLoading(false)
+      if (requestId === catalogRequestSeq.current) setLoading(false)
     }
   }, [companyId, warehouseId])
 
@@ -147,7 +157,10 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   }
 
   const { subtotal, total } = computePosSummary(cart)
-  const canOpenPayment = canOpenPosPayment(cart, customer)
+  const canOpenPayment = canOpenPosPayment(cart, customer, {
+    loading,
+    catalogCustomerId,
+  })
 
   const doCustomerSearch = useCallback(async (q) => {
     if (!shouldLoadCustomerSuggestions(q)) {
@@ -177,11 +190,18 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   }, [showCustomerSearch, customerQuery, doCustomerSearch])
 
   function selectCustomer(c) {
+    const selectedCustomerId = toPositiveSafeIntegerId(c.id)
+    const isSameCustomer = selectedCustomerId === toPositiveSafeIntegerId(customer.id)
+    catalogRequestSeq.current += 1
+    setCatalogCustomerId(null)
+    setPayConfirm(null)
+    setLoading(true)
     setCustomer({ id: c.id, name: c.name })
     setError('')
     setShowCustomerSearch(false)
     setCustomerQuery('')
     setCustomerResults([])
+    if (isSameCustomer) loadCatalog(selectedCustomerId)
   }
 
   async function refreshPricelistForCustomer() {
@@ -194,6 +214,13 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
     if (!payConfirm || cart.length === 0) return
     if (!hasValidPosCustomer(customer)) {
       setError('Selecciona un cliente antes de cobrar.')
+      return
+    }
+    if (!canOpenPosPayment(cart, customer, {
+      loading,
+      catalogCustomerId,
+    })) {
+      setError('Espera a que termine de cargar la lista de precios del cliente antes de cobrar.')
       return
     }
 
@@ -222,8 +249,18 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
           price_unit: c.price_unit,
         })),
       })
-      const data = result?.data ?? result
-      const orderId = data?.order_id || data?.id
+      const saleResult = normalizePosSaleResult(result)
+      if (saleResult.status === 'error') {
+        setError(saleResult.message)
+        return
+      }
+      if (saleResult.status === 'uncertain') {
+        setCart([])
+        setPayConfirm(null)
+        setError(saleResult.message || 'Venta creada pero sin folio. No vuelvas a cobrar; verifica la venta.')
+        return
+      }
+      const orderId = saleResult.orderId
       const ticketPath = buildPosTicketPath(flow, orderId)
       if (ticketPath) {
         toast.success('Venta registrada')
