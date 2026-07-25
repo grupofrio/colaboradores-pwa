@@ -55,8 +55,11 @@ function hasEnabledInstallBypass(npmrc) {
     const assignment = stripInlineNpmrcComment(logicalLine).trim()
     if (!assignment) continue
 
-    const match = assignment.match(/^(legacy-peer-deps|force)\s*=\s*(.*?)\s*$/i)
+    const match = assignment.match(
+      /^(legacy-peer-deps|force)(?:\s*=\s*(.*?))?\s*$/i,
+    )
     if (!match) continue
+    if (match[2] === undefined) return true
 
     let value = match[2].trim()
     const quote = value[0]
@@ -146,6 +149,8 @@ function assertReactFamilyLockAlignment(candidatePackageLock) {
 test('recognizes enabled npm install bypasses across npmrc syntax', async (t) => {
   const cases = [
     ['plain true', 'force=true', true],
+    ['bare force flag', 'force', true],
+    ['bare legacy peer deps flag', 'legacy-peer-deps', true],
     ['double-quoted true', 'legacy-peer-deps="true"', true],
     ["single-quoted true", "force='true'", true],
     ['true with hash comment', 'force=true # explanation', true],
