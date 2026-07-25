@@ -144,15 +144,17 @@ No se creará un controlador nuevo. El flujo enviará al controlador existente:
 tanto, las ventas nocturnas quedarán atribuidas a Héctor aunque compartan el
 mismo controlador con el POS de Angélica.
 
-La implementación vigente del controlador fue verificada en
-`gf_pwa_admin/controllers/pwa_admin_api.py`, método `api_sale_create`: resuelve
-al empleado mediante `_resolve_employee_from_token_header()` y no aplica una
-allowlist de `x_job_key`. Por ello, Héctor no necesita `auxiliar_admin` para
-crear la venta. La tabla de roles de `docs/CODE_MANUAL.md` no refleja este
-detalle del contrato actual.
+Como defensa del lado del servidor, el controlador compartido autoriza la
+creación únicamente cuando el empleado resuelto por el token es exactamente
+Héctor Tapia o conserva uno de los roles administrativos POS ya permitidos. La
+identidad se toma del registro de empleado en Odoo; ningún nombre enviado por
+el cliente puede suplantarla. El controlador también valida que compañía,
+almacén y unidad analítica pertenezcan al alcance del empleado antes de crear
+la orden.
 
-La política nominal protege la exposición y las rutas de la PWA. Este cambio no
-crea un endpoint nuevo ni amplía los permisos del controlador compartido.
+La política nominal protege la exposición y las rutas de la PWA, mientras que
+el controlador aplica la autorización real. No se crea un endpoint nuevo ni se
+concede a Héctor acceso al resto de Admin Sucursal.
 
 ## Flujo de datos
 
@@ -165,14 +167,16 @@ crea un endpoint nuevo ni amplía los permisos del controlador compartido.
    `VENTA PUBLICO IGUALA NOCHE`.
 6. Con su `partner_id`, el POS carga catálogo y lista de precios.
 7. Héctor cobra usando el mismo flujo existente.
-8. `/pwa-admin/sale-create` valida el token, crea la orden y la atribuye a
-   Héctor.
+8. `/pwa-admin/sale-create` valida token, identidad y alcance; luego crea la
+   orden y la atribuye a Héctor.
 9. La PWA abre `/pos-nocturno/ticket/:orderId`.
 
 ## Manejo de errores
 
 - Sesión ausente o expirada: redirección a `/login`.
 - Usuario diferente en una ruta nocturna: redirección a `/`.
+- Empleado no autorizado o almacén fuera de alcance: rechazo del controlador
+  antes de crear la orden.
 - Cliente nocturno ausente o inactivo: `ApiError` con código
   `night_pos_default_customer_missing`, error visible y cobro bloqueado hasta
   seleccionar un cliente válido.
@@ -223,7 +227,8 @@ crea un endpoint nuevo ni amplía los permisos del controlador compartido.
 - Dar acceso a gastos, requisiciones, cierres o liquidaciones.
 - Cambiar permisos de otros empleados.
 - Crear o modificar el contacto `Venta Publico Iguala Noche` en Odoo.
-- Desplegar o modificar módulos backend de Odoo.
+- Crear un controlador backend adicional o conceder nuevos roles
+  administrativos a Héctor.
 
 ## Criterios de aceptación
 
