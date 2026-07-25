@@ -130,7 +130,7 @@ const NAV_HIDDEN_PREFIXES = ['/admin/pos', '/admin/ticket', '/admin/cierre', '/p
 const NAV_HIDDEN_SUBTREES = ['/ruta', '/produccion', '/almacen-pt', '/entregas', '/koldcup', '/torres']
 
 export function isNavHiddenForPath(pathname = '') {
-  const path = normalizePath(pathname)
+  const path = normalizePath(pathname).toLowerCase()
   if (NAV_HIDDEN_EXACT.includes(path)) return true
   if (NAV_HIDDEN_PREFIXES.some((p) => path === p || path.startsWith(p + '/'))) return true
   // Subtrees: solo subrutas (la raíz del módulo conserva la nav global).
