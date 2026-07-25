@@ -823,7 +823,11 @@ async function getDefaultPosCustomerFromModels(companyId) {
 }
 ```
 
-Do not change `/pwa-admin/sale-create`; it remains the shared controller.
+The customer-resolution task does not create a second endpoint:
+`/pwa-admin/sale-create` remains the shared controller. A security follow-up
+from Task 3 hardens that existing controller in the backend repository so it
+authorizes Héctor from the employee resolved by the token and validates the
+company/warehouse scope.
 
 - [ ] **Step 4: Run the POS API tests**
 
@@ -892,10 +896,12 @@ Expected: Vite build succeeds and produces `dist/`.
 
 - [ ] **Step 5: Run graphify after code changes**
 
-The repository instructions require refreshing the backend graph after code
-changes only when working in `/Users/sebis/Documents/odoo/GrupoFrio`. This
-feature changes only the PWA repository, so no backend graph update is needed.
-Confirm that no files under `GrupoFrio` changed.
+The security review added changes to the existing controller and its tests in
+an isolated `GrupoFrio` worktree. Run the repository-required graph refresh
+there and confirm that generated ignored artifacts do not leave tracked
+changes. Also run `py_compile` for the controller and test module; if a complete
+Odoo runtime is unavailable locally, record that limitation explicitly and
+leave the HttpCase suite as a CI/runtime gate.
 
 - [ ] **Step 6: Inspect the final diff and preserve user changes**
 
