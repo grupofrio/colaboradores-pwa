@@ -49,9 +49,11 @@ precedencia:
 3. Si tampoco existe un empleado ligado al usuario, conservar
    `employee_id` del payload únicamente como compatibilidad legacy.
 
-Un token enviado pero inválido o expirado debe fallar de forma cerrada. No
-puede caer al usuario del API key ni al `employee_id` del payload. Si el token
-y el payload identifican empleados distintos, prevalece siempre el token.
+Un token enviado pero inválido, expirado, vacío o compuesto solo por espacios
+debe fallar de forma cerrada. La presencia del header activa la ruta de
+autenticación móvil aunque su valor no sea utilizable; no puede caer al usuario
+del API key ni al `employee_id` del payload. Si el token y el payload
+identifican empleados distintos, prevalece siempre el token.
 
 Esta regla alinea `gf_pwa_admin` con el contrato documentado en `CODE_MANUAL.md`:
 `X-GF-Employee-Token` es la fuente de verdad para la identidad del empleado.
@@ -66,7 +68,9 @@ Cambiar:
 - pruebas de `GrupoFrio/gf_pwa_admin/tests/`
 
 La implementación reutilizará `_resolve_employee_from_token_header()`; no
-duplicará la autenticación del token.
+duplicará la autenticación del token. Antes de editar el helper se
+inventariarán todos sus consumidores para confirmar que la nueva precedencia
+es compatible con cada endpoint afectado.
 
 ### Frontend
 
@@ -110,7 +114,8 @@ La regresión backend debe cubrir:
    payload sin `employee_id`: se resuelve al empleado del token.
 2. Header válido y `employee_id` distinto en payload: prevalece el empleado
    del token.
-3. Header inválido y `employee_id` válido: la petición se rechaza.
+3. Header inválido, vacío o con espacios y `employee_id` válido: la petición
+   se rechaza.
 4. Sin header y usuario del API key ligado a un empleado: se conserva el
    comportamiento actual.
 5. Sin header, cuenta de servicio y `employee_id` legacy válido: se conserva
