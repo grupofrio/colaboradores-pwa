@@ -1,10 +1,16 @@
 # SUPERVISOR_OPERATING_EXPERIENCE — perfil operativo de supervisor_ventas
 
-**Estado: PREP.** La implementación de pantallas está **bloqueada por dependencia**:
-#78 (Etapa 0A: StateScreen/DataFreshness/navModel) y #79 (hardening M4) deben
-mergear a main antes de la rama ejecutable final. Este documento fija la
-arquitectura para construirla sin re-decidir. Backend contrato: PR
-GrupoVeniu/GrupoFrio#220 (canónico: `gf_saleops/docs/SUPERVISOR_DAY_CONTROL_CONTRACT.md`).
+**Estado: Fase 1 implementada en PR #80.** La raíz `/equipo` coordina la nueva
+**Operación de hoy** con Hoy/Ayer y conserva el Control Comercial legado
+exclusivamente cuando backend responde `FEATURE_DISABLED`. #78 y #79 ya forman
+parte de la línea base. Radar/mapa queda diferido a una fase y autorización
+separadas; esta entrega no lo renderiza ni promete seguimiento en tiempo real.
+
+La decisión aprobada vive en
+[la especificación de Fase 1](../superpowers/specs/2026-07-24-supervisor-operations-today-design.md)
+y su [plan de implementación](../superpowers/plans/2026-07-24-supervisor-operations-today.md).
+Backend contrato: PR GrupoVeniu/GrupoFrio#220 (canónico:
+`gf_saleops/docs/SUPERVISOR_DAY_CONTROL_CONTRACT.md`).
 
 ## Principio
 
@@ -18,8 +24,8 @@ caja", "Ejecución", etc.).
 
 | # | Superficie | Contenido | Reutiliza |
 |---|---|---|---|
-| 1 | **Hoy** | home operativo (abajo) | ScreenControlComercial como base de datos/semántica corregida |
-| 2 | **Mapa** | radar honesto (contrato radar/1) | — (nueva, fixtures listos) |
+| 1 | **Hoy/Ayer** | home operativo de un día a la vez (Fase 1) | Day Control v1; fallback a ScreenControlComercial solo con flag OFF |
+| 2 | **Mapa** | diferido; radar honesto (contrato radar/1) | — (fuera de Fase 1) |
 | 3 | **Rutas** | rutas de hoy → detalle; sub-pestaña Planeación/Pronóstico | ScreenDetalleVendedor, ScreenPronostico, ScreenPlanDiarioClientes |
 | 4 | **Clientes** | editor, recuperación, sin visitar, bajas | ScreenClientesSupervisor, ScreenClientesRecuperacion, ScreenClientesSinVisitar, Bajas* |
 | 5 | **Pendientes** | cierres/caja (vía capability closure_cash), marcadores de incidencia, sin salir, sin visitar, tareas | ScreenM1Backlog (datos), ScreenTareasSupervisor |
@@ -32,18 +38,19 @@ home global quedan bajo "Más" para este rol.
 
 ## Home "Operación de hoy" — orden móvil
 
-A. **Header**: Supervisora Demo · BR-DEMO Sucursal Demo · fecha · "actualizado hace X" · refresh (datos de sesión reales en runtime; aquí solo ejemplos sintéticos).
+A. **Header**: sucursal del contrato · fecha operativa · freshness descriptivo ·
+   refresh. Los tabs Hoy/Ayer muestran un solo payload a la vez.
 B. **Estado de jornada**: asignadas / salieron / tarde / sin salir / **sin dato**
    (los 5 buckets del contrato; `departure_unknown` JAMÁS se suma a tarde).
-C. **Mini mapa**: N con señal / M sin señal + CTA "Ver mapa" (si radar OFF ⇒ no
-   bloquear Hoy: chip "Mapa no disponible aún").
+C. **Mapa/radar**: no se renderiza en Fase 1. La última señal se presenta como
+   dato descriptivo de ruta cuando la capability correspondiente está disponible.
 D. **Prioridades**: 3–5 del backend (`priorities[]`), con razón + CTA directo.
    Orden = severity del backend. Se muestra POR QUÉ está arriba. Sin descartes.
 E. **Rutas de hoy**: ruta · chofer · unidad · salida (objetivo/real/desviación) ·
    avance · venta día (con su moneda) · ⚑marcadores de incidencia · señal · CTA detalle/mapa.
-F. **Resultado comercial**: venta DÍA (cambia con la fecha) · venta mes · meta
-   SOLO si existe ("Sin meta configurada" si no — nunca $0 rojo) · visitas ·
-   no-venta · recuperación.
+F. **Resultado comercial**: venta DÍA (cambia con la fecha) y visitas
+   completadas. La primera entrega no agrega venta mensual, meta ni una métrica
+   inventada de "no venta"; recuperación y sin visitar son accesos existentes.
 G. **Cierre**: abiertas / cerradas / cortes / liquidadas / validadas + caja
    pendiente $ (capability `closure_cash_available`; `closure_backlog_available=false`
    hasta encender tower M1 — no se pinta backlog vacío como "todo al día").
@@ -65,12 +72,13 @@ G. **Cierre**: abiertas / cerradas / cortes / liquidadas / validadas + caja
 8. Hoy/Ayer: comparar SOLO métricas comparables; la venta del día cambia con la
    fecha (la mensual no se presenta como comparación diaria).
 
-## Estados (infra de #78 — razón de la dependencia)
+## Estados
 
-`loading / unavailable / forbidden / no_scope / disabled(flag) / empty / stale /
-partial / error / valid` con StateScreen + DataFreshness. Nunca raw JSON, nunca
-TypeError, nunca ausencia-como-cero. EvidenceSection solo fuera de la capa
-operativa principal.
+`loading / unauthorized / forbidden / no_scope / ambiguous_scope /
+date_unavailable / disabled(flag) / empty / invalid_contract / error / valid`
+con StateScreen + DataFreshness. Solo `disabled` activa legado. Nunca raw JSON,
+nunca TypeError, nunca ausencia-como-cero. EvidenceSection queda fuera de la
+capa operativa principal.
 
 ## Mapa (superficie 2) — reglas duras
 

@@ -11,24 +11,25 @@ prueba XTS, coordenadas oceánicas).
 
 ## Cadena de gates (cada uno con S/N propio)
 
-1. Backend PR GrupoVeniu/GrupoFrio#220 → Codex → merge (S/N). Todos los flags
-   quedan OFF (global y por sucursal; sin backfill).
+1. Backend PR GrupoVeniu/GrupoFrio#220 fusionado. Todos los flags permanecen
+   **OFF por default** (global y por sucursal; sin backfill).
 2. Staging: tests Odoo (core+full registry) + **paridad de venta diaria**
    (receta exacta en el contrato: fecha+branch+plan_ids congelados, total
    esperado por moneda, tolerancia 0, evidencia reproducible, SIN credenciales
    embebidas) + **performance** (p95 < 1.5 s objetivo — PERFORMANCE_PENDING
    hasta medir).
-3. #78 y #79 mergean a main de colaboradores-pwa (gobernanza propia).
-4. Rama frontend EJECUTABLE sobre el main nuevo, reconstruyendo sobre esta prep
-   → PR DRAFT → Codex.
+3. #78 y #79 fusionados a `main` de colaboradores-pwa.
+4. Fase 1 frontend implementada en PR #80 sobre esa línea base. La publicación
+   no implica exposición: el fallback legado sigue gobernado por flags backend.
 5. **S/N doble de exposición**: flag GLOBAL
    (`gf_salesops.supervisor_day_control.enabled`) **y** flag de LA sucursal
    piloto (`gf.ops.branch_config.supervisor_day_control_enabled`). "Solo la
    sucursal piloto" es realizable únicamente cuando AMBOS se enciendan con S/N
    posterior — este repo no activa ninguno.
-6. QA autenticada con la sesión real de la supervisora piloto: Preview +
-   dispositivo móvil real + desktop; estados error/stale/sin-GPS/backend OFF/
-   fecha no permitida (radar).
+6. QA autenticada obligatoria en ambos modos: **flags OFF** debe montar Control
+   Comercial legado; **flags ON** debe montar Operación de hoy. Repetir en
+   Preview, móvil real y desktop, incluyendo Hoy/Ayer, error/retry, empty,
+   sin posición, multi-moneda y fecha no permitida.
 7. Radar: S/N separado (flag global + branch de radar) + comunicación previa al
    equipo de campo (transparencia: la supervisión ve la última posición del
    dispositivo del responsable durante la jornada).
@@ -42,6 +43,12 @@ prueba XTS, coordenadas oceánicas).
 No enciende `gf_tower.m1.enabled` global · no activa acciones automáticas · no
 muestra histórico GPS · no toca M2–M6 · no cambia permisos de otros roles · no
 promete tiempo real.
+
+## Estado de exposición
+
+Este documento no afirma que staging o producción tengan flags activos. La
+activación global y por sucursal requiere un S/N posterior y evidencia QA
+OFF/ON. El repositorio frontend no cambia esos flags.
 
 ## Rollback
 
