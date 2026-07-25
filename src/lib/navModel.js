@@ -103,7 +103,8 @@ function navPriorityOf(module) {
 // ── Visibilidad SESSION-AWARE (fuente única para tarjeta + nav + clic) ───────
 // Un módulo con accessPolicy declara que su autoridad NO es x_job_key genérico
 // sino un contrato propio (B3: la MISMA función decide tarjeta, nav, Más, rail
-// y clic; el route guard revalida). Hoy: accessPolicy 'm2' => readM2Access.
+// y clic; el route guard revalida). Las políticas conocidas son 'm2' y
+// 'hectorNightPos', cada una resuelta por su helper de acceso específico.
 // FAIL-CLOSED: sesión inválida => nada; política desconocida => oculto.
 // (Mismos nombres/firmas que la mecánica towerGated del PR #67 para que el
 // rebase post-#67 sea una unión mecánica de ramas en la misma función.)
