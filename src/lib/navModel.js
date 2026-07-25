@@ -84,7 +84,7 @@ export function normalizePath(pathname = '') {
 //    /koldcup/*     → capturas KOLDCUP (compra, producción, corte, traspaso)
 //    /torres/*      → validación de requisiciones (detalle con acciones)
 const NAV_HIDDEN_EXACT = ['/login']
-const NAV_HIDDEN_PREFIXES = ['/torre', '/admin/pos', '/admin/ticket', '/admin/cierre']
+const NAV_HIDDEN_PREFIXES = ['/torre', '/admin/pos', '/admin/ticket', '/admin/cierre', '/pos-nocturno']
 const NAV_HIDDEN_SUBTREES = ['/ruta', '/produccion', '/almacen-pt', '/entregas', '/koldcup', '/torres']
 
 export function isNavHiddenForPath(pathname = '') {

@@ -13,6 +13,8 @@ import { isValidAuthenticatedSession } from './lib/session'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
+import { canAccessHectorNightPos } from './modules/admin/nightPosAccess'
+import { NIGHT_POS_FLOW } from './modules/admin/posFlow'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -232,6 +234,13 @@ function M2PlaneacionRoute({ children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   if (readM2Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function NightPosRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (!canAccessHectorNightPos(session)) return <Navigate to="/" replace />
   return children
 }
 
@@ -495,6 +504,10 @@ export default function App() {
             <Route path="/torre" element={<TowerRoute><ScreenKoldTowerE1Mount /></TowerRoute>} />
             {/* ── M1-D — Backlog M1 (read-only, mismo gate; SIN menú, ruta directa) ── */}
             <Route path="/torre/backlog" element={<TowerRoute><ScreenM1BacklogMount /></TowerRoute>} />
+
+            {/* ── POS nocturno — acceso nominal fail-closed, fuera de Admin ── */}
+            <Route path="/pos-nocturno" element={<NightPosRoute><ScreenPOS flow={NIGHT_POS_FLOW} /></NightPosRoute>} />
+            <Route path="/pos-nocturno/ticket/:orderId" element={<NightPosRoute><ScreenTicket flow={NIGHT_POS_FLOW} /></NightPosRoute>} />
 
             {/* ── Producción — Operadores ─────────────────────────────────── */}
             <Route path="/produccion" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenMiTurno /></ProductionOperatorRoute></ModuleRoleRoute>} />
