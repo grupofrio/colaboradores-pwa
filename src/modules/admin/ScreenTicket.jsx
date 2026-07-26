@@ -5,7 +5,11 @@ import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
 import { computePosSummary } from './posPricing'
-import { getPosCancelBlockMessage, getPosSaleStateLabel } from './nightPosSales'
+import {
+  getPosCancelBlockMessage,
+  getPosSaleStateLabel,
+  isKnownPosCancelBlockCode,
+} from './nightPosSales'
 import { resolveTicketCustomerName } from './ticketCustomer'
 import { printTicketViaQz } from './ticketPrinter'
 import {
@@ -24,9 +28,23 @@ function getResolvedCancellationFailure(response) {
       || status === 'error'
       || Boolean(current.error)
     if (failed) {
+      const structuredData = current.data
+        && typeof current.data === 'object'
+        && !Array.isArray(current.data)
+        ? current.data
+        : null
+      const structuredCode = typeof structuredData?.cancel_block_code === 'string'
+        ? structuredData.cancel_block_code
+        : ''
+      const knownStructuredCode = isKnownPosCancelBlockCode(structuredCode)
+      const safeUserMessage = knownStructuredCode
+        && typeof structuredData?.user_message === 'string'
+        ? structuredData.user_message.trim()
+        : ''
       let code = ''
       let message = ''
-      if (typeof current.code === 'string') code = current.code
+      if (structuredCode) code = structuredCode
+      if (!code && typeof current.code === 'string') code = current.code
       if (!code && typeof current.cancel_block_code === 'string') {
         code = current.cancel_block_code
       }
@@ -42,6 +60,7 @@ function getResolvedCancellationFailure(response) {
       return {
         code,
         message: message || 'Error al cancelar la venta',
+        safeUserMessage,
       }
     }
     current = current.data
@@ -105,9 +124,11 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
       })
       const resolvedFailure = getResolvedCancellationFailure(result)
       if (resolvedFailure !== null) {
-        const failure = new Error(resolvedFailure.message)
-        failure.code = resolvedFailure.code
-        throw failure
+        setCancelError(usesClosedCancelReasons
+          ? (resolvedFailure.safeUserMessage
+            || getPosCancelBlockMessage(resolvedFailure.code))
+          : resolvedFailure.message)
+        return
       }
       setCancelResult({ ok: true })
       setConfirmOpen(false)

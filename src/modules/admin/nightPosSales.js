@@ -117,7 +117,11 @@ export function getPosSaleStateLabel(state) {
 
 export function getPosCancelBlockMessage(code) {
   const key = primitiveText(code)
-  return Object.prototype.hasOwnProperty.call(CANCEL_BLOCK_MESSAGES, key)
+  return isKnownPosCancelBlockCode(key)
     ? CANCEL_BLOCK_MESSAGES[key]
     : SAFE_CANCEL_BLOCK_MESSAGE
+}
+
+export function isKnownPosCancelBlockCode(code) {
+  return Object.prototype.hasOwnProperty.call(CANCEL_BLOCK_MESSAGES, primitiveText(code))
 }

@@ -405,15 +405,103 @@ test('closing the modal resets both workflows and cancellation errors preserve t
   act(() => admin.renderer.unmount())
 })
 
-test('resolved cancellation failure stays retryable without false success or backend leakage', async () => {
-  const { renderer, calls } = await createTicket({
+test('night cancellation trusts structured user messages only for known block codes', async () => {
+  const cases = [
+    ['manager_required', 'Solicita autorización nocturna al gerente.'],
+    ['already_cancelled', 'La venta nocturna ya fue cancelada.'],
+    ['closed', 'La venta nocturna cerrada requiere reversión manual.'],
+    ['invalid_state', 'El estado actual impide cancelar esta venta nocturna.'],
+  ]
+
+  for (const [code, safeUserMessage] of cases) {
+    const sensitiveMessage = `detalle interno sensible para ${code}`
+    const { renderer, calls } = await createTicket({
+      apiOptions: {
+        cancelResponse: () => createJsonResponse(200, {
+          result: {
+            ok: false,
+            message: sensitiveMessage,
+            data: {
+              cancel_block_code: code,
+              user_message: safeUserMessage,
+            },
+          },
+        }),
+      },
+    })
+    act(() => findButton(renderer, 'Cancelar venta').props.onClick())
+    act(() => renderer.root.findByProps({ value: 'duplicate' }).props.onChange())
+
+    await act(async () => {
+      findButton(renderer, 'Sí, cancelar').props.onClick()
+      await flush()
+    })
+
+    const alert = renderer.root.findByProps({ role: 'alert' })
+    assert.equal(renderedInstanceText(alert), safeUserMessage)
+    assert.equal(renderer.root.findAllByProps({ role: 'dialog' }).length, 1)
+    assert.equal(renderer.root.findByProps({ value: 'duplicate' }).props.checked, true)
+    assert.equal(findButton(renderer, 'Sí, cancelar').props.disabled, false)
+    assert.doesNotMatch(renderedText(renderer), new RegExp(sensitiveMessage))
+    assert.doesNotMatch(renderedText(renderer), /Venta cancelada/)
+    assert.equal(calls.filter((call) => call.url.includes('/sale-detail?')).length, 1)
+    assert.equal(calls.filter((call) => call.url === '/odoo-api/pwa-admin/sale-cancel').length, 1)
+
+    act(() => renderer.unmount())
+  }
+})
+
+test('night cancellation hides unstructured and unknown backend messages', async () => {
+  const cases = [
+    {
+      data: { cancel_block_code: 'manager_required' },
+      expected: 'Esta venta requiere autorización de un gerente.',
+    },
+    {
+      data: {
+        cancel_block_code: 'private_backend_code',
+        user_message: 'Mensaje no autorizado por el contrato.',
+      },
+      expected: 'Esta venta no se puede cancelar.',
+    },
+  ]
+
+  for (const { data, expected } of cases) {
+    const { renderer } = await createTicket({
+      apiOptions: {
+        cancelResponse: () => createJsonResponse(200, {
+          result: {
+            ok: false,
+            message: 'Detalle interno sensible del servidor.',
+            data,
+          },
+        }),
+      },
+    })
+    act(() => findButton(renderer, 'Cancelar venta').props.onClick())
+    act(() => renderer.root.findByProps({ value: 'duplicate' }).props.onChange())
+
+    await act(async () => {
+      findButton(renderer, 'Sí, cancelar').props.onClick()
+      await flush()
+    })
+
+    assert.equal(renderedInstanceText(renderer.root.findByProps({ role: 'alert' })), expected)
+    assert.doesNotMatch(
+      renderedText(renderer),
+      /Detalle interno sensible|Mensaje no autorizado|private_backend_code/,
+    )
+    act(() => renderer.unmount())
+  }
+})
+
+test('night cancellation hides arbitrary thrown messages even with a known block code', async () => {
+  const { renderer } = await createTicket({
     apiOptions: {
-      cancelResponse: () => createJsonResponse(200, {
-        result: {
-          ok: false,
+      cancelResponse: () => createJsonResponse(409, {
+        error: {
           code: 'manager_required',
-          message: 'cancel_block_code=manager_required; detalle sensible',
-          data: {},
+          message: 'Credencial interna y detalle sensible.',
         },
       }),
     },
@@ -426,15 +514,11 @@ test('resolved cancellation failure stays retryable without false success or bac
     await flush()
   })
 
-  const text = renderedText(renderer)
-  assert.equal(renderer.root.findAllByProps({ role: 'dialog' }).length, 1)
-  assert.equal(renderer.root.findByProps({ value: 'duplicate' }).props.checked, true)
-  assert.equal(findButton(renderer, 'Sí, cancelar').props.disabled, false)
-  assert.match(text, /Esta venta requiere autorización de un gerente\./)
-  assert.doesNotMatch(text, /detalle sensible|cancel_block_code|Venta cancelada/)
-  assert.equal(calls.filter((call) => call.url.includes('/sale-detail?')).length, 1)
-  assert.equal(calls.filter((call) => call.url === '/odoo-api/pwa-admin/sale-cancel').length, 1)
-
+  assert.equal(
+    renderedInstanceText(renderer.root.findByProps({ role: 'alert' })),
+    'Esta venta requiere autorización de un gerente.',
+  )
+  assert.doesNotMatch(renderedText(renderer), /Credencial interna|detalle sensible/)
   act(() => renderer.unmount())
 })
 
