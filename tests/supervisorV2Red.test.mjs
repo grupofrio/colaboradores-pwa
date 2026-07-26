@@ -4,6 +4,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
+import { fileURLToPath } from 'node:url'
+// Contrato canónico del harness en main: { Component, mod, cleanup } + ruta
+// ABSOLUTA. `loadView` adapta las cargas de este archivo a ese contrato.
+const loadView = async (rel) => (
+  await loadJsxDefault(fileURLToPath(new URL('../' + rel, import.meta.url)))
+).Component
 import {
   isValidLat, isValidLng, isValidLatLng, validPoints, computeBounds,
 } from '../src/modules/supervisor-ventas/v2/radar/mapProjection.js'
@@ -36,7 +42,7 @@ test('validPoints filtra inválidos; computeBounds marca anti-meridiano', () => 
 })
 
 // ── PositionMap SSR (mapa vial NO; a11y de marcadores) ───────────────────────
-const PositionMap = await loadJsxDefault('src/modules/supervisor-ventas/v2/radar/PositionMap.jsx')
+const PositionMap = await loadView('src/modules/supervisor-ventas/v2/radar/PositionMap.jsx')
 test('PositionMap: coords inválidas ⇒ nota (lista), no crash', () => {
   const html = render(PositionMap, { points: [{ id: 1, lat: NaN, lng: 0, kind: 'unit' }], height: 200 })
   assert.match(html, /v2-position-map-empty/)
@@ -109,7 +115,7 @@ test('sourceVersion incluye fecha+sucursal+generated_at', () => {
 })
 
 // ── RowButton (a11y) ─────────────────────────────────────────────────────────
-const RowButton = await loadJsxDefault('src/modules/supervisor-ventas/v2/components/RowButton.jsx')
+const RowButton = await loadView('src/modules/supervisor-ventas/v2/components/RowButton.jsx')
 test('RowButton: onClick ⇒ <button> real; sin onClick ⇒ <div> inerte', () => {
   const btn = render(RowButton, { onClick: () => {}, ariaLabel: 'abrir', children: 'x' })
   assert.match(btn, /<button/)
@@ -119,7 +125,7 @@ test('RowButton: onClick ⇒ <button> real; sin onClick ⇒ <div> inerte', () =>
 })
 
 // ── DayStateGate (P14 homogéneo) ─────────────────────────────────────────────
-const DayStateGate = await loadJsxDefault('src/modules/supervisor-ventas/v2/dayStateGate.jsx')
+const DayStateGate = await loadView('src/modules/supervisor-ventas/v2/dayStateGate.jsx')
 test('DayStateGate: date_not_allowed ⇒ estado explícito', () => {
   const html = render(DayStateGate, { day: { status: 'date_not_allowed' } })
   assert.match(html, /v2-date-not-allowed/)

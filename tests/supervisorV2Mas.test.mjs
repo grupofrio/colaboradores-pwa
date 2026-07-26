@@ -5,8 +5,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
+import { fileURLToPath } from 'node:url'
+// Contrato canónico del harness en main: { Component, mod, cleanup } + ruta
+// ABSOLUTA. `loadView` adapta las cargas de este archivo a ese contrato.
+const loadView = async (rel) => (
+  await loadJsxDefault(fileURLToPath(new URL('../' + rel, import.meta.url)))
+).Component
 
-const MasView = await loadJsxDefault('src/modules/supervisor-ventas/v2/mas/MasView.jsx')
+const MasView = await loadView('src/modules/supervisor-ventas/v2/mas/MasView.jsx')
 
 const render = (props = {}) => renderToStaticMarkup(createElement(MasView, props))
 

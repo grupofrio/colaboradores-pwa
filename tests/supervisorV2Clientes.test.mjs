@@ -14,6 +14,12 @@ import {
 } from '../src/modules/supervisor-ventas/v2/presentation.js'
 import { ROUTE_STOPS_FIXTURE } from '../src/modules/supervisor-ventas/v2/fixtures/routeStops.fixture.js'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
+import { fileURLToPath } from 'node:url'
+// Contrato canónico del harness en main: { Component, mod, cleanup } + ruta
+// ABSOLUTA. `loadView` adapta las cargas de este archivo a ese contrato.
+const loadView = async (rel) => (
+  await loadJsxDefault(fileURLToPath(new URL('../' + rel, import.meta.url)))
+).Component
 
 // route-stops del día = TODAS las paradas de TODAS las rutas, aplanadas.
 const ALL_STOPS = Object.values(ROUTE_STOPS_FIXTURE).flat()
@@ -26,7 +32,7 @@ const EXPECTED = {
   planeados: 5, visitados: 3, pendientes: 2, no_venta: 1, con_venta: 2, incidencia: 1, fuera_secuencia: 0,
 }
 
-const View = await loadJsxDefault('src/modules/supervisor-ventas/v2/clientes/ClientesView.jsx')
+const View = await loadView('src/modules/supervisor-ventas/v2/clientes/ClientesView.jsx')
 const renderView = (props) => renderToStaticMarkup(createElement(View, {
   segments: SEGMENTS, onSelectSegment: () => {}, onOpenCustomer: () => {}, ...props,
 }))

@@ -4,16 +4,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
+import { fileURLToPath } from 'node:url'
+// Contrato canónico del harness en main: { Component, mod, cleanup } + ruta
+// ABSOLUTA. `loadView` adapta las cargas de este archivo a ese contrato.
+const loadView = async (rel) => (
+  await loadJsxDefault(fileURLToPath(new URL('../' + rel, import.meta.url)))
+).Component
 import { DAY_CONTROL_FIXTURE, RADAR_FIXTURE, DAY_CONTROL_FIXTURE_DEGRADED } from '../src/modules/supervisor-ventas/dayControl/fixtures.js'
 import { ROUTE_STOPS_FIXTURE } from '../src/modules/supervisor-ventas/v2/fixtures/routeStops.fixture.js'
 import { derivePendientes, deriveSituation, deriveFreshness } from '../src/modules/supervisor-ventas/v2/presentation.js'
 
 const NOW = Date.parse('2026-01-15T15:20:00Z')
-const HoyView = await loadJsxDefault('src/modules/supervisor-ventas/v2/hoy/HoyView.jsx')
-const RadarView = await loadJsxDefault('src/modules/supervisor-ventas/v2/radar/RadarView.jsx')
-const RutasView = await loadJsxDefault('src/modules/supervisor-ventas/v2/rutas/RutasView.jsx')
-const RutaDetalle = await loadJsxDefault('src/modules/supervisor-ventas/v2/rutas/RutaDetalle.jsx')
-const PendientesView = await loadJsxDefault('src/modules/supervisor-ventas/v2/pendientes/PendientesView.jsx')
+const HoyView = await loadView('src/modules/supervisor-ventas/v2/hoy/HoyView.jsx')
+const RadarView = await loadView('src/modules/supervisor-ventas/v2/radar/RadarView.jsx')
+const RutasView = await loadView('src/modules/supervisor-ventas/v2/rutas/RutasView.jsx')
+const RutaDetalle = await loadView('src/modules/supervisor-ventas/v2/rutas/RutaDetalle.jsx')
+const PendientesView = await loadView('src/modules/supervisor-ventas/v2/pendientes/PendientesView.jsx')
 const render = (C, props) => renderToStaticMarkup(createElement(C, props))
 
 // ── derivaciones puras ───────────────────────────────────────────────────────
