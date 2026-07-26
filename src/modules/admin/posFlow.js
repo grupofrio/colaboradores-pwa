@@ -3,6 +3,18 @@ import {
   toPositiveSafeIntegerId,
 } from './posCustomers.js'
 
+export const NIGHT_POS_CANCEL_REASONS = Object.freeze([
+  Object.freeze({ code: 'duplicate', label: 'Duplicidad' }),
+  Object.freeze({ code: 'error', label: 'Error' }),
+  Object.freeze({ code: 'customer_cancelled', label: 'Canceló' }),
+  Object.freeze({ code: 'out_of_stock', label: 'Falta de stock' }),
+])
+
+export function isNightPosCancelReasonCode(reasonCode) {
+  return typeof reasonCode === 'string'
+    && NIGHT_POS_CANCEL_REASONS.some((reason) => reason.code === reasonCode)
+}
+
 export const ADMIN_POS_FLOW = Object.freeze({
   backTo: '/admin',
   posRoute: '/admin/pos',
@@ -10,16 +22,78 @@ export const ADMIN_POS_FLOW = Object.freeze({
   title: 'Venta mostrador',
   standalone: false,
   allowSaleCancellation: true,
+  cancellationMode: 'free-text',
 })
 
 export const NIGHT_POS_FLOW = Object.freeze({
   backTo: '/',
   posRoute: '/pos-nocturno',
   ticketBasePath: '/pos-nocturno/ticket',
+  salesRoute: '/pos-nocturno/ventas',
   title: 'POS nocturno',
   standalone: true,
-  allowSaleCancellation: false,
+  allowSaleCancellation: true,
+  cancellationMode: 'closed-reasons',
+  cancelReasons: NIGHT_POS_CANCEL_REASONS,
 })
+
+export async function submitPosCancellation({
+  flow = ADMIN_POS_FLOW,
+  orderId,
+  reasonCode,
+  reason,
+  cancelFn,
+} = {}) {
+  if (!flow?.allowSaleCancellation) {
+    throw new Error('La cancelación no está habilitada para este flujo.')
+  }
+  const normalizedOrderId = toPositiveSafeIntegerId(orderId)
+  if (!normalizedOrderId) {
+    throw new Error('La venta no tiene un identificador válido.')
+  }
+  if (typeof cancelFn !== 'function') {
+    throw new TypeError('Se requiere una función de cancelación.')
+  }
+
+  if (flow.cancellationMode === 'closed-reasons') {
+    const matchingReasons = Array.isArray(flow.cancelReasons)
+      ? flow.cancelReasons.filter((item) => item?.code === reasonCode)
+      : []
+    if (matchingReasons.length !== 1) {
+      throw new Error('Selecciona un motivo de cancelación válido.')
+    }
+    return cancelFn(normalizedOrderId, { reasonCode })
+  }
+
+  if (flow.cancellationMode === 'free-text') {
+    const trimmedReason = String(reason ?? '').trim()
+    if (!trimmedReason) {
+      throw new Error('Escribe el motivo de cancelación.')
+    }
+    return cancelFn(normalizedOrderId, trimmedReason)
+  }
+
+  throw new Error('El modo de cancelación no es válido.')
+}
+
+export function canCancelPosOrder(flow, order, backendCap) {
+  if (backendCap !== true || flow?.allowSaleCancellation !== true) return false
+  if (!order || typeof order !== 'object' || Array.isArray(order)) return false
+
+  const orderId = toPositiveSafeIntegerId(order.id)
+    || toPositiveSafeIntegerId(order.order_id)
+  if (!orderId) return false
+
+  const state = typeof order.state === 'string'
+    ? order.state.trim().toLowerCase()
+    : ''
+  if (state === 'cancel' || state === 'done') return false
+
+  if (flow.cancellationMode === 'closed-reasons') {
+    return state === 'sale' && order.can_cancel === true
+  }
+  return flow.cancellationMode === 'free-text'
+}
 
 export function buildPosTicketPath(flow = ADMIN_POS_FLOW, orderId) {
   const id = toPositiveSafeIntegerId(orderId)

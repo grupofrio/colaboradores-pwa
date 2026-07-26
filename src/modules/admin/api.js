@@ -6,6 +6,7 @@ import {
   normalizePosCatalogResponse,
   normalizePosProductsResponse,
 } from './posProducts.js'
+import { isNightPosCancelReasonCode } from './posFlow.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,10 +59,32 @@ export function getSaleOrder(orderId) {
 
 /** Cancela una venta (sale.order.action_cancel). Revierte stock moves.
  *  Rechaza si la venta ya está `done`. La razón queda en el chatter. */
-export function cancelSaleOrder(orderId, reason) {
+export function cancelSaleOrder(orderId, reasonOrOptions) {
+  let optionsReasonCode = null
+  let hasOptions = false
+  if (reasonOrOptions !== null && typeof reasonOrOptions === 'object') {
+    const prototype = Object.getPrototypeOf(reasonOrOptions)
+    const isPlainObject = prototype === Object.prototype || prototype === null
+    const reasonDescriptor = isPlainObject
+      ? Object.getOwnPropertyDescriptor(reasonOrOptions, 'reasonCode')
+      : null
+    const hasReasonValue = reasonDescriptor
+      && Object.prototype.hasOwnProperty.call(reasonDescriptor, 'value')
+    if (
+      !isPlainObject
+      || !hasReasonValue
+      || !isNightPosCancelReasonCode(reasonDescriptor.value)
+    ) {
+      throw new TypeError('Selecciona un motivo de cancelación válido.')
+    }
+    optionsReasonCode = reasonDescriptor.value
+    hasOptions = true
+  }
   return api('POST', '/pwa-admin/sale-cancel', {
     order_id: orderId,
-    reason: reason || '',
+    ...(hasOptions
+      ? { reason_code: optionsReasonCode }
+      : { reason: reasonOrOptions || '' }),
   })
 }
 
@@ -73,6 +96,11 @@ export function getTodaySales(arg) {
   const { warehouseId, companyId, date } = arg || {}
   const qs = toQuery({ warehouse_id: warehouseId, company_id: companyId, date })
   return api('GET', `/pwa-admin/today-sales${qs}`)
+}
+
+/** Ventas de hoy del POS nocturno. El backend fija identidad y fecha efectiva. */
+export function getNightTodaySales() {
+  return api('GET', '/pwa-admin/today-sales?night_pos=1')
 }
 
 // ── Validación de ticket (Almacenista Entregas) ──────────────────────────────

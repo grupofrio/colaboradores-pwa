@@ -132,9 +132,11 @@ test('NightPosRoute exige sesión válida e identidad nominal autorizada', () =>
 
 test('POS nocturno monta rutas directas con guard propio y NIGHT_POS_FLOW', () => {
   const posRoute = '<Route path="/pos-nocturno" element={<NightPosRoute><ScreenPOS flow={NIGHT_POS_FLOW} /></NightPosRoute>} />'
+  const salesRoute = '<Route path="/pos-nocturno/ventas" element={<NightPosRoute><ScreenNightPosSales /></NightPosRoute>} />'
   const ticketRoute = '<Route path="/pos-nocturno/ticket/:orderId" element={<NightPosRoute><ScreenTicket flow={NIGHT_POS_FLOW} /></NightPosRoute>} />'
 
   assert.ok(appSrc.includes(posRoute), 'ruta exacta del POS nocturno')
+  assert.ok(appSrc.includes(salesRoute), 'ruta exacta de ventas nocturnas')
   assert.ok(appSrc.includes(ticketRoute), 'ruta exacta del ticket nocturno')
   assert.ok(!appSrc.includes('moduleId="pos_nocturno"'), 'no amplía ModuleRoleRoute ni roles de Admin')
 })
