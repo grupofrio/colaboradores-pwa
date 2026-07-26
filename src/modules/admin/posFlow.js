@@ -3,6 +3,13 @@ import {
   toPositiveSafeIntegerId,
 } from './posCustomers.js'
 
+export const NIGHT_POS_CANCEL_REASONS = Object.freeze([
+  Object.freeze({ code: 'duplicate', label: 'Duplicidad' }),
+  Object.freeze({ code: 'error', label: 'Error' }),
+  Object.freeze({ code: 'customer_cancelled', label: 'Canceló' }),
+  Object.freeze({ code: 'out_of_stock', label: 'Falta de stock' }),
+])
+
 export const ADMIN_POS_FLOW = Object.freeze({
   backTo: '/admin',
   posRoute: '/admin/pos',
@@ -10,16 +17,55 @@ export const ADMIN_POS_FLOW = Object.freeze({
   title: 'Venta mostrador',
   standalone: false,
   allowSaleCancellation: true,
+  cancellationMode: 'free-text',
 })
 
 export const NIGHT_POS_FLOW = Object.freeze({
   backTo: '/',
   posRoute: '/pos-nocturno',
   ticketBasePath: '/pos-nocturno/ticket',
+  salesRoute: '/pos-nocturno/ventas',
   title: 'POS nocturno',
   standalone: true,
-  allowSaleCancellation: false,
+  allowSaleCancellation: true,
+  cancellationMode: 'closed-reasons',
+  cancelReasons: NIGHT_POS_CANCEL_REASONS,
 })
+
+export async function submitPosCancellation({
+  flow = ADMIN_POS_FLOW,
+  orderId,
+  reasonCode,
+  reason,
+  cancelFn,
+} = {}) {
+  if (!flow?.allowSaleCancellation) {
+    throw new Error('La cancelación no está habilitada para este flujo.')
+  }
+  if (typeof cancelFn !== 'function') {
+    throw new TypeError('Se requiere una función de cancelación.')
+  }
+
+  if (flow.cancellationMode === 'closed-reasons') {
+    const matchingReasons = Array.isArray(flow.cancelReasons)
+      ? flow.cancelReasons.filter((item) => item?.code === reasonCode)
+      : []
+    if (matchingReasons.length !== 1) {
+      throw new Error('Selecciona un motivo de cancelación válido.')
+    }
+    return cancelFn(orderId, { reasonCode })
+  }
+
+  if (flow.cancellationMode === 'free-text') {
+    const trimmedReason = String(reason ?? '').trim()
+    if (!trimmedReason) {
+      throw new Error('Escribe el motivo de cancelación.')
+    }
+    return cancelFn(orderId, trimmedReason)
+  }
+
+  throw new Error('El modo de cancelación no es válido.')
+}
 
 export function buildPosTicketPath(flow = ADMIN_POS_FLOW, orderId) {
   const id = toPositiveSafeIntegerId(orderId)

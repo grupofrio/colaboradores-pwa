@@ -8,7 +8,15 @@ import {
   canOpenPosPayment,
   classifyPosSaleCreateError,
   normalizePosSaleResult,
+  submitPosCancellation,
 } from '../src/modules/admin/posFlow.js'
+
+const NIGHT_CANCEL_REASONS = [
+  { code: 'duplicate', label: 'Duplicidad' },
+  { code: 'error', label: 'Error' },
+  { code: 'customer_cancelled', label: 'Canceló' },
+  { code: 'out_of_stock', label: 'Falta de stock' },
+]
 
 test('ADMIN_POS_FLOW preserves the existing admin POS routes', () => {
   assert.deepEqual(ADMIN_POS_FLOW, {
@@ -18,6 +26,7 @@ test('ADMIN_POS_FLOW preserves the existing admin POS routes', () => {
     title: 'Venta mostrador',
     standalone: false,
     allowSaleCancellation: true,
+    cancellationMode: 'free-text',
   })
   assert.equal(buildPosTicketPath(ADMIN_POS_FLOW, 9001), '/admin/ticket/9001')
 })
@@ -27,11 +36,97 @@ test('NIGHT_POS_FLOW defines the isolated night POS routes', () => {
     backTo: '/',
     posRoute: '/pos-nocturno',
     ticketBasePath: '/pos-nocturno/ticket',
+    salesRoute: '/pos-nocturno/ventas',
     title: 'POS nocturno',
     standalone: true,
-    allowSaleCancellation: false,
+    allowSaleCancellation: true,
+    cancellationMode: 'closed-reasons',
+    cancelReasons: NIGHT_CANCEL_REASONS,
   })
   assert.equal(buildPosTicketPath(NIGHT_POS_FLOW, 9001), '/pos-nocturno/ticket/9001')
+})
+
+test('NIGHT_POS_FLOW and its closed cancellation reasons are immutable', () => {
+  assert.equal(Object.isFrozen(NIGHT_POS_FLOW), true)
+  assert.equal(Object.isFrozen(NIGHT_POS_FLOW.cancelReasons), true)
+  assert.equal(
+    NIGHT_POS_FLOW.cancelReasons.every((reason) => Object.isFrozen(reason)),
+    true,
+  )
+})
+
+test('submitPosCancellation rejects flows that do not allow cancellation', async () => {
+  const calls = []
+
+  await assert.rejects(
+    submitPosCancellation({
+      flow: { ...NIGHT_POS_FLOW, allowSaleCancellation: false },
+      orderId: 9001,
+      reasonCode: 'duplicate',
+      cancelFn: (...args) => calls.push(args),
+    }),
+  )
+
+  assert.deepEqual(calls, [])
+})
+
+test('submitPosCancellation submits one allowed closed reason code', async () => {
+  const calls = []
+  const expected = { ok: true }
+
+  const result = await submitPosCancellation({
+    flow: NIGHT_POS_FLOW,
+    orderId: 9001,
+    reasonCode: 'duplicate',
+    reason: 'free text must not leak',
+    cancelFn: async (...args) => {
+      calls.push(args)
+      return expected
+    },
+  })
+
+  assert.equal(result, expected)
+  assert.deepEqual(calls, [[9001, { reasonCode: 'duplicate' }]])
+})
+
+test('submitPosCancellation rejects missing and unknown closed reason codes without calling', async () => {
+  for (const reasonCode of [undefined, '', 'unknown', ' duplicate ']) {
+    const calls = []
+
+    await assert.rejects(
+      submitPosCancellation({
+        flow: NIGHT_POS_FLOW,
+        orderId: 9001,
+        reasonCode,
+        cancelFn: (...args) => calls.push(args),
+      }),
+    )
+
+    assert.deepEqual(calls, [], String(reasonCode))
+  }
+})
+
+test('submitPosCancellation trims admin free text and rejects empty text', async () => {
+  const calls = []
+
+  await submitPosCancellation({
+    flow: ADMIN_POS_FLOW,
+    orderId: 9001,
+    reason: '  Captura duplicada  ',
+    cancelFn: async (...args) => calls.push(args),
+  })
+
+  assert.deepEqual(calls, [[9001, 'Captura duplicada']])
+
+  await assert.rejects(
+    submitPosCancellation({
+      flow: ADMIN_POS_FLOW,
+      orderId: 9002,
+      reason: '   ',
+      cancelFn: (...args) => calls.push(args),
+    }),
+  )
+  assert.equal(calls.length, 1)
 })
 
 test('canOpenPosPayment requires cart lines and a valid customer id', () => {

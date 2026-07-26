@@ -58,10 +58,15 @@ export function getSaleOrder(orderId) {
 
 /** Cancela una venta (sale.order.action_cancel). Revierte stock moves.
  *  Rechaza si la venta ya está `done`. La razón queda en el chatter. */
-export function cancelSaleOrder(orderId, reason) {
+export function cancelSaleOrder(orderId, reasonOrOptions) {
+  const options = reasonOrOptions !== null && typeof reasonOrOptions === 'object'
+    ? reasonOrOptions
+    : null
   return api('POST', '/pwa-admin/sale-cancel', {
     order_id: orderId,
-    reason: reason || '',
+    ...(options
+      ? { reason_code: options.reasonCode }
+      : { reason: reasonOrOptions || '' }),
   })
 }
 
@@ -73,6 +78,15 @@ export function getTodaySales(arg) {
   const { warehouseId, companyId, date } = arg || {}
   const qs = toQuery({ warehouse_id: warehouseId, company_id: companyId, date })
   return api('GET', `/pwa-admin/today-sales${qs}`)
+}
+
+/** Ventas de hoy del POS nocturno. El backend fija identidad y fecha efectiva. */
+export function getNightTodaySales({ warehouseId, companyId }) {
+  return api('GET', `/pwa-admin/today-sales${toQuery({
+    warehouse_id: warehouseId,
+    company_id: companyId,
+    night_pos: 1,
+  })}`)
 }
 
 // ── Validación de ticket (Almacenista Entregas) ──────────────────────────────

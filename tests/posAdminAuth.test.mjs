@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { ApiError, api } from '../src/lib/api.js'
+import { cancelSaleOrder, getNightTodaySales } from '../src/modules/admin/api.js'
 
 const originalLocalStorage = globalThis.localStorage
 const originalFetch = globalThis.fetch
@@ -1094,6 +1095,57 @@ test('today sales delegates employee scope to the Odoo backend endpoint', async 
   assert.equal(result.data.items[0].id, 9001)
 })
 
+test('night today sales sends the night intent without any date filters', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+
+    if (url === '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34&night_pos=1') {
+      return createJsonResponse(200, {
+        ok: true,
+        data: { items: [] },
+      })
+    }
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  await getNightTodaySales({ warehouseId: 89, companyId: 34 })
+
+  assert.equal(calls.length, 1)
+  const [call] = calls
+  assert.equal(call.options.headers['Api-Key'], 'stale-api-key')
+  assert.equal(call.options.headers['X-GF-Employee-Token'], 'employee-token-test')
+  const query = new URL(call.url, 'https://pwa.test').searchParams
+  assert.deepEqual([...query.keys()], ['warehouse_id', 'company_id', 'night_pos'])
+  assert.equal(query.get('night_pos'), '1')
+  assert.equal(query.has('date'), false)
+  assert.equal(query.has('date_from'), false)
+  assert.equal(query.has('date_to'), false)
+})
+
+test('today sales forwards supplied empty and malformed night intent for backend rejection', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return createJsonResponse(200, { ok: true, data: { items: [] } })
+  }
+
+  await api('GET', '/pwa-admin/today-sales?warehouse_id=89&night_pos=')
+  await api('GET', '/pwa-admin/today-sales?warehouse_id=89&night_pos=malformed')
+
+  assert.equal(calls.length, 2)
+  assert.equal(calls[0].url, '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34&night_pos=')
+  assert.equal(
+    calls[1].url,
+    '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34&night_pos=malformed',
+  )
+})
+
 test('sale detail delegates employee scope to the secured Odoo controller', async () => {
   setSession()
 
@@ -1167,6 +1219,77 @@ test('sale cancel delegates authorization and cancellation to the secured Odoo c
   })
   assert.equal(calls.some((entry) => entry.url === '/odoo-api/api/create_update'), false)
   assert.equal(result.data.state, 'cancel')
+})
+
+test('night sale cancel sends only order_id and reason_code to the secured controller', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+
+    if (url === '/odoo-api/pwa-admin/sale-cancel') {
+      return createJsonResponse(200, {
+        result: { ok: true, data: { id: 9001, state: 'cancel' } },
+      })
+    }
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  await cancelSaleOrder(9001, { reasonCode: 'duplicate' })
+
+  assert.equal(calls.length, 1)
+  const [call] = calls
+  assert.equal(call.options.headers['Api-Key'], 'stale-api-key')
+  assert.equal(call.options.headers['X-GF-Employee-Token'], 'employee-token-test')
+  assert.deepEqual(call.payload.params, {
+    order_id: 9001,
+    reason_code: 'duplicate',
+  })
+})
+
+test('admin cancelSaleOrder keeps the legacy free-text transport contract', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+    return createJsonResponse(200, {
+      result: { ok: true, data: { id: 9002, state: 'cancel' } },
+    })
+  }
+
+  await cancelSaleOrder(9002, 'Captura duplicada')
+
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0].payload.params, {
+    order_id: 9002,
+    reason: 'Captura duplicada',
+    employee_id: 699,
+  })
+})
+
+test('cancelSaleOrder handles null as legacy empty text instead of options', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+    return createJsonResponse(200, {
+      result: { ok: true, data: { id: 9003, state: 'cancel' } },
+    })
+  }
+
+  await cancelSaleOrder(9003, null)
+
+  assert.deepEqual(calls[0].payload.params, {
+    order_id: 9003,
+    reason: '',
+    employee_id: 699,
+  })
 })
 
 test('sale detail propagates a secured controller 403', async () => {

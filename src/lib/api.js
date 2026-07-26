@@ -1652,11 +1652,19 @@ async function directAdmin(method, path, body) {
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const reqCompanyId = Number(query.get('company_id') || companyId || 0)
-    return odooHttp('GET', '/pwa-admin/today-sales', {
+    const requestQuery = {
       warehouse_id: reqWarehouseId || undefined,
       company_id: reqCompanyId || undefined,
       date: query.get('date') || undefined,
-    })
+    }
+    if (!query.has('night_pos')) {
+      return odooHttp('GET', '/pwa-admin/today-sales', requestQuery)
+    }
+
+    const standardQuery = toQueryString(requestQuery)
+    const nightQuery = `night_pos=${encodeURIComponent(query.get('night_pos'))}`
+    const queryString = standardQuery ? `${standardQuery}&${nightQuery}` : nightQuery
+    return odooHttp('GET', `/pwa-admin/today-sales?${queryString}`)
   }
 
   if (cleanPath === '/pwa-admin/today-expenses' && method === 'GET') {
@@ -2270,6 +2278,12 @@ async function directAdmin(method, path, body) {
     const id = toPositiveSafeIntegerId(body?.order_id)
     if (!id) {
       return { ok: false, error: 'order_id requerido' }
+    }
+    if (Object.prototype.hasOwnProperty.call(body || {}, 'reason_code')) {
+      return odooJson('/pwa-admin/sale-cancel', {
+        order_id: id,
+        reason_code: body.reason_code,
+      })
     }
     return odooJson('/pwa-admin/sale-cancel', {
       order_id: id,
