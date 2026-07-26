@@ -308,9 +308,10 @@ La selección autoritativa de política será:
 | Héctor + `pos_diurno` | omitida o intención nocturna existente | política nocturna existente |
 
 En `today-sales`, la coexistencia de `pos_scope=day` con `night_pos` se
-rechazará. En detalle y cancelación, una identidad nocturna acompañada de
-`pos_scope=day`, o cualquier combinación incoherente de alcances, también se
-rechazará. Ningún conflicto escogerá la política más permisiva.
+rechazará. En detalle y cancelación, Héctor con `pos_scope=day` solo usará la
+política diurna cuando también posea el rol `pos_diurno`; sin ese rol se
+rechazará. Cualquier combinación incoherente de alcances también se rechazará.
+Ningún conflicto escogerá la política más permisiva.
 
 La compatibilidad de Héctor con `night_pos=1` se conserva. La nueva intención no
 se utilizará para reconocer a Héctor ni sustituirá su política actual.
