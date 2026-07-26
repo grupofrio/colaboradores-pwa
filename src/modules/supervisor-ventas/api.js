@@ -47,6 +47,12 @@ export function getRadar(date) {
   return api('GET', `/pwa-supv/radar${qs}`)
 }
 
+/** Supervisor V2: paradas de una ruta vía DTO read-only guardado (#223), sin
+ *  ORM/sudo en el cliente. Devuelve el envelope {status,data:{stops,...}}. */
+export function getRouteStopsV2(planId) {
+  return api('GET', `/pwa-supv/route-stops-v2?plan_id=${Number(planId || 0)}`)
+}
+
 // ── Pronóstico ───────────────────────────────────────────────────────────────
 
 /** Productos disponibles para forecast */
@@ -196,14 +202,39 @@ export function deleteForecast(forecastId) {
   return api('POST', '/pwa-supv/forecast-delete', { forecast_id: forecastId })
 }
 
-/** Líneas de un forecast (productos, canal, qty) */
+/** Líneas de un forecast (productos, canal, qty) — LEGACY (ORM). Ya NO se usa en
+ *  el flujo de edición del supervisor (reemplazado por getForecastDto, §10). */
 export function getForecastLines(forecastId) {
   return api('GET', `/pwa-supv/forecast-lines?forecast_id=${forecastId}`)
 }
 
-/** Reemplazar las líneas de un forecast borrador */
-export function updateForecastLines(forecastId, lines) {
-  return api('POST', '/pwa-supv/forecast-update-lines', { forecast_id: forecastId, lines })
+/**
+ * DTO GET SEGURO del forecast (Codex §7/§10): carga forecast + write_date +
+ * líneas completas + capabilities vía el endpoint token-only con scope canónico.
+ * Devuelve { ok, forecast_id, write_date, operational_date, state, capabilities,
+ * lines[], contract_version } o { ok:false, code, message }.
+ */
+export function getForecastDto(forecastId) {
+  return api('POST', '/pwa-supv/forecast-get', { forecast_id: forecastId })
+}
+
+/**
+ * Reemplazar las líneas de un forecast borrador (Codex §7/§9). El caller DEBE
+ * pasar `expectedWriteDate` (el write_date que leyó del backend) y confirmar el
+ * reemplazo total; vaciar exige confirmación adicional. Devuelve el resultado del
+ * adaptador ({ok, phase, code, message, reload}) — el caller NO puede asumir éxito.
+ * @param {number} forecastId
+ * @param {Array} lines
+ * @param {{expectedWriteDate:string, confirmReplaceAll?:boolean, confirmEmptyReplace?:boolean}} opts
+ */
+export function updateForecastLines(forecastId, lines, opts = {}) {
+  return api('POST', '/pwa-supv/forecast-update-lines', {
+    forecast_id: forecastId,
+    lines,
+    expected_write_date: opts.expectedWriteDate,
+    confirm_replace_all: opts.confirmReplaceAll === true,
+    confirm_empty_replace: opts.confirmEmptyReplace === true,
+  })
 }
 
 // ── Metas mensuales ──────────────────────────────────────────────────────────

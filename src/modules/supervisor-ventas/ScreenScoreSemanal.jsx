@@ -49,15 +49,14 @@ export default function ScreenScoreSemanal() {
     return () => { cancelled = true }
   }, [])
 
-  // Determine today's column index
-  const todayStr = useMemo(() => {
-    const d = new Date()
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  }, [])
+  // Codex §14: el día de "hoy" sale de la fecha operativa del SERVIDOR (tz de la
+  // sucursal), devuelta por getWeeklyScore().serverDate. NO se usa `new Date()` ni
+  // ninguna semana derivada del dispositivo. Sin fecha del servidor ⇒ Score no
+  // disponible (data.unavailable) y no se resalta ningún día.
+  const todayStr = data?.serverDate || null
 
   const todayIdx = useMemo(() => {
-    if (!data) return -1
+    if (!data || !todayStr) return -1
     return data.weekDays.indexOf(todayStr)
   }, [data, todayStr])
 
@@ -131,6 +130,22 @@ export default function ScreenScoreSemanal() {
         }}>
           <div style={{ ...typo.h2, color: TOKENS.colors.error, marginBottom: 8 }}>Error</div>
           <div style={{ ...typo.body, color: TOKENS.colors.textMuted }}>{error}</div>
+        </div>
+      </ScreenShell>
+    )
+  }
+
+  // Codex §14: sin fecha operativa del SERVIDOR no se calcula la semana con el
+  // dispositivo ⇒ estado explícito "no disponible" (nunca una semana inventada).
+  if (data?.unavailable) {
+    return (
+      <ScreenShell title="Score Semanal" backTo="/equipo">
+        <div data-testid="score-unavailable" style={{ padding: '60px 24px', textAlign: 'center' }}>
+          <div style={{ ...typo.h2, color: TOKENS.colors.textSoft, marginBottom: 8 }}>Fecha no disponible</div>
+          <div style={{ ...typo.body, color: TOKENS.colors.textMuted }}>
+            No se pudo obtener la fecha operativa de la sucursal. El Score se calcula con la
+            fecha del servidor, no con la del dispositivo. Reintenta más tarde.
+          </div>
         </div>
       </ScreenShell>
     )

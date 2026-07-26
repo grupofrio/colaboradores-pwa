@@ -4,6 +4,7 @@ import { useState, useEffect, createContext, useContext } from 'react'
 import { ToastProvider } from './components/Toast'
 import AppShell from './components/AppShell'
 import { normalizeSessionRoleContext } from './lib/roleContext'
+import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervisor-ventas/v2/sessionScope'
 import { api } from './lib/api'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
@@ -152,6 +153,15 @@ const ScreenScoreSemanal       = lazy(() => import('./modules/supervisor-ventas/
 const ScreenCierreOperativo    = lazy(() => import('./modules/supervisor-ventas/ScreenCierreOperativo'))
 const ScreenNotaRapida         = lazy(() => import('./modules/supervisor-ventas/ScreenNotaRapida'))
 const ScreenOperacionesHoy     = lazy(() => import('./modules/supervisor-ventas/ScreenOperacionesHoy'))
+// Supervisor V2 — shell de 6 superficies (gated por flag fail-closed).
+const HoyTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/HoyTab'))
+const RadarTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RadarTab'))
+const RutasTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RutasTab'))
+const ClientesTab   = lazy(() => import('./modules/supervisor-ventas/v2/tabs/ClientesTab'))
+const PendientesTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/PendientesTab'))
+const MasTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/MasTab'))
+import SupervisorV2Gate from './modules/supervisor-ventas/v2/SupervisorV2Gate'
+import V2ExcludedRoute from './modules/supervisor-ventas/v2/V2ExcludedRoute'
 // Torres de Control — Validación de Requisiciones
 const ScreenTorreRequisiciones = lazy(() => import('./modules/torre/ScreenTorreRequisiciones'))
 const ScreenTorreDetail        = lazy(() => import('./modules/torre/ScreenTorreDetail'))
@@ -496,9 +506,26 @@ class ErrorBoundary extends Component {
   }
 }
 
+// Codex §3/§5: la firma de identidad usa la IDENTIDAD CANÓNICA compartida
+// (buildSessionIdentity) — misma autoridad que sessionStore/sessionScope, sin
+// duplicar campos. `sessionKey` no serializa el token.
+function sessionIdentitySig(s) {
+  if (!s || typeof s !== 'object') return ''
+  return buildSessionIdentity(s).sessionKey
+}
+
+// Codex §5/§6: `withScopeNonce` = alias local del helper canónico
+// `ensureSessionScopeNonce` (vive en sessionScope, misma casa que la identidad).
+// Toda sesión persistida debe tener una huella no sensible estable; dos sesiones
+// legacy del mismo empleado ya NO comparten scopeKey.
+const withScopeNonce = ensureSessionScopeNonce
+
 // ─── App principal ────────────────────────────────────────────────────────────
 export default function App() {
-  const [session, setSession] = useState(getStoredSession)
+  // §5/§6: migra en memoria la sesión legacy (sin session_id/nonce) añadiéndole un
+  // nonce estable en la inicialización (una sola vez; el efecto de persistencia la
+  // guarda ya con el nonce).
+  const [session, setSession] = useState(() => withScopeNonce(getStoredSession()))
 
   useEffect(() => {
     if (session) {
@@ -506,6 +533,11 @@ export default function App() {
     } else {
       localStorage.removeItem('gf_session')
     }
+    // Codex §2/§3: notifica a la capa reactiva de scope (sessionStore) que la
+    // sesión cambió EN ESTA pestaña (los writes de localStorage de la misma
+    // pestaña NO disparan `storage`). Al cambiar la identidad, los hooks de datos
+    // limpian su estado visible, invalidan caché y refetch.
+    try { window.dispatchEvent(new Event('gf:session-changed')) } catch { /* noop */ }
   }, [session])
 
   // Global listener: any api.js that detects expired/missing token fires this.
@@ -519,20 +551,29 @@ export default function App() {
     return () => window.removeEventListener('gf:session-expired', onSessionExpired)
   }, [])
 
-  // Multi-tab safety: detect when another tab cambia la sesion (logout o
-  // login distinto). Cuando el employee_id en localStorage difiere del que
-  // tenemos en memoria, hard-reload para descartar cualquier estado en RAM
-  // del usuario anterior y arrancar limpio con la nueva sesion.
+  // Multi-tab safety (Codex §5): detecta cuando otra pestaña cambia la sesión.
+  // Compara la IDENTIDAD COMPLETA (no solo employee_id): misma persona + distinta
+  // sucursal/company/token también es drift. Resolución:
+  //   · otra pestaña cerró sesión ⇒ logout local;
+  //   · cambió de USUARIO ⇒ hard reload (descarta estado en RAM de módulos);
+  //   · misma persona, distinta sucursal/token/company/rol ⇒ ADOPTAR la sesión
+  //     nueva en el Context (sessionStore publica snapshot, invalida caches,
+  //     useOperationalDay refetch). Sin hard reload innecesario.
   useEffect(() => {
     function checkSessionDrift() {
       const stored = getStoredSession()
-      const memEmpId = session?.employee_id || null
+      if (sessionIdentitySig(session) === sessionIdentitySig(stored)) return
+      const storedHasSession = !!(stored && (stored.employee_id || stored.odoo_employee_token || stored.gf_employee_token))
+      if (!storedHasSession) { setSession(null); return }
       const storedEmpId = stored?.employee_id || null
-      if (memEmpId !== storedEmpId) {
-        // Drift detectado: hard reload a "/" para que el routing recompute
-        // landing y se descarte la pila de history del usuario anterior.
+      const memEmpId = session?.employee_id || null
+      if (storedEmpId && memEmpId && String(storedEmpId) !== String(memEmpId)) {
         window.location.replace('/')
+        return
       }
+      // Misma persona, distinta sucursal/token/session_id/nonce ⇒ adoptar (con
+      // nonce garantizado). sessionStore publica snapshot, invalida cachés, refetch.
+      setSession(withScopeNonce(normalizeSessionRoleContext(stored)))
     }
     function onStorage(e) {
       if (e.key === 'gf_session') checkSessionDrift()
@@ -547,10 +588,20 @@ export default function App() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [session?.employee_id])
+  }, [session])
 
   function login(sessionData) {
     const next = normalizeSessionRoleContext(sessionData)
+    // Codex §6: nonce de scope NO sensible por sesión — separa re-logins de la
+    // misma persona en las claves de caché. Se genera una vez y persiste con la
+    // sesión; estable durante la sesión, nuevo en cada login.
+    if (next && !next.gf_scope_nonce) {
+      try {
+        next.gf_scope_nonce = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `n${Date.now()}${Math.random().toString(36).slice(2, 8)}`
+      } catch { next.gf_scope_nonce = `n${Date.now()}` }
+    }
     const nextEmpId = next?.employee_id || null
     const prevEmpId = session?.employee_id || null
     setSession(next)
@@ -707,30 +758,45 @@ export default function App() {
 
             {/* ── Supervisor de Ventas ─────────────────────────────────── */}
             {/* Supervisor Ventas V2 — Centro de Control Comercial */}
-            {/* `/equipo` NO se toca aquí: sigue sirviendo el entry de main
-                (ScreenSupervisorOperationsEntry, que a su vez alterna entre
-                ScreenControlComercial y ScreenSupervisorToday). El gate de
-                experiencia (SupervisorV2Gate) llega en el PR de Supervisor V2. */}
-            <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenSupervisorOperationsEntry /></ModuleRoleRoute>} />
-            <Route path="/equipo/hoy" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenOperacionesHoy /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasHub /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/sugey" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugey /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/sugey/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugeyDetail /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/angelica" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasAngelica /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/angelica/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasAngelicaDetail /></ModuleRoleRoute>} />
+            {/* CONTRATO DE `/equipo` (decisión autorizada):
+                SupervisorV2Gate GOBIERNA el entry y decide UNA sola experiencia.
+                  · V2 ON  ⇒ experiencia nueva (SupervisorV2Shell + HoyTab).
+                  · V2 OFF / flag ausente / estado desconocido ⇒ fail-closed al
+                    entry LEGACY de main, `ScreenSupervisorOperationsEntry` (que a
+                    su vez alterna ScreenControlComercial ↔ ScreenSupervisorToday).
+                `ScreenSupervisorOperationsEntry` NO se elimina: es el fallback.
+                Nunca se montan ambas. El gate decide EXPERIENCIA, no autorización:
+                el rol lo impone ModuleRoleRoute y la autoridad de seguridad sigue
+                siendo el guard + rol + flags del backend. */}
+            <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="hoy" legacy={<ScreenSupervisorOperationsEntry />}><HoyTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/radar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="radar" v2Only><RadarTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/rutas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="rutas" v2Only><RutasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/pendientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="pendientes" v2Only><PendientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/mas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="mas" v2Only><MasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            {/* `/equipo/hoy` es una CAPACIDAD V2 (no una ruta legacy permitida):
+                V2 ON ⇒ acceso a la home ejecutable standalone; V2 OFF ⇒ redirect
+                a `/equipo` (sin evadir el gate principal). `shell={false}` evita
+                anidar dos shells/navegaciones: la pantalla ya trae la suya. */}
+            <Route path="/equipo/hoy" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="hoy" v2Only shell={false}><ScreenOperacionesHoy /></SupervisorV2Gate></ModuleRoleRoute>} />
+            {/* Bajas: EXCLUIDA de V2 (backend no auditado). V2 ON ⇒ no disponible sin fetch; V2 OFF ⇒ legacy. */}
+            <Route path="/equipo/bajas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasHub />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/sugey" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasSugey />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/sugey/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasSugeyDetail />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/angelica" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasAngelica />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/angelica/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasAngelicaDetail />} /></ModuleRoleRoute>} />
             <Route path="/equipo/vendedor/:vendedorId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDetalleVendedor /></ModuleRoleRoute>} />
             <Route path="/equipo/sin-visitar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesSinVisitar /></ModuleRoleRoute>} />
             <Route path="/equipo/score-semanal" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenScoreSemanal /></ModuleRoleRoute>} />
             <Route path="/equipo/cierre" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenCierreOperativo /></ModuleRoleRoute>} />
             <Route path="/equipo/dashboard" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDashboardVentas /></ModuleRoleRoute>} />
-            <Route path="/equipo/pronostico" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPronostico /></ModuleRoleRoute>} />
-            <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPlanDiarioClientes /></ModuleRoleRoute>} />
-            <Route path="/equipo/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesSupervisor /></ModuleRoleRoute>} />
+            <Route path="/equipo/pronostico" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenPronostico />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenPlanDiarioClientes />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="clientes" legacy={<ScreenClientesSupervisor />}><ClientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/metas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenMetasVendedores /></ModuleRoleRoute>} />
-            <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenTareasSupervisor /></ModuleRoleRoute>} />
-            <Route path="/equipo/notas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenNotasCliente /></ModuleRoleRoute>} />
+            <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenTareasSupervisor />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/notas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenNotasCliente />} /></ModuleRoleRoute>} />
             <Route path="/equipo/recuperacion" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesRecuperacion /></ModuleRoleRoute>} />
-            <Route path="/equipo/nota-rapida" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenNotaRapida /></ModuleRoleRoute>} />
+            <Route path="/equipo/nota-rapida" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenNotaRapida />} /></ModuleRoleRoute>} />
             {/* V1 legacy routes */}
             <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />
             <Route path="/equipo/control" element={<Navigate to="/equipo" replace />} />
