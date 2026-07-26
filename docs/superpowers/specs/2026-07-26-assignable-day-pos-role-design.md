@@ -242,6 +242,10 @@ cancelarse de nuevo. Las ventas iguales o superiores a $5,000 mostrarán que deb
 intervenir un gerente; este diseño no introduce un flujo nuevo de aprobación
 remota.
 
+Si `gf_pwa_admin.cancel_manager_threshold` no está configurado, se conservará
+el valor predeterminado de $5,000. Si el parámetro existe pero es negativo, no
+numérico o no finito, la cancelación se bloqueará de forma segura.
+
 La cancelación conservará el bloqueo transaccional y las revalidaciones
 inmediatamente anteriores a `action_cancel()` para impedir dobles cancelaciones
 concurrentes. Después del éxito se registrarán en chatter el empleado y la razón
@@ -300,6 +304,8 @@ La selección autoritativa de política será:
 | Rol administrativo sin `pos_diurno` | omitida | contrato administrativo existente |
 | Héctor | omitida o intención nocturna existente | política nocturna existente |
 | Héctor | `day` sin rol diurno | denegado |
+| Héctor + `pos_diurno` | `day` | POS diurno restringido |
+| Héctor + `pos_diurno` | omitida o intención nocturna existente | política nocturna existente |
 
 En `today-sales`, la coexistencia de `pos_scope=day` con `night_pos` se
 rechazará. En detalle y cancelación, una identidad nocturna acompañada de
@@ -344,8 +350,9 @@ se utilizará para reconocer a Héctor ni sustituirá su política actual.
 - Perfil sin `pos_diurno`: módulo oculto, ruta directa bloqueada y backend
   denegado.
 - Permiso retirado con una sesión PWA todavía abierta: la tarjeta puede quedar
-  visible hasta refrescar la sesión, pero Odoo rechaza inmediatamente cualquier
-  lectura o mutación porque vuelve a consultar el rol del empleado.
+  visible hasta refrescar la sesión, pero Odoo rechaza inmediatamente los
+  endpoints protegidos del POS diurno porque vuelve a consultar el rol del
+  empleado.
 - Cliente público ausente o ambiguo: captura bloqueada con mensaje de
   configuración.
 - Empleado sin compañía, almacén o analítica coherentes: acceso operativo
@@ -405,7 +412,8 @@ se utilizará para reconocer a Héctor ni sustituirá su política actual.
 - el corte de medianoche de México incluye el primer instante del día y excluye
   el primer instante del siguiente;
 - exactamente $5,000 requiere gerente y $4,999.99 conserva la decisión normal;
-- un umbral ausente, negativo, no numérico o no finito bloquea la cancelación;
+- un umbral ausente conserva $5,000; uno negativo, no numérico o no finito
+  bloquea la cancelación;
 - retirar `pwa_extra_pos_diurno` revoca inmediatamente el backend aun con una
   sesión cliente abierta;
 - Angy conserva el contrato administrativo y Héctor el contrato nocturno.
