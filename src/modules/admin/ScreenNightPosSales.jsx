@@ -73,6 +73,31 @@ function stateTone(state) {
   return STATE_TONES[state] || UNKNOWN_STATE_TONE
 }
 
+function responseLayers(response) {
+  const layers = []
+  const seen = new Set()
+  let current = response
+
+  while (current && typeof current === 'object' && !Array.isArray(current)) {
+    if (seen.has(current)) break
+    seen.add(current)
+    layers.push(current)
+    if (!current.data || typeof current.data !== 'object' || Array.isArray(current.data)) break
+    current = current.data
+  }
+
+  return layers
+}
+
+function isFailureEnvelope(response) {
+  return responseLayers(response).some((layer) => (
+    layer.ok === false
+    || layer.success === false
+    || (typeof layer.status === 'string' && layer.status.trim().toLowerCase() === 'error')
+    || Boolean(layer.error)
+  ))
+}
+
 function SaleRow({ sale, onOpen }) {
   const ticketPath = buildPosTicketPath(NIGHT_POS_FLOW, sale.order_id)
   const folio = sale.name || `Venta #${sale.order_id}`
@@ -278,6 +303,9 @@ export default function ScreenNightPosSales({
     Promise.resolve(loadSales({ warehouseId, companyId }))
       .then((response) => {
         if (!active || requestId !== requestSequence.current) return
+        if (isFailureEnvelope(response)) {
+          throw new Error('night_pos_sales_failure_envelope')
+        }
         setState({
           loading: false,
           error: false,

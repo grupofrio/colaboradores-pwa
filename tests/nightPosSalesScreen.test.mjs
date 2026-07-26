@@ -129,7 +129,7 @@ test('loads only the current warehouse/company context and renders loading then 
   assert.equal(renderer.root.findAllByType('input').length, 0, 'sin control de fecha')
 
   await act(async () => {
-    request.resolve({ data: { items: [] } })
+    request.resolve({ ok: true, data: { items: [] } })
     await flush()
   })
 
@@ -137,6 +137,67 @@ test('loads only the current warehouse/company context and renders loading then 
   assert.equal(calls.length, 1, 'no hace polling ni recargas automáticas')
 
   act(() => renderer.unmount())
+})
+
+test('resolved failure envelope shows the safe retryable error and can recover', async () => {
+  let attempts = 0
+  const loadSales = async () => {
+    attempts += 1
+    if (attempts === 1) {
+      return {
+        ok: false,
+        message: 'Detalle sensible del backend',
+        data: {},
+      }
+    }
+    return {
+      ok: true,
+      data: {
+        items: [{ order_id: 9010, name: 'VENTA RECUPERADA', state: 'sale' }],
+      },
+    }
+  }
+  const renderer = await createScreen({ loadSales })
+
+  let text = renderedText(renderer)
+  assert.match(text, /No se pudieron cargar las ventas de hoy/)
+  assert.doesNotMatch(text, /Detalle sensible del backend/)
+  assert.doesNotMatch(text, /No hay ventas registradas hoy/)
+  const retry = renderer.root.findAllByType('button').find((button) => (
+    button.children.join('') === 'Reintentar'
+  ))
+  assert.ok(retry)
+
+  await act(async () => {
+    retry.props.onClick()
+    await flush()
+  })
+
+  text = renderedText(renderer)
+  assert.match(text, /VENTA RECUPERADA/)
+  assert.doesNotMatch(text, /No se pudieron cargar las ventas de hoy/)
+  assert.equal(attempts, 2)
+
+  act(() => renderer.unmount())
+})
+
+test('resolved success, status, and error envelopes also fail safely', async () => {
+  const envelopes = [
+    { success: false, message: 'SENSITIVE_SUCCESS', data: {} },
+    { status: 'ERROR', user_message: 'SENSITIVE_STATUS', data: {} },
+    { data: { error: { message: 'SENSITIVE_NESTED_ERROR' } } },
+  ]
+
+  for (const envelope of envelopes) {
+    const renderer = await createScreen({ loadSales: async () => envelope })
+    const text = renderedText(renderer)
+
+    assert.match(text, /No se pudieron cargar las ventas de hoy/)
+    assert.doesNotMatch(text, /SENSITIVE_/)
+    assert.doesNotMatch(text, /No hay ventas registradas hoy/)
+
+    act(() => renderer.unmount())
+  }
 })
 
 test('renders a safe retryable error and fetches again only after Retry', async () => {
