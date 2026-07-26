@@ -2,12 +2,26 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+// Centinelas de los fixtures SINTÉTICOS de day-control/radar: si alguno aparece en
+// `dist`, el fixture se filtró al bundle de PRODUCCIÓN y el build debe fallar.
+// Cubre las DOS vías de carga del mismo `dayControl/fixtures.js`:
+//   · la pantalla de operaciones del entry (PREP), y
+//   · el módulo virtual `virtual:supervisor-daycontrol-demo` de la home "Hoy"
+//     (en prod resuelve al stub `demoLoader.prod.js`, sin fixtures).
+// Un único check para ambas — no se duplica el script.
 export const SUPERVISOR_DAY_CONTROL_BANNED = Object.freeze([
   'BR-DEMO',
   'Ruta Demo Uno',
   'gf.salesops.supervisor.radar/1',
   '10.5001',
   '-35.5001',
+  // Marcadores propios de la home "Hoy" (fixtures rotulados del demoLoader).
+  // El rótulo largo del demoLoader ("Datos de DEMOSTRACIÓN sintéticos (BR-DEMO)…")
+  // NO se añade: ya lo captura el centinela `BR-DEMO`, y duplicarlo haría que un
+  // mismo asset reportara dos fugas por el mismo hallazgo.
+  'Chofer Demo Uno',
+  'Ruta Demo Dos',
+  'Unidad Demo A',
 ])
 
 export function findSupervisorDayControlLeaks(assets) {
