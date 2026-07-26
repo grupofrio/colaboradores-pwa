@@ -170,6 +170,12 @@ se reutilizará un cliente de otra compañía ni se aplicarán los fallbacks
 `day_pos_default_customer_missing`; más de una coincidencia elegible devolverá
 `day_pos_default_customer_ambiguous`.
 
+El dominio diurno exigirá `company_id` compartida o igual a la compañía
+confiable y `x_analytic_un_id` igual a la analítica confiable del empleado. Se
+reutilizará en la búsqueda, en el cliente predeterminado y al validar el
+`partner_id` de `/sale-create`; enviar el ID de un cliente de otra unidad
+analítica no permitirá crear la venta.
+
 Al confirmar, `/pwa-admin/sale-create` guardará el empleado autenticado en
 `x_pwa_employee_id` y en los campos compatibles disponibles. El rol
 `pos_diurno` solo añadirá acceso a creación POS; no añadirá permisos
@@ -297,6 +303,13 @@ los controladores Odoo autenticados en vez de resolver el permiso desde los
 roles cacheados de la sesión. Un valor desconocido nunca se eliminará
 silenciosamente para caer al contrato administrativo: se rechazará antes del
 transporte o en Odoo.
+
+Si una sesión cacheada que solo contiene `pos_diurno` omite la intención, el
+proxy también delegará en Odoo y permitirá que el token vigente seleccione la
+política diurna restringida; nunca usará la ruta local/administrativa como
+respaldo. Esta consulta del rol cacheado solo decide una ruta que falla de forma
+cerrada: la autorización final y cualquier revocación inmediata pertenecen a
+Odoo.
 
 La selección autoritativa de política será:
 

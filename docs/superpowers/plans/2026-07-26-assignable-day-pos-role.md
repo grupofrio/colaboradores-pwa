@@ -38,6 +38,7 @@ belong to different repositories.
 
 - `src/modules/admin/posFlow.js`: `DAY_POS_FLOW`, shared reasons, and strict intent propagation.
 - `src/modules/admin/api.js`: day history/detail/cancel/default-customer wrappers.
+- `src/modules/admin/posProducts.js`: scoped catalog and customer-search path builders.
 - `src/lib/api.js`: proxy allowlist and exact day-customer resolution.
 - `src/modules/admin/ScreenRestrictedPosSales.jsx`: reusable own-today sales presentation.
 - `src/modules/admin/ScreenNightPosSales.jsx`: compatibility wrapper for Héctor.
@@ -272,8 +273,8 @@ Extend the table with explicit HTTP/helper rows for:
 - admin+day+Héctor with `day` → day;
 - admin+day+Héctor with omitted or `night_pos=1` → night;
 - any of those identities with both supplied intents → forbidden;
-- sale-create with omitted, `day`, `night_pos=1`, malformed, and conflicting
-  body values using the same precedence.
+- helper selection for the sale-create inputs omitted, `day`, `night_pos=1`,
+  malformed, and conflicting, without calling the HTTP create endpoint yet.
 
 - [ ] **Step 2: Run the focused policy tests and verify RED**
 
@@ -362,13 +363,23 @@ For `/pos-products`, `/customers`, and `/default-customer`, assert a day token
 derives company, warehouse, and analytic context from the live employee record;
 client-supplied company/warehouse mismatches fail. Characterize that the valid
 catalog returns the scoped stock and current pricelist price, and customer search
-returns only active customers from the trusted company/shared domain.
+returns only active customers whose `company_id` is shared or the trusted company
+**and** whose `x_analytic_un_id` equals the employee's trusted analytic. Add a
+same-company customer from another analytic unit and a customer without an
+analytic; neither may appear.
 
 For the day default customer, create exact case-insensitive, inactive, other-
-company, zero-match, and two-eligible-match fixtures. Assert exactly one active
-eligible `VENTA PUBLICO IGUALA` succeeds; zero returns
+company, other-analytic, no-analytic, zero-match, and two-eligible-match
+fixtures. Assert exactly one active eligible `VENTA PUBLICO IGUALA` succeeds;
+zero returns
 `day_pos_default_customer_missing`, two return
 `day_pos_default_customer_ambiguous`, and no fallback name is selected.
+
+Exercise sale-create with omitted, `day`, `night_pos=1`, malformed, and
+conflicting body values using the same policy precedence. Attempt to submit the
+ID of a same-company customer from another analytic unit and assert the order is
+not created; the employee token, not the payload partner, defines the permitted
+customer analytic scope.
 
 After creating a valid mobile session, revoke `pwa_extra_pos_diurno` and assert
 catalog, customers, default customer, and sale-create all fail immediately even
@@ -401,11 +412,16 @@ detected, and analytic attribution is missing.
 
 - [ ] **Step 3: Implement minimal create authorization and attribution**
 
-Add `pos_diurno`/`pwa_extra_pos_diurno` to the existing create-role sources.
-Run the request through `_select_pos_policy()` using the optional JSON
+Do **not** add `pos_diurno` or `pwa_extra_pos_diurno` to any existing
+administrative create-role allowlist. Run the request through
+`_select_pos_policy()` using the optional JSON
 `pos_scope`, so mixed admin+day roles follow the approved precedence and an
 unknown scope cannot be ignored. Parse supplied/value `night_pos` as well so a
 day/night conflict is rejected instead of discarded.
+Authorize creation from the selected policy: the admin policy continues through
+the unchanged administrative allowlist, while day and night are authorized only
+by the role/identity checks already performed by the selector. A day-only
+employee with omitted intent must therefore select day, never appear admin.
 Make strict scope resolution accept a `require_restricted_analytic` flag and
 return the trusted analytic record. Enable that flag only for the selected day
 policy; preserve the current admin and Hector creation behavior. Write the
@@ -432,10 +448,19 @@ behavior.
 
 - [ ] **Step 4: Route day catalog/customer reads through live Odoo authority**
 
-For `pos_scope=day`, make `/pos-products`, `/customers`, and
-`/default-customer` resolve the employee from `X-GF-Employee-Token`, select the
-day policy, and derive trusted company/warehouse/analytic context. The day
-default-customer search must use `limit=2`, detect ambiguity, and never fall back.
+Make `/pos-products`, `/customers`, and `/default-customer` resolve the employee
+from `X-GF-Employee-Token` and run `_select_pos_policy()` for both explicit
+`pos_scope=day` and omitted scope. A day-only token with omitted scope must
+therefore take the restricted Odoo branch; mixed admin+day with omitted scope
+keeps the admin branch. For selected day policy, derive trusted
+company/warehouse/analytic context.
+
+The day customer domain must require `active=True`, `company_id` in
+`[False, trusted_company.id]`, and
+`x_analytic_un_id=trusted_analytic.id`. Reuse the same domain to validate the
+submitted `partner_id` during sale-create so a payload cannot cross analytic
+units. The default-customer search adds the exact case-insensitive name to this
+domain, uses `limit=2`, detects ambiguity, and never falls back.
 Keep omitted-scope admin behavior unchanged.
 
 Bump `gf_pwa_admin` from `18.0.2.1.8` to `18.0.2.1.9`.
@@ -476,6 +501,11 @@ For `/sale-detail?order_id=...&pos_scope=day`, assert own-today rows return the
 shared cancellation decision and every hidden target returns the same generic
 403 without revealing existence. Revoke the role while keeping the same token
 and assert both history and detail fail immediately.
+
+Before implementation, also add the creation → history → detail round-trip:
+create through `/sale-create`, call day history and detail with the same token,
+and assert the new order appears without backfill with its trusted
+`x_analytic_account_id`.
 
 - [ ] **Step 2: Run the new read tests and verify RED**
 
@@ -532,11 +562,11 @@ range input and derive company/warehouse/analytic from the employee. Admin keeps
 its current date/filter contract. Preserve `night_pos=1` and reject day/night
 conflicts.
 
-- [ ] **Step 5: Add the creation → history → detail integration assertion**
+- [ ] **Step 5: Satisfy the creation → history → detail integration path**
 
-Create through `/sale-create`, then call day history and detail with the same
-token. Assert the new order appears without backfill and its
-`x_analytic_account_id` is the trusted analytic.
+Use the same shared restricted scope and persisted analytic in creation,
+history, and detail; do not add a backfill or a PWA-side filter to make the
+round-trip test pass.
 
 - [ ] **Step 6: Run read tests and Hector/admin regressions**
 
@@ -570,7 +600,7 @@ git commit -m "feat(pos): expose own day sales and tickets"
 - Modify: `gf_pwa_admin/tests/test_pwa_admin_api.py`
 - Modify: `gf_pwa_admin/tests/test_pwa_admin_cancel_concurrency.py`
 
-- [ ] **Step 1: Write failing day cancellation tests**
+- [ ] **Step 1: Write all failing day cancellation and concurrency tests**
 
 For each canonical code, cancel an own-today order below the threshold,
 including exactly `$4,999.99`, and
@@ -592,6 +622,16 @@ After a successful detail decision, revoke `pwa_extra_pos_diurno` without
 renewing the token and assert cancellation is rejected before lock, mutation, or
 chatter.
 
+Before implementing the day branch, generalize the committed-transaction
+fixture and add two simultaneous day cancellations of the same order. Assert
+exactly one success, one safe terminal response, one cancelled order, and one
+canonical audit message; retain the existing Hector race case.
+
+Add a second race: one transaction holds the target row lock while the request
+has already passed pre-authorization; revoke `pwa_extra_pos_diurno` in a
+committed transaction, then release the lock. The waiting request must reload
+the employee role, fail authorization, and leave state/chatter unchanged.
+
 - [ ] **Step 2: Run cancellation tests and verify RED**
 
 ```bash
@@ -601,7 +641,7 @@ chatter.
   --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
   --without-demo=all --http-port=18069 --gevent-port=18072 \
   --test-enable --stop-after-init -u gf_pwa_admin \
-  --test-tags='/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_cancel_accepts_canonical_reasons,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_cancel_rejects_every_scope_and_state_violation,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_cancel_policy_matrix_and_live_revocation' \
+  --test-tags='/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_cancel_accepts_canonical_reasons,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_cancel_rejects_every_scope_and_state_violation,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_cancel_policy_matrix_and_live_revocation,/gf_pwa_admin:TestPWAAdminCancelConcurrency.test_day_pos_cancel_has_one_winner,/gf_pwa_admin:TestPWAAdminCancelConcurrency.test_day_pos_cancel_rechecks_role_after_lock' \
   --log-level=test --logfile=/private/tmp/day-pos-cancel-red.log
 ```
 
@@ -612,19 +652,18 @@ Expected: day requests use or attempt the admin free-text branch.
 Replace the binary `is_night_cancel` decision with a restricted policy value.
 For day and night, require `reason_code`, reject `reason`, use the same immutable
 allowlist, pre-authorize through the restricted domain, lock the authorized row,
-invalidate employee/order scope inputs, rebuild context, re-search, re-run
-`can_cancel`, cancel, verify final state, and post escaped chatter.
+invalidate the order plus the employee's `job_id`, the resolved job's
+`x_job_key`, `pwa_extra_pos_diurno`, company, warehouse, and analytic fields,
+then rerun
+`_select_pos_policy()` with the original unmodified intent. Require the same
+restricted policy, rebuild context, re-search, re-run `can_cancel`, cancel,
+verify final state, and post escaped chatter. A revocation while waiting for the
+row lock must therefore fail before mutation.
 
 Keep the administrative free-text branch byte-for-byte equivalent except for
 the surrounding selector.
 
-- [ ] **Step 4: Add committed-transaction day concurrency coverage**
-
-Generalize the concurrency fixture so two simultaneous day cancellations of the
-same order yield exactly one success, one safe terminal response, one cancelled
-order, and one canonical audit message. Keep the existing Hector race test.
-
-- [ ] **Step 5: Run cancellation and concurrency suites**
+- [ ] **Step 4: Run cancellation and concurrency suites**
 
 Rerun Step 2, then run:
 
@@ -642,7 +681,7 @@ Rerun Step 2, then run:
 Expected: every restricted cancellation test passes, including one-winner
 concurrency; admin and Hector regressions remain green.
 
-- [ ] **Step 6: Commit cancellation**
+- [ ] **Step 5: Commit cancellation**
 
 ```bash
 git add gf_pwa_admin
@@ -654,8 +693,10 @@ git commit -m "feat(pos): cancel own day sales with canonical reasons"
 **Files:**
 - Modify: `src/modules/admin/posFlow.js`
 - Modify: `src/modules/admin/api.js`
+- Modify: `src/modules/admin/posProducts.js`
 - Modify: `src/lib/api.js`
 - Create: `tests/dayPosApi.test.mjs`
+- Modify: `tests/adminApi.test.mjs`
 - Modify: `tests/posAdminAuth.test.mjs`
 - Modify: `tests/posFlow.test.mjs`
 
@@ -681,6 +722,10 @@ Assert `DAY_POS_FLOW` is frozen and contains:
 Assert the reason list is the same immutable four-code catalog used by night.
 Assert printing is provided by the shared `ScreenTicket`/`printTicketViaQz`
 path, not by a second day-printer implementation.
+Assert both mobile and desktop catalog/customer-search helpers accept the flow
+scope and produce the scoped day URLs; omitting it from a day-only cached
+session must still delegate to Odoo's restricted policy rather than use any
+local/direct-model administrative path.
 Assert the public wrappers produce exactly:
 
 ```text
@@ -700,11 +745,18 @@ a fetch-capture test that proves `sale-create` sends `pos_scope` and any supplie
 `night_pos` all the way to the Odoo JSON params; conflicting values must reach
 the backend selector or fail locally, never disappear.
 
+Add proxy authorization-routing cases for a cached day-only session with
+omitted `pos_scope`, the same session after live Odoo revocation, mixed
+admin+day with omitted scope, and admin-only with omitted scope. The day-only
+cases must call Odoo without using the local/direct-model fallback; revocation
+must surface the Odoo 403. Mixed/admin-only cases preserve the existing admin
+contract.
+
 - [ ] **Step 2: Run focused Node tests and verify RED**
 
 ```bash
 cd /Users/sebis/Documents/odoo/gf-pwa-colaboradores/.worktrees/day-pos-role
-node --test tests/dayPosApi.test.mjs tests/posFlow.test.mjs tests/posAdminAuth.test.mjs
+node --test tests/dayPosApi.test.mjs tests/adminApi.test.mjs tests/posFlow.test.mjs tests/posAdminAuth.test.mjs
 ```
 
 Expected: missing `DAY_POS_FLOW`, wrappers, and proxy forwarding.
@@ -745,8 +797,15 @@ When `pos_scope=day`, delegate catalog, customer search, and default customer to
 their dedicated Odoo controllers with the employee token. Do not authorize from
 the cached session role or reproduce the exact/ambiguous search in JavaScript.
 Surface the stable backend codes `day_pos_default_customer_missing` and
-`day_pos_default_customer_ambiguous`. Preserve current local/direct-model admin
-and Hector customer behavior when day scope is absent.
+`day_pos_default_customer_ambiguous`.
+
+When scope is omitted, a cached day-only session must also delegate those
+operations to Odoo and let the live token select the restricted default-day
+policy. The cached role may only choose this fail-closed route; it never grants
+access. Preserve current local/direct-model admin and Hector customer behavior
+only when the server-side session has their existing role and is not day-only.
+For mixed admin+day with omitted scope, preserve the approved admin precedence;
+with explicit `day`, always delegate to Odoo.
 
 - [ ] **Step 6: Run focused tests and verify GREEN**
 
@@ -755,7 +814,7 @@ Expected: new day contracts and all existing proxy/night/admin tests pass.
 - [ ] **Step 7: Commit the PWA flow contract**
 
 ```bash
-git add src/modules/admin/posFlow.js src/modules/admin/api.js src/lib/api.js tests
+git add src/modules/admin/posFlow.js src/modules/admin/api.js src/modules/admin/posProducts.js src/lib/api.js tests
 git commit -m "feat(pos): add strict day POS flow contract"
 ```
 
@@ -857,7 +916,8 @@ the module root.
 
 - [ ] **Step 2: Write failing flow-propagation tests**
 
-Verify mobile and desktop POS call default-customer/create with `day`,
+Verify mobile and desktop POS call catalog, customer search, default-customer,
+and create with `day`,
 `ScreenTicket` requests detail with `flow.posScope`, cancellation carries the
 same scope, and printing still calls `printTicketViaQz` with the shared order.
 Verify admin and night calls remain byte-compatible.
@@ -881,8 +941,9 @@ Lazy-load `ScreenDayPosSales` and mount POS, history, and ticket behind
 
 - [ ] **Step 5: Pass flow scope through both POS layouts and ticket**
 
-Use `{ posScope: flow.posScope }` for the day default customer and detail.
-Include `pos_scope: flow.posScope` in day sale-create payloads. Closed-reason
+Use `{ posScope: flow.posScope }` for day catalog loading, customer search,
+default customer, and detail in both mobile and desktop layouts. Include
+`pos_scope: flow.posScope` in day sale-create payloads. Closed-reason
 cancellation passes the flow scope through `submitPosCancellation`; admin free
 text and night closed reasons remain unchanged. Do not fork ticket printing.
 
