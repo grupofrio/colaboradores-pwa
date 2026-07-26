@@ -166,10 +166,14 @@ test('nav oculta: POS/ticket/cierre de caja en admin; resto de admin visible', (
 
 test('nav oculta: POS nocturno y tickets, sin capturar prefijos similares', () => {
   assert.equal(isNavHiddenForPath('/pos-nocturno'), true)
+  assert.equal(isNavHiddenForPath('/pos-nocturno/ventas'), true)
   assert.equal(isNavHiddenForPath('/pos-nocturno/ticket/9001'), true)
   assert.equal(isNavHiddenForPath('/POS-NOCTURNO'), true)
+  assert.equal(isNavHiddenForPath('/Pos-Nocturno/Ventas'), true)
   assert.equal(isNavHiddenForPath('/Pos-Nocturno/Ticket/9001'), true)
   assert.equal(isNavHiddenForPath('/pos-nocturnos'), false)
+  assert.equal(isNavHiddenForPath('/pos-nocturnos/ventas'), false)
+  assert.equal(isNavHiddenForPath('/pos-nocturno-ventas'), false)
   assert.equal(isNavHiddenForPath('/POS-NOCTURNOS'), false)
 })
 

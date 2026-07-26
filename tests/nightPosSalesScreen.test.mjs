@@ -1,0 +1,312 @@
+import test, { after } from 'node:test'
+import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import React from 'react'
+import TestRenderer, { act } from 'react-test-renderer'
+import { MemoryRouter } from 'react-router-dom'
+import { createServer } from 'vite'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const screenUrl = new URL('../src/modules/admin/ScreenNightPosSales.jsx', import.meta.url)
+const screenPath = fileURLToPath(screenUrl)
+const posSource = readFileSync(new URL('../src/modules/admin/ScreenPOS.jsx', import.meta.url), 'utf8')
+const flowSource = readFileSync(new URL('../src/modules/admin/posFlow.js', import.meta.url), 'utf8')
+
+const SESSION = {
+  employee_id: 730,
+  session_token: 'h.p.s',
+  name: 'Héctor Tapia',
+  warehouse_id: 89,
+  company_id: 34,
+}
+
+let vite
+let runtimePromise
+
+async function loadRuntime() {
+  assert.ok(existsSync(screenPath), 'falta ScreenNightPosSales.jsx')
+  if (!runtimePromise) {
+    runtimePromise = (async () => {
+      vite = await createServer({
+        appType: 'custom',
+        logLevel: 'silent',
+        server: { middlewareMode: true },
+      })
+      const screenModule = await vite.ssrLoadModule('/src/modules/admin/ScreenNightPosSales.jsx')
+      const appModule = await vite.ssrLoadModule('/src/App.jsx')
+      return {
+        Screen: screenModule.default,
+        SessionContext: appModule.SessionContext,
+        formatNightPosSaleTime: screenModule.formatNightPosSaleTime,
+      }
+    })()
+  }
+  return runtimePromise
+}
+
+after(async () => {
+  await vite?.close()
+})
+
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+function renderedText(renderer) {
+  function collect(node) {
+    if (node === null || node === undefined || typeof node === 'boolean') return []
+    if (typeof node === 'string' || typeof node === 'number') return [String(node)]
+    if (Array.isArray(node)) return node.flatMap(collect)
+    return collect(node.children)
+  }
+
+  return collect(renderer.toJSON()).join(' ').replace(/\s+/g, ' ').trim()
+}
+
+async function flush() {
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+async function createScreen({
+  loadSales,
+  navigateOverride = () => {},
+  session = SESSION,
+} = {}) {
+  const { Screen, SessionContext } = await loadRuntime()
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(
+      React.createElement(
+        MemoryRouter,
+        {
+          initialEntries: ['/pos-nocturno/ventas'],
+          future: { v7_startTransition: true, v7_relativeSplatPath: true },
+        },
+        React.createElement(
+          SessionContext.Provider,
+          { value: { session } },
+          React.createElement(Screen, { loadSales, navigateOverride }),
+        ),
+      ),
+    )
+    await flush()
+  })
+  return renderer
+}
+
+test('loads only the current warehouse/company context and renders loading then empty', async () => {
+  const request = deferred()
+  const calls = []
+  const renderer = await createScreen({
+    loadSales: (scope) => {
+      calls.push(scope)
+      return request.promise
+    },
+  })
+
+  assert.deepEqual(calls, [{ warehouseId: 89, companyId: 34 }])
+  assert.deepEqual(Object.keys(calls[0]).sort(), ['companyId', 'warehouseId'])
+  assert.match(renderedText(renderer), /Cargando ventas de hoy/)
+  assert.equal(renderer.root.findAllByType('input').length, 0, 'sin control de fecha')
+
+  await act(async () => {
+    request.resolve({ data: { items: [] } })
+    await flush()
+  })
+
+  assert.match(renderedText(renderer), /No hay ventas registradas hoy/)
+  assert.equal(calls.length, 1, 'no hace polling ni recargas automáticas')
+
+  act(() => renderer.unmount())
+})
+
+test('renders a safe retryable error and fetches again only after Retry', async () => {
+  let attempts = 0
+  const loadSales = async () => {
+    attempts += 1
+    if (attempts === 1) {
+      throw new Error('cancel_block_code=not_owner; detalle interno')
+    }
+    return { data: { items: [] } }
+  }
+  const renderer = await createScreen({ loadSales })
+
+  let text = renderedText(renderer)
+  assert.match(text, /No se pudieron cargar las ventas de hoy/)
+  assert.doesNotMatch(text, /not_owner|detalle interno|cancel_block_code/)
+  assert.equal(attempts, 1)
+  const retry = renderer.root.findAllByType('button').find((button) => (
+    button.children.join('') === 'Reintentar'
+  ))
+  assert.ok(retry, 'error explícito con acción Reintentar')
+
+  await act(async () => {
+    retry.props.onClick()
+    await flush()
+  })
+
+  text = renderedText(renderer)
+  assert.match(text, /No hay ventas registradas hoy/)
+  assert.equal(attempts, 2)
+
+  act(() => renderer.unmount())
+})
+
+test('renders Mexico time, folio, customer, money, and stable state labels', async () => {
+  const renderer = await createScreen({
+    loadSales: async () => ({
+      data: {
+        items: [
+          {
+            order_id: 9001,
+            name: 'S09001',
+            partner_name: 'Cliente Iguala',
+            date_order: '2026-07-25 03:10:00',
+            amount_total: 1234.5,
+            state: 'sale',
+            cancel_block_code: 'not_owner',
+          },
+          { order_id: 9002, name: 'S09002', partner_name: 'Público', state: 'done' },
+          { order_id: 9003, name: 'S09003', partner_name: 'Público', state: 'cancel' },
+          { order_id: 9004, name: 'S09004', partner_name: 'Público', state: 'draft' },
+        ],
+      },
+    }),
+  })
+
+  const text = renderedText(renderer)
+  assert.match(text, /21:10/)
+  assert.match(text, /S09001/)
+  assert.match(text, /Cliente Iguala/)
+  assert.match(text, /\$1,234\.50/)
+  for (const label of ['Activa', 'Cerrada', 'Cancelada', 'Desconocida']) {
+    assert.match(text, new RegExp(label))
+  }
+  assert.doesNotMatch(text, /not_owner|cancel_block_code/)
+
+  act(() => renderer.unmount())
+})
+
+test('sale rows are keyboard-native buttons and only safe ids navigate to night tickets', async () => {
+  const navigations = []
+  const renderer = await createScreen({
+    navigateOverride: (...args) => navigations.push(args),
+    loadSales: async () => ({
+      data: {
+        items: [
+          { order_id: 9001, name: 'S09001', partner_name: 'Cliente Iguala' },
+          { order_id: 'unsafe', name: 'NO-DEBE-MONTAR' },
+        ],
+      },
+    }),
+  })
+
+  const row = renderer.root.findByProps({ 'data-sale-order-id': 9001 })
+  assert.equal(row.type, 'button')
+  assert.equal(row.props.type, 'button')
+  assert.equal(row.props.disabled, false)
+  assert.doesNotMatch(renderedText(renderer), /NO-DEBE-MONTAR/)
+
+  const back = renderer.root.findByProps({ 'aria-label': 'Volver al POS nocturno' })
+  act(() => back.props.onClick())
+  act(() => row.props.onClick())
+  assert.deepEqual(navigations, [
+    ['/pos-nocturno'],
+    ['/pos-nocturno/ticket/9001'],
+  ])
+
+  act(() => renderer.unmount())
+})
+
+test('ignores a stale sales response after the session context changes', async () => {
+  const { Screen, SessionContext } = await loadRuntime()
+  const first = deferred()
+  const second = deferred()
+  const calls = []
+  const loadSales = (scope) => {
+    calls.push(scope)
+    return calls.length === 1 ? first.promise : second.promise
+  }
+  const element = (session) => React.createElement(
+    MemoryRouter,
+    {
+      initialEntries: ['/pos-nocturno/ventas'],
+      future: { v7_startTransition: true, v7_relativeSplatPath: true },
+    },
+    React.createElement(
+      SessionContext.Provider,
+      { value: { session } },
+      React.createElement(Screen, { loadSales, navigateOverride: () => {} }),
+    ),
+  )
+
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(element(SESSION))
+    await flush()
+  })
+  await act(async () => {
+    renderer.update(element({ ...SESSION, company_id: 35 }))
+    await flush()
+  })
+  assert.deepEqual(calls, [
+    { warehouseId: 89, companyId: 34 },
+    { warehouseId: 89, companyId: 35 },
+  ])
+
+  await act(async () => {
+    second.resolve({ data: { items: [{ order_id: 9002, name: 'RESPUESTA NUEVA' }] } })
+    await flush()
+  })
+  assert.match(renderedText(renderer), /RESPUESTA NUEVA/)
+
+  await act(async () => {
+    first.resolve({ data: { items: [{ order_id: 9001, name: 'RESPUESTA VIEJA' }] } })
+    await flush()
+  })
+  assert.match(renderedText(renderer), /RESPUESTA NUEVA/)
+  assert.doesNotMatch(renderedText(renderer), /RESPUESTA VIEJA/)
+
+  act(() => renderer.unmount())
+})
+
+test('formats Odoo server datetimes deterministically in Mexico City time', async () => {
+  const { formatNightPosSaleTime } = await loadRuntime()
+
+  assert.equal(formatNightPosSaleTime('2026-07-25 03:10:00'), '21:10')
+  assert.equal(formatNightPosSaleTime('invalid'), 'Hora no disponible')
+  assert.equal(formatNightPosSaleTime(null), 'Hora no disponible')
+})
+
+test('screen source has no date picker/filter or Hector identity policy', () => {
+  assert.ok(existsSync(screenPath), 'falta ScreenNightPosSales.jsx')
+  const source = readFileSync(screenUrl, 'utf8')
+
+  assert.match(source, /useSession\(\)/)
+  assert.match(source, /softWarehouse\(session\)/)
+  assert.match(source, /loadSales = getNightTodaySales/)
+  assert.match(source, /normalizeNightPosSalesResponse/)
+  assert.match(source, /buildPosTicketPath\(NIGHT_POS_FLOW, sale\.order_id\)/)
+  assert.doesNotMatch(source, /type=["']date["']/)
+  assert.doesNotMatch(source, /\bdate_from\b|\bdate_to\b|\bdate\s*:/)
+  assert.doesNotMatch(source, /canAccessHectorNightPos|hasHectorTapiaIdentity/)
+})
+
+test('mobile and desktop POS expose sales only through flow.salesRoute', () => {
+  const actionMatches = posSource.match(/\{flow\.salesRoute && \(/g) || []
+
+  assert.equal(actionMatches.length, 2, 'una acción en desktop y otra en mobile')
+  assert.ok(posSource.indexOf('flow.salesRoute') < posSource.indexOf('<AdminPosForm flow={flow} />'))
+  assert.match(posSource, /navigate\(flow\.salesRoute\)/)
+  const adminFlow = flowSource.match(/export const ADMIN_POS_FLOW = Object\.freeze\(\{[\s\S]*?\n\}\)/)
+  assert.ok(adminFlow)
+  assert.doesNotMatch(adminFlow[0], /salesRoute/)
+})
