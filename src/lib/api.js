@@ -183,10 +183,44 @@ function isBypass() {
   return getSession()._bypass === true
 }
 
+// Codex §2/§4: expiración IDEMPOTENTE — un solo evento lógico aunque múltiples
+// requests devuelvan UNAUTHORIZED a la vez. Se rearma al establecerse una sesión
+// nueva y válida (login).
+let _sessionExpireFired = false
 function expireSession() {
-  if (!isBypass()) {
-    window.dispatchEvent(new Event('gf:session-expired'))
-  }
+  if (isBypass()) return
+  if (_sessionExpireFired) return
+  _sessionExpireFired = true
+  window.dispatchEvent(new Event('gf:session-expired'))
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('gf:session-changed', () => {
+    const s = getSession()
+    if (s && (s.employee_id || s.odoo_employee_token || s.gf_employee_token)) {
+      _sessionExpireFired = false // nueva sesión válida ⇒ rearmar
+    }
+  })
+}
+
+// Codex §3: detector ESTRICTO de envelope UNAUTHORIZED (HTTP 200 con
+// {status:"error", code:"UNAUTHORIZED"} o su forma anidada {result:{...}}, o el
+// crudo {ok:false, code:"UNAUTHORIZED"}). Basado en CÓDIGO estructurado, nunca en
+// texto de mensaje. NO expira por FORBIDDEN/FEATURE_DISABLED/DATE_NOT_ALLOWED/
+// VALIDATION/CONFLICT/LOCKED.
+function isUnauthorizedEnvelope(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
+  const env = (raw.result && typeof raw.result === 'object' && !Array.isArray(raw.result)) ? raw.result : raw
+  if (!env || typeof env !== 'object') return false
+  if (String(env.code || '').toUpperCase() !== 'UNAUTHORIZED') return false
+  // Requiere forma de error/no-ok estructurada (evita falsos positivos por texto).
+  return env.status === 'error' || env.status === 'busy' || env.ok === false
+}
+
+// Expira sesión (idempotente) si `raw` es un envelope UNAUTHORIZED estructurado, y
+// el endpoint NO es opcional (no romper Metabase/capabilities). Devuelve `raw`.
+function expireSessionIfUnauthorizedEnvelope(raw, path = '') {
+  if (isUnauthorizedEnvelope(raw) && !isOptionalEndpoint(path)) expireSession()
+  return raw
 }
 
 function buildBaseHeaders(path = '') {
@@ -484,9 +518,17 @@ async function odooJson(path, params = {}) {
 
   if (!res.ok) {
     const { message, code } = extractErrorDetails(json, res.status)
+    // Codex §1/§2: 401 (o code UNAUTHORIZED) de endpoint crítico ⇒ expira sesión.
+    if ((res.status === 401 || String(code || '').toUpperCase() === 'UNAUTHORIZED') && !isOptionalEndpoint(path)) {
+      expireSession()
+    }
     throw new ApiError(message, { status: res.status, code })
   }
 
+  // Codex §2: HTTP 200 + envelope {status:"error", code:"UNAUTHORIZED"} ⇒ expira
+  // sesión de forma CENTRAL (idempotente), sin convertirlo a network error ni
+  // reintentar; el envelope normalizado se preserva y se devuelve al caller.
+  expireSessionIfUnauthorizedEnvelope(json, path)
   return json?.result !== undefined ? json.result : json
 }
 
@@ -568,9 +610,14 @@ async function odooHttp(method, path, query = {}, body) {
 
   if (!res.ok) {
     const { message, code } = extractErrorDetails(json, res.status)
+    if ((res.status === 401 || String(code || '').toUpperCase() === 'UNAUTHORIZED') && !isOptionalEndpoint(path)) {
+      expireSession()
+    }
     throw new ApiError(message, { status: res.status, code })
   }
 
+  // §2: envelope UNAUTHORIZED con HTTP 200 (forma odooHttp) ⇒ expira sesión central.
+  expireSessionIfUnauthorizedEnvelope(json, path)
   return json
 }
 
@@ -8933,6 +8980,25 @@ async function directSupervisorVentas(method, path, body) {
       qty: Number(l.qty || 0),
       channel: l.channel || 'van',
     }))
+  }
+
+  if (cleanPath === '/pwa-supv/forecast-get' && method === 'POST') {
+    // Codex §7/§10: DTO GET SEGURO — reemplaza la lectura ORM/sudo del navegador
+    // (/pwa-supv/forecast-lines) para cargar forecast + write_date + líneas
+    // completas en el flujo de edición. Token-only + scope canónico server-side.
+    const forecastId = Number(body?.forecast_id || 0)
+    if (!forecastId) return { ok: false, code: 'VALIDATION_ERROR', message: 'forecast_id requerido' }
+    let raw
+    try {
+      raw = await odooJson('/gf/salesops/supervisor/v2/forecast/get', {
+        meta: supervisorMeta(),
+        data: { forecast_id: forecastId },
+      })
+    } catch (e) {
+      return { ok: false, code: e?.code || 'network', message: e?.message || 'No se pudo cargar el pronóstico.' }
+    }
+    if (raw?.status === 'ok' && raw?.data) return { ok: true, ...raw.data }
+    return { ok: false, code: raw?.code || 'ERROR', message: raw?.user_message || raw?.message || 'No se pudo cargar el pronóstico.' }
   }
 
   if (cleanPath === '/pwa-supv/forecast-update-lines' && method === 'POST') {

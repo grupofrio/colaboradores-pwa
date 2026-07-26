@@ -22,18 +22,21 @@ export function readSessionRaw() {
   }
 }
 
-// Huella de sesión NO sensible (Codex §4/§6): se usa el `odoo_employee_session_id`
-// que el backend (magic-link) ya provee como identificador de sesión — cambia por
-// login y no es el token ni deriva de él (no longitud/sufijo/hash improvisado). Si
-// no existe, cae a otros ids de sesión no sensibles; nunca al token de empleado.
+// Huella de sesión NO sensible (Codex §4/§6): usa el `odoo_employee_session_id`
+// del magic-link (cambia por login, no es el token ni deriva de él). Cadena de
+// fallback: otros ids de sesión → `gf_scope_nonce` (nonce local generado al
+// persistir la sesión, §6). NUNCA cae a longitud/sufijo/hash del token. Si aún así
+// no hay ninguno (sesión legacy), el fallback es un marcador NO VACÍO derivado del
+// empleado (distingue empleados; el nonce separa re-logins de la misma persona).
 // La seguridad NO depende de esta huella: solo separa cachés por sesión.
 function sessionFingerprint(session) {
-  return String(
-    session.odoo_employee_session_id
+  const id = session.odoo_employee_session_id
     || session.gf_employee_session_id
     || session.session_id
-    || '',
-  )
+    || session.gf_scope_nonce
+  if (id) return String(id)
+  const emp = session.employee_id || (session.employee && session.employee.id)
+  return emp ? `emp${emp}` : 'anon'
 }
 
 /**

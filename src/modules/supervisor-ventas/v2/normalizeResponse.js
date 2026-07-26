@@ -11,6 +11,9 @@ export const PHASE = Object.freeze({
   DATE_NOT_ALLOWED: 'date_not_allowed', UNAUTHORIZED: 'unauthorized',
   FEATURE_DISABLED: 'feature_disabled', NOT_FOUND: 'not_found',
   CONFLICT: 'conflict', VALIDATION: 'validation', CAPABILITY_UNAVAILABLE: 'capability_unavailable',
+  // §14: la jornada operativa no se pudo resolver (tz/config) — DISTINTO de
+  // date_not_allowed (fecha equivocada), de empty, de invalid y de network.
+  DATE_CONTEXT_UNAVAILABLE: 'date_context_unavailable',
   NETWORK: 'network', MALFORMED: 'malformed', ERROR: 'error',
 })
 
@@ -18,6 +21,7 @@ export const PHASE = Object.freeze({
 function phaseForCode(code) {
   const c = String(code || '').toUpperCase()
   if (c === 'DATE_NOT_ALLOWED') return PHASE.DATE_NOT_ALLOWED
+  if (c === 'DATE_CONTEXT_UNAVAILABLE') return PHASE.DATE_CONTEXT_UNAVAILABLE
   if (c === 'UNAUTHORIZED' || c === 'FORBIDDEN') return PHASE.UNAUTHORIZED
   if (c === 'FEATURE_DISABLED') return PHASE.FEATURE_DISABLED
   if (c === 'CAPABILITY_UNAVAILABLE' || c === 'NOT_IMPLEMENTED') return PHASE.CAPABILITY_UNAVAILABLE
@@ -30,6 +34,7 @@ function phaseForCode(code) {
 function phaseForError(e) {
   const code = String(e?.code || e?.status || '').toUpperCase()
   const msg = String(e?.message || e || '')
+  if (code === 'DATE_CONTEXT_UNAVAILABLE') return PHASE.DATE_CONTEXT_UNAVAILABLE
   if (code === 'DATE_NOT_ALLOWED' || /DATE_NOT_ALLOWED/i.test(msg)) return PHASE.DATE_NOT_ALLOWED
   if (['401', '403', 'FORBIDDEN', 'UNAUTHORIZED'].includes(code)) return PHASE.UNAUTHORIZED
   if (code === '404' || code === 'NOT_FOUND') return PHASE.NOT_FOUND

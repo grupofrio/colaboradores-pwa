@@ -505,6 +505,22 @@ class ErrorBoundary extends Component {
   }
 }
 
+// Codex §5: firma de IDENTIDAD de sesión (sin credenciales expuestas fuera de la
+// comparación). Dos sesiones son distintas si cambia CUALQUIERA: session_id,
+// token, empleado, sucursal efectiva, warehouse, company o rol. No solo employee_id.
+function sessionIdentitySig(s) {
+  if (!s || typeof s !== 'object') return ''
+  return [
+    s.odoo_employee_session_id || '',
+    s.odoo_employee_token || s.gf_employee_token || '',
+    s.employee_id || '',
+    s.branch_config_id || s.analytic_account_id || '',
+    s.warehouse_id || '',
+    s.company_id || '',
+    s.role || '',
+  ].join('|')
+}
+
 // ─── App principal ────────────────────────────────────────────────────────────
 export default function App() {
   const [session, setSession] = useState(getStoredSession)
@@ -533,20 +549,27 @@ export default function App() {
     return () => window.removeEventListener('gf:session-expired', onSessionExpired)
   }, [])
 
-  // Multi-tab safety: detect when another tab cambia la sesion (logout o
-  // login distinto). Cuando el employee_id en localStorage difiere del que
-  // tenemos en memoria, hard-reload para descartar cualquier estado en RAM
-  // del usuario anterior y arrancar limpio con la nueva sesion.
+  // Multi-tab safety (Codex §5): detecta cuando otra pestaña cambia la sesión.
+  // Compara la IDENTIDAD COMPLETA (no solo employee_id): misma persona + distinta
+  // sucursal/company/token también es drift. Resolución:
+  //   · otra pestaña cerró sesión ⇒ logout local;
+  //   · cambió de USUARIO ⇒ hard reload (descarta estado en RAM de módulos);
+  //   · misma persona, distinta sucursal/token/company/rol ⇒ ADOPTAR la sesión
+  //     nueva en el Context (sessionStore publica snapshot, invalida caches,
+  //     useOperationalDay refetch). Sin hard reload innecesario.
   useEffect(() => {
     function checkSessionDrift() {
       const stored = getStoredSession()
-      const memEmpId = session?.employee_id || null
+      if (sessionIdentitySig(session) === sessionIdentitySig(stored)) return
+      const storedHasSession = !!(stored && (stored.employee_id || stored.odoo_employee_token || stored.gf_employee_token))
+      if (!storedHasSession) { setSession(null); return }
       const storedEmpId = stored?.employee_id || null
-      if (memEmpId !== storedEmpId) {
-        // Drift detectado: hard reload a "/" para que el routing recompute
-        // landing y se descarte la pila de history del usuario anterior.
+      const memEmpId = session?.employee_id || null
+      if (storedEmpId && memEmpId && String(storedEmpId) !== String(memEmpId)) {
         window.location.replace('/')
+        return
       }
+      setSession(normalizeSessionRoleContext(stored))
     }
     function onStorage(e) {
       if (e.key === 'gf_session') checkSessionDrift()
@@ -561,10 +584,20 @@ export default function App() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [session?.employee_id])
+  }, [session])
 
   function login(sessionData) {
     const next = normalizeSessionRoleContext(sessionData)
+    // Codex §6: nonce de scope NO sensible por sesión — separa re-logins de la
+    // misma persona en las claves de caché. Se genera una vez y persiste con la
+    // sesión; estable durante la sesión, nuevo en cada login.
+    if (next && !next.gf_scope_nonce) {
+      try {
+        next.gf_scope_nonce = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `n${Date.now()}${Math.random().toString(36).slice(2, 8)}`
+      } catch { next.gf_scope_nonce = `n${Date.now()}` }
+    }
     const nextEmpId = next?.employee_id || null
     const prevEmpId = session?.employee_id || null
     setSession(next)

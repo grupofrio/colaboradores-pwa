@@ -14,6 +14,8 @@ export const WRITE_PHASE = Object.freeze({
   DATE_NOT_ALLOWED: 'date_not_allowed', FEATURE_DISABLED: 'feature_disabled',
   VALIDATION: 'validation', CONFLICT: 'conflict', LOCKED: 'locked',
   NOT_FOUND: 'not_found', CAPABILITY_UNAVAILABLE: 'capability_unavailable',
+  // §14: jornada operativa no resuelta (add_customer puede devolverlo).
+  DATE_CONTEXT_UNAVAILABLE: 'date_context_unavailable',
   NETWORK: 'network', INVALID: 'invalid',
 })
 
@@ -24,6 +26,7 @@ const RETRYABLE = new Set([WRITE_PHASE.NETWORK, WRITE_PHASE.LOCKED, WRITE_PHASE.
 function phaseForCode(code) {
   switch (String(code || '').toUpperCase()) {
     case 'DATE_NOT_ALLOWED': return WRITE_PHASE.DATE_NOT_ALLOWED
+    case 'DATE_CONTEXT_UNAVAILABLE': return WRITE_PHASE.DATE_CONTEXT_UNAVAILABLE
     case 'UNAUTHORIZED': return WRITE_PHASE.UNAUTHORIZED
     case 'FORBIDDEN': return WRITE_PHASE.FORBIDDEN
     case 'FEATURE_DISABLED': return WRITE_PHASE.FEATURE_DISABLED

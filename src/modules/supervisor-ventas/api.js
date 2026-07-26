@@ -202,9 +202,20 @@ export function deleteForecast(forecastId) {
   return api('POST', '/pwa-supv/forecast-delete', { forecast_id: forecastId })
 }
 
-/** Líneas de un forecast (productos, canal, qty) */
+/** Líneas de un forecast (productos, canal, qty) — LEGACY (ORM). Ya NO se usa en
+ *  el flujo de edición del supervisor (reemplazado por getForecastDto, §10). */
 export function getForecastLines(forecastId) {
   return api('GET', `/pwa-supv/forecast-lines?forecast_id=${forecastId}`)
+}
+
+/**
+ * DTO GET SEGURO del forecast (Codex §7/§10): carga forecast + write_date +
+ * líneas completas + capabilities vía el endpoint token-only con scope canónico.
+ * Devuelve { ok, forecast_id, write_date, operational_date, state, capabilities,
+ * lines[], contract_version } o { ok:false, code, message }.
+ */
+export function getForecastDto(forecastId) {
+  return api('POST', '/pwa-supv/forecast-get', { forecast_id: forecastId })
 }
 
 /**

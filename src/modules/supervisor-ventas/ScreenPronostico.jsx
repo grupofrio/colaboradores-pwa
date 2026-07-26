@@ -9,7 +9,7 @@ import {
   confirmForecast,
   cancelForecast,
   deleteForecast,
-  getForecastLines,
+  getForecastDto,
   updateForecastLines,
   getRouteTemplatesForPlanning,
   ensureDailyRoutePlan,
@@ -347,6 +347,15 @@ export default function ScreenPronostico() {
     return row.name || row.label || row.display_name || fallback || optionId(row)
   }
 
+  // §10: mapea las líneas del DTO GET seguro a la forma que usan la vista y la
+  // edición (id/product_id/product_name/qty/channel).
+  function dtoLinesToView(lines) {
+    return (Array.isArray(lines) ? lines : []).map(l => ({
+      id: l.line_id, product_id: l.product_id, product_name: l.product_name,
+      qty: l.quantity, channel: l.channel || 'van',
+    }))
+  }
+
   async function handleToggleExpand(forecastId) {
     if (expandedForecastId === forecastId) {
       setExpandedForecastId(null)
@@ -356,10 +365,11 @@ export default function ScreenPronostico() {
     if (!forecastLinesCache[forecastId]) {
       setForecastLinesLoading(forecastId)
       try {
-        const fLines = await getForecastLines(forecastId)
-        setForecastLinesCache(prev => ({ ...prev, [forecastId]: fLines }))
+        // §10: DTO GET seguro (token-only + scope), NO lectura ORM/sudo del navegador.
+        const dto = await getForecastDto(forecastId)
+        setForecastLinesCache(prev => ({ ...prev, [forecastId]: dto?.ok ? dtoLinesToView(dto.lines) : [] }))
       } catch (e) {
-        logScreenError('ScreenPronostico', 'getForecastLines', e)
+        logScreenError('ScreenPronostico', 'getForecastDto', e)
         setForecastLinesCache(prev => ({ ...prev, [forecastId]: [] }))
       } finally {
         setForecastLinesLoading(null)
@@ -367,17 +377,27 @@ export default function ScreenPronostico() {
     }
   }
 
-  function handleStartEdit(forecast) {
-    const cached = forecastLinesCache[forecast.id] || []
-    setEditLines(cached.length
-      ? cached.map(l => ({
-          product_id: String(l.product_id),
+  async function handleStartEdit(forecast) {
+    // §7/§10: cargar forecast + write_date + líneas COMPLETAS vía el DTO GET
+    // seguro (no combinación manual ni ORM). El panel de edición se abre solo
+    // tras cargar la versión autoritativa del backend.
+    let dto
+    try { dto = await getForecastDto(forecast.id) } catch (e) { dto = { ok: false, message: e?.message } }
+    if (!dto?.ok) { flashMsg(dto?.message || 'No se pudo cargar el pronóstico.', 5000); return }
+    if (dto.capabilities && dto.capabilities.editable === false) {
+      flashMsg('Este pronóstico no es editable en su estado actual.', 5000); return
+    }
+    const dtoLines = Array.isArray(dto.lines) ? dto.lines : []
+    setEditLines(dtoLines.length
+      ? dtoLines.map(l => ({
+          product_id: String(l.product_id || ''),
           channel: l.channel === 'counter' ? 'Mostrador' : 'Van',
-          qty: String(l.qty),
+          qty: String(l.quantity ?? ''),
         }))
       : [{ product_id: '', channel: 'Van', qty: '' }])
+    setForecastLinesCache(prev => ({ ...prev, [forecast.id]: dtoLinesToView(dtoLines) }))
     setEditingForecastId(forecast.id)
-    setEditingWriteDate(forecast.write_date || null)
+    setEditingWriteDate(dto.write_date || null)
   }
 
   function handleCancelEdit() {
@@ -417,18 +437,24 @@ export default function ScreenPronostico() {
       // éxito. No se limpia el formulario ni se muestra "actualizado" ante fallo.
       if (!result || result.ok !== true) {
         if (result?.phase === 'conflict') {
-          // §10: el forecast cambió ⇒ recargar líneas antes de reintentar (no pisar).
-          const reloaded = await getForecastLines(forecastId).catch(() => null)
-          if (reloaded) setForecastLinesCache(prev => ({ ...prev, [forecastId]: reloaded }))
-          flashMsg('El pronóstico cambió; recargué las líneas. Revisa y vuelve a guardar.', 6000)
+          // Codex §11: el forecast cambió ⇒ recargar vía DTO seguro y ACTUALIZAR
+          // editingWriteDate=B de forma ATÓMICA (el siguiente save envía B, no A);
+          // NO se sobrescribe automáticamente con la versión local (se pide nueva
+          // confirmación al volver a guardar).
+          const dto = await getForecastDto(forecastId).catch(() => null)
+          if (dto?.ok) {
+            setForecastLinesCache(prev => ({ ...prev, [forecastId]: dtoLinesToView(dto.lines) }))
+            setEditingWriteDate(dto.write_date || null)
+          }
+          flashMsg('El pronóstico cambió (otra edición). Recargué la versión nueva; revisa y confirma de nuevo.', 6500)
         } else {
           flashMsg(result?.message || 'No se pudo guardar el pronóstico.', 5000)
         }
         return
       }
-      // Solo con éxito REAL: refrescar caché, cerrar edición y confirmar.
-      const refreshed = await getForecastLines(forecastId)
-      setForecastLinesCache(prev => ({ ...prev, [forecastId]: refreshed }))
+      // Solo con éxito REAL: refrescar caché con el DTO seguro, cerrar y confirmar.
+      const refreshed = await getForecastDto(forecastId).catch(() => null)
+      if (refreshed?.ok) setForecastLinesCache(prev => ({ ...prev, [forecastId]: dtoLinesToView(refreshed.lines) }))
       setEditingForecastId(null)
       setEditingWriteDate(null)
       setEditLines([])

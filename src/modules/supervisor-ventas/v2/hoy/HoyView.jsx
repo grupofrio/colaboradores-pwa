@@ -70,6 +70,11 @@ function SituationGrid({ situation }) {
           m.dataAsOf ? `datos: ${m.dataAsOf}` : null,
           partial && missing.length ? `sin dato de: ${missing.join(', ')}` : null,
         ].filter(Boolean).join(' · ')
+        // §15: la accesibilidad NO depende solo de `title` (hover). El estado
+        // parcial y las etapas faltantes se muestran con TEXTO VISIBLE; la fuente
+        // y data_as_of van en un span visually-hidden (lo lee el lector de
+        // pantalla, no depende de hover ni de teclado sobre el tile).
+        const srOnly = { position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }
         return (
           <div key={it.k} title={detail || undefined} data-partial={partial ? '1' : undefined}
                style={{ textAlign: 'center', padding: '9px 6px', background: C.surfaceSoft, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.md }}>
@@ -82,9 +87,13 @@ function SituationGrid({ situation }) {
                 Info. parcial
               </div>
             )}
+            {partial && missing.length > 0 && (
+              <div style={{ fontSize: 9, color: C.textMuted, marginTop: 1 }}>sin: {missing.join(', ')}</div>
+            )}
             {!m.available && (
               <div style={{ fontSize: 9.5, color: C.textMuted, marginTop: 1 }}>Sin dato</div>
             )}
+            {detail && <span style={srOnly}>{it.k}: {detail}</span>}
           </div>
         )
       })}
