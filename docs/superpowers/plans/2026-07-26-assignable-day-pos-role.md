@@ -56,6 +56,75 @@ belong to different repositories.
 - `tests/dayPosCancellation.test.mjs`: ticket intent and reason payload.
 - Existing POS/night/nav tests: regression coverage.
 
+### Task 0: Prepare and characterize the isolated test runtime
+
+**Files:**
+- None.
+
+- [ ] **Step 1: Start the disposable PostgreSQL cluster**
+
+Check it without changing production state:
+
+```bash
+/Library/PostgreSQL/17/bin/pg_ctl -D /private/tmp/pg-hector-test status
+```
+
+If it is stopped, run:
+
+```bash
+/Library/PostgreSQL/17/bin/pg_ctl \
+  -D /private/tmp/pg-hector-test \
+  -l /private/tmp/pg-day-pos-test.log start
+```
+
+- [ ] **Step 2: Create a feature-only database**
+
+```bash
+/Library/PostgreSQL/17/bin/createdb \
+  -h /private/tmp/pg-hector-socket \
+  -p 55437 \
+  -U sebis \
+  gf_day_pos_test_20260726
+```
+
+Expected: a new disposable database. If it already exists from this plan, reuse
+it; never substitute a production/shared database.
+
+- [ ] **Step 3: Install the unchanged baseline and run representative POS tests**
+
+```bash
+/private/tmp/odoo18-hector-venv/bin/python -B \
+  /private/tmp/odoo18-hector/odoo-bin \
+  -d gf_day_pos_test_20260726 \
+  --db_host=/private/tmp/pg-hector-socket \
+  --db_port=55437 \
+  --db_user=sebis \
+  --data-dir=/private/tmp/odoo18-hector-data \
+  --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
+  --without-demo=all \
+  --http-port=18069 \
+  --gevent-port=18072 \
+  --test-enable \
+  --stop-after-init \
+  -i gf_pwa_admin \
+  --test-tags='/gf_pwa_admin:TestPWAAdminAPI.test_night_cancel_contract_is_exact_immutable_and_safe,/gf_pwa_admin:TestPWAAdminAPI.test_pos_sale_create_access_accepts_each_admin_role_source' \
+  --log-level=test \
+  --logfile=/private/tmp/day-pos-baseline.log
+```
+
+Expected: both representative baseline tests pass before feature code changes.
+
+- [ ] **Step 4: Reconfirm the PWA and pure-role baselines**
+
+```bash
+cd /Users/sebis/Documents/odoo/gf-pwa-colaboradores/.worktrees/day-pos-role
+npm test
+cd /Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend
+python3 os_customer_zones/tests/test_pwa_job_key.py
+```
+
+Expected: 1,761 PWA tests and 13 pure role tests pass.
+
 ### Task 1: Add the canonical assignable Odoo role
 
 **Files:**
@@ -66,7 +135,7 @@ belong to different repositories.
 - Modify: `os_api/tests/test_employee_signin_security.py`
 - Modify: `os_customer_zones/__manifest__.py`
 
-- [ ] **Step 1: Write the failing dependency-free role tests**
+- [ ] **Step 1: Write all failing role and login tests first**
 
 Import `PWA_ADDITIONAL_ROLE_SPECS` and add assertions equivalent to:
 
@@ -90,6 +159,21 @@ def test_pos_diurno_is_not_duplicated_when_primary(self):
     self.assertEqual(resolve_employee_pwa_additional_job_keys(employee), [])
 ```
 
+In `TestEmployeeSignInSecurity`, add one test for a primary
+`hr.job.x_job_key="pos_diurno"` and one for
+`pwa_extra_pos_diurno=True`. Sign in through the existing controller and assert:
+
+```python
+self.assertEqual(primary_result["status"], 200)
+self.assertEqual(primary_result["employee"]["pwa_job_key"], "pos_diurno")
+self.assertEqual(primary_result["employee"]["role"], "pos_diurno")
+self.assertEqual(primary_result["employee"]["additional_job_keys"], [])
+
+self.assertEqual(additional_result["status"], 200)
+self.assertIn("pos_diurno", additional_result["employee"]["additional_job_keys"])
+self.assertIn("pos_diurno", additional_result["employee"]["additional_roles"])
+```
+
 - [ ] **Step 2: Run the pure tests and verify RED**
 
 Run:
@@ -100,6 +184,21 @@ python3 os_customer_zones/tests/test_pwa_job_key.py
 ```
 
 Expected: FAIL because `pwa_extra_pos_diurno` is not in the canonical specs.
+
+Run the exact Odoo RED test as well:
+
+```bash
+/private/tmp/odoo18-hector-venv/bin/python -B /private/tmp/odoo18-hector/odoo-bin \
+  -d gf_day_pos_test_20260726 --db_host=/private/tmp/pg-hector-socket --db_port=55437 --db_user=sebis \
+  --data-dir=/private/tmp/odoo18-hector-data \
+  --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
+  --without-demo=all --http-port=18069 --gevent-port=18072 \
+  --test-enable --stop-after-init -u os_customer_zones,os_api \
+  --test-tags='/os_api:TestEmployeeSignInSecurity.test_employee_sign_in_publishes_primary_pos_diurno_role,/os_api:TestEmployeeSignInSecurity.test_employee_sign_in_publishes_additional_pos_diurno_role' \
+  --log-level=test --logfile=/private/tmp/day-pos-role-red.log
+```
+
+Expected: FAIL because the new field/role does not exist.
 
 - [ ] **Step 3: Implement the role catalog, field, and view**
 
@@ -121,26 +220,13 @@ pwa_extra_pos_diurno = fields.Boolean(string="POS diurno", default=False)
 
 Bump `os_customer_zones` from `18.0.2.2.2` to `18.0.2.2.3`.
 
-- [ ] **Step 4: Prove the login payload publishes the generic role**
+- [ ] **Step 4: Run both role test layers and verify GREEN**
 
-Add an Odoo test that creates an employee with
-`pwa_extra_pos_diurno=True`, signs in through the existing controller, and
-asserts:
+Run `python3 os_customer_zones/tests/test_pwa_job_key.py`, then rerun the exact
+Odoo command from Step 2. Expected: pure tests and both login methods pass. Do
+not add name matching or special Ruth data.
 
-```python
-self.assertEqual(result["status"], 200)
-self.assertIn("pos_diurno", result["employee"]["additional_job_keys"])
-self.assertIn("pos_diurno", result["employee"]["additional_roles"])
-```
-
-Do not add name matching or special Ruth data.
-
-- [ ] **Step 5: Run the role tests and verify GREEN**
-
-Run the pure test again; expect all tests to pass. Run the Odoo sign-in class in
-the disposable database during Task 9.
-
-- [ ] **Step 6: Commit the Odoo role change**
+- [ ] **Step 5: Commit the Odoo role change**
 
 ```bash
 git add os_customer_zones os_api/tests/test_employee_signin_security.py
@@ -177,9 +263,32 @@ Also assert that unknown/non-scalar `pos_scope`, `night_pos != "1"`, and
 `pos_scope` combined with any supplied `night_pos` raise `AccessError`. Payload
 employee IDs or names must not affect the result.
 
+Extend the table with explicit HTTP/helper rows for:
+
+- Héctor with `night_pos=1` → night;
+- day-only, admin-only, and unrelated users with `night_pos=1` → forbidden;
+- admin+Héctor with omitted or `night_pos=1` → night;
+- admin+Héctor with `day` but no day role → forbidden;
+- admin+day+Héctor with `day` → day;
+- admin+day+Héctor with omitted or `night_pos=1` → night;
+- any of those identities with both supplied intents → forbidden;
+- sale-create with omitted, `day`, `night_pos=1`, malformed, and conflicting
+  body values using the same precedence.
+
 - [ ] **Step 2: Run the focused policy tests and verify RED**
 
-Run the new methods with Odoo `--test-tags`; expect missing helper/role failures.
+```bash
+/private/tmp/odoo18-hector-venv/bin/python -B /private/tmp/odoo18-hector/odoo-bin \
+  -d gf_day_pos_test_20260726 --db_host=/private/tmp/pg-hector-socket --db_port=55437 --db_user=sebis \
+  --data-dir=/private/tmp/odoo18-hector-data \
+  --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
+  --without-demo=all --http-port=18069 --gevent-port=18072 \
+  --test-enable --stop-after-init -u gf_pwa_admin \
+  --test-tags='/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_policy_selector_matrix' \
+  --log-level=test --logfile=/private/tmp/day-pos-policy-red.log
+```
+
+Expected: FAIL with the missing selector/role behavior.
 
 - [ ] **Step 3: Implement small, testable policy helpers**
 
@@ -212,8 +321,20 @@ Keep `_has_hector_tapia_identity()` intact for backward compatibility.
 
 - [ ] **Step 4: Run the focused policy tests and verify GREEN**
 
-Expected: every matrix row passes and existing Hector/admin helper tests remain
-green.
+Rerun the exact command from Step 2, then run:
+
+```bash
+/private/tmp/odoo18-hector-venv/bin/python -B /private/tmp/odoo18-hector/odoo-bin \
+  -d gf_day_pos_test_20260726 --db_host=/private/tmp/pg-hector-socket --db_port=55437 --db_user=sebis \
+  --data-dir=/private/tmp/odoo18-hector-data \
+  --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
+  --without-demo=all --http-port=18069 --gevent-port=18072 \
+  --test-enable --stop-after-init -u gf_pwa_admin \
+  --test-tags='/gf_pwa_admin:TestPWAAdminAPI.test_night_today_sales_uses_authoritative_identity_and_strict_flag,/gf_pwa_admin:TestPWAAdminAPI.test_pos_sale_create_access_accepts_each_admin_role_source' \
+  --log-level=test --logfile=/private/tmp/day-pos-policy-regression.log
+```
+
+Expected: every matrix row and the Hector/admin characterization tests pass.
 
 - [ ] **Step 5: Commit the backend policy selector**
 
@@ -222,14 +343,14 @@ git add gf_pwa_admin/controllers/pwa_admin_api.py gf_pwa_admin/tests/test_pwa_ad
 git commit -m "feat(pos): select restricted day POS policy"
 ```
 
-### Task 3: Authorize day sale creation and persist trusted analytic scope
+### Task 3: Authorize day POS operations and persist trusted analytic scope
 
 **Files:**
 - Modify: `gf_pwa_admin/controllers/pwa_admin_api.py`
 - Modify: `gf_pwa_admin/tests/test_pwa_admin_api.py`
 - Modify: `gf_pwa_admin/__manifest__.py`
 
-- [ ] **Step 1: Write failing sale-create tests**
+- [ ] **Step 1: Write failing operational-read and sale-create tests**
 
 Cover primary `x_job_key=pos_diurno`, additional
 `pwa_extra_pos_diurno=True`, a same-name employee without the role, a role
@@ -237,7 +358,23 @@ revoked after token creation, payload identity spoofing, cross-company,
 cross-warehouse, and missing/mismatched analytic scope. Include admin+day with
 `pos_scope=day` (restricted) and with omitted scope (existing admin behavior).
 
-For a valid request, assert:
+For `/pos-products`, `/customers`, and `/default-customer`, assert a day token
+derives company, warehouse, and analytic context from the live employee record;
+client-supplied company/warehouse mismatches fail. Characterize that the valid
+catalog returns the scoped stock and current pricelist price, and customer search
+returns only active customers from the trusted company/shared domain.
+
+For the day default customer, create exact case-insensitive, inactive, other-
+company, zero-match, and two-eligible-match fixtures. Assert exactly one active
+eligible `VENTA PUBLICO IGUALA` succeeds; zero returns
+`day_pos_default_customer_missing`, two return
+`day_pos_default_customer_ambiguous`, and no fallback name is selected.
+
+After creating a valid mobile session, revoke `pwa_extra_pos_diurno` and assert
+catalog, customers, default customer, and sale-create all fail immediately even
+though the client token/session is unchanged.
+
+For a valid sale-create request, assert:
 
 ```python
 self.assertEqual(order.x_pwa_employee_id, day_employee)
@@ -246,48 +383,75 @@ self.assertEqual(order.warehouse_id, day_warehouse)
 self.assertEqual(order.x_analytic_account_id, day_employee.x_analytic_account_id)
 ```
 
-- [ ] **Step 2: Run the sale-create tests and verify RED**
+- [ ] **Step 2: Run the operational endpoint tests and verify RED**
 
-Expected: access denied for `pos_diurno`, then analytic attribution missing once
-access is enabled.
+```bash
+/private/tmp/odoo18-hector-venv/bin/python -B /private/tmp/odoo18-hector/odoo-bin \
+  -d gf_day_pos_test_20260726 --db_host=/private/tmp/pg-hector-socket --db_port=55437 --db_user=sebis \
+  --data-dir=/private/tmp/odoo18-hector-data \
+  --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
+  --without-demo=all --http-port=18069 --gevent-port=18072 \
+  --test-enable --stop-after-init -u gf_pwa_admin \
+  --test-tags='/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_catalog_customers_and_default_customer_are_live_scoped,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_create_persists_trusted_identity_and_analytic,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_operational_endpoints_revoke_immediately' \
+  --log-level=test --logfile=/private/tmp/day-pos-operations-red.log
+```
+
+Expected: day intent is not authorized, default-customer ambiguity is not
+detected, and analytic attribution is missing.
 
 - [ ] **Step 3: Implement minimal create authorization and attribution**
 
 Add `pos_diurno`/`pwa_extra_pos_diurno` to the existing create-role sources.
 Run the request through `_select_pos_policy()` using the optional JSON
 `pos_scope`, so mixed admin+day roles follow the approved precedence and an
-unknown scope cannot be ignored.
+unknown scope cannot be ignored. Parse supplied/value `night_pos` as well so a
+day/night conflict is rejected instead of discarded.
 Make strict scope resolution accept a `require_restricted_analytic` flag and
-return the trusted analytic record. Enable that flag for day/Hector restricted
-employees, but preserve the current admin scope behavior. Write the analytic
-only when one was resolved and the sale field exists:
+return the trusted analytic record. Enable that flag only for the selected day
+policy; preserve the current admin and Hector creation behavior. Write the
+analytic only for the day policy:
 
 ```python
 trusted_analytic = self._require_pos_sale_create_scope(
     employee,
     company,
     warehouse,
-    require_restricted_analytic=is_restricted_pos_employee,
+    require_restricted_analytic=(selected_policy == _POS_POLICY_DAY),
 )
-if trusted_analytic and "x_analytic_account_id" in sale_fields:
+if selected_policy == _POS_POLICY_DAY and "x_analytic_account_id" not in sale_fields:
+    raise AccessError("No se pudo establecer el alcance analítico del POS diurno.")
+if selected_policy == _POS_POLICY_DAY:
     order_vals["x_analytic_account_id"] = trusted_analytic.id
 ```
 
-Fail closed if the day employee, warehouse, and stock-location analytic are not
-all present and identical. Preserve the current admin and Hector behavior.
+Require the strict analytic only for `_POS_POLICY_DAY`; fail closed if the day
+employee, warehouse, and stock-location analytic are not all present and
+identical. Add characterization tests before this change proving that night
+creation stays byte-compatible, then preserve the current admin and Hector
+behavior.
+
+- [ ] **Step 4: Route day catalog/customer reads through live Odoo authority**
+
+For `pos_scope=day`, make `/pos-products`, `/customers`, and
+`/default-customer` resolve the employee from `X-GF-Employee-Token`, select the
+day policy, and derive trusted company/warehouse/analytic context. The day
+default-customer search must use `limit=2`, detect ambiguity, and never fall back.
+Keep omitted-scope admin behavior unchanged.
 
 Bump `gf_pwa_admin` from `18.0.2.1.8` to `18.0.2.1.9`.
 
-- [ ] **Step 4: Run sale-create tests and verify GREEN**
+- [ ] **Step 5: Run operational endpoint tests and verify GREEN**
 
-Expected: both role sources create attributed orders; spoofing and scope
-mismatches fail.
+Rerun the exact command from Step 2. Expected: both role sources load scoped
+catalog/prices/customers and create attributed orders; ambiguity, revocation,
+spoofing, and scope mismatches fail. Also rerun the existing Hector/admin create
+tests named in Task 2 Step 4 to prove no analytic-policy regression.
 
-- [ ] **Step 5: Commit sale creation**
+- [ ] **Step 6: Commit operational POS authorization**
 
 ```bash
 git add gf_pwa_admin
-git commit -m "feat(pos): create day sales in trusted employee scope"
+git commit -m "feat(pos): authorize day POS in trusted employee scope"
 ```
 
 ### Task 4: Generalize own-today history and ticket detail
@@ -298,8 +462,9 @@ git commit -m "feat(pos): create day sales in trusted employee scope"
 
 - [ ] **Step 1: Write failing history and detail tests**
 
-Create two day employees in the same branch plus orders for today, yesterday,
-the next Mexico day boundary, other employee, other company, other warehouse,
+Create two day employees in the same branch plus orders for the exact first
+instant of today in Mexico, yesterday, the exact first instant of the next
+Mexico day, other employee, other company, other warehouse,
 other analytic, KoldHome, website, `sale`, `done`, and `cancel`.
 
 Assert `/today-sales?pos_scope=day` returns only the authenticated employee's
@@ -309,9 +474,21 @@ a day-only role stays restricted and revoked role fails immediately.
 
 For `/sale-detail?order_id=...&pos_scope=day`, assert own-today rows return the
 shared cancellation decision and every hidden target returns the same generic
-403 without revealing existence.
+403 without revealing existence. Revoke the role while keeping the same token
+and assert both history and detail fail immediately.
 
 - [ ] **Step 2: Run the new read tests and verify RED**
+
+```bash
+/private/tmp/odoo18-hector-venv/bin/python -B /private/tmp/odoo18-hector/odoo-bin \
+  -d gf_day_pos_test_20260726 --db_host=/private/tmp/pg-hector-socket --db_port=55437 --db_user=sebis \
+  --data-dir=/private/tmp/odoo18-hector-data \
+  --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
+  --without-demo=all --http-port=18069 --gevent-port=18072 \
+  --test-enable --stop-after-init -u gf_pwa_admin \
+  --test-tags='/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_today_sales_forces_owner_and_mexico_day,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_detail_is_owner_today_only_and_revokes_live,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_create_history_detail_round_trip' \
+  --log-level=test --logfile=/private/tmp/day-pos-reads-red.log
+```
 
 Expected: day employees currently enter the admin branch or receive admin-shaped
 detail.
@@ -363,6 +540,20 @@ token. Assert the new order appears without backfill and its
 
 - [ ] **Step 6: Run read tests and Hector/admin regressions**
 
+Rerun the exact command from Step 2, then run the existing Hector history/detail
+methods with:
+
+```bash
+/private/tmp/odoo18-hector-venv/bin/python -B /private/tmp/odoo18-hector/odoo-bin \
+  -d gf_day_pos_test_20260726 --db_host=/private/tmp/pg-hector-socket --db_port=55437 --db_user=sebis \
+  --data-dir=/private/tmp/odoo18-hector-data \
+  --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
+  --without-demo=all --http-port=18069 --gevent-port=18072 \
+  --test-enable --stop-after-init -u gf_pwa_admin \
+  --test-tags='/gf_pwa_admin:TestPWAAdminAPI.test_night_today_sales_is_today_only_exact_owner_and_includes_all_terminal_states,/gf_pwa_admin:TestPWAAdminAPI.test_night_sale_detail_allows_own_today_states_with_cancel_decision' \
+  --log-level=test --logfile=/private/tmp/day-pos-reads-regression.log
+```
+
 Expected: all day, night, and admin history/detail tests pass.
 
 - [ ] **Step 7: Commit scoped reads**
@@ -381,7 +572,8 @@ git commit -m "feat(pos): expose own day sales and tickets"
 
 - [ ] **Step 1: Write failing day cancellation tests**
 
-For each canonical code, cancel an own-today order below the threshold and
+For each canonical code, cancel an own-today order below the threshold,
+including exactly `$4,999.99`, and
 assert the canonical Spanish label and authenticated employee are posted. Reject
 free text, invalid/accessor-like values, other employee, legacy unattributed,
 yesterday, future boundary, other scope, `draft`, `done`, already cancelled,
@@ -396,7 +588,22 @@ Add policy-matrix requests:
 - day plus nocturnal intent conflict;
 - payload `employee_id`/name spoofing without a valid mobile token.
 
+After a successful detail decision, revoke `pwa_extra_pos_diurno` without
+renewing the token and assert cancellation is rejected before lock, mutation, or
+chatter.
+
 - [ ] **Step 2: Run cancellation tests and verify RED**
+
+```bash
+/private/tmp/odoo18-hector-venv/bin/python -B /private/tmp/odoo18-hector/odoo-bin \
+  -d gf_day_pos_test_20260726 --db_host=/private/tmp/pg-hector-socket --db_port=55437 --db_user=sebis \
+  --data-dir=/private/tmp/odoo18-hector-data \
+  --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
+  --without-demo=all --http-port=18069 --gevent-port=18072 \
+  --test-enable --stop-after-init -u gf_pwa_admin \
+  --test-tags='/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_cancel_accepts_canonical_reasons,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_cancel_rejects_every_scope_and_state_violation,/gf_pwa_admin:TestPWAAdminAPI.test_day_pos_sale_cancel_policy_matrix_and_live_revocation' \
+  --log-level=test --logfile=/private/tmp/day-pos-cancel-red.log
+```
 
 Expected: day requests use or attempt the admin free-text branch.
 
@@ -418,6 +625,19 @@ same order yield exactly one success, one safe terminal response, one cancelled
 order, and one canonical audit message. Keep the existing Hector race test.
 
 - [ ] **Step 5: Run cancellation and concurrency suites**
+
+Rerun Step 2, then run:
+
+```bash
+/private/tmp/odoo18-hector-venv/bin/python -B /private/tmp/odoo18-hector/odoo-bin \
+  -d gf_day_pos_test_20260726 --db_host=/private/tmp/pg-hector-socket --db_port=55437 --db_user=sebis \
+  --data-dir=/private/tmp/odoo18-hector-data \
+  --addons-path=/private/tmp/odoo18-hector/addons,/private/tmp/odoo18-hector-stubs,/Users/sebis/Documents/odoo/GrupoFrio/.worktrees/day-pos-role-backend \
+  --without-demo=all --http-port=18069 --gevent-port=18072 \
+  --test-enable --stop-after-init -u gf_pwa_admin \
+  --test-tags='/gf_pwa_admin:TestPWAAdminCancelConcurrency,/gf_pwa_admin:TestPWAAdminAPI.test_night_sale_cancel_accepts_each_exact_reason_code_and_posts_canonical_label,/gf_pwa_admin:TestPWAAdminAPI.test_sale_cancel_admin_token_keeps_free_text_response_chatter_and_manager_policy' \
+  --log-level=test --logfile=/private/tmp/day-pos-cancel-green.log
+```
 
 Expected: every restricted cancellation test passes, including one-winner
 concurrency; admin and Hector regressions remain green.
@@ -452,24 +672,33 @@ Assert `DAY_POS_FLOW` is frozen and contains:
   title: 'POS día',
   standalone: true,
   posScope: 'day',
+  defaultCustomerName: 'VENTA PUBLICO IGUALA',
   allowSaleCancellation: true,
   cancellationMode: 'closed-reasons',
 }
 ```
 
 Assert the reason list is the same immutable four-code catalog used by night.
+Assert printing is provided by the shared `ScreenTicket`/`printTicketViaQz`
+path, not by a second day-printer implementation.
 Assert the public wrappers produce exactly:
 
 ```text
+/pwa-admin/pos-products?...&pos_scope=day
+/pwa-admin/customers?...&pos_scope=day
 /pwa-admin/today-sales?pos_scope=day
 /pwa-admin/sale-detail?order_id=9001&pos_scope=day
+POST /pwa-admin/sale-create {...sale, pos_scope: day}
 POST /pwa-admin/sale-cancel {order_id: 9001, reason_code: duplicate, pos_scope: day}
 /pwa-admin/default-customer?company_id=34&pos_scope=day
 ```
 
 Unknown, whitespace, inherited, accessor-backed, array, or object scopes must
 throw before transport. Direct proxy calls with supplied malformed/conflicting
-intent must be forwarded for backend rejection, never silently downgraded.
+intent must be forwarded for backend rejection, never silently downgraded. Add
+a fetch-capture test that proves `sale-create` sends `pos_scope` and any supplied
+`night_pos` all the way to the Odoo JSON params; conflicting values must reach
+the backend selector or fail locally, never disappear.
 
 - [ ] **Step 2: Run focused Node tests and verify RED**
 
@@ -497,29 +726,27 @@ export function normalizePosScope(value) {
 Add `getDayTodaySales()`, make `getSaleOrder(orderId, { posScope } = {})`,
 `getDefaultCustomer(companyId, { posScope } = {})`, and closed cancellation
 options carry the validated scope. `submitPosCancellation()` must pass
-`flow.posScope` to the cancel function.
+`flow.posScope` to the cancel function. Extend catalog and customer-search path
+builders with the same optional scope. `createSaleOrder()` must validate an own
+`pos_scope`/`night_pos` property without reading accessors, then preserve the
+allowlisted scalar values in the body.
 
 - [ ] **Step 4: Forward the allowlisted intent through `src/lib/api.js`**
 
-For today-sales and detail, preserve `pos_scope` in the Odoo HTTP query. For
-cancel, preserve it in JSON params. Do not let the existing `night_pos` branch
-drop a simultaneous `pos_scope`; both must reach Odoo or be rejected locally as
-a conflict.
+For day catalog, customer search, default customer, today-sales, and detail,
+preserve `pos_scope` in the dedicated Odoo HTTP query. For sale-create and
+cancel, preserve it in JSON params. Do not let an existing `night_pos` branch or
+body field drop a simultaneous `pos_scope`; both must reach Odoo or be rejected
+locally as a conflict.
 
 - [ ] **Step 5: Implement exact day default-customer resolution**
 
-When `pos_scope=day` and the effective session role contains `pos_diurno`:
-
-1. search active customers in the existing company/analytic base domains;
-2. match `VENTA PUBLICO IGUALA` with `=ilike`;
-3. collect unique rows with a limit that can detect at least two matches;
-4. return exactly one;
-5. throw `day_pos_default_customer_missing` for zero and
-   `day_pos_default_customer_ambiguous` for more than one;
-6. never use the admin `PUBLICO/PUBLIC/MOSTRADOR` fallbacks.
-
-Reject day intent when the session lacks the role. Preserve current admin and
-Hector customer behavior.
+When `pos_scope=day`, delegate catalog, customer search, and default customer to
+their dedicated Odoo controllers with the employee token. Do not authorize from
+the cached session role or reproduce the exact/ambiguous search in JavaScript.
+Surface the stable backend codes `day_pos_default_customer_missing` and
+`day_pos_default_customer_ambiguous`. Preserve current local/direct-model admin
+and Hector customer behavior when day scope is absent.
 
 - [ ] **Step 6: Run focused tests and verify GREEN**
 
@@ -635,6 +862,10 @@ Verify mobile and desktop POS call default-customer/create with `day`,
 same scope, and printing still calls `printTicketViaQz` with the shared order.
 Verify admin and night calls remain byte-compatible.
 
+Simulate a cached PWA session that still contains `pos_diurno` while each
+protected backend call returns 403. Assert POS, history, and ticket show a safe
+access/configuration error and never retry as admin or strip the scope.
+
 - [ ] **Step 3: Run focused UI tests and verify RED**
 
 ```bash
@@ -693,8 +924,8 @@ errors, production build succeeds, and no whitespace errors exist.
   -l /private/tmp/pg-day-pos-test.log start
 ```
 
-Use socket `/private/tmp/pg-hector-socket`, port `55437`, user `sebis`, and a
-dedicated database `gf_day_pos_test`. Never run these tests against production
+Use socket `/private/tmp/pg-hector-socket`, port `55437`, user `sebis`, and the
+dedicated database `gf_day_pos_test_20260726`. Never run these tests against production
 or a shared database.
 
 - [ ] **Step 3: Run the focused Odoo role and POS suites**
@@ -711,7 +942,7 @@ Then install/update the disposable database and run:
 ```bash
 /private/tmp/odoo18-hector-venv/bin/python -B \
   /private/tmp/odoo18-hector/odoo-bin \
-  -d gf_day_pos_test \
+  -d gf_day_pos_test_20260726 \
   --db_host=/private/tmp/pg-hector-socket \
   --db_port=55437 \
   --db_user=sebis \
@@ -722,7 +953,7 @@ Then install/update the disposable database and run:
   --gevent-port=18072 \
   --test-enable \
   --stop-after-init \
-  -i gf_pwa_admin \
+  -u os_customer_zones,os_api,gf_pwa_admin \
   --test-tags='/os_api:TestEmployeeSignInSecurity,/gf_pwa_admin:TestPWAAdminAPI' \
   --log-level=test \
   --logfile=/private/tmp/day-pos-focused.log
@@ -737,7 +968,7 @@ methods and do not widen permissions to make unrelated tests green.
 ```bash
 /private/tmp/odoo18-hector-venv/bin/python -B \
   /private/tmp/odoo18-hector/odoo-bin \
-  -d gf_day_pos_test \
+  -d gf_day_pos_test_20260726 \
   --db_host=/private/tmp/pg-hector-socket \
   --db_port=55437 \
   --db_user=sebis \

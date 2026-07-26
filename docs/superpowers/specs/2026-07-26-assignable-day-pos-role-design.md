@@ -281,6 +281,9 @@ flujo propio del día.
 
 La intención canónica será `pos_scope=day`:
 
+- `/pwa-admin/pos-products` la recibirá como query string;
+- `/pwa-admin/customers` la recibirá como query string;
+- `/pwa-admin/default-customer` la recibirá como query string;
 - `/pwa-admin/today-sales` la recibirá como query string;
 - `/pwa-admin/sale-detail` la recibirá como query string junto a `order_id`;
 - `/pwa-admin/sale-create` la recibirá en el cuerpo JSON junto a la venta;
@@ -289,8 +292,11 @@ La intención canónica será `pos_scope=day`:
 
 `DAY_POS_FLOW` declarará `posScope: 'day'`. Los wrappers PWA aceptarán el flujo
 o el alcance explícito y el proxy enviará únicamente el valor allowlisted
-`day`. Un valor desconocido nunca se eliminará silenciosamente para caer al
-contrato administrativo: se rechazará antes del transporte o en Odoo.
+`day`. Para catálogo, clientes y cliente predeterminado, el proxy delegará en
+los controladores Odoo autenticados en vez de resolver el permiso desde los
+roles cacheados de la sesión. Un valor desconocido nunca se eliminará
+silenciosamente para caer al contrato administrativo: se rechazará antes del
+transporte o en Odoo.
 
 La selección autoritativa de política será:
 
