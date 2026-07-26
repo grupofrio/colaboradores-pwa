@@ -84,7 +84,11 @@ test('desktop POS uses configurable flow and requires a customer before payment'
 test('ticket and shell respect the active flow standalone configuration', () => {
   assert.match(ticket, /flow = ADMIN_POS_FLOW/)
   assert.match(ticket, /navigate\(flow\.posRoute\)/)
-  assert.match(ticket, /flow\.allowSaleCancellation === true/)
+  assert.match(ticket, /canCancelPosOrder\(flow, order, BACKEND_CAPS\.saleCancel\)/)
+  assert.match(ticket, /submitPosCancellation\(\{[\s\S]{0,300}flow,[\s\S]{0,300}orderId,[\s\S]{0,300}reasonCode: cancelReasonCode,[\s\S]{0,300}reason: cancelReason,[\s\S]{0,300}cancelFn: cancelSaleOrder/)
+  assert.doesNotMatch(ticket, /saleCreateManagerThreshold|amount_total\s*[<>]=?|5000/)
+  const doCancel = sliceFunction(ticket, 'async function doCancel()', '\n\n  function resetCancelReasons')
+  assert.doesNotMatch(doCancel, /flow\.allowSaleCancellation|BACKEND_CAPS|canCancel\b/)
   assert.match(shell, /hideNavigation = false/)
   assert.match(shell, /!hideNavigation &&/)
 })

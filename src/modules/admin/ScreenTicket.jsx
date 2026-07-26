@@ -1,13 +1,40 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
 import { computePosSummary } from './posPricing'
+import { getPosCancelBlockMessage, getPosSaleStateLabel } from './nightPosSales'
 import { resolveTicketCustomerName } from './ticketCustomer'
 import { printTicketViaQz } from './ticketPrinter'
-import { ADMIN_POS_FLOW } from './posFlow'
+import {
+  ADMIN_POS_FLOW,
+  canCancelPosOrder,
+  submitPosCancellation,
+} from './posFlow'
+
+function getResolvedCancellationFailureCode(response) {
+  let current = response
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) return null
+    const status = typeof current.status === 'string' ? current.status.toLowerCase() : ''
+    const failed = current.ok === false
+      || current.success === false
+      || status === 'error'
+      || Boolean(current.error)
+    if (failed) {
+      if (typeof current.code === 'string') return current.code
+      if (typeof current.cancel_block_code === 'string') return current.cancel_block_code
+      if (current.error && typeof current.error === 'object' && !Array.isArray(current.error)) {
+        return typeof current.error.code === 'string' ? current.error.code : ''
+      }
+      return ''
+    }
+    current = current.data
+  }
+  return null
+}
 
 export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   const { session } = useSession()
@@ -22,10 +49,12 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
 
   // Sale cancel flow (Sprint 4)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [cancelReasonCode, setCancelReasonCode] = useState('')
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState('')
   const [cancelResult, setCancelResult] = useState(null)
+  const cancelRequestRef = useRef(false)
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -49,32 +78,61 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   }
 
   async function doCancel() {
-    if (flow.allowSaleCancellation !== true) return
-    if (!orderId) return
-    if (!cancelReason.trim()) { setCancelError('Explica brevemente el motivo'); return }
+    if (cancelRequestRef.current) return
+    cancelRequestRef.current = true
     setCancelling(true)
     setCancelError('')
     try {
-      const res = await cancelSaleOrder(orderId, cancelReason.trim())
-      const data = res?.data ?? res
-      setCancelResult(data || { ok: true })
+      const result = await submitPosCancellation({
+        flow,
+        orderId,
+        reasonCode: cancelReasonCode,
+        reason: cancelReason,
+        cancelFn: cancelSaleOrder,
+      })
+      const failureCode = getResolvedCancellationFailureCode(result)
+      if (failureCode !== null) {
+        const failure = new Error('La cancelación fue rechazada.')
+        failure.code = failureCode
+        throw failure
+      }
+      setCancelResult({ ok: true })
       setConfirmOpen(false)
+      resetCancelReasons()
       // Refresca la orden para mostrar el state=cancel
       await loadOrder()
     } catch (e) {
-      setCancelError(e?.message || 'Error al cancelar la venta')
+      setCancelError(getPosCancelBlockMessage(e?.code))
     } finally {
+      cancelRequestRef.current = false
       setCancelling(false)
     }
   }
 
+  function resetCancelReasons() {
+    setCancelReasonCode('')
+    setCancelReason('')
+  }
+
+  function closeCancelDialog() {
+    if (cancelRequestRef.current) return
+    setConfirmOpen(false)
+    setCancelError('')
+    resetCancelReasons()
+  }
+
   const orderState = order?.state || ''
-  const canCancel =
-    flow.allowSaleCancellation === true &&
-    BACKEND_CAPS.saleCancel &&
-    order &&
-    orderState !== 'cancel' &&
-    orderState !== 'done'
+  const canCancel = canCancelPosOrder(flow, order, BACKEND_CAPS.saleCancel)
+  const usesClosedCancelReasons = flow.cancellationMode === 'closed-reasons'
+  const hasCancelReason = usesClosedCancelReasons
+    ? Boolean(cancelReasonCode)
+    : Boolean(cancelReason.trim())
+  const cancelBlockMessage = usesClosedCancelReasons
+    && BACKEND_CAPS.saleCancel === true
+    && order
+    && !canCancel
+    ? getPosCancelBlockMessage(order.cancel_block_code)
+    : ''
 
   const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -278,6 +336,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
         * { font-family: 'DM Sans', sans-serif; box-sizing: border-box; }
         button { border: none; background: none; cursor: pointer; }
+        .night-cancel-reason:focus-visible { outline: 3px solid ${TOKENS.colors.blue}; outline-offset: 3px; }
         @keyframes spin { to { transform: rotate(360deg); } }
         /* La impresión NO usa @media print de esta página: el botón Imprimir
            renderiza el ticket en un iframe limpio (buildTicketHtml) para evitar
@@ -320,7 +379,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
                 background: `${TOKENS.colors.error}10`, border: `1px solid ${TOKENS.colors.error}40`,
               }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: TOKENS.colors.error, margin: 0 }}>
-                  Venta cancelada{cancelResult?.picking_states ? ` · ${JSON.stringify(cancelResult.picking_states)}` : ''}
+                  Venta cancelada
                 </p>
               </div>
             )}
@@ -356,6 +415,9 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>Folio: {folio}</span>
                 <div style={{ fontSize: 12, color: '#333', marginTop: 2 }}>
                   Cliente: {customerName}
+                </div>
+                <div style={{ fontSize: 12, color: '#333', marginTop: 2 }}>
+                  Estado: {getPosSaleStateLabel(orderState)}
                 </div>
               </div>
 
@@ -438,11 +500,19 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
                 </button>
               </div>
 
+              {cancelBlockMessage && (
+                <p role="status" style={{
+                  fontSize: 12, color: TOKENS.colors.textMuted, textAlign: 'center', margin: 0,
+                }}>
+                  {cancelBlockMessage}
+                </p>
+              )}
+
               {canCancel && (
                 <button
                   onClick={() => { setConfirmOpen(true); setCancelError('') }}
                   style={{
-                    width: '100%', padding: '12px 0', borderRadius: TOKENS.radius.md,
+                    width: '100%', minHeight: 44, padding: '12px 0', borderRadius: TOKENS.radius.md,
                     background: 'transparent', border: `1px solid ${TOKENS.colors.error}60`,
                   }}
                 >
@@ -460,7 +530,8 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
           <div
             role="dialog"
             aria-modal="true"
-            onClick={() => !cancelling && setConfirmOpen(false)}
+            aria-labelledby="cancel-sale-title"
+            onClick={closeCancelDialog}
             style={{
               position: 'fixed', inset: 0, zIndex: 1000,
               background: 'rgba(6, 10, 18, 0.72)',
@@ -484,7 +555,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
               }}>
                 CANCELAR VENTA
               </p>
-              <h2 style={{
+              <h2 id="cancel-sale-title" style={{
                 fontSize: 18, fontWeight: 700, color: TOKENS.colors.text,
                 margin: '4px 0 12px', letterSpacing: '-0.02em',
               }}>
@@ -494,21 +565,67 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
                 La venta se cancela y se revierten los movimientos de inventario. La razón queda en el chatter.
               </p>
 
-              <label style={{ fontSize: 11, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
-                Motivo *
-              </label>
-              <textarea
-                rows={3}
-                value={cancelReason}
-                onChange={e => setCancelReason(e.target.value)}
-                placeholder="Ej: Cliente se arrepintió / producto equivocado"
-                style={{
-                  width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.md,
-                  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                  color: TOKENS.colors.text, fontSize: 13, outline: 'none',
-                  fontFamily: "'DM Sans', sans-serif", resize: 'vertical', marginBottom: 10,
-                }}
-              />
+              {usesClosedCancelReasons ? (
+                <fieldset style={{ border: 0, padding: 0, margin: '0 0 10px' }}>
+                  <legend style={{
+                    fontSize: 11, color: TOKENS.colors.textMuted, marginBottom: 4,
+                  }}>
+                    Motivo *
+                  </legend>
+                  <div style={{ display: 'grid', gap: 4 }}>
+                    {flow.cancelReasons.map((reason) => {
+                      const inputId = `cancel-reason-${reason.code}`
+                      return (
+                        <label
+                          key={reason.code}
+                          htmlFor={inputId}
+                          style={{
+                            minHeight: 44, padding: '8px 10px', borderRadius: TOKENS.radius.md,
+                            background: TOKENS.colors.surface,
+                            border: `1px solid ${cancelReasonCode === reason.code ? TOKENS.colors.blue : TOKENS.colors.border}`,
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            color: TOKENS.colors.textSoft, fontSize: 13, cursor: 'pointer',
+                          }}
+                        >
+                          <input
+                            className="night-cancel-reason"
+                            id={inputId}
+                            name="cancel-reason"
+                            type="radio"
+                            value={reason.code}
+                            checked={cancelReasonCode === reason.code}
+                            onChange={() => {
+                              setCancelReasonCode(reason.code)
+                              setCancelError('')
+                            }}
+                            style={{ width: 20, height: 20, margin: 0, flexShrink: 0 }}
+                          />
+                          <span>{reason.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </fieldset>
+              ) : (
+                <>
+                  <label htmlFor="admin-cancel-reason" style={{ fontSize: 11, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
+                    Motivo *
+                  </label>
+                  <textarea
+                    id="admin-cancel-reason"
+                    rows={3}
+                    value={cancelReason}
+                    onChange={e => setCancelReason(e.target.value)}
+                    placeholder="Ej: Cliente se arrepintió / producto equivocado"
+                    style={{
+                      width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.md,
+                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                      color: TOKENS.colors.text, fontSize: 13, outline: 'none',
+                      fontFamily: "'DM Sans', sans-serif", resize: 'vertical', marginBottom: 10,
+                    }}
+                  />
+                </>
+              )}
 
               {cancelError && (
                 <div style={{
@@ -523,10 +640,10 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  onClick={() => setConfirmOpen(false)}
+                  onClick={closeCancelDialog}
                   disabled={cancelling}
                   style={{
-                    flex: 1, padding: '11px 0', borderRadius: TOKENS.radius.md,
+                    flex: 1, minHeight: 44, padding: '11px 0', borderRadius: TOKENS.radius.md,
                     background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
                     fontSize: 12, fontWeight: 600, color: TOKENS.colors.textSoft,
                     fontFamily: "'DM Sans', sans-serif",
@@ -537,14 +654,14 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
                 <button
                   type="button"
                   onClick={doCancel}
-                  disabled={cancelling || !cancelReason.trim()}
+                  disabled={cancelling || !hasCancelReason}
                   style={{
-                    flex: 1, padding: '11px 0', borderRadius: TOKENS.radius.md,
+                    flex: 1, minHeight: 44, padding: '11px 0', borderRadius: TOKENS.radius.md,
                     background: `linear-gradient(135deg, ${TOKENS.colors.error}, #d44)`,
                     border: 'none',
                     fontSize: 12, fontWeight: 700, color: 'white',
                     fontFamily: "'DM Sans', sans-serif",
-                    opacity: cancelling || !cancelReason.trim() ? 0.6 : 1,
+                    opacity: cancelling || !hasCancelReason ? 0.6 : 1,
                     cursor: cancelling ? 'wait' : 'pointer',
                   }}
                 >

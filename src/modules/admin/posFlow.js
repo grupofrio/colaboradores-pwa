@@ -76,6 +76,25 @@ export async function submitPosCancellation({
   throw new Error('El modo de cancelación no es válido.')
 }
 
+export function canCancelPosOrder(flow, order, backendCap) {
+  if (backendCap !== true || flow?.allowSaleCancellation !== true) return false
+  if (!order || typeof order !== 'object' || Array.isArray(order)) return false
+
+  const orderId = toPositiveSafeIntegerId(order.id)
+    || toPositiveSafeIntegerId(order.order_id)
+  if (!orderId) return false
+
+  const state = typeof order.state === 'string'
+    ? order.state.trim().toLowerCase()
+    : ''
+  if (state === 'cancel' || state === 'done') return false
+
+  if (flow.cancellationMode === 'closed-reasons') {
+    return order.can_cancel === true
+  }
+  return flow.cancellationMode === 'free-text'
+}
+
 export function buildPosTicketPath(flow = ADMIN_POS_FLOW, orderId) {
   const id = toPositiveSafeIntegerId(orderId)
   if (!id) return ''

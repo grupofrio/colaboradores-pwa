@@ -5,6 +5,7 @@ import {
   ADMIN_POS_FLOW,
   NIGHT_POS_FLOW,
   buildPosTicketPath,
+  canCancelPosOrder,
   canOpenPosPayment,
   classifyPosSaleCreateError,
   normalizePosSaleResult,
@@ -53,6 +54,78 @@ test('NIGHT_POS_FLOW and its closed cancellation reasons are immutable', () => {
     NIGHT_POS_FLOW.cancelReasons.every((reason) => Object.isFrozen(reason)),
     true,
   )
+})
+
+test('canCancelPosOrder preserves admin free-text eligibility', () => {
+  const eligibleOrder = { id: 9001, state: 'sale', can_cancel: false }
+
+  assert.equal(canCancelPosOrder(ADMIN_POS_FLOW, eligibleOrder, true), true)
+  assert.equal(canCancelPosOrder(ADMIN_POS_FLOW, { ...eligibleOrder, state: 'cancel' }, true), false)
+  assert.equal(canCancelPosOrder(ADMIN_POS_FLOW, { ...eligibleOrder, state: 'done' }, true), false)
+  assert.equal(canCancelPosOrder(ADMIN_POS_FLOW, eligibleOrder, false), false)
+  assert.equal(
+    canCancelPosOrder({ ...ADMIN_POS_FLOW, allowSaleCancellation: false }, eligibleOrder, true),
+    false,
+  )
+})
+
+test('canCancelPosOrder requires a safe order id for every cancellation mode', () => {
+  for (const id of [undefined, null, 0, -1, 1.5, 'unsafe', Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal(canCancelPosOrder(ADMIN_POS_FLOW, { id, state: 'sale' }, true), false)
+    assert.equal(
+      canCancelPosOrder(NIGHT_POS_FLOW, { id, state: 'sale', can_cancel: true }, true),
+      false,
+    )
+  }
+
+  assert.equal(
+    canCancelPosOrder(NIGHT_POS_FLOW, { order_id: '9001', state: 'sale', can_cancel: true }, true),
+    true,
+  )
+})
+
+test('canCancelPosOrder trusts the night backend boolean without amount thresholds', () => {
+  for (const amount_total of [0, 4999.99, 5000, 5001, 1000000]) {
+    assert.equal(
+      canCancelPosOrder(NIGHT_POS_FLOW, {
+        id: 9001,
+        state: 'sale',
+        amount_total,
+        can_cancel: true,
+      }, true),
+      true,
+    )
+    assert.equal(
+      canCancelPosOrder(NIGHT_POS_FLOW, {
+        id: 9001,
+        state: 'sale',
+        amount_total,
+        can_cancel: false,
+      }, true),
+      false,
+    )
+  }
+
+  for (const malformed of [undefined, null, 1, 'true']) {
+    assert.equal(
+      canCancelPosOrder(NIGHT_POS_FLOW, {
+        id: 9001,
+        state: 'sale',
+        amount_total: 1,
+        can_cancel: malformed,
+      }, true),
+      false,
+    )
+  }
+})
+
+test('canCancelPosOrder rejects terminal night states despite malformed approval', () => {
+  for (const state of ['cancel', 'done']) {
+    assert.equal(
+      canCancelPosOrder(NIGHT_POS_FLOW, { id: 9001, state, can_cancel: true }, true),
+      false,
+    )
+  }
 })
 
 test('submitPosCancellation rejects flows that do not allow cancellation', async () => {
