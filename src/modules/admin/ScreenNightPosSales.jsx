@@ -85,7 +85,6 @@ function SaleRow({ sale, onOpen }) {
       type="button"
       data-sale-order-id={ticketPath ? sale.order_id : undefined}
       disabled={!ticketPath}
-      aria-label={ticketPath ? `Ver ticket ${folio}` : `Venta ${folio} sin ticket disponible`}
       onClick={() => {
         if (ticketPath) onOpen(ticketPath)
       }}
@@ -163,6 +162,7 @@ function NightPosSalesView({ items, loading, error, onBack, onRetry, onOpen }) {
         * { box-sizing: border-box; }
         body { margin: 0; }
         button { font-family: 'DM Sans', sans-serif; }
+        .night-pos-sales-main button { min-height: 44px; }
         button:focus-visible { outline: 3px solid ${TOKENS.colors.blue3}; outline-offset: 3px; }
         @media (max-width: 560px) {
           .night-pos-sales-main { padding-left: 14px !important; padding-right: 14px !important; }
@@ -186,8 +186,8 @@ function NightPosSalesView({ items, loading, error, onBack, onRetry, onOpen }) {
           aria-label="Volver al POS nocturno"
           onClick={onBack}
           style={{
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             flexShrink: 0,
             display: 'grid',
             placeItems: 'center',

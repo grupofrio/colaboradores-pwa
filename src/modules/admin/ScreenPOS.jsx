@@ -76,6 +76,7 @@ export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
               onClick={() => navigate(flow.salesRoute)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
+                minHeight: 44,
                 padding: '10px 16px', borderRadius: TOKENS.radius.pill,
                 background: TOKENS.colors.surface,
                 border: `1px solid ${TOKENS.colors.borderBlue}`,
@@ -334,6 +335,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
               onClick={() => navigate(flow.salesRoute)}
               style={{
                 marginLeft: 'auto', padding: '8px 11px', borderRadius: TOKENS.radius.pill,
+                minHeight: 44,
                 background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.borderBlue}`,
                 color: TOKENS.colors.blue3, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
               }}

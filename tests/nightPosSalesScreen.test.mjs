@@ -71,6 +71,17 @@ function renderedText(renderer) {
   return collect(renderer.toJSON()).join(' ').replace(/\s+/g, ' ').trim()
 }
 
+function renderedInstanceText(instance) {
+  function collect(node) {
+    if (node === null || node === undefined || typeof node === 'boolean') return []
+    if (typeof node === 'string' || typeof node === 'number') return [String(node)]
+    if (Array.isArray(node)) return node.flatMap(collect)
+    return collect(node.children)
+  }
+
+  return collect(instance).join(' ').replace(/\s+/g, ' ').trim()
+}
+
 async function flush() {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
@@ -202,7 +213,14 @@ test('sale rows are keyboard-native buttons and only safe ids navigate to night 
     loadSales: async () => ({
       data: {
         items: [
-          { order_id: 9001, name: 'S09001', partner_name: 'Cliente Iguala' },
+          {
+            order_id: 9001,
+            name: 'S09001',
+            partner_name: 'Cliente Iguala',
+            date_order: '2026-07-25 03:10:00',
+            amount_total: 98.75,
+            state: 'sale',
+          },
           { order_id: 'unsafe', name: 'NO-DEBE-MONTAR' },
         ],
       },
@@ -213,6 +231,11 @@ test('sale rows are keyboard-native buttons and only safe ids navigate to night 
   assert.equal(row.type, 'button')
   assert.equal(row.props.type, 'button')
   assert.equal(row.props.disabled, false)
+  assert.equal(row.props['aria-label'], undefined, 'descendant text supplies the full accessible name')
+  const accessibleText = renderedInstanceText(row)
+  for (const value of ['S09001', 'Cliente Iguala', '21:10', '$98.75', 'Activa']) {
+    assert.match(accessibleText, new RegExp(value.replace('$', '\\$')))
+  }
   assert.doesNotMatch(renderedText(renderer), /NO-DEBE-MONTAR/)
 
   const back = renderer.root.findByProps({ 'aria-label': 'Volver al POS nocturno' })
@@ -309,4 +332,26 @@ test('mobile and desktop POS expose sales only through flow.salesRoute', () => {
   const adminFlow = flowSource.match(/export const ADMIN_POS_FLOW = Object\.freeze\(\{[\s\S]*?\n\}\)/)
   assert.ok(adminFlow)
   assert.doesNotMatch(adminFlow[0], /salesRoute/)
+})
+
+test('all Task 5 controls enforce the 44px minimum touch target', async () => {
+  const request = deferred()
+  const renderer = await createScreen({ loadSales: () => request.promise })
+  const back = renderer.root.findByProps({ 'aria-label': 'Volver al POS nocturno' })
+  const source = readFileSync(screenUrl, 'utf8')
+
+  assert.equal(back.props.style.width, 44)
+  assert.equal(back.props.style.height, 44)
+  assert.match(
+    source,
+    /\.night-pos-sales-main button\s*\{\s*min-height:\s*44px;/,
+    'retry and sale-row buttons inherit a 44px minimum height',
+  )
+  assert.equal(
+    (posSource.match(/minHeight:\s*44/g) || []).length,
+    2,
+    'desktop and mobile Ventas de hoy controls each enforce 44px',
+  )
+
+  act(() => renderer.unmount())
 })
