@@ -138,7 +138,9 @@ test('wiring: handleStartEdit bloquea edición si editable===false (sin request)
 test('wiring: capabilities se cachean y la UI ofrece Solo lectura', () => {
   const s = src('modules/supervisor-ventas/ScreenPronostico.jsx')
   assert.ok(/forecastCapsCache/.test(s), 'cache de capabilities por forecast')
-  assert.ok(/const knownReadOnly = !!\(caps && caps\.editable === false\)/.test(s))
+  // El afford de edición deriva de SU capability (`editable`), no de un permiso
+  // genérico ni del estado local cuando el servidor ya se pronunció.
+  assert.ok(/const canEditForecast = caps \? caps\.editable === true : st === 'draft'/.test(s))
   assert.ok(/Solo lectura/.test(s), 'indicador read-only en lugar del botón Editar')
   // en conflicto se re-chequea editable y se cierra la edición.
   assert.ok(/ya no es editable/.test(s), 'conflict re-check cierra edición si dejó de ser editable')

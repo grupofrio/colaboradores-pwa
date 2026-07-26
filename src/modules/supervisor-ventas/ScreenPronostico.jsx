@@ -6,9 +6,9 @@ import {
   getForecastProducts,
   createForecast,
   getForecasts,
-  confirmForecast,
-  cancelForecast,
-  deleteForecast,
+  // confirmForecast / cancelForecast / deleteForecast NO se importan: sus
+  // endpoints no tienen respaldo seguro (capability false) y esta pantalla no
+  // debe tener una función de escritura alcanzable para ellos.
   getForecastDto,
   updateForecastLines,
   getRouteTemplatesForPlanning,
@@ -483,6 +483,10 @@ export default function ScreenPronostico() {
       setEditingForecastId(null)
       setEditingWriteDate(null)
       setEditLines([])
+      // §10: tras una acción exitosa se relee también la LISTA, para que estado y
+      // conteos no queden en la versión previa (los botones no deben quedar
+      // autorizados por un estado viejo).
+      await loadData()
       flashMsg('Pronostico actualizado')
     } catch (e) {
       flashMsg(e.message || 'Error al guardar', 5000)
@@ -1176,38 +1180,16 @@ export default function ScreenPronostico() {
 
   const [actionLoading, setActionLoading] = useState(null) // forecast id being acted on
 
-  async function handleConfirm(forecastId) {
-    setActionLoading(forecastId)
-    try {
-      await confirmForecast(forecastId)
-      await loadData()
-      flashMsg('Pronostico confirmado')
-    } catch (e) {
-      flashMsg(e.message || 'Error al confirmar', 5000)
-    } finally { setActionLoading(null) }
-  }
-
-  async function handleCancel(forecastId) {
-    setActionLoading(forecastId)
-    try {
-      await cancelForecast(forecastId)
-      await loadData()
-      flashMsg('Pronostico regresado a borrador')
-    } catch (e) {
-      flashMsg(e.message || 'Error al cancelar', 5000)
-    } finally { setActionLoading(null) }
-  }
-
-  async function handleDelete(forecastId) {
-    setActionLoading(forecastId)
-    try {
-      await deleteForecast(forecastId)
-      await loadData()
-      flashMsg('Pronostico eliminado')
-    } catch (e) {
-      flashMsg(e.message || 'Error al eliminar', 5000)
-    } finally { setActionLoading(null) }
-  }
+  // ── Acciones RETIRADAS de esta pantalla (Confirmar · Regresar a borrador ·
+  // Eliminar) ─────────────────────────────────────────────────────────────────
+  // Sus endpoints (`/v2/forecast/{confirm,cancel,delete}`) siguen montados sobre
+  // el guard LEGACY `_guard_and_cfg`, que confía en el scope del payload cuando
+  // `require_employee_token` está en False: no exigen token-only, ni doble flag
+  // de escritura, ni analytic scope, ni jornada. El DTO seguro las reporta con
+  // capability `false` (`NO_SECURE_ENDPOINT`).
+  // Por eso NO existe handler para ellas: no basta esconder el botón — no hay
+  // función de escritura alcanzable desde esta pantalla. Quedan FUERA del DoD y
+  // no se migran parcialmente.
 
   function statusColor(status) {
     if (status === 'confirmed' || status === 'done') return TOKENS.colors.success
@@ -2283,11 +2265,17 @@ export default function ScreenPronostico() {
                     const isLinesLoading = forecastLinesLoading === f.id
                     const cachedLines = forecastLinesCache[f.id] || null
                     const isEditing = editingForecastId === f.id
-                    // §8: capabilities autoritativas del DTO (si ya se cargaron).
-                    // `knownReadOnly` = el backend confirmó que NO es editable ⇒ se
-                    // reemplaza el afford de edición por un indicador de solo lectura.
+                    // Capabilities AUTORITATIVAS del DTO seguro, por acción.
+                    // Mientras no se conocen (aún no se abrió/cargó el DTO) se asume
+                    // el estado local del forecast SOLO como pista de presentación:
+                    // el permiso real lo impone el backend en cada write, y abrir la
+                    // edición vuelve a consultar el DTO (handleStartEdit corta si
+                    // editable===false). `editable` NO autoriza otras acciones.
                     const caps = forecastCapsCache[f.id] || null
-                    const knownReadOnly = !!(caps && caps.editable === false)
+                    const canEditForecast = caps ? caps.editable === true : st === 'draft'
+                    const readOnlyLabel = caps && caps.editable === false
+                      ? 'Pronóstico de solo lectura (el servidor no autoriza editarlo)'
+                      : 'Pronóstico de solo lectura'
                     return (
                     <div key={f.id || i} style={{
                       borderRadius: TOKENS.radius.lg,
@@ -2330,70 +2318,39 @@ export default function ScreenPronostico() {
                           </div>
                         </div>
 
-                        {/* Action buttons */}
-                        {!isEditing && (st === 'draft' || st === 'confirmed') && (
+                        {/* Acciones — CADA UNA derivada de SU capability del DTO seguro.
+                            `editable` NO se usa como permiso genérico: es la capability
+                            de UNA acción (reemplazo de líneas vía update_lines).
+                            Confirmar · Regresar a borrador · Eliminar están RETIRADAS
+                            (capability false: NO_SECURE_ENDPOINT) y no tienen handler. */}
+                        {!isEditing && (
                           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                            {st === 'draft' && (
-                              <>
-                                <button onClick={() => handleConfirm(f.id)} disabled={isActing} style={{
-                                  flex: 1, padding: '8px 0', borderRadius: TOKENS.radius.md,
-                                  background: isActing ? TOKENS.colors.surface : 'rgba(34,197,94,0.12)',
-                                  border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e',
+                            {canEditForecast ? (
+                              <button
+                                onClick={() => { if (!isExpanded) handleToggleExpand(f.id); handleStartEdit(f) }}
+                                disabled={isActing}
+                                style={{
+                                  flex: 1, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                                  background: isActing ? TOKENS.colors.surface : 'rgba(99,179,237,0.12)',
+                                  border: `1px solid ${TOKENS.colors.blue2}40`, color: TOKENS.colors.blue3,
                                   fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1,
-                                }}>
-                                  {isActing ? '...' : 'Confirmar'}
-                                </button>
-                                {knownReadOnly ? (
-                                  // §8: el backend confirmó no editable (estado/flags OFF).
-                                  // Sin botón de edición, sin start-edit, sin request.
-                                  <span
-                                    role="note"
-                                    aria-label="Pronóstico de solo lectura"
-                                    style={{
-                                      padding: '8px 12px', borderRadius: TOKENS.radius.md,
-                                      background: TOKENS.colors.surface,
-                                      border: `1px solid ${TOKENS.colors.border}`, color: TOKENS.colors.textMuted,
-                                      fontSize: 12, fontWeight: 700, flexShrink: 0,
-                                    }}
-                                  >
-                                    Solo lectura
-                                  </span>
-                                ) : (
-                                  <button
-                                    onClick={() => { if (!isExpanded) handleToggleExpand(f.id); handleStartEdit(f) }}
-                                    disabled={isActing}
-                                    style={{
-                                      padding: '8px 12px', borderRadius: TOKENS.radius.md,
-                                      background: isActing ? TOKENS.colors.surface : 'rgba(99,179,237,0.12)',
-                                      border: `1px solid ${TOKENS.colors.blue2}40`, color: TOKENS.colors.blue3,
-                                      fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1, flexShrink: 0,
-                                    }}
-                                  >
-                                    Editar
-                                  </button>
-                                )}
-                                <button onClick={() => handleDelete(f.id)} disabled={isActing} style={{
-                                  width: 36, height: 34, borderRadius: TOKENS.radius.md, flexShrink: 0,
-                                  background: isActing ? TOKENS.colors.surface : 'rgba(239,68,68,0.08)',
-                                  border: '1px solid rgba(239,68,68,0.25)',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  opacity: isActing ? 0.5 : 1,
-                                }}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                                  </svg>
-                                </button>
-                              </>
-                            )}
-                            {st === 'confirmed' && (
-                              <button onClick={() => handleCancel(f.id)} disabled={isActing} style={{
-                                flex: 1, padding: '8px 0', borderRadius: TOKENS.radius.md,
-                                background: isActing ? TOKENS.colors.surface : 'rgba(239,68,68,0.08)',
-                                border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444',
-                                fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1,
-                              }}>
-                                {isActing ? '...' : 'Regresar a borrador'}
+                                }}
+                              >
+                                Editar productos
                               </button>
+                            ) : (
+                              <span
+                                role="note"
+                                aria-label={readOnlyLabel}
+                                style={{
+                                  flex: 1, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                                  background: TOKENS.colors.surface,
+                                  border: `1px solid ${TOKENS.colors.border}`, color: TOKENS.colors.textMuted,
+                                  fontSize: 12, fontWeight: 700, textAlign: 'center',
+                                }}
+                              >
+                                Solo lectura
+                              </span>
                             )}
                           </div>
                         )}

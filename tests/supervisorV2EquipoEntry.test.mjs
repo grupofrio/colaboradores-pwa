@@ -14,6 +14,7 @@
 //     navegador; se cubre montaje, redirect declarado y cambio de flag.
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
@@ -134,23 +135,99 @@ test('caso 4 · exactamente UNA experiencia montada en cada estado del flag', ()
   }
 })
 
-// ── 5/6: sin fetch cruzado (el montaje ES la condición para que haya fetch) ──
-test('caso 5 · V2 OFF ⇒ CERO trabajo de la rama V2 (no se monta ⇒ no fetch V2)', () => {
+// ── 5/6: cero EFECTOS de la rama no elegida ─────────────────────────────────
+// El montaje es la condición para que haya efectos: si la rama no se monta, sus
+// loaders no corren. NO se asevera "cero fetch a URLs /v2/*": ese prefijo es la
+// versión del CONTRATO de API, no una marca de superficie V2 (ver allowlist).
+test('caso 5 · V2 OFF ⇒ CERO efectos de la rama V2 (no se monta ⇒ no corre su loader)', () => {
   setSession(SESSION_V2_OFF)
-  let v2Fetches = 0
-  const V2WithFetch = () => { v2Fetches += 1; return createElement('div', null, 'v2') }
+  let v2Effects = 0
+  const V2WithEffect = () => { v2Effects += 1; return createElement('div', null, 'v2') }
   const legacy = makeSpy('legacy')
-  renderGate({ active: 'hoy', legacy: createElement(legacy.Component), children: createElement(V2WithFetch) })
-  assert.equal(v2Fetches, 0, 'la rama V2 no debe ejecutarse con el flag OFF')
+  renderGate({ active: 'hoy', legacy: createElement(legacy.Component), children: createElement(V2WithEffect) })
+  assert.equal(v2Effects, 0, 'la rama V2 no debe ejecutarse con el flag OFF')
 })
 
-test('caso 6 · V2 ON ⇒ CERO trabajo de la rama legacy (no se monta ⇒ no fetch legacy)', () => {
+test('caso 6 · V2 ON ⇒ CERO efectos de la rama legacy (no se monta ⇒ no corre su loader)', () => {
   setSession(SESSION_V2_ON)
-  let legacyFetches = 0
-  const LegacyWithFetch = () => { legacyFetches += 1; return createElement('div', null, 'legacy') }
+  let legacyEffects = 0
+  const LegacyWithEffect = () => { legacyEffects += 1; return createElement('div', null, 'legacy') }
   const v2 = makeSpy('v2')
-  renderGate({ active: 'hoy', legacy: createElement(LegacyWithFetch), children: createElement(v2.Component) })
-  assert.equal(legacyFetches, 0, 'el entry legacy no debe ejecutarse con el flag ON')
+  renderGate({ active: 'hoy', legacy: createElement(LegacyWithEffect), children: createElement(v2.Component) })
+  assert.equal(legacyEffects, 0, 'el entry legacy no debe ejecutarse con el flag ON')
+})
+
+// ── ALLOWLIST de APIs compartidas del fallback legacy ────────────────────────
+// Declarada por FUNCIÓN IMPORTADA (no por string de URL): con V2 OFF, el árbol
+// legacy solo puede alcanzar estas lecturas seguras y compartidas. Cualquier
+// import de escritura o de superficie V2 dentro de ese árbol rompe el test.
+const SHARED_READ_ALLOWLIST = Object.freeze({
+  // day-control read-only: MISMA fuente de verdad que V2 (no se duplica).
+  sharedDayControlRead: ['requestSupervisorDayControl', 'loadSupervisorOperationDays', 'loadDayControlState'],
+  // resúmenes legacy del hub comercial (lecturas propias de la experiencia legacy).
+  legacyExperienceRead: ['getDayOverview', 'getYesterdaySummary'],
+})
+const V2_ONLY_SURFACE = Object.freeze([
+  'SupervisorV2Shell', 'HoyTab', 'RadarTab', 'RutasTab', 'PendientesTab', 'MasTab',
+  'useOperationalDay', 'SupervisorV2Gate',
+])
+const WRITE_FUNCTIONS = Object.freeze([
+  'updateForecastLines', 'confirmForecast', 'cancelForecast', 'deleteForecast',
+  'addCustomerToRoutePlan', 'removeCustomerFromRoutePlan', 'publishRoutePlan',
+  'saveRoutePlanDraft', 'ensureDailyRoutePlan',
+])
+
+const readSrc = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
+const LEGACY_TREE = [
+  'modules/supervisor-ventas/ScreenSupervisorOperationsEntry.jsx',
+  'modules/supervisor-ventas/dayControl/controller.js',
+  'modules/supervisor-ventas/dayControl/api.js',
+  'modules/supervisor-ventas/dayControl/state.js',
+  'modules/supervisor-ventas/ScreenSupervisorToday.jsx',
+]
+
+test('legacy: el árbol real del fallback NO importa superficie exclusiva de V2', () => {
+  for (const rel of LEGACY_TREE) {
+    const src = readSrc(rel)
+    for (const symbol of V2_ONLY_SURFACE) {
+      assert.equal(
+        new RegExp(`import[^\\n]*\\b${symbol}\\b`).test(src), false,
+        `${rel} no debe importar ${symbol} (superficie V2)`,
+      )
+    }
+  }
+})
+
+test('legacy: el árbol real del fallback NO importa NINGUNA función de escritura', () => {
+  for (const rel of LEGACY_TREE) {
+    const src = readSrc(rel)
+    for (const fn of WRITE_FUNCTIONS) {
+      assert.equal(src.includes(fn), false, `${rel} no debe alcanzar el write ${fn}`)
+    }
+  }
+})
+
+test('legacy: su única API de datos es la lectura COMPARTIDA de day-control', () => {
+  // Efecto real: el entry ejecuta `loadSupervisorOperationDays`, que desemboca en
+  // `requestSupervisorDayControl` — un POST de LECTURA al contrato compartido.
+  const entry = readSrc('modules/supervisor-ventas/ScreenSupervisorOperationsEntry.jsx')
+  assert.match(entry, /loadSupervisorOperationDays/)
+  assert.ok(SHARED_READ_ALLOWLIST.sharedDayControlRead.includes('loadSupervisorOperationDays'))
+
+  const api = readSrc('modules/supervisor-ventas/dayControl/api.js')
+  // Read-only: expone UNA operación y no escribe.
+  assert.match(api, /export function requestSupervisorDayControl/)
+  assert.equal(/update|create|delete|confirm|cancel|publish/i.test(api), false,
+    'el datasource compartido no debe exponer escrituras')
+})
+
+test('legacy: NO existe un datasource duplicado de day-control', () => {
+  // El fallback reutiliza el módulo compartido; no hay una segunda copia de las
+  // reglas ni una segunda fuente de verdad.
+  const controller = readSrc('modules/supervisor-ventas/dayControl/controller.js')
+  assert.match(controller, /from '\.\/state\.js'/)
+  const api = readSrc('modules/supervisor-ventas/dayControl/api.js')
+  assert.equal((api.match(/export const SUPERVISOR_DAY_CONTROL_PATH/g) || []).length, 1)
 })
 
 // ── 7/8: `/equipo/hoy` como CAPACIDAD V2 ─────────────────────────────────────
