@@ -162,10 +162,29 @@ fallará cerrado y pedirá corregir la configuración; no elegirá silenciosamen
 otro cliente. El usuario podrá conservar el selector de clientes que ya ofrece
 el POS, pero el valor inicial será el cliente público aprobado.
 
+Para `DAY_POS_FLOW`, la resolución considerará únicamente clientes activos cuyo
+nombre coincida de forma exacta, sin distinguir mayúsculas y minúsculas, y cuyo
+alcance pertenezca a la compañía y unidad analítica autorizadas de la sesión. No
+se reutilizará un cliente de otra compañía ni se aplicarán los fallbacks
+`PUBLICO`, `PUBLIC` o `MOSTRADOR`. Cero coincidencias devolverá
+`day_pos_default_customer_missing`; más de una coincidencia elegible devolverá
+`day_pos_default_customer_ambiguous`.
+
 Al confirmar, `/pwa-admin/sale-create` guardará el empleado autenticado en
 `x_pwa_employee_id` y en los campos compatibles disponibles. El rol
 `pos_diurno` solo añadirá acceso a creación POS; no añadirá permisos
 administrativos generales.
+
+La orden creada guardará también `x_analytic_account_id` con la analítica
+confiable validada contra el empleado y el almacén. Esta escritura es parte del
+contrato, no solo una validación previa: garantiza que una venta recién creada
+cumpla inmediatamente el mismo dominio usado por `Ventas de hoy` y por el
+detalle del ticket.
+
+En este alcance, “diurno” identifica el cliente, el módulo y el día calendario;
+no introduce una ventana horaria para capturar ventas. Un empleado autorizado
+puede crear una venta a cualquier hora mientras conserve el rol. Cualquier
+restricción por horario requerirá una decisión y un cambio posteriores.
 
 ### Ventas de hoy
 
@@ -254,6 +273,42 @@ también posee un rol administrativo real, sus capacidades administrativas
 seguirán regidas por ese rol; al entrar por `/pos-diurno`, la UI utilizará el
 flujo propio del día.
 
+### Contrato y precedencia de la intención diurna
+
+La intención canónica será `pos_scope=day`:
+
+- `/pwa-admin/today-sales` la recibirá como query string;
+- `/pwa-admin/sale-detail` la recibirá como query string junto a `order_id`;
+- `/pwa-admin/sale-cancel` la recibirá en el cuerpo JSON junto a `order_id` y
+  `reason_code`.
+
+`DAY_POS_FLOW` declarará `posScope: 'day'`. Los wrappers PWA aceptarán el flujo
+o el alcance explícito y el proxy enviará únicamente el valor allowlisted
+`day`. Un valor desconocido nunca se eliminará silenciosamente para caer al
+contrato administrativo: se rechazará antes del transporte o en Odoo.
+
+La selección autoritativa de política será:
+
+| Identidad/roles del token | Intención | Política |
+|---|---|---|
+| Solo `pos_diurno` | `day` | POS diurno restringido |
+| Solo `pos_diurno` | omitida | POS diurno restringido; omitir no amplía acceso |
+| Solo `pos_diurno` | inválida/manipulada | rechazo dentro de la política restringida; nunca admin |
+| Sin `pos_diurno` | `day` | denegado |
+| `pos_diurno` + rol administrativo | `day` | POS diurno restringido |
+| `pos_diurno` + rol administrativo | omitida | contrato administrativo existente |
+| Rol administrativo sin `pos_diurno` | omitida | contrato administrativo existente |
+| Héctor | omitida o intención nocturna existente | política nocturna existente |
+| Héctor | `day` sin rol diurno | denegado |
+
+En `today-sales`, la coexistencia de `pos_scope=day` con `night_pos` se
+rechazará. En detalle y cancelación, una identidad nocturna acompañada de
+`pos_scope=day`, o cualquier combinación incoherente de alcances, también se
+rechazará. Ningún conflicto escogerá la política más permisiva.
+
+La compatibilidad de Héctor con `night_pos=1` se conserva. La nueva intención no
+se utilizará para reconocer a Héctor ni sustituirá su política actual.
+
 ## Flujo de datos
 
 ### Creación e impresión
@@ -288,6 +343,9 @@ flujo propio del día.
 - Sesión inválida: redirección a `/login`.
 - Perfil sin `pos_diurno`: módulo oculto, ruta directa bloqueada y backend
   denegado.
+- Permiso retirado con una sesión PWA todavía abierta: la tarjeta puede quedar
+  visible hasta refrescar la sesión, pero Odoo rechaza inmediatamente cualquier
+  lectura o mutación porque vuelve a consultar el rol del empleado.
 - Cliente público ausente o ambiguo: captura bloqueada con mensaje de
   configuración.
 - Empleado sin compañía, almacén o analítica coherentes: acceso operativo
@@ -310,12 +368,16 @@ flujo propio del día.
 - una sesión válida sin el rol no ve ni abre las rutas diurnas;
 - `DAY_POS_FLOW` usa cliente, rutas, historial, razones e impresión aprobados;
 - el POS diurno resuelve exactamente `VENTA PUBLICO IGUALA` y falla cerrado si
-  falta;
+  falta, está duplicado, inactivo o fuera de alcance;
+- los wrappers y el proxy conservan `pos_scope=day` en historial, detalle y
+  cancelación, y rechazan valores desconocidos;
 - `Ventas de hoy` no muestra selector de fecha;
 - la pantalla usa el flujo diurno y abre su ruta de ticket;
 - el ticket exige un motivo cerrado y no envía texto libre;
 - `can_cancel` y `cancel_block_code` provienen del backend;
 - una venta cancelada o `done` no muestra acción de cancelación;
+- una sesión cuya casilla fue retirada muestra un error seguro aunque conserve
+  temporalmente la tarjeta por caché;
 - las regresiones de Angy y Héctor permanecen verdes;
 - lint, pruebas completas y build terminan correctamente.
 
@@ -335,23 +397,45 @@ flujo propio del día.
 - razón libre, código inválido, venta ajena, día anterior, `done`, cancelada y
   venta en/sobre el umbral se rechazan;
 - dos perfiles `pos_diurno` no pueden consultar o cancelar ventas entre sí;
+- la matriz completa de intención diurna, omisión, manipulación, roles mixtos y
+  conflicto con intención nocturna falla cerrada según el contrato;
+- una venta recién creada guarda empleado y analítica confiables y aparece en
+  historial y detalle sin backfill;
 - la cancelación concurrente conserva una sola transición y una sola auditoría;
+- el corte de medianoche de México incluye el primer instante del día y excluye
+  el primer instante del siguiente;
+- exactamente $5,000 requiere gerente y $4,999.99 conserva la decisión normal;
+- un umbral ausente, negativo, no numérico o no finito bloquea la cancelación;
+- retirar `pwa_extra_pos_diurno` revoca inmediatamente el backend aun con una
+  sesión cliente abierta;
 - Angy conserva el contrato administrativo y Héctor el contrato nocturno.
+
+### Integración de cliente y venta
+
+- la resolución diurna acepta una única coincidencia exacta, activa y dentro del
+  alcance autorizado;
+- cero coincidencias, dos coincidencias exactas, cliente inactivo o cliente de
+  otra compañía/unidad se rechazan sin usar fallbacks;
+- una prueba integral crea la venta, confirma `x_pwa_employee_id` y
+  `x_analytic_account_id`, la consulta en `Ventas de hoy` y abre su detalle.
 
 ## Despliegue y asignación
 
-1. Actualizar los módulos Odoo que contienen el catálogo de roles y los
-   controladores del POS.
+1. Incrementar la versión de `os_customer_zones` y `gf_pwa_admin` y actualizar
+   ambos módulos Odoo para instalar el campo, la vista, el catálogo de roles y
+   los controladores.
 2. Desplegar la PWA con el nuevo módulo y rutas.
 3. Confirmar que existe exactamente el cliente `VENTA PUBLICO IGUALA` en la
    compañía correspondiente.
-4. Marcar `POS diurno` en la ficha del empleado autorizado, por ejemplo Ruth.
+4. Solo después de actualizar backend y PWA, marcar `POS diurno` en la ficha del
+   empleado autorizado, por ejemplo Ruth.
 5. Cerrar su sesión anterior e iniciar sesión nuevamente para recibir el rol.
 6. Realizar una venta de prueba, imprimir el ticket, consultar `Ventas de hoy` y
    validar una cancelación menor al umbral.
 
-Retirar la casilla elimina el acceso en el siguiente inicio o renovación de
-sesión, sin requerir cambios de código.
+Retirar la casilla elimina inmediatamente la autorización del backend. La PWA
+dejará de mostrar el módulo al refrescar o renovar la sesión, sin requerir
+cambios de código.
 
 ## Criterios de aceptación
 
@@ -374,6 +458,7 @@ sesión, sin requerir cambios de código.
 - Crear o compartir una cuenta genérica de POS.
 - Asignar automáticamente el permiso a Ruth desde el código.
 - Mostrar ventas de días anteriores o un rango de fechas.
+- Restringir la creación de ventas a horas específicas del día.
 - Consultar o cancelar ventas de otros empleados.
 - Añadir motivos libres o modificar las cuatro razones.
 - Crear un flujo de aprobación remota para ventas de $5,000 o más.
