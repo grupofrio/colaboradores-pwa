@@ -14,7 +14,7 @@ import {
   submitPosCancellation,
 } from './posFlow'
 
-function getResolvedCancellationFailureCode(response) {
+function getResolvedCancellationFailure(response) {
   let current = response
   for (let depth = 0; depth < 4; depth += 1) {
     if (!current || typeof current !== 'object' || Array.isArray(current)) return null
@@ -24,12 +24,25 @@ function getResolvedCancellationFailureCode(response) {
       || status === 'error'
       || Boolean(current.error)
     if (failed) {
-      if (typeof current.code === 'string') return current.code
-      if (typeof current.cancel_block_code === 'string') return current.cancel_block_code
-      if (current.error && typeof current.error === 'object' && !Array.isArray(current.error)) {
-        return typeof current.error.code === 'string' ? current.error.code : ''
+      let code = ''
+      let message = ''
+      if (typeof current.code === 'string') code = current.code
+      if (!code && typeof current.cancel_block_code === 'string') {
+        code = current.cancel_block_code
       }
-      return ''
+      if (typeof current.user_message === 'string') message = current.user_message
+      if (!message && typeof current.message === 'string') message = current.message
+      if (current.error && typeof current.error === 'object' && !Array.isArray(current.error)) {
+        if (!code && typeof current.error.code === 'string') code = current.error.code
+        if (!message && typeof current.error.message === 'string') {
+          message = current.error.message
+        }
+      }
+      if (!message && typeof current.error === 'string') message = current.error
+      return {
+        code,
+        message: message || 'Error al cancelar la venta',
+      }
     }
     current = current.data
   }
@@ -90,10 +103,10 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
         reason: cancelReason,
         cancelFn: cancelSaleOrder,
       })
-      const failureCode = getResolvedCancellationFailureCode(result)
-      if (failureCode !== null) {
-        const failure = new Error('La cancelación fue rechazada.')
-        failure.code = failureCode
+      const resolvedFailure = getResolvedCancellationFailure(result)
+      if (resolvedFailure !== null) {
+        const failure = new Error(resolvedFailure.message)
+        failure.code = resolvedFailure.code
         throw failure
       }
       setCancelResult({ ok: true })
@@ -102,7 +115,9 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
       // Refresca la orden para mostrar el state=cancel
       await loadOrder()
     } catch (e) {
-      setCancelError(getPosCancelBlockMessage(e?.code))
+      setCancelError(usesClosedCancelReasons
+        ? getPosCancelBlockMessage(e?.code)
+        : (e?.message || 'Error al cancelar la venta'))
     } finally {
       cancelRequestRef.current = false
       setCancelling(false)
@@ -628,7 +643,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
               )}
 
               {cancelError && (
-                <div style={{
+                <div role="alert" style={{
                   padding: '8px 12px', borderRadius: TOKENS.radius.sm, marginBottom: 10,
                   background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
                   fontSize: 11, fontWeight: 600, color: TOKENS.colors.error,

@@ -90,7 +90,7 @@ export function canCancelPosOrder(flow, order, backendCap) {
   if (state === 'cancel' || state === 'done') return false
 
   if (flow.cancellationMode === 'closed-reasons') {
-    return order.can_cancel === true
+    return state === 'sale' && order.can_cancel === true
   }
   return flow.cancellationMode === 'free-text'
 }

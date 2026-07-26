@@ -390,6 +390,7 @@ test('closing the modal resets both workflows and cancellation errors preserve t
   const text = renderedText(renderer)
   assert.match(text, /Esta venta no se puede cancelar\./)
   assert.doesNotMatch(text, /not_owner|detalle sensible|cancel_block_code/)
+  assert.match(renderedInstanceText(renderer.root.findByProps({ role: 'alert' })), /Esta venta no se puede cancelar\./)
   assert.equal(renderer.root.findByProps({ value: 'out_of_stock' }).props.checked, true)
   assert.equal(findButton(renderer, 'Sí, cancelar').props.disabled, false)
 
@@ -433,6 +434,44 @@ test('resolved cancellation failure stays retryable without false success or bac
   assert.doesNotMatch(text, /detalle sensible|cancel_block_code|Venta cancelada/)
   assert.equal(calls.filter((call) => call.url.includes('/sale-detail?')).length, 1)
   assert.equal(calls.filter((call) => call.url === '/odoo-api/pwa-admin/sale-cancel').length, 1)
+
+  act(() => renderer.unmount())
+})
+
+test('admin logical cancellation failures preserve useful legacy backend messages', async () => {
+  const { renderer, calls } = await createTicket({
+    flowName: 'admin',
+    order: orderFixture({ can_cancel: false }),
+    apiOptions: {
+      cancelResponse: () => createJsonResponse(200, {
+        result: {
+          ok: false,
+          code: 'admin_validation',
+          message: 'La venta tiene una entrega validada y no se puede cancelar.',
+          data: {},
+        },
+      }),
+    },
+  })
+  act(() => findButton(renderer, 'Cancelar venta').props.onClick())
+  act(() => renderer.root.findByType('textarea').props.onChange({
+    target: { value: 'Corrección administrativa' },
+  }))
+
+  await act(async () => {
+    findButton(renderer, 'Sí, cancelar').props.onClick()
+    await flush()
+  })
+
+  const alert = renderer.root.findByProps({ role: 'alert' })
+  assert.match(
+    renderedInstanceText(alert),
+    /La venta tiene una entrega validada y no se puede cancelar\./,
+  )
+  assert.equal(renderer.root.findAllByProps({ role: 'dialog' }).length, 1)
+  assert.equal(renderer.root.findByType('textarea').props.value, 'Corrección administrativa')
+  assert.equal(calls.filter((call) => call.url.includes('/sale-detail?')).length, 1)
+  assert.doesNotMatch(renderedText(renderer), /Venta cancelada/)
 
   act(() => renderer.unmount())
 })

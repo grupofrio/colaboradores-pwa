@@ -128,6 +128,30 @@ test('canCancelPosOrder rejects terminal night states despite malformed approval
   }
 })
 
+test('canCancelPosOrder requires normalized sale state for night authorization', () => {
+  assert.equal(
+    canCancelPosOrder(NIGHT_POS_FLOW, {
+      id: 9001,
+      state: ' SALE ',
+      can_cancel: true,
+    }, true),
+    true,
+  )
+
+  for (const state of ['draft', 'sent', '', 'unknown', null, undefined]) {
+    assert.equal(
+      canCancelPosOrder(NIGHT_POS_FLOW, { id: 9001, state, can_cancel: true }, true),
+      false,
+      String(state),
+    )
+    assert.equal(
+      canCancelPosOrder(ADMIN_POS_FLOW, { id: 9001, state, can_cancel: false }, true),
+      true,
+      `admin ${String(state)}`,
+    )
+  }
+})
+
 test('submitPosCancellation rejects flows that do not allow cancellation', async () => {
   const calls = []
 
