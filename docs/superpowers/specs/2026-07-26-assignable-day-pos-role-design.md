@@ -283,6 +283,7 @@ La intención canónica será `pos_scope=day`:
 
 - `/pwa-admin/today-sales` la recibirá como query string;
 - `/pwa-admin/sale-detail` la recibirá como query string junto a `order_id`;
+- `/pwa-admin/sale-create` la recibirá en el cuerpo JSON junto a la venta;
 - `/pwa-admin/sale-cancel` la recibirá en el cuerpo JSON junto a `order_id` y
   `reason_code`.
 
@@ -323,7 +324,7 @@ se utilizará para reconocer a Héctor ni sustituirá su política actual.
 1. El empleado con `pos_diurno` inicia sesión con su perfil personal.
 2. La PWA muestra `POS día` por su rol efectivo.
 3. El POS carga `VENTA PUBLICO IGUALA` y el catálogo de su alcance.
-4. La PWA envía la venta con el token de la sesión.
+4. La PWA envía la venta con el token de la sesión y `pos_scope=day`.
 5. Odoo valida el rol y el alcance, crea la orden y la atribuye al empleado.
 6. La PWA abre el ticket compartido y permite imprimirlo.
 
