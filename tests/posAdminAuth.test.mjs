@@ -1249,6 +1249,81 @@ test('night sale cancel sends only order_id and reason_code to the secured contr
   })
 })
 
+test('cancelSaleOrder rejects malformed option objects before transport', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return createJsonResponse(200, { result: { ok: true } })
+  }
+
+  const inheritedReason = Object.create({ reasonCode: 'duplicate' })
+  const malformedOptions = [
+    {},
+    { reasonCode: null },
+    { reasonCode: {} },
+    { reasonCode: 'unknown' },
+    { reasonCode: ' duplicate ' },
+    inheritedReason,
+    [],
+    new Date(0),
+    new Map([['reasonCode', 'duplicate']]),
+  ]
+
+  for (const options of malformedOptions) {
+    await assert.rejects(async () => cancelSaleOrder(9001, options))
+    assert.deepEqual(calls, [])
+  }
+})
+
+test('cancelSaleOrder accepts a null-prototype options object with an own canonical code', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+    return createJsonResponse(200, {
+      result: { ok: true, data: { id: 9001, state: 'cancel' } },
+    })
+  }
+
+  const options = Object.create(null)
+  options.reasonCode = 'out_of_stock'
+  await cancelSaleOrder(9001, options)
+
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0].payload.params, {
+    order_id: 9001,
+    reason_code: 'out_of_stock',
+  })
+})
+
+test('cancelSaleOrder rejects accessor-backed reason codes before transport', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return createJsonResponse(200, { result: { ok: true } })
+  }
+
+  let reads = 0
+  const options = {}
+  Object.defineProperty(options, 'reasonCode', {
+    enumerable: true,
+    get() {
+      reads += 1
+      return reads === 1 ? 'duplicate' : 'unknown'
+    },
+  })
+
+  await assert.rejects(async () => cancelSaleOrder(9001, options))
+  assert.equal(reads, 0)
+  assert.deepEqual(calls, [])
+})
+
 test('admin cancelSaleOrder keeps the legacy free-text transport contract', async () => {
   setSession()
 

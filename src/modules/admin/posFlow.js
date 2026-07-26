@@ -10,6 +10,11 @@ export const NIGHT_POS_CANCEL_REASONS = Object.freeze([
   Object.freeze({ code: 'out_of_stock', label: 'Falta de stock' }),
 ])
 
+export function isNightPosCancelReasonCode(reasonCode) {
+  return typeof reasonCode === 'string'
+    && NIGHT_POS_CANCEL_REASONS.some((reason) => reason.code === reasonCode)
+}
+
 export const ADMIN_POS_FLOW = Object.freeze({
   backTo: '/admin',
   posRoute: '/admin/pos',
@@ -42,6 +47,10 @@ export async function submitPosCancellation({
   if (!flow?.allowSaleCancellation) {
     throw new Error('La cancelación no está habilitada para este flujo.')
   }
+  const normalizedOrderId = toPositiveSafeIntegerId(orderId)
+  if (!normalizedOrderId) {
+    throw new Error('La venta no tiene un identificador válido.')
+  }
   if (typeof cancelFn !== 'function') {
     throw new TypeError('Se requiere una función de cancelación.')
   }
@@ -53,7 +62,7 @@ export async function submitPosCancellation({
     if (matchingReasons.length !== 1) {
       throw new Error('Selecciona un motivo de cancelación válido.')
     }
-    return cancelFn(orderId, { reasonCode })
+    return cancelFn(normalizedOrderId, { reasonCode })
   }
 
   if (flow.cancellationMode === 'free-text') {
@@ -61,7 +70,7 @@ export async function submitPosCancellation({
     if (!trimmedReason) {
       throw new Error('Escribe el motivo de cancelación.')
     }
-    return cancelFn(orderId, trimmedReason)
+    return cancelFn(normalizedOrderId, trimmedReason)
   }
 
   throw new Error('El modo de cancelación no es válido.')

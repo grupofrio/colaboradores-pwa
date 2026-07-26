@@ -76,7 +76,7 @@ test('submitPosCancellation submits one allowed closed reason code', async () =>
 
   const result = await submitPosCancellation({
     flow: NIGHT_POS_FLOW,
-    orderId: 9001,
+    orderId: '9001',
     reasonCode: 'duplicate',
     reason: 'free text must not leak',
     cancelFn: async (...args) => {
@@ -111,7 +111,7 @@ test('submitPosCancellation trims admin free text and rejects empty text', async
 
   await submitPosCancellation({
     flow: ADMIN_POS_FLOW,
-    orderId: 9001,
+    orderId: '9001',
     reason: '  Captura duplicada  ',
     cancelFn: async (...args) => calls.push(args),
   })
@@ -127,6 +127,37 @@ test('submitPosCancellation trims admin free text and rejects empty text', async
     }),
   )
   assert.equal(calls.length, 1)
+})
+
+test('submitPosCancellation rejects unsafe order ids before invoking either cancellation mode', async () => {
+  const invalidOrderIds = [
+    null,
+    0,
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    'not-an-order-id',
+  ]
+  const submissions = [
+    { flow: NIGHT_POS_FLOW, reasonCode: 'duplicate' },
+    { flow: ADMIN_POS_FLOW, reason: 'Captura duplicada' },
+  ]
+
+  for (const orderId of invalidOrderIds) {
+    for (const submission of submissions) {
+      const calls = []
+
+      await assert.rejects(
+        submitPosCancellation({
+          ...submission,
+          orderId,
+          cancelFn: (...args) => calls.push(args),
+        }),
+      )
+
+      assert.deepEqual(calls, [], `${String(orderId)} / ${submission.flow.cancellationMode}`)
+    }
+  }
 })
 
 test('canOpenPosPayment requires cart lines and a valid customer id', () => {

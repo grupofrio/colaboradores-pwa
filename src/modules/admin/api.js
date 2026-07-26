@@ -6,6 +6,7 @@ import {
   normalizePosCatalogResponse,
   normalizePosProductsResponse,
 } from './posProducts.js'
+import { isNightPosCancelReasonCode } from './posFlow.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,13 +60,30 @@ export function getSaleOrder(orderId) {
 /** Cancela una venta (sale.order.action_cancel). Revierte stock moves.
  *  Rechaza si la venta ya está `done`. La razón queda en el chatter. */
 export function cancelSaleOrder(orderId, reasonOrOptions) {
-  const options = reasonOrOptions !== null && typeof reasonOrOptions === 'object'
-    ? reasonOrOptions
-    : null
+  let optionsReasonCode = null
+  let hasOptions = false
+  if (reasonOrOptions !== null && typeof reasonOrOptions === 'object') {
+    const prototype = Object.getPrototypeOf(reasonOrOptions)
+    const isPlainObject = prototype === Object.prototype || prototype === null
+    const reasonDescriptor = isPlainObject
+      ? Object.getOwnPropertyDescriptor(reasonOrOptions, 'reasonCode')
+      : null
+    const hasReasonValue = reasonDescriptor
+      && Object.prototype.hasOwnProperty.call(reasonDescriptor, 'value')
+    if (
+      !isPlainObject
+      || !hasReasonValue
+      || !isNightPosCancelReasonCode(reasonDescriptor.value)
+    ) {
+      throw new TypeError('Selecciona un motivo de cancelación válido.')
+    }
+    optionsReasonCode = reasonDescriptor.value
+    hasOptions = true
+  }
   return api('POST', '/pwa-admin/sale-cancel', {
     order_id: orderId,
-    ...(options
-      ? { reason_code: options.reasonCode }
+    ...(hasOptions
+      ? { reason_code: optionsReasonCode }
       : { reason: reasonOrOptions || '' }),
   })
 }
