@@ -2,7 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { ApiError, api } from '../src/lib/api.js'
-import { cancelSaleOrder, getNightTodaySales } from '../src/modules/admin/api.js'
+import {
+  cancelSaleOrder,
+  getNightTodaySales,
+  getTodaySales,
+} from '../src/modules/admin/api.js'
 
 const originalLocalStorage = globalThis.localStorage
 const originalFetch = globalThis.fetch
@@ -1095,15 +1099,15 @@ test('today sales delegates employee scope to the Odoo backend endpoint', async 
   assert.equal(result.data.items[0].id, 9001)
 })
 
-test('night today sales sends the night intent without any date filters', async () => {
-  setSession()
+test('night today sales sends only night intent for a cross-company warehouse session', async () => {
+  setSession({ company_id: 1, warehouse_id: 89 })
 
   const calls = []
   globalThis.fetch = async (url, options = {}) => {
     const payload = options.body ? JSON.parse(options.body) : null
     calls.push({ url, options, payload })
 
-    if (url === '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34&night_pos=1') {
+    if (url === '/odoo-api/pwa-admin/today-sales?night_pos=1') {
       return createJsonResponse(200, {
         ok: true,
         data: { items: [] },
@@ -1112,18 +1116,39 @@ test('night today sales sends the night intent without any date filters', async 
     return createJsonResponse(500, { error: `Unexpected ${url}` })
   }
 
-  await getNightTodaySales({ warehouseId: 89, companyId: 34 })
+  await getNightTodaySales()
 
   assert.equal(calls.length, 1)
   const [call] = calls
   assert.equal(call.options.headers['Api-Key'], 'stale-api-key')
   assert.equal(call.options.headers['X-GF-Employee-Token'], 'employee-token-test')
   const query = new URL(call.url, 'https://pwa.test').searchParams
-  assert.deepEqual([...query.keys()], ['warehouse_id', 'company_id', 'night_pos'])
+  assert.equal(call.url, '/odoo-api/pwa-admin/today-sales?night_pos=1')
+  assert.deepEqual([...query.keys()], ['night_pos'])
   assert.equal(query.get('night_pos'), '1')
+  assert.equal(query.has('warehouse_id'), false)
+  assert.equal(query.has('company_id'), false)
   assert.equal(query.has('date'), false)
   assert.equal(query.has('date_from'), false)
   assert.equal(query.has('date_to'), false)
+})
+
+test('admin today sales preserves session warehouse and company fallbacks', async () => {
+  setSession({ company_id: 34, warehouse_id: 89 })
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return createJsonResponse(200, { ok: true, data: { items: [] } })
+  }
+
+  await getTodaySales()
+
+  assert.equal(calls.length, 1)
+  assert.equal(
+    calls[0].url,
+    '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34',
+  )
 })
 
 test('today sales forwards supplied empty and malformed night intent for backend rejection', async () => {
@@ -1135,14 +1160,14 @@ test('today sales forwards supplied empty and malformed night intent for backend
     return createJsonResponse(200, { ok: true, data: { items: [] } })
   }
 
-  await api('GET', '/pwa-admin/today-sales?warehouse_id=89&night_pos=')
-  await api('GET', '/pwa-admin/today-sales?warehouse_id=89&night_pos=malformed')
+  await api('GET', '/pwa-admin/today-sales?warehouse_id=89&company_id=1&date=2026-07-24&night_pos=')
+  await api('GET', '/pwa-admin/today-sales?warehouse_id=89&company_id=1&date=2026-07-24&night_pos=malformed')
 
   assert.equal(calls.length, 2)
-  assert.equal(calls[0].url, '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34&night_pos=')
+  assert.equal(calls[0].url, '/odoo-api/pwa-admin/today-sales?night_pos=')
   assert.equal(
     calls[1].url,
-    '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34&night_pos=malformed',
+    '/odoo-api/pwa-admin/today-sales?night_pos=malformed',
   )
 })
 

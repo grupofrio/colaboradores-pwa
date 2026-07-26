@@ -113,18 +113,18 @@ async function createScreen({
   return renderer
 }
 
-test('loads only the current warehouse/company context and renders loading then empty', async () => {
+test('loads without client scope assertions for a cross-company warehouse session', async () => {
   const request = deferred()
   const calls = []
   const renderer = await createScreen({
-    loadSales: (scope) => {
-      calls.push(scope)
+    session: { ...SESSION, company_id: 1, warehouse_id: 89 },
+    loadSales: (...args) => {
+      calls.push(args)
       return request.promise
     },
   })
 
-  assert.deepEqual(calls, [{ warehouseId: 89, companyId: 34 }])
-  assert.deepEqual(Object.keys(calls[0]).sort(), ['companyId', 'warehouseId'])
+  assert.deepEqual(calls, [[]])
   assert.match(renderedText(renderer), /Cargando ventas de hoy/)
   assert.equal(renderer.root.findAllByType('input').length, 0, 'sin control de fecha')
 
@@ -135,6 +135,27 @@ test('loads only the current warehouse/company context and renders loading then 
 
   assert.match(renderedText(renderer), /No hay ventas registradas hoy/)
   assert.equal(calls.length, 1, 'no hace polling ni recargas automáticas')
+
+  act(() => renderer.unmount())
+})
+
+test('does not require client company or warehouse assertions to load night sales', async () => {
+  const calls = []
+  const renderer = await createScreen({
+    session: {
+      employee_id: SESSION.employee_id,
+      session_token: SESSION.session_token,
+      name: SESSION.name,
+    },
+    loadSales: (...args) => {
+      calls.push(args)
+      return Promise.resolve({ ok: true, data: { items: [] } })
+    },
+  })
+
+  assert.deepEqual(calls, [[]])
+  assert.match(renderedText(renderer), /No hay ventas registradas hoy/)
+  assert.doesNotMatch(renderedText(renderer), /Falta configurar|Sesión incompleta/)
 
   act(() => renderer.unmount())
 })
@@ -310,14 +331,13 @@ test('sale rows are keyboard-native buttons and only safe ids navigate to night 
   act(() => renderer.unmount())
 })
 
-test('ignores a stale sales response after the session context changes', async () => {
+test('does not restart the backend-scoped request when client company context changes', async () => {
   const { Screen, SessionContext } = await loadRuntime()
-  const first = deferred()
-  const second = deferred()
+  const request = deferred()
   const calls = []
-  const loadSales = (scope) => {
-    calls.push(scope)
-    return calls.length === 1 ? first.promise : second.promise
+  const loadSales = (...args) => {
+    calls.push(args)
+    return request.promise
   }
   const element = (session) => React.createElement(
     MemoryRouter,
@@ -338,26 +358,16 @@ test('ignores a stale sales response after the session context changes', async (
     await flush()
   })
   await act(async () => {
-    renderer.update(element({ ...SESSION, company_id: 35 }))
+    renderer.update(element({ ...SESSION, company_id: 35, warehouse_id: 91 }))
     await flush()
   })
-  assert.deepEqual(calls, [
-    { warehouseId: 89, companyId: 34 },
-    { warehouseId: 89, companyId: 35 },
-  ])
+  assert.deepEqual(calls, [[]])
 
   await act(async () => {
-    second.resolve({ data: { items: [{ order_id: 9002, name: 'RESPUESTA NUEVA' }] } })
+    request.resolve({ data: { items: [{ order_id: 9002, name: 'RESPUESTA DEL BACKEND' }] } })
     await flush()
   })
-  assert.match(renderedText(renderer), /RESPUESTA NUEVA/)
-
-  await act(async () => {
-    first.resolve({ data: { items: [{ order_id: 9001, name: 'RESPUESTA VIEJA' }] } })
-    await flush()
-  })
-  assert.match(renderedText(renderer), /RESPUESTA NUEVA/)
-  assert.doesNotMatch(renderedText(renderer), /RESPUESTA VIEJA/)
+  assert.match(renderedText(renderer), /RESPUESTA DEL BACKEND/)
 
   act(() => renderer.unmount())
 })
@@ -370,17 +380,17 @@ test('formats Odoo server datetimes deterministically in Mexico City time', asyn
   assert.equal(formatNightPosSaleTime(null), 'Hora no disponible')
 })
 
-test('screen source has no date picker/filter or Hector identity policy', () => {
+test('screen source has no client scope, date, or Hector identity policy', () => {
   assert.ok(existsSync(screenPath), 'falta ScreenNightPosSales.jsx')
   const source = readFileSync(screenUrl, 'utf8')
 
-  assert.match(source, /useSession\(\)/)
-  assert.match(source, /softWarehouse\(session\)/)
   assert.match(source, /loadSales = getNightTodaySales/)
   assert.match(source, /normalizeNightPosSalesResponse/)
   assert.match(source, /buildPosTicketPath\(NIGHT_POS_FLOW, sale\.order_id\)/)
   assert.doesNotMatch(source, /type=["']date["']/)
   assert.doesNotMatch(source, /\bdate_from\b|\bdate_to\b|\bdate\s*:/)
+  assert.doesNotMatch(source, /useSession|softWarehouse|SessionErrorState/)
+  assert.doesNotMatch(source, /\bcompanyId\b|\bwarehouseId\b/)
   assert.doesNotMatch(source, /canAccessHectorNightPos|hasHectorTapiaIdentity/)
 })
 

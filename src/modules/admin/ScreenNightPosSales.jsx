@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useSession } from '../../App'
 import { ErrorState, EmptyState, Loader } from '../../components/Loader'
-import SessionErrorState from '../../components/SessionErrorState'
-import { softWarehouse } from '../../lib/sessionGuards'
 import { TOKENS } from '../../tokens'
 import { getNightTodaySales } from './api'
 import {
@@ -283,24 +280,18 @@ export default function ScreenNightPosSales({
   loadSales = getNightTodaySales,
   navigateOverride,
 }) {
-  const sessionContext = useSession()
-  const session = sessionContext?.session
   const routerNavigate = useNavigate()
   const navigate = typeof navigateOverride === 'function' ? navigateOverride : routerNavigate
-  const warehouseId = softWarehouse(session)
-  const companyId = Number(session?.company_id || 0) || null
   const requestSequence = useRef(0)
   const [retryKey, setRetryKey] = useState(0)
   const [state, setState] = useState({ loading: true, error: false, items: [] })
 
   useEffect(() => {
-    if (!warehouseId || !companyId) return undefined
-
     const requestId = ++requestSequence.current
     let active = true
     setState({ loading: true, error: false, items: [] })
 
-    Promise.resolve(loadSales({ warehouseId, companyId }))
+    Promise.resolve(loadSales())
       .then((response) => {
         if (!active || requestId !== requestSequence.current) return
         if (isFailureEnvelope(response)) {
@@ -320,7 +311,7 @@ export default function ScreenNightPosSales({
     return () => {
       active = false
     }
-  }, [warehouseId, companyId, loadSales, retryKey])
+  }, [loadSales, retryKey])
 
   const handleBack = useCallback(() => {
     navigate(NIGHT_POS_FLOW.posRoute)
@@ -329,13 +320,6 @@ export default function ScreenNightPosSales({
   const handleOpen = useCallback((path) => {
     if (path) navigate(path)
   }, [navigate])
-
-  if (!warehouseId) {
-    return <SessionErrorState error={{ missing: 'warehouse_id' }} backTo={NIGHT_POS_FLOW.posRoute} />
-  }
-  if (!companyId) {
-    return <SessionErrorState error={{ missing: 'company_id' }} backTo={NIGHT_POS_FLOW.posRoute} />
-  }
 
   return (
     <NightPosSalesView

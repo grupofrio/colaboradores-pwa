@@ -99,12 +99,8 @@ export function getTodaySales(arg) {
 }
 
 /** Ventas de hoy del POS nocturno. El backend fija identidad y fecha efectiva. */
-export function getNightTodaySales({ warehouseId, companyId }) {
-  return api('GET', `/pwa-admin/today-sales${toQuery({
-    warehouse_id: warehouseId,
-    company_id: companyId,
-    night_pos: 1,
-  })}`)
+export function getNightTodaySales() {
+  return api('GET', '/pwa-admin/today-sales?night_pos=1')
 }
 
 // ── Validación de ticket (Almacenista Entregas) ──────────────────────────────

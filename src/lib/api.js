@@ -1650,6 +1650,11 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
+    if (query.has('night_pos')) {
+      const nightQuery = `night_pos=${encodeURIComponent(query.get('night_pos'))}`
+      return odooHttp('GET', `/pwa-admin/today-sales?${nightQuery}`)
+    }
+
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const reqCompanyId = Number(query.get('company_id') || companyId || 0)
     const requestQuery = {
@@ -1657,14 +1662,7 @@ async function directAdmin(method, path, body) {
       company_id: reqCompanyId || undefined,
       date: query.get('date') || undefined,
     }
-    if (!query.has('night_pos')) {
-      return odooHttp('GET', '/pwa-admin/today-sales', requestQuery)
-    }
-
-    const standardQuery = toQueryString(requestQuery)
-    const nightQuery = `night_pos=${encodeURIComponent(query.get('night_pos'))}`
-    const queryString = standardQuery ? `${standardQuery}&${nightQuery}` : nightQuery
-    return odooHttp('GET', `/pwa-admin/today-sales?${queryString}`)
+    return odooHttp('GET', '/pwa-admin/today-sales', requestQuery)
   }
 
   if (cleanPath === '/pwa-admin/today-expenses' && method === 'GET') {
