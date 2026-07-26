@@ -4,6 +4,7 @@ import { useState, useEffect, createContext, useContext } from 'react'
 import { ToastProvider } from './components/Toast'
 import AppShell from './components/AppShell'
 import { normalizeSessionRoleContext } from './lib/roleContext'
+import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervisor-ventas/v2/sessionScope'
 import { api } from './lib/api'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
@@ -505,25 +506,26 @@ class ErrorBoundary extends Component {
   }
 }
 
-// Codex §5: firma de IDENTIDAD de sesión (sin credenciales expuestas fuera de la
-// comparación). Dos sesiones son distintas si cambia CUALQUIERA: session_id,
-// token, empleado, sucursal efectiva, warehouse, company o rol. No solo employee_id.
+// Codex §3/§5: la firma de identidad usa la IDENTIDAD CANÓNICA compartida
+// (buildSessionIdentity) — misma autoridad que sessionStore/sessionScope, sin
+// duplicar campos. `sessionKey` no serializa el token.
 function sessionIdentitySig(s) {
   if (!s || typeof s !== 'object') return ''
-  return [
-    s.odoo_employee_session_id || '',
-    s.odoo_employee_token || s.gf_employee_token || '',
-    s.employee_id || '',
-    s.branch_config_id || s.analytic_account_id || '',
-    s.warehouse_id || '',
-    s.company_id || '',
-    s.role || '',
-  ].join('|')
+  return buildSessionIdentity(s).sessionKey
 }
+
+// Codex §5/§6: `withScopeNonce` = alias local del helper canónico
+// `ensureSessionScopeNonce` (vive en sessionScope, misma casa que la identidad).
+// Toda sesión persistida debe tener una huella no sensible estable; dos sesiones
+// legacy del mismo empleado ya NO comparten scopeKey.
+const withScopeNonce = ensureSessionScopeNonce
 
 // ─── App principal ────────────────────────────────────────────────────────────
 export default function App() {
-  const [session, setSession] = useState(getStoredSession)
+  // §5/§6: migra en memoria la sesión legacy (sin session_id/nonce) añadiéndole un
+  // nonce estable en la inicialización (una sola vez; el efecto de persistencia la
+  // guarda ya con el nonce).
+  const [session, setSession] = useState(() => withScopeNonce(getStoredSession()))
 
   useEffect(() => {
     if (session) {
@@ -569,7 +571,9 @@ export default function App() {
         window.location.replace('/')
         return
       }
-      setSession(normalizeSessionRoleContext(stored))
+      // Misma persona, distinta sucursal/token/session_id/nonce ⇒ adoptar (con
+      // nonce garantizado). sessionStore publica snapshot, invalida cachés, refetch.
+      setSession(withScopeNonce(normalizeSessionRoleContext(stored)))
     }
     function onStorage(e) {
       if (e.key === 'gf_session') checkSessionDrift()

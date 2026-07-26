@@ -40,28 +40,67 @@ function sessionFingerprint(session) {
 }
 
 /**
- * Clave de identidad de scope (string estable). Cambia si cambia CUALQUIERA de:
- * sesión (session_id), employee id, warehouse/branch, company, versión de contrato.
+ * IDENTIDAD CANÓNICA de sesión (Codex §3, YELLOW). Fuente ÚNICA usada por App.jsx,
+ * sessionStore, sessionScope, comparación multi-tab e invalidación de cachés — NO
+ * se duplica la lógica en varios archivos. Normaliza los aliases reales:
+ *   session_id: odoo_employee_session_id | gf_employee_session_id | session_id |
+ *               gf_scope_nonce  (huella no sensible, §6)
+ *   branchId:  effective_branch_config_id | branch_config_id | branch_id |
+ *              analytic_account_id
+ * `sessionKey` NO serializa el token; `credentialVersion` permite comparar de forma
+ * segura dentro del flujo de sesión (deriva de la huella no sensible, no del token).
  * @param {object|null} session  sesión inyectable (null ⇒ lee gf_session)
- * @returns {string}
+ * @returns {{sessionKey, employeeId, branchId, warehouseId, companyId, role, credentialVersion}}
  */
-export function sessionScopeKey(session = null) {
+export function buildSessionIdentity(session = null) {
   const s = session || readSessionRaw()
-  const emp = s.employee_id || (s.employee && s.employee.id) || ''
-  const wh = s.warehouse_id || s.plant_warehouse_id || ''
-  const company = s.company_id || ''
-  const branch = s.branch_config_id || s.analytic_account_id || ''
-  return [CACHE_CONTRACT_VERSION, sessionFingerprint(s), emp, wh, company, branch].join(':')
+  const fp = sessionFingerprint(s) // no vacío (§6)
+  const employeeId = s.employee_id || (s.employee && s.employee.id) || null
+  const branchId = s.effective_branch_config_id || s.branch_config_id || s.branch_id || s.analytic_account_id || null
+  const warehouseId = s.warehouse_id || s.plant_warehouse_id || null
+  const companyId = s.company_id || null
+  const role = s.role || null
+  const sessionKey = [CACHE_CONTRACT_VERSION, fp, employeeId || '', warehouseId || '', companyId || '', branchId || '', role || ''].join(':')
+  return { sessionKey, employeeId, branchId, warehouseId, companyId, role, credentialVersion: fp }
 }
 
-/** Snapshot de campos de scope (sin credenciales) para la capa reactiva §2. */
+/**
+ * §5/§6: garantiza que una sesión tenga una huella no sensible estable. Si la
+ * sesión (legacy) no trae ningún session_id NI nonce, devuelve una COPIA con
+ * `gf_scope_nonce` generado (no vacío, no token, no derivado del token). Una
+ * sesión sin empleado (no logueada) o que ya tiene id/nonce se devuelve tal cual.
+ * Pura y testeable (usada por App.jsx al inicializar/adoptar sesión).
+ * @param {object|null} session
+ * @returns {object|null}
+ */
+export function ensureSessionScopeNonce(session) {
+  if (!session || typeof session !== 'object') return session
+  if (session.odoo_employee_session_id || session.gf_employee_session_id || session.session_id || session.gf_scope_nonce) return session
+  if (!(session.employee_id || (session.employee && session.employee.id))) return session
+  let nonce
+  try {
+    nonce = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `n${Date.now()}${Math.random().toString(36).slice(2, 8)}`
+  } catch { nonce = `n${Date.now()}` }
+  return { ...session, gf_scope_nonce: nonce }
+}
+
+/** Clave de identidad de scope (string estable). Delega en buildSessionIdentity. */
+export function sessionScopeKey(session = null) {
+  return buildSessionIdentity(session).sessionKey
+}
+
+/** Snapshot de campos de scope (sin credenciales) para la capa reactiva §2.
+ *  Deriva de la identidad canónica (sin duplicar lógica). */
 export function sessionScopeFields(session = null) {
-  const s = session || readSessionRaw()
+  const id = buildSessionIdentity(session)
   return {
-    employeeId: s.employee_id || (s.employee && s.employee.id) || null,
-    effectiveBranchConfigId: s.branch_config_id || s.analytic_account_id || null,
-    warehouseId: s.warehouse_id || s.plant_warehouse_id || null,
-    companyId: s.company_id || null,
-    tokenFingerprint: sessionFingerprint(s) || null,
+    employeeId: id.employeeId,
+    effectiveBranchConfigId: id.branchId,
+    warehouseId: id.warehouseId,
+    companyId: id.companyId,
+    role: id.role,
+    tokenFingerprint: id.credentialVersion || null,
   }
 }

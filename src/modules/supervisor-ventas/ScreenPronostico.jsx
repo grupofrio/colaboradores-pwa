@@ -275,6 +275,12 @@ export default function ScreenPronostico() {
   // Codex §7/§9: write_date del forecast leído del backend, para enviarlo como
   // expected_write_date (control de concurrencia). NO se inventa en el frontend.
   const [editingWriteDate, setEditingWriteDate] = useState(null)
+  // Codex §8 (YELLOW): capabilities AUTORITATIVAS del DTO GET seguro por forecast
+  // ({ editable, empty_replace_allowed }). La UI de edición se DERIVA de esto —
+  // no del `state` local ni de una suposición de flags del cliente. `editable`
+  // combina state==draft Y flags de escritura ON en el backend; si es false: sin
+  // botón Guardar, sin abrir edición, sin request de escritura.
+  const [forecastCapsCache, setForecastCapsCache] = useState({})
   const [editLines, setEditLines] = useState([])
   const [editProductLineIdx, setEditProductLineIdx] = useState(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
@@ -368,6 +374,8 @@ export default function ScreenPronostico() {
         // §10: DTO GET seguro (token-only + scope), NO lectura ORM/sudo del navegador.
         const dto = await getForecastDto(forecastId)
         setForecastLinesCache(prev => ({ ...prev, [forecastId]: dto?.ok ? dtoLinesToView(dto.lines) : [] }))
+        // §8: registra capabilities autoritativas para derivar la UI de edición.
+        if (dto?.ok && dto.capabilities) setForecastCapsCache(prev => ({ ...prev, [forecastId]: dto.capabilities }))
       } catch (e) {
         logScreenError('ScreenPronostico', 'getForecastDto', e)
         setForecastLinesCache(prev => ({ ...prev, [forecastId]: [] }))
@@ -384,6 +392,9 @@ export default function ScreenPronostico() {
     let dto
     try { dto = await getForecastDto(forecast.id) } catch (e) { dto = { ok: false, message: e?.message } }
     if (!dto?.ok) { flashMsg(dto?.message || 'No se pudo cargar el pronóstico.', 5000); return }
+    // §8: registra capabilities y respeta `editable` — si el backend dice que no es
+    // editable (estado o flags de escritura OFF), NO se abre edición ni se escribe.
+    if (dto.capabilities) setForecastCapsCache(prev => ({ ...prev, [forecast.id]: dto.capabilities }))
     if (dto.capabilities && dto.capabilities.editable === false) {
       flashMsg('Este pronóstico no es editable en su estado actual.', 5000); return
     }
@@ -445,6 +456,17 @@ export default function ScreenPronostico() {
           if (dto?.ok) {
             setForecastLinesCache(prev => ({ ...prev, [forecastId]: dtoLinesToView(dto.lines) }))
             setEditingWriteDate(dto.write_date || null)
+            if (dto.capabilities) setForecastCapsCache(prev => ({ ...prev, [forecastId]: dto.capabilities }))
+            // §8: si tras el conflicto el forecast dejó de ser editable (p.ej. lo
+            // confirmaron en otra pestaña o apagaron flags), cerrar edición: no se
+            // puede seguir escribiendo. Read-only manda.
+            if (dto.capabilities && dto.capabilities.editable === false) {
+              setEditingForecastId(null)
+              setEditingWriteDate(null)
+              setEditLines([])
+              flashMsg('El pronóstico ya no es editable (cambió su estado). Cerré la edición.', 6500)
+              return
+            }
           }
           flashMsg('El pronóstico cambió (otra edición). Recargué la versión nueva; revisa y confirma de nuevo.', 6500)
         } else {
@@ -454,7 +476,10 @@ export default function ScreenPronostico() {
       }
       // Solo con éxito REAL: refrescar caché con el DTO seguro, cerrar y confirmar.
       const refreshed = await getForecastDto(forecastId).catch(() => null)
-      if (refreshed?.ok) setForecastLinesCache(prev => ({ ...prev, [forecastId]: dtoLinesToView(refreshed.lines) }))
+      if (refreshed?.ok) {
+        setForecastLinesCache(prev => ({ ...prev, [forecastId]: dtoLinesToView(refreshed.lines) }))
+        if (refreshed.capabilities) setForecastCapsCache(prev => ({ ...prev, [forecastId]: refreshed.capabilities }))
+      }
       setEditingForecastId(null)
       setEditingWriteDate(null)
       setEditLines([])
@@ -2258,6 +2283,11 @@ export default function ScreenPronostico() {
                     const isLinesLoading = forecastLinesLoading === f.id
                     const cachedLines = forecastLinesCache[f.id] || null
                     const isEditing = editingForecastId === f.id
+                    // §8: capabilities autoritativas del DTO (si ya se cargaron).
+                    // `knownReadOnly` = el backend confirmó que NO es editable ⇒ se
+                    // reemplaza el afford de edición por un indicador de solo lectura.
+                    const caps = forecastCapsCache[f.id] || null
+                    const knownReadOnly = !!(caps && caps.editable === false)
                     return (
                     <div key={f.id || i} style={{
                       borderRadius: TOKENS.radius.lg,
@@ -2313,18 +2343,35 @@ export default function ScreenPronostico() {
                                 }}>
                                   {isActing ? '...' : 'Confirmar'}
                                 </button>
-                                <button
-                                  onClick={() => { if (!isExpanded) handleToggleExpand(f.id); handleStartEdit(f) }}
-                                  disabled={isActing}
-                                  style={{
-                                    padding: '8px 12px', borderRadius: TOKENS.radius.md,
-                                    background: isActing ? TOKENS.colors.surface : 'rgba(99,179,237,0.12)',
-                                    border: `1px solid ${TOKENS.colors.blue2}40`, color: TOKENS.colors.blue3,
-                                    fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1, flexShrink: 0,
-                                  }}
-                                >
-                                  Editar
-                                </button>
+                                {knownReadOnly ? (
+                                  // §8: el backend confirmó no editable (estado/flags OFF).
+                                  // Sin botón de edición, sin start-edit, sin request.
+                                  <span
+                                    role="note"
+                                    aria-label="Pronóstico de solo lectura"
+                                    style={{
+                                      padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                                      background: TOKENS.colors.surface,
+                                      border: `1px solid ${TOKENS.colors.border}`, color: TOKENS.colors.textMuted,
+                                      fontSize: 12, fontWeight: 700, flexShrink: 0,
+                                    }}
+                                  >
+                                    Solo lectura
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => { if (!isExpanded) handleToggleExpand(f.id); handleStartEdit(f) }}
+                                    disabled={isActing}
+                                    style={{
+                                      padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                                      background: isActing ? TOKENS.colors.surface : 'rgba(99,179,237,0.12)',
+                                      border: `1px solid ${TOKENS.colors.blue2}40`, color: TOKENS.colors.blue3,
+                                      fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1, flexShrink: 0,
+                                    }}
+                                  >
+                                    Editar
+                                  </button>
+                                )}
                                 <button onClick={() => handleDelete(f.id)} disabled={isActing} style={{
                                   width: 36, height: 34, borderRadius: TOKENS.radius.md, flexShrink: 0,
                                   background: isActing ? TOKENS.colors.surface : 'rgba(239,68,68,0.08)',

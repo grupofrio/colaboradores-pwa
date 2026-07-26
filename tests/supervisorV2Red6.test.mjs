@@ -67,7 +67,11 @@ test('wiring: api.js expira sesión ante envelope UNAUTHORIZED (central, idempot
 test('wiring: App.jsx compara IDENTIDAD completa multi-tab (no solo employee_id)', () => {
   const s = src('App.jsx')
   assert.ok(/function sessionIdentitySig/.test(s))
-  assert.ok(/odoo_employee_session_id/.test(s) && /branch_config_id/.test(s) && /company_id/.test(s))
+  // YELLOW §3: sessionIdentitySig delega en la identidad CANÓNICA (buildSessionIdentity),
+  // que cubre la identidad completa. Los nombres de campo viven en sessionScope (fuente única).
+  assert.ok(/return buildSessionIdentity\(s\)\.sessionKey/.test(s), 'delega en la identidad canónica')
+  const scope = src('modules/supervisor-ventas/v2/sessionScope.js')
+  assert.ok(/odoo_employee_session_id/.test(scope) && /branch_config_id/.test(scope) && /company_id/.test(scope), 'la canónica cubre session_id/branch/company')
   assert.ok(/gf_scope_nonce/.test(s), 'genera nonce de scope en login (§6)')
 })
 

@@ -8,14 +8,26 @@
 // anterior, invalidar cachés dependientes, incrementar la generación de request y
 // refetch — sin depender de una lectura imperativa aislada de sessionScopeKey().
 import { useSyncExternalStore } from 'react'
-import { sessionScopeKey, sessionScopeFields } from '../modules/supervisor-ventas/v2/sessionScope.js'
+import { buildSessionIdentity } from '../modules/supervisor-ventas/v2/sessionScope.js'
 
 const listeners = new Set()
 const scopedCaches = new Set()
 let _version = 0
 
+// §3: el snapshot deriva de la IDENTIDAD CANÓNICA única (buildSessionIdentity) —
+// misma autoridad que App.jsx y sessionScope, sin recomputar campos aparte.
 function build() {
-  return { sessionVersion: _version, scopeKey: sessionScopeKey(), ...sessionScopeFields() }
+  const id = buildSessionIdentity()
+  return {
+    sessionVersion: _version,
+    scopeKey: id.sessionKey,
+    employeeId: id.employeeId,
+    effectiveBranchConfigId: id.branchId,
+    warehouseId: id.warehouseId,
+    companyId: id.companyId,
+    role: id.role,
+    tokenFingerprint: id.credentialVersion || null,
+  }
 }
 
 let _snapshot = build()
@@ -23,7 +35,7 @@ let _snapshot = build()
 // Recalcula el snapshot; si la identidad (scopeKey) cambió: bumpea la versión,
 // invalida cachés dependientes y notifica a los suscriptores (re-render de hooks).
 function recompute() {
-  const nextKey = sessionScopeKey()
+  const nextKey = buildSessionIdentity().sessionKey
   if (nextKey !== _snapshot.scopeKey) {
     _version += 1
     _snapshot = build()
