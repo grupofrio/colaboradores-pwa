@@ -1,5 +1,7 @@
 import { isValidAuthenticatedSession } from '../../lib/session.js'
 
+const DEFAULT_ATTENDANCE_MANAGER_IDS = '717'
+
 /** Parse the public, UI-only allowlist without accepting numeric coercions. */
 export function parseAttendanceManagerIds(raw = '') {
   if (typeof raw !== 'string') return []
@@ -24,7 +26,7 @@ export function parseAttendanceManagerIds(raw = '') {
  */
 export function readAttendanceAccess(
   session,
-  raw = import.meta.env?.VITE_ATTENDANCE_MANAGER_EMPLOYEE_IDS || '',
+  raw = import.meta.env?.VITE_ATTENDANCE_MANAGER_EMPLOYEE_IDS ?? DEFAULT_ATTENDANCE_MANAGER_IDS,
 ) {
   if (!isValidAuthenticatedSession(session)) {
     return { level: 'none', reason: 'invalid_session' }

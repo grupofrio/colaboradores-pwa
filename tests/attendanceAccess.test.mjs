@@ -60,6 +60,26 @@ test('attendance access: only employee 717 with a valid session gets local atten
   }
 })
 
+test('attendance access: production-safe default keeps employee 717 visible when Vercel omits the variable', () => {
+  assert.ok(attendanceAccess, 'el helper de acceso de asistencias debe existir')
+
+  const { readAttendanceAccess } = attendanceAccess
+  const accessSource = readFileSync(new URL('../src/modules/asistencias/access.js', import.meta.url), 'utf8')
+  assert.match(accessSource, /VITE_ATTENDANCE_MANAGER_EMPLOYEE_IDS \?\? DEFAULT_ATTENDANCE_MANAGER_IDS/)
+  assert.deepEqual(readAttendanceAccess(session(717)), {
+    level: 'manager',
+    reason: 'employee_allowlist',
+  })
+  assert.deepEqual(readAttendanceAccess(session(718)), {
+    level: 'none',
+    reason: 'employee_not_allowed',
+  })
+  assert.deepEqual(readAttendanceAccess(session(717), ''), {
+    level: 'none',
+    reason: 'employee_not_allowed',
+  }, 'una variable explícita vacía desactiva el fallback')
+})
+
 test('attendance access: name, role, nested employee, or malformed IDs cannot grant access', () => {
   assert.ok(attendanceAccess, 'el helper de acceso de asistencias debe existir')
 
