@@ -55,6 +55,7 @@ const WRITER_BINDINGS = [
 ]
 
 const WRITER_SET = new Set(WRITER_BINDINGS)
+const HTTP_WRITE_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 
 function parseModule(source) {
   return parse(source, { sourceType: 'module', plugins: ['jsx'] })
@@ -79,6 +80,39 @@ function importedName(specifier) {
   return specifier.imported.type === 'Identifier'
     ? specifier.imported.name
     : specifier.imported.value
+}
+
+function isWriterCapableSource(source) {
+  return /(?:^|[/_.-])(?:api|service)(?:[/_.-]|$)/i.test(source)
+    || /(?:api|service|client)(?:\.[cm]?[jt]sx?)?$/i.test(source)
+}
+
+function memberPropertyName(callee) {
+  if (!callee?.computed && callee?.property?.type === 'Identifier') return callee.property.name
+  return callee?.computed && callee?.property?.type === 'StringLiteral' ? callee.property.value : null
+}
+
+function isDynamicImport(node) {
+  return (node?.type === 'CallExpression' || node?.type === 'OptionalCallExpression')
+    && node.callee?.type === 'Import'
+}
+
+function dynamicImportSource(node) {
+  return isDynamicImport(node) && node.arguments[0]?.type === 'StringLiteral'
+    ? node.arguments[0].value
+    : null
+}
+
+function forbiddenMemberCall(callee) {
+  if (callee?.type !== 'MemberExpression' && callee?.type !== 'OptionalMemberExpression') return null
+  const property = memberPropertyName(callee)
+  const objectName = callee.object?.type === 'Identifier' ? callee.object.name : null
+  if (objectName === 'window' && property === 'fetch') return 'window.fetch'
+  if (objectName && /(?:api|client)$/i.test(objectName) && (HTTP_WRITE_METHODS.has(property) || WRITER_SET.has(property))) {
+    return `${objectName}.${property}`
+  }
+  if (isDynamicImport(callee.object) && WRITER_SET.has(property)) return `import().${property}`
+  return null
 }
 
 function jsxName(name) {
@@ -139,7 +173,6 @@ function assertAuditedReadConsumerImports(file, source) {
   const modules = AUDITED_IMPORTS[file]
   const ast = parseModule(source)
   const imports = ast.program.body.filter((node) => node.type === 'ImportDeclaration')
-  const auditedSpecifiers = new Set(Object.keys(modules))
 
   for (const [specifier, allowed] of Object.entries(modules)) {
     const declarations = imports.filter((node) => node.source.value === specifier)
@@ -157,21 +190,38 @@ function assertAuditedReadConsumerImports(file, source) {
   }
 
   for (const declaration of imports) {
-    if (!auditedSpecifiers.has(declaration.source.value)) continue
     for (const binding of declaration.specifiers) {
       assert.equal(WRITER_SET.has(importedName(binding)), false, `${file} no debe importar writers de ${declaration.source.value}`)
       assert.equal(WRITER_SET.has(binding.local?.name), false, `${file} no debe aliasar writers de ${declaration.source.value}`)
+      assert.equal(
+        isWriterCapableSource(declaration.source.value) && (
+          binding.type === 'ImportDefaultSpecifier' || binding.type === 'ImportNamespaceSpecifier'
+        ),
+        false,
+        `${file} no debe importar default/namespace de ${declaration.source.value}`,
+      )
     }
   }
 
   walkAst(ast, (node) => {
     if (node.type !== 'CallExpression' && node.type !== 'OptionalCallExpression') return
-    if (node.callee?.type !== 'Identifier') return
+    const importedSource = dynamicImportSource(node)
     assert.equal(
-      WRITER_SET.has(node.callee.name) || node.callee.name === 'api' || node.callee.name === 'fetch',
+      importedSource !== null && isWriterCapableSource(importedSource),
       false,
-      `${file} no debe ejecutar ${node.callee.name}()`,
+      `${file} no debe cargar dinámicamente ${importedSource}`,
     )
+
+    if (node.callee?.type === 'Identifier') {
+      assert.equal(
+        WRITER_SET.has(node.callee.name) || node.callee.name === 'api' || node.callee.name === 'fetch',
+        false,
+        `${file} no debe ejecutar ${node.callee.name}()`,
+      )
+    }
+
+    const memberWriter = forbiddenMemberCall(node.callee)
+    assert.equal(memberWriter, null, `${file} no debe ejecutar ${memberWriter}()`)
   })
 }
 
@@ -218,6 +268,40 @@ test('la auditoría rechaza llamadas de escritura ejecutables, no comentarios ni
   const file = 'modules/supervisor-ventas/ScreenDashboardVentas.jsx'
   assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\napiPost()`))
   assert.doesNotThrow(() => assertAuditedReadConsumerImports(file, `${src(file)}\n// apiPost()\nconst label = 'apiPost()'`))
+})
+
+test('la auditoría cierra writers importados y writes por miembro fuera de los módulos auditados', () => {
+  const file = 'modules/supervisor-ventas/ScreenDashboardVentas.jsx'
+  const withWriterFromOtherService = replaceExactlyOnce(
+    src(file),
+    "import { apiGet, getSession } from '../../lib/api.js'",
+    "import { apiGet, getSession } from '../../lib/api.js'\nimport { apiPost as writeDashboard } from '../otro-servicio'",
+  )
+
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${withWriterFromOtherService}\nwriteDashboard()`))
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nwindow.fetch('/escritura')`))
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\napiClient.post('/escritura')`))
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nclient.apiPost('/escritura')`))
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nclient['apiPost']('/escritura')`))
+  assert.doesNotThrow(() => assertAuditedReadConsumerImports(file, `${src(file)}\napiClient.get('/lectura')`))
+
+  const withDefaultApiImport = replaceExactlyOnce(
+    src(file),
+    "import { apiGet, getSession } from '../../lib/api.js'",
+    "import { apiGet, getSession } from '../../lib/api.js'\nimport apiClient from '../otro-api'",
+  )
+  assert.throws(() => assertAuditedReadConsumerImports(file, withDefaultApiImport))
+
+  const withNamespaceServiceImport = replaceExactlyOnce(
+    src(file),
+    "import { apiGet, getSession } from '../../lib/api.js'",
+    "import { apiGet, getSession } from '../../lib/api.js'\nimport * as serviceClient from '../otro-service'",
+  )
+  assert.throws(() => assertAuditedReadConsumerImports(file, withNamespaceServiceImport))
+
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nimport('../otro-api')`))
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nimport('../otro-componente').apiPost('/escritura')`))
+  assert.doesNotThrow(() => assertAuditedReadConsumerImports(file, `${src(file)}\nimport('../componentes/lectura')`))
 })
 
 test('Más enlaza únicamente las cuatro superficies secundarias aprobadas', () => {
