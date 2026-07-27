@@ -50,6 +50,34 @@ Este documento no afirma que staging o producción tengan flags activos. La
 activación global y por sucursal requiere un S/N posterior y evidencia QA
 OFF/ON. El repositorio frontend no cambia esos flags.
 
+## Gate de experiencia
+
+Supervisor V2 monta **únicamente** cuando la sesión del login más reciente
+tiene `capabilities.supervisorV2 === true` y
+`branch.supervisor_v2_enabled === true`. Esa sesión es una caché visual; cada
+endpoint vuelve a autorizar en Odoo.
+
+El piloto persistente habilitará Supervisor V2, Day Control y Radar para cada
+supervisor que Odoo resuelva en la sucursal de la supervisora piloto. Secure
+Writes se usará solo de forma temporal para QA en staging y Customer Edit se
+mantiene apagado. Cualquier cambio de experiencia requiere cerrar sesión e
+iniciar una sesión nueva.
+
+Las siguientes rutas secundarias legadas alcanzables están auditadas como
+superficies de lectura:
+
+- `/equipo/vendedor/:vendedorId`
+- `/equipo/sin-visitar`
+- `/equipo/cierre`
+- `/equipo/dashboard`
+- `/equipo/metas`
+- `/equipo/score-semanal`
+- `/equipo/recuperacion`
+
+Los enlaces de **Más** llevan a Dashboard, Metas, Score semanal y Recuperación.
+Mientras V2 esté activo quedan excluidas Bajas, Pronóstico, Plan diario/Agregar
+cliente, Tareas, Notas y Nota rápida; `V2ExcludedRoute` las bloquea.
+
 ## Rollback
 
 Apagar flags (default OFF/false) · el perfil PWA conserva las rutas actuales
