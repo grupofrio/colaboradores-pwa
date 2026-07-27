@@ -103,24 +103,36 @@ export function AbsenceModal({
   const busy = saving || reading
 
   useEffect(() => {
+    const previouslyFocused = document.activeElement
     mountedRef.current = true
+    firstFieldRef.current?.focus()
     return () => {
       mountedRef.current = false
       readSequenceRef.current += 1
+      previouslyFocused?.focus?.()
     }
   }, [])
 
   useEffect(() => {
-    const previouslyFocused = document.activeElement
-    firstFieldRef.current?.focus()
     function onKeyDown(event) {
       if (event.key === 'Escape' && !busy) onClose()
       if (event.key === 'Tab') {
         const focusable = [...(dialogRef.current?.querySelectorAll(
           'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
         ) || [])]
+        if (!focusable.length) {
+          event.preventDefault()
+          dialogRef.current?.focus()
+          return
+        }
         const first = focusable[0]
         const last = focusable.at(-1)
+        if (document.activeElement === dialogRef.current) {
+          event.preventDefault()
+          if (event.shiftKey) last?.focus()
+          else first?.focus()
+          return
+        }
         if (event.shiftKey && document.activeElement === first) {
           event.preventDefault()
           last?.focus()
@@ -131,11 +143,12 @@ export function AbsenceModal({
       }
     }
     document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      previouslyFocused?.focus?.()
-    }
+    return () => document.removeEventListener('keydown', onKeyDown)
   }, [busy, onClose])
+
+  useEffect(() => {
+    if (busy) dialogRef.current?.focus()
+  }, [busy])
 
   function update(field, value) {
     setDraft((current) => ({ ...current, [field]: value }))
@@ -204,10 +217,12 @@ export function AbsenceModal({
     <div className="attendance-modal-backdrop">
       <section
         aria-labelledby="absence-modal-title"
+        aria-busy={busy}
         aria-modal="true"
         className="attendance-modal"
         ref={dialogRef}
         role="dialog"
+        tabIndex="-1"
       >
         <header>
           <div>

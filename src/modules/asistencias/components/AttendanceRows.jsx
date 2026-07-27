@@ -14,6 +14,22 @@ function formatTime(value) {
   return match ? match[1] : String(value)
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function formatAttendanceCheckout(value, rowDate) {
+  if (!value) return 'Pendiente'
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
+  if (!match) return formatTime(value)
+  const [, checkoutDate, checkoutTime] = match
+  if (checkoutDate === rowDate) return checkoutTime
+
+  const rowTimestamp = Date.parse(`${rowDate}T00:00:00Z`)
+  const checkoutTimestamp = Date.parse(`${checkoutDate}T00:00:00Z`)
+  if (Number.isFinite(rowTimestamp) && checkoutTimestamp - rowTimestamp === 86400000) {
+    return `${checkoutTime} (+1 día)`
+  }
+  return `${checkoutTime} (${checkoutDate})`
+}
+
 function finiteHours(value) {
   const hours = Number(value)
   return Number.isFinite(hours) ? `${Math.round(hours * 100) / 100} h` : '0 h'
@@ -91,7 +107,7 @@ export function AttendanceRows({
         {row.segments.map((segment) => (
           <li key={segment.key}>
             <div>
-              <strong>{formatTime(segment.check_in)}–{formatTime(segment.check_out)}</strong>
+              <strong>{formatTime(segment.check_in)}–{formatAttendanceCheckout(segment.check_out, row.date)}</strong>
               <span>{finiteHours(segment.worked_hours)}</span>
             </div>
             <div className="attendance-segment-actions">

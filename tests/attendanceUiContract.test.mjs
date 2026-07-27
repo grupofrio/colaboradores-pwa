@@ -66,7 +66,10 @@ test('attendance ui: summary keeps expected categories separate from incomplete 
 })
 
 test('attendance ui: desktop table and mobile cards expose every segment with stable keys', async () => {
-  const { buildAttendanceRowViewModels } = await importJsx('components/AttendanceRows.jsx')
+  const {
+    buildAttendanceRowViewModels,
+    formatAttendanceCheckout,
+  } = await importJsx('components/AttendanceRows.jsx')
   const rows = buildAttendanceRowViewModels([{
     employee: { id: 12, number: 'IG-12', name: 'Ana', analytic_code: 'IGU' },
     date: '2026-07-27',
@@ -82,6 +85,14 @@ test('attendance ui: desktop table and mobile cards expose every segment with st
     '12:2026-07-27:attendance:8',
     '12:2026-07-27:attendance:9',
   ])
+  assert.equal(
+    formatAttendanceCheckout('2026-07-28T02:15:00-06:00', '2026-07-27'),
+    '02:15 (+1 día)',
+  )
+  assert.equal(
+    formatAttendanceCheckout('2026-07-27T17:00:00-06:00', '2026-07-27'),
+    '17:00',
+  )
 
   const componentSource = await source('components/AttendanceRows.jsx')
   assert.match(componentSource, /attendance-table/)
@@ -116,6 +127,8 @@ test('attendance ui: mutation drafts retain employee date version and administra
     version: 'attendance-v2',
     change_reason: '',
   })
+  assert.equal(attendance.getAttendanceInitialFocusField('close'), 'check_out')
+  assert.equal(attendance.getAttendanceInitialFocusField('correct'), 'check_in')
   assert.deepEqual(absence.buildAbsenceDraft({ mode: 'justify', row }), {
     employee_id: 12,
     date: '2026-07-27',
@@ -219,6 +232,26 @@ test('attendance ui: modal and drawer dialogs trap keyboard focus', async () => 
   }
 })
 
+test('attendance ui: modal focus lifecycle stays inside dialogs while pending', async () => {
+  const attendance = await source('components/AttendanceModal.jsx')
+  const absence = await source('components/AbsenceModal.jsx')
+
+  assert.match(attendance, /ref=\{initialFocusField === 'check_out' \? firstFieldRef : undefined\}/)
+  assert.match(attendance, /aria-busy=\{saving\}/)
+  assert.match(attendance, /tabIndex="-1"/)
+  assert.match(attendance, /if \(!focusable\.length\)/)
+  assert.match(attendance, /document\.activeElement === dialogRef\.current/)
+  assert.match(attendance, /if \(saving\) dialogRef\.current\?\.focus\(\)/)
+  assert.equal((attendance.match(/previouslyFocused\?\.focus\?\.\(\)/g) || []).length, 1)
+
+  assert.match(absence, /aria-busy=\{busy\}/)
+  assert.match(absence, /tabIndex="-1"/)
+  assert.match(absence, /if \(!focusable\.length\)/)
+  assert.match(absence, /document\.activeElement === dialogRef\.current/)
+  assert.match(absence, /if \(busy\) dialogRef\.current\?\.focus\(\)/)
+  assert.equal((absence.match(/previouslyFocused\?\.focus\?\.\(\)/g) || []).length, 1)
+})
+
 test('attendance ui: audit drawer sends model record ID and stable pagination', async () => {
   const { buildAuditRequest, nextAuditOffset } = await importJsx('components/AuditDrawer.jsx')
   assert.deepEqual(buildAuditRequest({
@@ -261,4 +294,10 @@ test('attendance ui: invalid filters clear a refresh cancelled by the effect cle
   )
   assert.match(invalidBranch, /setLoading\(false\)/)
   assert.match(invalidBranch, /setRefreshing\(false\)/)
+})
+
+test('attendance ui: mobile segment lists shrink without overflowing narrow cards', async () => {
+  const styles = await source('asistencias.css')
+  const mobileStyles = styles.slice(styles.indexOf('@media (max-width: 760px)'))
+  assert.match(mobileStyles, /\.attendance-segments\s*\{[^}]*min-width:\s*0;[^}]*width:\s*100%;/s)
 })

@@ -685,6 +685,11 @@
     display: none;
   }
 
+  .attendance-segments {
+    min-width: 0;
+    width: 100%;
+  }
+
   .attendance-mobile-cards {
     display: grid;
     gap: 12px;

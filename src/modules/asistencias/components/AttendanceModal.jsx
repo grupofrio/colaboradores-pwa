@@ -18,6 +18,11 @@ function defaultTime(date, time) {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
+export function getAttendanceInitialFocusField(mode) {
+  return mode === 'close' ? 'check_out' : 'check_in'
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildAttendanceDraft({ mode, row = {}, attendance = null }) {
   const update = mode === 'correct' || mode === 'close'
   return {
@@ -46,18 +51,34 @@ export function AttendanceModal({
   const [errors, setErrors] = useState({})
   const firstFieldRef = useRef(null)
   const dialogRef = useRef(null)
+  const initialFocusField = getAttendanceInitialFocusField(mode)
 
   useEffect(() => {
     const previouslyFocused = document.activeElement
     firstFieldRef.current?.focus()
+    return () => previouslyFocused?.focus?.()
+  }, [])
+
+  useEffect(() => {
     function onKeyDown(event) {
       if (event.key === 'Escape' && !saving) onClose()
       if (event.key === 'Tab') {
         const focusable = [...(dialogRef.current?.querySelectorAll(
           'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
         ) || [])]
+        if (!focusable.length) {
+          event.preventDefault()
+          dialogRef.current?.focus()
+          return
+        }
         const first = focusable[0]
         const last = focusable.at(-1)
+        if (document.activeElement === dialogRef.current) {
+          event.preventDefault()
+          if (event.shiftKey) last?.focus()
+          else first?.focus()
+          return
+        }
         if (event.shiftKey && document.activeElement === first) {
           event.preventDefault()
           last?.focus()
@@ -68,11 +89,12 @@ export function AttendanceModal({
       }
     }
     document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      previouslyFocused?.focus?.()
-    }
+    return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose, saving])
+
+  useEffect(() => {
+    if (saving) dialogRef.current?.focus()
+  }, [saving])
 
   function update(field, value) {
     setDraft((current) => ({ ...current, [field]: value }))
@@ -96,10 +118,12 @@ export function AttendanceModal({
     <div className="attendance-modal-backdrop">
       <section
         aria-labelledby="attendance-modal-title"
+        aria-busy={saving}
         aria-modal="true"
         className="attendance-modal"
         ref={dialogRef}
         role="dialog"
+        tabIndex="-1"
       >
         <header>
           <div>
@@ -122,7 +146,7 @@ export function AttendanceModal({
               disabled={saving || closeMode}
               name="check_in"
               onChange={(event) => update('check_in', event.target.value)}
-              ref={firstFieldRef}
+              ref={initialFocusField === 'check_in' ? firstFieldRef : undefined}
               required={mode === 'create' || mode === 'add' || mode === 'correct'}
               type="datetime-local"
               value={draft.check_in}
@@ -137,6 +161,7 @@ export function AttendanceModal({
               disabled={saving}
               name="check_out"
               onChange={(event) => update('check_out', event.target.value)}
+              ref={initialFocusField === 'check_out' ? firstFieldRef : undefined}
               required={closeMode}
               type="datetime-local"
               value={draft.check_out}
