@@ -20,7 +20,7 @@ import { readM5Access } from './modules/inventario/m5/access'
 import { readM6Access } from './modules/caja-conciliacion/m6/access'
 import { readM7Access } from './modules/rentabilidad-costos/m7/access'
 import { canAccessHectorNightPos } from './modules/admin/nightPosAccess'
-import { NIGHT_POS_FLOW } from './modules/admin/posFlow'
+import { DAY_POS_FLOW, NIGHT_POS_FLOW } from './modules/admin/posFlow'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -92,6 +92,7 @@ const ScreenControlTurno    = lazy(() => import('./modules/supervision/ScreenCon
 const ScreenAdminPanel      = lazy(() => import('./modules/admin/ScreenAdminPanel'))
 const ScreenPOS             = lazy(() => import('./modules/admin/ScreenPOS'))
 const ScreenNightPosSales   = lazy(() => import('./modules/admin/ScreenNightPosSales'))
+const ScreenDayPosSales     = lazy(() => import('./modules/admin/ScreenDayPosSales'))
 const ScreenTicket          = lazy(() => import('./modules/admin/ScreenTicket'))
 const ScreenGastos          = lazy(() => import('./modules/admin/ScreenGastos'))
 const ScreenGastosHistorial = lazy(() => import('./modules/admin/ScreenGastosHistorial'))
@@ -657,6 +658,11 @@ export default function App() {
             <Route path="/pos-nocturno" element={<NightPosRoute><ScreenPOS flow={NIGHT_POS_FLOW} /></NightPosRoute>} />
             <Route path="/pos-nocturno/ventas" element={<NightPosRoute><ScreenNightPosSales /></NightPosRoute>} />
             <Route path="/pos-nocturno/ticket/:orderId" element={<NightPosRoute><ScreenTicket flow={NIGHT_POS_FLOW} /></NightPosRoute>} />
+
+            {/* ── POS diurno — permiso asignable, independiente de Admin ── */}
+            <Route path="/pos-diurno" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenPOS flow={DAY_POS_FLOW} /></ModuleRoleRoute>} />
+            <Route path="/pos-diurno/ventas" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenDayPosSales /></ModuleRoleRoute>} />
+            <Route path="/pos-diurno/ticket/:orderId" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenTicket flow={DAY_POS_FLOW} /></ModuleRoleRoute>} />
 
             {/* ── Producción — Operadores ─────────────────────────────────── */}
             <Route path="/produccion" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenMiTurno /></ProductionOperatorRoute></ModuleRoleRoute>} />

@@ -177,6 +177,17 @@ test('nav oculta: POS nocturno y tickets, sin capturar prefijos similares', () =
   assert.equal(isNavHiddenForPath('/POS-NOCTURNOS'), false)
 })
 
+test('nav diurna conserva la raíz y oculta solamente ventas y tickets operativos', () => {
+  assert.equal(isNavHiddenForPath('/pos-diurno'), false)
+  assert.equal(isNavHiddenForPath('/POS-DIURNO'), false)
+  assert.equal(isNavHiddenForPath('/pos-diurno/ventas'), true)
+  assert.equal(isNavHiddenForPath('/Pos-Diurno/Ventas'), true)
+  assert.equal(isNavHiddenForPath('/pos-diurno/ticket/9001'), true)
+  assert.equal(isNavHiddenForPath('/POS-DIURNO/TICKET/9001'), true)
+  assert.equal(isNavHiddenForPath('/pos-diurnos'), false)
+  assert.equal(isNavHiddenForPath('/pos-diurno-ventas'), false)
+})
+
 test('nav oculta: prefijos similares NO se ocultan por accidente', () => {
   assert.equal(isNavHiddenForPath('/rutas-nueva'), false)
   assert.equal(isNavHiddenForPath('/producciones'), false)

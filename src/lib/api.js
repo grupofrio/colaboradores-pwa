@@ -15,7 +15,6 @@ import {
   filterKoldOsM2Params,
 } from './koldOsM2Route.js'
 import { toPositiveSafeIntegerId } from '../modules/admin/posCustomers.js'
-import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
 import {
   isKoldOsM3Path,
   filterKoldOsM3Params,
@@ -697,24 +696,6 @@ const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
 const POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES = ['IGU34', POS_CUSTOMER_ANALYTIC_NAME]
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
 const ANGELICA_JAIMES_NAME_PARTS = ['angelica', 'jaimes']
-const POS_DEFAULT_CUSTOMER_NAME = 'VENTA PUBLICO IGUALA'
-const NIGHT_POS_DEFAULT_CUSTOMER_NAME = 'VENTA PUBLICO IGUALA NOCHE'
-
-function shapePosCustomer(row = {}) {
-  const pricelist = row.pricelist_id || row.property_product_pricelist
-  return {
-    id: Number(row.id || 0),
-    name: row.name || row.display_name || '',
-    email: row.email || '',
-    phone: row.phone || row.mobile || '',
-    mobile: row.mobile || '',
-    vat: row.vat || '',
-    ref: row.ref || '',
-    is_company: Boolean(row.is_company),
-    pricelist_id: toMany2oneId(pricelist) || null,
-    pricelist_name: toMany2oneName(pricelist),
-  }
-}
 
 function shapeSupervisorCustomer(row = {}) {
   return {
@@ -733,239 +714,6 @@ function shapeSupervisorCustomer(row = {}) {
     latitude: row.latitude ?? row.partner_latitude ?? false,
     longitude: row.longitude ?? row.partner_longitude ?? false,
     [POS_CUSTOMER_ANALYTIC_FIELD]: row[POS_CUSTOMER_ANALYTIC_FIELD] || false,
-  }
-}
-
-const POS_PRODUCT_FIELDS = ['id', 'display_name', 'name', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos']
-const POS_PRICELIST_ITEM_FIELDS = [
-  'id',
-  'pricelist_id',
-  'applied_on',
-  'product_id',
-  'product_tmpl_id',
-  'categ_id',
-  'min_quantity',
-  'compute_price',
-  'fixed_price',
-  'percent_price',
-  'price_discount',
-  'price_surcharge',
-  'price_round',
-  'price_min_margin',
-  'price_max_margin',
-]
-
-async function readPosPricelist(companyId, partnerId = 0) {
-  if (partnerId) {
-    const partnerRows = pickListResponse(await readModelSorted('res.partner', {
-      fields: ['id', 'property_product_pricelist', 'pricelist_id'],
-      domain: [['id', '=', partnerId]],
-      sort_column: 'id',
-      sort_desc: false,
-      limit: 1,
-      sudo: 1,
-    }))
-    const partnerPricelist = partnerRows[0]?.pricelist_id || partnerRows[0]?.property_product_pricelist
-    if (toMany2oneId(partnerPricelist)) {
-      return {
-        id: toMany2oneId(partnerPricelist),
-        name: toMany2oneName(partnerPricelist),
-      }
-    }
-  }
-
-  const domains = companyId
-    ? [[['company_id', '=', companyId]], [['company_id', '=', false]]]
-    : [[]]
-  let pricelistRows = []
-  for (const domain of domains) {
-    pricelistRows = pickListResponse(await readModelSorted('product.pricelist', {
-      fields: ['id', 'name', 'display_name'],
-      domain,
-      sort_column: 'id',
-      sort_desc: false,
-      limit: 1,
-      sudo: 1,
-    }))
-    if (pricelistRows.length) break
-  }
-  const pricelist = pricelistRows[0] || null
-  return pricelist
-    ? { id: Number(pricelist.id || 0) || null, name: pricelist.display_name || pricelist.name || '' }
-    : { id: null, name: '' }
-}
-
-async function readPosProducts() {
-  const { result } = await readWithOptionalFieldFallback(readModelSorted, 'product.product', {
-    requiredFields: POS_PRODUCT_FIELDS,
-    optionalFieldGroups: [['categ_id'], ['product_tmpl_id']],
-    domain: [['sale_ok', '=', true], ['available_in_pos', '=', true]],
-    sort_column: 'name',
-    sort_desc: false,
-    limit: 400,
-    sudo: 1,
-  })
-  return pickListResponse(result)
-}
-
-async function readPosPricelistItems(pricelistId) {
-  const resolvedPricelistId = Number(pricelistId || 0)
-  if (!resolvedPricelistId) return []
-  return pickListResponse(await readModelSorted('product.pricelist.item', {
-    fields: POS_PRICELIST_ITEM_FIELDS,
-    domain: [['pricelist_id', '=', resolvedPricelistId]],
-    sort_column: 'min_quantity',
-    sort_desc: true,
-    limit: 1000,
-    sudo: 1,
-  }))
-}
-
-function productBasePrice(product = {}) {
-  return Number(product.price_unit ?? product.list_price ?? product.lst_price ?? 0) || 0
-}
-
-function pricelistItemSpecificity(item = {}, product = {}) {
-  const appliedOn = String(item.applied_on || '')
-  const productId = Number(product.id || 0)
-  const productTemplateId = toMany2oneId(product.product_tmpl_id)
-  const categoryId = toMany2oneId(product.categ_id)
-
-  if ((appliedOn === '0_product_variant' || appliedOn.includes('variant')) && toMany2oneId(item.product_id) === productId) {
-    return 4
-  }
-  if ((appliedOn === '1_product' || appliedOn.includes('product')) && toMany2oneId(item.product_tmpl_id) === productTemplateId) {
-    return 3
-  }
-  if ((appliedOn === '2_product_category' || appliedOn.includes('category')) && toMany2oneId(item.categ_id) === categoryId) {
-    return 2
-  }
-  if (appliedOn === '3_global' || appliedOn === 'global') {
-    return 1
-  }
-  return 0
-}
-
-function selectPricelistItem(items = [], product = {}) {
-  let selected = null
-  let selectedScore = 0
-  for (const item of items) {
-    const minQuantity = Number(item.min_quantity || 0) || 0
-    if (minQuantity > 1) continue
-    const score = pricelistItemSpecificity(item, product)
-    if (!score) continue
-    if (
-      !selected
-      || score > selectedScore
-      || (score === selectedScore && minQuantity > (Number(selected.min_quantity || 0) || 0))
-    ) {
-      selected = item
-      selectedScore = score
-    }
-  }
-  return selected
-}
-
-function applyPricelistItemPrice(product = {}, item = null) {
-  const basePrice = productBasePrice(product)
-  if (!item) return basePrice
-
-  const computePrice = String(item.compute_price || '').toLowerCase()
-  if (computePrice === 'fixed') {
-    return Number(item.fixed_price ?? basePrice) || 0
-  }
-  if (computePrice === 'percentage') {
-    const percent = Number(item.percent_price || 0) || 0
-    return Math.max(0, basePrice * (1 - (percent / 100)))
-  }
-  if (computePrice === 'formula') {
-    const discount = Number(item.price_discount || 0) || 0
-    const surcharge = Number(item.price_surcharge || 0) || 0
-    const round = Number(item.price_round || 0) || 0
-    const minMargin = Number(item.price_min_margin || 0) || 0
-    const maxMargin = Number(item.price_max_margin || 0) || 0
-    let price = basePrice * (1 - (discount / 100)) + surcharge
-    if (round > 0) price = Math.round(price / round) * round
-    if (minMargin > 0) price = Math.max(price, basePrice + minMargin)
-    if (maxMargin > 0) price = Math.min(price, basePrice + maxMargin)
-    return Math.max(0, price)
-  }
-  return basePrice
-}
-
-async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {}) {
-  const requestedWarehouseId = Number(warehouseId || 0)
-  if (!requestedWarehouseId) {
-    throw new ApiError("Debe enviar 'warehouse_id'.", { status: 400, code: 'warehouse_required' })
-  }
-
-  const warehouseRows = pickListResponse(await readModelSorted('stock.warehouse', {
-    fields: ['id', 'company_id', 'lot_stock_id'],
-    domain: [['id', '=', requestedWarehouseId]],
-    sort_column: 'id',
-    sort_desc: false,
-    limit: 1,
-    sudo: 1,
-  }))
-  const warehouse = warehouseRows[0]
-  if (!warehouse?.id) {
-    throw new ApiError('Almacen no encontrado.', { status: 404, code: 'warehouse_not_found' })
-  }
-
-  const resolvedCompanyId = Number(companyId || toMany2oneId(warehouse.company_id) || 0)
-  const lotStockId = toMany2oneId(warehouse.lot_stock_id)
-  const pricelist = await readPosPricelist(resolvedCompanyId, Number(partnerId || 0))
-
-  const productRows = await readPosProducts()
-  const productIds = productRows.map((row) => Number(row.id || 0)).filter(Boolean)
-
-  const quantRows = lotStockId && productIds.length
-    ? pickListResponse(await readModelSorted('stock.quant', {
-        fields: ['id', 'product_id', 'quantity', 'reserved_quantity'],
-        domain: [
-          ['location_id', 'child_of', lotStockId],
-          ['product_id', 'in', productIds],
-        ],
-        sort_column: 'product_id',
-        sort_desc: false,
-        limit: 2000,
-        sudo: 1,
-      }))
-    : []
-
-  const stockByProduct = new Map()
-  for (const quant of quantRows) {
-    const productId = toMany2oneId(quant?.product_id)
-    if (!productId) continue
-    const available = (Number(quant?.quantity || 0) || 0) - (Number(quant?.reserved_quantity || 0) || 0)
-    stockByProduct.set(productId, (stockByProduct.get(productId) || 0) + available)
-  }
-  const pricelistItems = await readPosPricelistItems(pricelist.id)
-
-  return {
-    ok: true,
-    message: 'OK',
-    data: {
-      company_id: resolvedCompanyId,
-      warehouse_id: Number(warehouse.id),
-      pricelist_id: pricelist.id || false,
-      pricelist_name: pricelist.name || '',
-      products: productRows.map((product) => {
-        const price = applyPricelistItemPrice(product, selectPricelistItem(pricelistItems, product))
-        const stock = Math.max(0, stockByProduct.get(Number(product.id)) || 0)
-        return {
-          id: Number(product.id),
-          name: product.display_name || product.name || '',
-          price,
-          price_unit: price,
-          stock,
-          barcode: product.barcode || '',
-          weight: Number(product.weight || 0) || 0,
-          sale_ok: Boolean(product.sale_ok),
-          available_in_pos: Boolean(product.available_in_pos),
-        }
-      }),
-    },
   }
 }
 
@@ -1074,11 +822,6 @@ async function resolveAngelicaJaimesSalesScope() {
   }
 }
 
-async function resolvePosCustomerAnalyticUnitId() {
-  const ids = await resolvePosCustomerAnalyticUnitIds()
-  return ids[0] || 0
-}
-
 async function resolvePosCustomerAnalyticUnitIds() {
   const ids = []
   const addId = (id) => {
@@ -1124,50 +867,6 @@ async function resolvePosCustomerAnalyticUnitIds() {
   return ids
 }
 
-function posCustomerAnalyticDomain(analyticUnitIds) {
-  const ids = (Array.isArray(analyticUnitIds) ? analyticUnitIds : [analyticUnitIds])
-    .map((id) => Number(id || 0))
-    .filter((id, index, list) => id > 0 && list.indexOf(id) === index)
-
-  if (ids.length > 1) return [[POS_CUSTOMER_ANALYTIC_FIELD, 'in', ids]]
-  return ids.length === 1
-    ? [[POS_CUSTOMER_ANALYTIC_FIELD, '=', ids[0]]]
-    : [['id', '=', 0]]
-}
-
-function buildPosCustomerBaseDomains(companyId, analyticUnitIds) {
-  const baseDomain = [
-    ['active', '=', true],
-    ...posCustomerAnalyticDomain(analyticUnitIds),
-  ]
-  return companyId
-    ? [
-        [...baseDomain, ['company_id', '=', companyId]],
-        [...baseDomain, ['company_id', '=', false]],
-      ]
-    : [baseDomain]
-}
-
-function buildPosCustomerIdBaseDomains(companyId, analyticUnitIds) {
-  const baseDomain = [
-    ['active', '=', true],
-    ...posCustomerAnalyticDomain(analyticUnitIds),
-  ]
-  return companyId
-    ? [
-        [...baseDomain, ['company_id', '=', companyId]],
-        [...baseDomain, ['company_id', '=', false]],
-      ]
-    : [baseDomain]
-}
-
-function parsePosCustomerIdQuery(query) {
-  const normalized = String(query || '').trim()
-  if (/^\d+$/.test(normalized)) return Number(normalized)
-  const idMatch = normalized.match(/\bid\s*:?\s*(\d+)\b/i)
-  return idMatch ? Number(idMatch[1]) : 0
-}
-
 function addUniquePosCustomers(target, rows = []) {
   const seen = new Set(target.map((row) => Number(row?.id || 0)).filter(Boolean))
   for (const row of rows) {
@@ -1176,17 +875,6 @@ function addUniquePosCustomers(target, rows = []) {
     seen.add(id)
     target.push(row)
   }
-}
-
-async function readPosCustomerRows(domain, limit) {
-  return pickListResponse(await readModelSorted('res.partner', {
-    fields: ['id', 'name', 'display_name', 'email', 'phone', 'mobile', 'vat', 'ref', 'is_company', 'property_product_pricelist', 'pricelist_id', POS_CUSTOMER_ANALYTIC_FIELD],
-    domain,
-    sort_column: 'name',
-    sort_desc: false,
-    limit,
-    sudo: 1,
-  }))
 }
 
 async function readSupervisorCustomerRows(domain, limit = 200) {
@@ -1233,94 +921,6 @@ async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 20
       customers: rows.map(shapeSupervisorCustomer),
       total: rows.length,
     },
-  }
-}
-
-async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = {}) {
-  const safeLimit = Math.min(Number(limit || 30) || 30, 100)
-  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
-  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0), analyticUnitIds)
-  const query = String(q || '').trim()
-  const rows = []
-
-  if (!query) {
-    for (const baseDomain of baseDomains) {
-      if (rows.length >= safeLimit) break
-      addUniquePosCustomers(rows, await readPosCustomerRows(baseDomain, safeLimit - rows.length))
-    }
-  } else {
-    const exactId = parsePosCustomerIdQuery(query)
-    if (exactId) {
-      const idBaseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0), analyticUnitIds)
-      for (const baseDomain of idBaseDomains) {
-        if (rows.length >= safeLimit) break
-        addUniquePosCustomers(
-          rows,
-          await readPosCustomerRows([...baseDomain, ['id', '=', exactId]], safeLimit - rows.length),
-        )
-      }
-    }
-
-    const searchFields = ['name', 'email', 'vat', 'ref', 'phone', 'mobile']
-    for (const baseDomain of baseDomains) {
-      if (rows.length >= safeLimit) break
-      for (const field of searchFields) {
-        if (rows.length >= safeLimit) break
-        addUniquePosCustomers(
-          rows,
-          await readPosCustomerRows([...baseDomain, [field, 'ilike', query]], safeLimit - rows.length),
-        )
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    message: 'OK',
-    data: rows.map(shapePosCustomer),
-  }
-}
-
-async function getDefaultPosCustomerFromModels(companyId) {
-  const nightPos = canAccessHectorNightPos(getSession())
-  const targetName = nightPos
-    ? NIGHT_POS_DEFAULT_CUSTOMER_NAME
-    : POS_DEFAULT_CUSTOMER_NAME
-  const baseCompanyId = Number(companyId || 0)
-  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
-  const baseDomains = buildPosCustomerBaseDomains(baseCompanyId, analyticUnitIds)
-  let partner = null
-  for (const baseDomain of baseDomains) {
-    const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', targetName]], 1)
-    if (exactRows[0]) {
-      partner = exactRows[0]
-      break
-    }
-  }
-  if (!partner && nightPos) {
-    throw new ApiError('No se encontró el cliente Venta Publico Iguala Noche.', {
-      status: 404,
-      code: 'night_pos_default_customer_missing',
-    })
-  }
-  if (!partner) {
-    const fallbackNames = ['PUBLICO', 'PUBLIC', 'MOSTRADOR']
-    for (const baseDomain of baseDomains) {
-      if (partner) break
-      for (const fallbackName of fallbackNames) {
-        const fallbackRows = await readPosCustomerRows([...baseDomain, ['name', 'ilike', fallbackName]], 1)
-        if (fallbackRows[0]) {
-          partner = fallbackRows[0]
-          break
-        }
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    message: 'OK',
-    data: partner ? shapePosCustomer(partner) : null,
   }
 }
 
@@ -1675,34 +1275,51 @@ async function directAdmin(method, path, body) {
   const warehouseId = getWarehouseId()
   const companyId = getCompanyId()
   const [todayStart, todayEnd] = todayRange()
+  const posIntentEndpoints = new Set([
+    '/pwa-admin/pos-products',
+    '/pwa-admin/customers',
+    '/pwa-admin/default-customer',
+    '/pwa-admin/today-sales',
+    '/pwa-admin/sale-detail',
+  ])
+  if (
+    posIntentEndpoints.has(cleanPath)
+    && (query.getAll('pos_scope').length > 1 || query.getAll('night_pos').length > 1)
+  ) {
+    throw new ApiError('No puedes combinar modos de POS.', {
+      status: 400,
+      code: 'pos_intent_conflict',
+    })
+  }
+  const hasExplicitPosScope = query.has('pos_scope')
+  const forwardGetQuery = (endpoint, params = query) => {
+    const search = params.toString()
+    return odooHttp('GET', `${endpoint}${search ? `?${search}` : ''}`)
+  }
 
   if (cleanPath === '/pwa-admin/pos-products' && method === 'GET') {
-    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
-    return getPosCatalogFromModels({
-      warehouseId: reqWarehouseId,
-      companyId: Number(query.get('company_id') || companyId || 0) || undefined,
-      partnerId: Number(query.get('partner_id') || 0) || undefined,
-    })
+    return forwardGetQuery('/pwa-admin/pos-products')
   }
 
   if (cleanPath === '/pwa-admin/customers' && method === 'GET') {
-    return searchPosCustomersFromModels({
-      q: query.get('q') || undefined,
-      companyId: Number(query.get('company_id') || companyId || 0) || undefined,
-      limit: Number(query.get('limit') || 30) || undefined,
-    })
+    return forwardGetQuery('/pwa-admin/customers')
   }
 
   if (cleanPath === '/pwa-admin/default-customer' && method === 'GET') {
-    return getDefaultPosCustomerFromModels(Number(query.get('company_id') || companyId || 0) || undefined)
+    return forwardGetQuery('/pwa-admin/default-customer')
   }
 
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
-    if (query.has('night_pos')) {
-      const nightQuery = `night_pos=${encodeURIComponent(query.get('night_pos'))}`
-      return odooHttp('GET', `/pwa-admin/today-sales?${nightQuery}`)
+    if (query.has('night_pos') || hasExplicitPosScope) {
+      const intentParts = []
+      if (hasExplicitPosScope) {
+        intentParts.push(`pos_scope=${encodeURIComponent(query.get('pos_scope'))}`)
+      }
+      if (query.has('night_pos')) {
+        intentParts.push(`night_pos=${encodeURIComponent(query.get('night_pos'))}`)
+      }
+      return odooHttp('GET', `/pwa-admin/today-sales?${intentParts.join('&')}`)
     }
-
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const reqCompanyId = Number(query.get('company_id') || companyId || 0)
     const requestQuery = {
@@ -1908,9 +1525,10 @@ async function directAdmin(method, path, body) {
     // El readModel genérico /get_records NO expandía order_line ni el total, por
     // eso el ticket salía sin productos, en $0 y con folio incorrecto (caía al
     // fallback S{orderId}, que mostraba el id como si fuera el folio).
-    const result = await odooHttp('GET', '/pwa-admin/sale-detail', {
-      order_id: orderId,
-    })
+    const detailQuery = new URLSearchParams({ order_id: String(orderId) })
+    if (query.has('pos_scope')) detailQuery.set('pos_scope', query.get('pos_scope'))
+    if (query.has('night_pos')) detailQuery.set('night_pos', query.get('night_pos'))
+    const result = await forwardGetQuery('/pwa-admin/sale-detail', detailQuery)
     const order = result?.data ?? result
     if (!order || !order.id) return null
     const normalizedOrder = normalizeSaleOrder(order)
@@ -2320,21 +1938,31 @@ async function directAdmin(method, path, body) {
   }
 
   // ── Sale cancel ─────────────────────────────────────────────────────────
+  if (cleanPath === '/pwa-admin/sale-create' && method === 'POST') {
+    return odooJson('/pwa-admin/sale-create', { ...(body || {}) })
+  }
+
   if (cleanPath === '/pwa-admin/sale-cancel' && method === 'POST') {
     const id = toPositiveSafeIntegerId(body?.order_id)
     if (!id) {
       return { ok: false, error: 'order_id requerido' }
     }
-    if (Object.prototype.hasOwnProperty.call(body || {}, 'reason_code')) {
+    const hasReasonCode = Object.prototype.hasOwnProperty.call(body || {}, 'reason_code')
+    const hasPosScope = Object.prototype.hasOwnProperty.call(body || {}, 'pos_scope')
+    const hasNightPos = Object.prototype.hasOwnProperty.call(body || {}, 'night_pos')
+    if (hasReasonCode || hasPosScope || hasNightPos) {
       return odooJson('/pwa-admin/sale-cancel', {
         order_id: id,
-        reason_code: body.reason_code,
+        ...(hasReasonCode
+          ? { reason_code: body.reason_code }
+          : { reason: body?.reason || '' }),
+        ...(hasPosScope ? { pos_scope: body.pos_scope } : {}),
+        ...(hasNightPos ? { night_pos: body.night_pos } : {}),
       })
     }
     return odooJson('/pwa-admin/sale-cancel', {
       order_id: id,
       reason: body?.reason || '',
-      employee_id: getSession().employee_id || undefined,
     })
   }
 

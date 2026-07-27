@@ -1,12 +1,17 @@
 // ─── API Admin Sucursal — POS, Gastos, Requisiciones ─────────────────────────
 // Endpoints del módulo Odoo `gf_pwa_admin` (Sebastián, rollout 2026-04-10).
-import { api } from '../../lib/api.js'
+import { api, ApiError } from '../../lib/api.js'
 import {
   buildPosCatalogPath,
+  buildPosCustomerSearchPath,
   normalizePosCatalogResponse,
   normalizePosProductsResponse,
 } from './posProducts.js'
-import { isNightPosCancelReasonCode } from './posFlow.js'
+import {
+  isNightPosCancelReasonCode,
+  normalizePosScope,
+  readPosScopeOption,
+} from './posFlow.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -20,47 +25,153 @@ function toQuery(filters = {}) {
   return s ? `?${s}` : ''
 }
 
+function readOwnIntent(source, propertyName, validator) {
+  const descriptor = Object.getOwnPropertyDescriptor(source, propertyName)
+  if (!descriptor) {
+    if (propertyName in source) {
+      throw new TypeError('El alcance del POS no es válido.')
+    }
+    return { present: false, value: undefined }
+  }
+  if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+    throw new TypeError('El alcance del POS no es válido.')
+  }
+  return { present: true, value: validator(descriptor.value) }
+}
+
 // ── POS Mostrador ────────────────────────────────────────────────────────────
 
+const DAY_POS_ACCESS_ERROR = 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+const DAY_POS_READ_ERROR = 'No se pudo consultar el POS día. Inténtalo de nuevo.'
+
+function safeDayPosReadError(error, posScope) {
+  if (posScope !== 'day') return error
+  if (error?.status === 403) {
+    return new ApiError(DAY_POS_ACCESS_ERROR, { status: 403, code: 'forbidden' })
+  }
+  if (Number(error?.status || 0) >= 500) {
+    return new ApiError(DAY_POS_READ_ERROR, {
+      status: Number(error.status),
+      code: 'day_pos_service_unavailable',
+    })
+  }
+  return error
+}
+
+function requireSuccessfulPosRead(response, posScope) {
+  if (response?.ok !== false) return response
+  if (posScope === 'day') {
+    throw new ApiError(DAY_POS_READ_ERROR, {
+      status: 200,
+      code: String(response?.data?.code || response?.code || 'day_pos_read_failed'),
+    })
+  }
+  throw new ApiError(
+    String(response?.message || 'No fue posible consultar el POS.'),
+    {
+      status: 200,
+      code: String(
+        response?.data?.code
+        || response?.code
+        || 'pos_read_failed',
+      ),
+    },
+  )
+}
+
 /** Catálogo POS con stock y pricelist aplicados para el cliente seleccionado */
-export async function getPosCatalog(filters = {}) {
-  const response = await api('GET', buildPosCatalogPath(filters))
-  return normalizePosCatalogResponse(response)
+export function getPosCatalog(filters = {}) {
+  const posScope = readPosScopeOption(filters)
+  return api('GET', buildPosCatalogPath({
+    warehouseId: filters?.warehouseId,
+    companyId: filters?.companyId,
+    partnerId: filters?.partnerId,
+    ...(posScope === undefined ? {} : { posScope }),
+  }))
+    .then((response) => normalizePosCatalogResponse(
+      requireSuccessfulPosRead(response, posScope),
+    ))
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Productos disponibles con stock en el CEDIS del empleado */
-export async function getPosProducts(arg) {
+export function getPosProducts(arg) {
   const filters = typeof arg === 'object'
     ? arg
     : { warehouseId: arg }
-  const response = await api('GET', buildPosCatalogPath(filters))
-  return normalizePosProductsResponse(response)
+  const posScope = readPosScopeOption(filters)
+  return api('GET', buildPosCatalogPath({
+    warehouseId: filters?.warehouseId,
+    companyId: filters?.companyId,
+    partnerId: filters?.partnerId,
+    ...(posScope === undefined ? {} : { posScope }),
+  }))
+    .then((response) => normalizePosProductsResponse(
+      requireSuccessfulPosRead(response, posScope),
+    ))
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Buscar clientes (para factura) */
-export function searchCustomers(query, companyId) {
-  return api('GET', `/pwa-admin/customers${toQuery({ q: query, company_id: companyId })}`)
+export function searchCustomers(query, companyId, options = {}) {
+  const posScope = readPosScopeOption(options)
+  return api(
+    'GET',
+    buildPosCustomerSearchPath(
+      query,
+      companyId,
+      posScope === undefined ? {} : { posScope },
+    ),
+  )
+    .then((response) => requireSuccessfulPosRead(response, posScope))
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Cliente default "Publico Mostrador" de la sucursal */
-export function getDefaultCustomer(companyId) {
-  return api('GET', `/pwa-admin/default-customer${toQuery({ company_id: companyId })}`)
+export function getDefaultCustomer(companyId, options = {}) {
+  const posScope = readPosScopeOption(options)
+  return api('GET', `/pwa-admin/default-customer${toQuery({
+    company_id: companyId,
+    pos_scope: posScope,
+  })}`)
+    .then((response) => requireSuccessfulPosRead(response, posScope))
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Crear venta (sale.order + confirmar) */
 export function createSaleOrder(data) {
-  return api('POST', '/pwa-admin/sale-create', data)
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new TypeError('Los datos de la venta no son válidos.')
+  }
+  const posScope = readOwnIntent(data, 'pos_scope', normalizePosScope)
+  const nightPos = readOwnIntent(data, 'night_pos', (value) => {
+    if (typeof value !== 'string' || value !== '1') {
+      throw new TypeError('El alcance del POS no es válido.')
+    }
+    return value
+  })
+  return api('POST', '/pwa-admin/sale-create', {
+    ...data,
+    ...(posScope.present ? { pos_scope: posScope.value } : {}),
+    ...(nightPos.present ? { night_pos: nightPos.value } : {}),
+  })
 }
 
 /** Ver detalle de un ticket/venta */
-export function getSaleOrder(orderId) {
-  return api('GET', `/pwa-admin/sale-detail?order_id=${orderId}`)
+export function getSaleOrder(orderId, options = {}) {
+  const posScope = readPosScopeOption(options)
+  return api('GET', `/pwa-admin/sale-detail${toQuery({
+    order_id: orderId,
+    pos_scope: posScope,
+  })}`)
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Cancela una venta (sale.order.action_cancel). Revierte stock moves.
  *  Rechaza si la venta ya está `done`. La razón queda en el chatter. */
 export function cancelSaleOrder(orderId, reasonOrOptions) {
   let optionsReasonCode = null
+  let optionsPosScope
   let hasOptions = false
   if (reasonOrOptions !== null && typeof reasonOrOptions === 'object') {
     const prototype = Object.getPrototypeOf(reasonOrOptions)
@@ -77,13 +188,17 @@ export function cancelSaleOrder(orderId, reasonOrOptions) {
     ) {
       throw new TypeError('Selecciona un motivo de cancelación válido.')
     }
+    optionsPosScope = readPosScopeOption(reasonOrOptions)
     optionsReasonCode = reasonDescriptor.value
     hasOptions = true
   }
   return api('POST', '/pwa-admin/sale-cancel', {
     order_id: orderId,
     ...(hasOptions
-      ? { reason_code: optionsReasonCode }
+      ? {
+          reason_code: optionsReasonCode,
+          ...(optionsPosScope === undefined ? {} : { pos_scope: optionsPosScope }),
+        }
       : { reason: reasonOrOptions || '' }),
   })
 }
@@ -101,6 +216,11 @@ export function getTodaySales(arg) {
 /** Ventas de hoy del POS nocturno. El backend fija identidad y fecha efectiva. */
 export function getNightTodaySales() {
   return api('GET', '/pwa-admin/today-sales?night_pos=1')
+}
+
+/** Ventas propias de hoy del POS diurno restringido. */
+export function getDayTodaySales() {
+  return api('GET', '/pwa-admin/today-sales?pos_scope=day')
 }
 
 // ── Validación de ticket (Almacenista Entregas) ──────────────────────────────

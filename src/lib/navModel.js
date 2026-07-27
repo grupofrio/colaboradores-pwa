@@ -126,7 +126,14 @@ export function normalizePath(pathname = '') {
 //   · /torres/*      (requisic.)  → operativo full-screen (subtree), sin cambios.
 // Antes '/torre' era prefijo y ocultaba también /torre/backlog (bug: M1 sin sidebar).
 const NAV_HIDDEN_EXACT = ['/login', '/torre']
-const NAV_HIDDEN_PREFIXES = ['/admin/pos', '/admin/ticket', '/admin/cierre', '/pos-nocturno']
+const NAV_HIDDEN_PREFIXES = [
+  '/admin/pos',
+  '/admin/ticket',
+  '/admin/cierre',
+  '/pos-nocturno',
+  '/pos-diurno/ventas',
+  '/pos-diurno/ticket',
+]
 const NAV_HIDDEN_SUBTREES = ['/ruta', '/produccion', '/almacen-pt', '/entregas', '/koldcup', '/torres']
 
 export function isNavHiddenForPath(pathname = '') {

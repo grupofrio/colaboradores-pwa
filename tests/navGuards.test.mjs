@@ -83,6 +83,7 @@ test('ModuleRoleRoute existe y aplica la triple autoridad (sesión→módulo→r
 test('cada familia de módulo usa ModuleRoleRoute con su moduleId canónico', () => {
   const expected = [
     ['/kpis', 'kpis'], ['/surveys', 'encuestas'], ['/badges', 'logros'],
+    ['/pos-diurno', 'pos_diurno'],
     ['/admin', 'admin_sucursal'], ['/gerente', 'gerente'], ['/equipo', 'supervisor_ventas'],
     ['/ruta', 'cierre_ruta'], ['/entregas', 'almacen_entregas'], ['/almacen-pt', 'almacen_pt'],
     ['/koldcup', 'koldcup'], ['/supervision', 'supervision_produccion'], ['/torres', 'torre_control'],
@@ -139,6 +140,16 @@ test('POS nocturno monta rutas directas con guard propio y NIGHT_POS_FLOW', () =
   assert.ok(appSrc.includes(salesRoute), 'ruta exacta de ventas nocturnas')
   assert.ok(appSrc.includes(ticketRoute), 'ruta exacta del ticket nocturno')
   assert.ok(!appSrc.includes('moduleId="pos_nocturno"'), 'no amplía ModuleRoleRoute ni roles de Admin')
+})
+
+test('POS diurno monta todas sus rutas directas con ModuleRoleRoute y DAY_POS_FLOW', () => {
+  const posRoute = '<Route path="/pos-diurno" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenPOS flow={DAY_POS_FLOW} /></ModuleRoleRoute>} />'
+  const salesRoute = '<Route path="/pos-diurno/ventas" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenDayPosSales /></ModuleRoleRoute>} />'
+  const ticketRoute = '<Route path="/pos-diurno/ticket/:orderId" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenTicket flow={DAY_POS_FLOW} /></ModuleRoleRoute>} />'
+
+  assert.ok(appSrc.includes(posRoute), 'ruta exacta del POS diurno')
+  assert.ok(appSrc.includes(salesRoute), 'ruta exacta de ventas diurnas')
+  assert.ok(appSrc.includes(ticketRoute), 'ruta exacta del ticket diurno')
 })
 
 test('getStoredSession y PrivateRoute usan la validación estricta única', () => {

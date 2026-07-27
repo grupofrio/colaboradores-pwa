@@ -102,11 +102,13 @@ function responseRows(response) {
   return []
 }
 
-export function normalizeNightPosSalesResponse(response) {
+export function normalizeRestrictedPosSalesResponse(response) {
   return responseRows(response)
     .map(normalizeSaleRow)
     .filter(Boolean)
 }
+
+export const normalizeNightPosSalesResponse = normalizeRestrictedPosSalesResponse
 
 export function getPosSaleStateLabel(state) {
   const key = primitiveText(state).toLowerCase()

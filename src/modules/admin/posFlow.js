@@ -10,6 +10,37 @@ export const NIGHT_POS_CANCEL_REASONS = Object.freeze([
   Object.freeze({ code: 'out_of_stock', label: 'Falta de stock' }),
 ])
 
+export function normalizePosScope(value) {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || value !== 'day') {
+    throw new TypeError('El alcance del POS no es válido.')
+  }
+  return value
+}
+
+export function readPosScopeOption(options, propertyName = 'posScope') {
+  if (options === undefined) return undefined
+  if (
+    options === null
+    || (typeof options !== 'object' && typeof options !== 'function')
+    || Array.isArray(options)
+  ) {
+    throw new TypeError('El alcance del POS no es válido.')
+  }
+
+  const descriptor = Object.getOwnPropertyDescriptor(options, propertyName)
+  if (!descriptor) {
+    if (propertyName in options) {
+      throw new TypeError('El alcance del POS no es válido.')
+    }
+    return undefined
+  }
+  if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+    throw new TypeError('El alcance del POS no es válido.')
+  }
+  return normalizePosScope(descriptor.value)
+}
+
 export function isNightPosCancelReasonCode(reasonCode) {
   return typeof reasonCode === 'string'
     && NIGHT_POS_CANCEL_REASONS.some((reason) => reason.code === reasonCode)
@@ -37,6 +68,21 @@ export const NIGHT_POS_FLOW = Object.freeze({
   cancelReasons: NIGHT_POS_CANCEL_REASONS,
 })
 
+const dayPosFlow = {
+  backTo: '/',
+  posRoute: '/pos-diurno',
+  ticketBasePath: '/pos-diurno/ticket',
+  salesRoute: '/pos-diurno/ventas',
+  title: 'POS día',
+  standalone: true,
+  posScope: 'day',
+  defaultCustomerName: 'VENTA PUBLICO IGUALA',
+  allowSaleCancellation: true,
+  cancellationMode: 'closed-reasons',
+  cancelReasons: NIGHT_POS_CANCEL_REASONS,
+}
+export const DAY_POS_FLOW = Object.freeze(dayPosFlow)
+
 export async function submitPosCancellation({
   flow = ADMIN_POS_FLOW,
   orderId,
@@ -62,7 +108,10 @@ export async function submitPosCancellation({
     if (matchingReasons.length !== 1) {
       throw new Error('Selecciona un motivo de cancelación válido.')
     }
-    return cancelFn(normalizedOrderId, { reasonCode })
+    return cancelFn(normalizedOrderId, {
+      reasonCode,
+      ...(flow.posScope === undefined ? {} : { posScope: normalizePosScope(flow.posScope) }),
+    })
   }
 
   if (flow.cancellationMode === 'free-text') {
@@ -105,6 +154,7 @@ export function buildPosTicketPath(flow = ADMIN_POS_FLOW, orderId) {
 export function canOpenPosPayment(cart = [], customer = {}, readiness) {
   if (!Array.isArray(cart) || cart.length === 0 || !hasValidPosCustomer(customer)) return false
   if (readiness === undefined) return true
+  if (readiness?.defaultCustomerReady === false) return false
 
   const customerId = toPositiveSafeIntegerId(customer.id)
   const catalogCustomerId = toPositiveSafeIntegerId(readiness?.catalogCustomerId)

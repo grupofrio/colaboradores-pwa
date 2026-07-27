@@ -6,12 +6,39 @@ import {
   normalizePosCatalogResponse,
   normalizePosProductsResponse,
 } from '../src/modules/admin/posProducts.js'
+import * as posProducts from '../src/modules/admin/posProducts.js'
 
 test('buildPosCatalogPath includes company and partner filters when present', () => {
   assert.equal(
     buildPosCatalogPath({ warehouseId: 76, companyId: 35, partnerId: 9001 }),
     '/pwa-admin/pos-products?warehouse_id=76&company_id=35&partner_id=9001',
   )
+})
+
+test('POS catalog and customer path builders append the exact day scope', () => {
+  assert.equal(
+    buildPosCatalogPath({
+      warehouseId: 76,
+      companyId: 35,
+      partnerId: 9001,
+      posScope: 'day',
+    }),
+    '/pwa-admin/pos-products?warehouse_id=76&company_id=35&partner_id=9001&pos_scope=day',
+  )
+  assert.equal(
+    posProducts.buildPosCustomerSearchPath('hielo', 35, { posScope: 'day' }),
+    '/pwa-admin/customers?q=hielo&company_id=35&pos_scope=day',
+  )
+})
+
+test('POS path builders reject non-canonical scopes', () => {
+  for (const posScope of ['', ' day ', 'night', null, [], {}]) {
+    assert.throws(() => buildPosCatalogPath({ posScope }), TypeError)
+    assert.throws(
+      () => posProducts.buildPosCustomerSearchPath('hielo', 35, { posScope }),
+      TypeError,
+    )
+  }
 })
 
 test('normalizePosCatalogResponse preserves products and pricelist metadata', () => {

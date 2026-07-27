@@ -5,19 +5,28 @@ import {
   getPosCancelBlockMessage,
   getPosSaleStateLabel,
   normalizeNightPosSalesResponse,
+  normalizeRestrictedPosSalesResponse,
 } from '../src/modules/admin/nightPosSales.js'
 
-test('normalizeNightPosSalesResponse accepts direct arrays without mutating rows', () => {
+test('normalizeRestrictedPosSalesResponse accepts direct arrays without mutating rows', () => {
   const input = [{ id: '9001', name: 'S09001', total: '120.50' }]
   const snapshot = structuredClone(input)
 
-  const result = normalizeNightPosSalesResponse(input)
+  const result = normalizeRestrictedPosSalesResponse(input)
 
   assert.equal(result[0].order_id, 9001)
   assert.equal(result[0].amount_total, 120.5)
   assert.deepEqual(input, snapshot)
   assert.notEqual(result, input)
   assert.notEqual(result[0], input[0])
+})
+
+test('normalizeNightPosSalesResponse remains a compatibility alias of the generic normalizer', () => {
+  assert.equal(normalizeNightPosSalesResponse, normalizeRestrictedPosSalesResponse)
+  assert.deepEqual(
+    normalizeNightPosSalesResponse([{ id: 9006, name: 'COMPATIBLE' }]),
+    normalizeRestrictedPosSalesResponse([{ id: 9006, name: 'COMPATIBLE' }]),
+  )
 })
 
 test('normalizeNightPosSalesResponse supports nested and top-level collections with items precedence', () => {

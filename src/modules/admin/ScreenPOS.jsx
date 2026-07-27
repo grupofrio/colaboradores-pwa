@@ -60,12 +60,17 @@ export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
 
   if (sw < 1024) return <MobilePOS warehouseId={warehouseId} flow={flow} />
 
+  const standaloneDayBackProps = flow.standalone && flow.posScope === 'day'
+    ? { backButtonLabel: 'Volver al inicio', backButtonSize: 44 }
+    : {}
+
   return (
     <AdminProvider>
       <AdminShell
         activeBlock="pos"
         title={flow.title}
         onBack={() => navigate(flow.backTo)}
+        {...standaloneDayBackProps}
         hideNavigation={flow.standalone}
         hideActivityFeed={flow.standalone}
       >
@@ -100,6 +105,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const companyId = Number(session?.company_id || 0) || undefined
+  const defaultCustomerName = flow.defaultCustomerName || 'VENTA PUBLICO'
 
   const [products, setProducts] = useState([])
   const [cart, setCart] = useState([])
@@ -109,17 +115,31 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const [error, setError] = useState('')
 
   // Customer
-  const [customer, setCustomer] = useState({ id: null, name: 'VENTA PUBLICO' })
+  const [customer, setCustomer] = useState({ id: null, name: defaultCustomerName })
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
   const [catalogCustomerId, setCatalogCustomerId] = useState(null)
   const catalogRequestSeq = useRef(0)
+  const defaultCustomerRequestSeq = useRef(0)
+  const manualCustomerSelectionSeq = useRef(0)
+  const [defaultCustomerState, setDefaultCustomerState] = useState({
+    status: flow.posScope === 'day' ? 'pending' : 'ready',
+    message: '',
+  })
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
+  const [customerResultRequestId, setCustomerResultRequestId] = useState(0)
   const [searchingCustomer, setSearchingCustomer] = useState(false)
+  const customerSearchSeq = useRef(0)
 
   // Payment confirmation
   const [payConfirm, setPayConfirm] = useState(null) // 'cash' | 'card' | null
+  const [cardRef, setCardRef] = useState('')
+
+  function resetPaymentContext() {
+    setPayConfirm(null)
+    setCardRef('')
+  }
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -130,6 +150,8 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const loadProducts = useCallback(async (selectedPartnerId) => {
     const requestId = ++catalogRequestSeq.current
     const requestedCustomerId = toPositiveSafeIntegerId(selectedPartnerId) || null
+    setPayConfirm(null)
+    setCardRef('')
     setCatalogCustomerId(null)
     setLoading(true)
     setError('')
@@ -138,6 +160,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         warehouseId,
         companyId,
         partnerId: selectedPartnerId || undefined,
+        posScope: flow.posScope,
       })
       if (requestId !== catalogRequestSeq.current) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
@@ -152,29 +175,70 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
     } catch (e) {
       if (requestId !== catalogRequestSeq.current) return false
       logScreenError('ScreenPOS', 'getPosCatalog', e)
-      setError(e?.message || 'Error cargando productos')
+      setError(flow.posScope === 'day' && e?.status === 403
+        ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+        : (e?.message || 'Error cargando productos'))
       return false
     } finally {
       if (requestId === catalogRequestSeq.current) setLoading(false)
     }
-  }, [companyId, warehouseId])
+  }, [companyId, flow.posScope, warehouseId])
 
   useEffect(() => {
     loadProducts(customer.id)
   }, [customer.id, loadProducts])
 
+  useEffect(() => {
+    setCart([])
+    setPayConfirm(null)
+    setCardRef('')
+  }, [companyId, warehouseId])
+
   const loadDefaultCustomer = useCallback(async () => {
-    try {
-      const c = normalizeDefaultCustomerResponse(await getDefaultCustomer(companyId))
-      if (c && c.id) setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
-    } catch (e) {
-      logScreenError('ScreenPOS', 'getDefaultCustomer', e)
-      setError(e?.message || 'No se pudo cargar el cliente predeterminado.')
+    const requestId = ++defaultCustomerRequestSeq.current
+    const manualSelectionAtStart = manualCustomerSelectionSeq.current
+    if (flow.posScope === 'day') {
+      setDefaultCustomerState({ status: 'pending', message: '' })
     }
-  }, [companyId])
+    try {
+      const c = normalizeDefaultCustomerResponse(await getDefaultCustomer(
+        companyId,
+        { posScope: flow.posScope },
+      ))
+      if (requestId !== defaultCustomerRequestSeq.current) return
+      if (!c?.id) {
+        if (flow.posScope === 'day') {
+          setDefaultCustomerState({
+            status: 'failed',
+            message: 'No se pudo consultar el POS día. Inténtalo de nuevo.',
+          })
+        }
+        return
+      }
+      if (flow.posScope === 'day') {
+        setDefaultCustomerState({ status: 'ready', message: '' })
+      }
+      if (manualSelectionAtStart === manualCustomerSelectionSeq.current) {
+        setCustomer({ id: c.id, name: c.name || defaultCustomerName })
+      }
+    } catch (e) {
+      if (requestId !== defaultCustomerRequestSeq.current) return
+      logScreenError('ScreenPOS', 'getDefaultCustomer', e)
+      setError(flow.posScope === 'day' && e?.status === 403
+        ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+        : (e?.message || 'No se pudo cargar el cliente predeterminado.'))
+      if (flow.posScope === 'day') {
+        setDefaultCustomerState({
+          status: 'failed',
+          message: e?.message || 'No se pudo consultar el POS día. Inténtalo de nuevo.',
+        })
+      }
+    }
+  }, [companyId, defaultCustomerName, flow.posScope])
 
   useEffect(() => {
     loadDefaultCustomer()
+    return () => { defaultCustomerRequestSeq.current += 1 }
   }, [loadDefaultCustomer])
 
   // Filtered products
@@ -186,59 +250,114 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
 
   // Cart operations
   function addToCart(product) {
+    resetPaymentContext()
     setCart((prev) => addProductToCart(prev, product))
   }
 
   function updateQty(productId, delta) {
+    resetPaymentContext()
     setCart((prev) => changeCartItemQty(prev, productId, delta))
   }
 
   function removeItem(productId) {
+    resetPaymentContext()
     setCart(prev => prev.filter(c => c.product_id !== productId))
   }
 
   const { subtotal, total } = computePosSummary(cart)
+  const defaultCustomerReady = flow.posScope !== 'day'
+    || defaultCustomerState.status === 'ready'
   const canOpenPayment = canOpenPosPayment(cart, customer, {
     loading,
     catalogCustomerId,
+    defaultCustomerReady,
   })
 
-  // Customer search
-  const doCustomerSearch = useCallback(async (q) => {
-    if (!shouldLoadCustomerSuggestions(q)) { setCustomerResults([]); return }
-    setSearchingCustomer(true)
-    try {
-      const res = await searchCustomers(q, companyId)
-      setCustomerResults(normalizeCustomerResults(res))
-    } catch (e) {
-      logScreenError('ScreenPOS', 'searchCustomers', e)
-      setCustomerResults([])
+  function openPayment(method) {
+    if (!canOpenPayment) return
+    setCardRef('')
+    setPayConfirm(method)
+  }
+
+  useEffect(() => {
+    const requestId = ++customerSearchSeq.current
+    let active = true
+    let timer
+    const isCurrent = () => active && customerSearchSeq.current === requestId
+
+    setSearchingCustomer(false)
+    setCustomerResults([])
+    setCustomerResultRequestId(0)
+    if (showCustomerSearch && shouldLoadCustomerSuggestions(customerQuery)) {
+      timer = setTimeout(async () => {
+        if (!isCurrent()) return
+        setSearchingCustomer(true)
+        try {
+          const res = await searchCustomers(
+            customerQuery,
+            companyId,
+            { posScope: flow.posScope },
+          )
+          if (!isCurrent()) return
+          setCustomerResults(normalizeCustomerResults(res))
+          setCustomerResultRequestId(requestId)
+        } catch (e) {
+          if (!isCurrent()) return
+          logScreenError('ScreenPOS', 'searchCustomers', e)
+          setCustomerResults([])
+          if (flow.posScope === 'day') {
+            setError(e?.message || 'No se pudo consultar el POS día. Inténtalo de nuevo.')
+          }
+        } finally {
+          if (isCurrent()) setSearchingCustomer(false)
+        }
+      }, 400)
     }
-    finally { setSearchingCustomer(false) }
-  }, [companyId])
 
-  useEffect(() => {
-    const timer = setTimeout(() => doCustomerSearch(customerQuery), 400)
-    return () => clearTimeout(timer)
-  }, [customerQuery, doCustomerSearch])
+    return () => {
+      active = false
+      clearTimeout(timer)
+      if (customerSearchSeq.current === requestId) customerSearchSeq.current += 1
+    }
+  }, [companyId, customerQuery, flow.posScope, showCustomerSearch])
 
-  useEffect(() => {
-    if (!showCustomerSearch) return
-    doCustomerSearch(customerQuery)
-  }, [showCustomerSearch, customerQuery, doCustomerSearch])
+  function invalidateCustomerSearch() {
+    customerSearchSeq.current += 1
+    setSearchingCustomer(false)
+    setCustomerResults([])
+    setCustomerResultRequestId(0)
+  }
 
-  function selectCustomer(c) {
+  function toggleCustomerSearch() {
+    resetPaymentContext()
+    invalidateCustomerSearch()
+    setShowCustomerSearch((visible) => !visible)
+  }
+
+  function changeCustomerQuery(value) {
+    invalidateCustomerSearch()
+    setCustomerQuery(value)
+  }
+
+  function selectCustomer(c, resultRequestId) {
+    if (
+      !showCustomerSearch
+      || resultRequestId !== customerSearchSeq.current
+    ) return
     const selectedCustomerId = toPositiveSafeIntegerId(c.id)
     const isSameCustomer = selectedCustomerId === toPositiveSafeIntegerId(customer.id)
+    manualCustomerSelectionSeq.current += 1
+    if (flow.posScope !== 'day') defaultCustomerRequestSeq.current += 1
     catalogRequestSeq.current += 1
+    invalidateCustomerSearch()
     setCatalogCustomerId(null)
     setPayConfirm(null)
+    setCardRef('')
     setLoading(true)
     setCustomer({ id: c.id, name: c.name })
     setError('')
     setShowCustomerSearch(false)
     setCustomerQuery('')
-    setCustomerResults([])
     if (isSameCustomer) loadProducts(selectedCustomerId)
   }
 
@@ -257,8 +376,15 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
     if (!canOpenPosPayment(cart, customer, {
       loading,
       catalogCustomerId,
+      defaultCustomerReady,
     })) {
-      setError('Espera a que termine de cargar la lista de precios del cliente antes de cobrar.')
+      setError(defaultCustomerReady
+        ? 'Espera a que termine de cargar la lista de precios del cliente antes de cobrar.'
+        : (defaultCustomerState.message || 'Espera a validar el cliente predeterminado del POS día.'))
+      return
+    }
+    if (payConfirm === 'card' && cardRef.trim().length < 4) {
+      setError('Ingresa el folio de la terminal (mínimo 4 caracteres).')
       return
     }
     setSubmitting(true)
@@ -267,9 +393,11 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
       const result = await createSaleOrder({
         warehouse_id: warehouseId,
         company_id: companyId,
+        ...(flow.posScope === undefined ? {} : { pos_scope: flow.posScope }),
         partner_id: customer.id,
         pricelist_id: pricelist.id || undefined,
         payment_method: payConfirm,
+        payment_reference: payConfirm === 'card' ? cardRef.trim() : undefined,
         lines: cart.map(c => ({ product_id: c.product_id, qty: c.qty, price_unit: c.price_unit })),
       })
       const saleResult = normalizePosSaleResult(result)
@@ -296,8 +424,10 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         setCart([])
         setPayConfirm(null)
       }
-      setError(saleError.message)
-    } finally { setSubmitting(false); setPayConfirm(null) }
+      setError(flow.posScope === 'day' && e?.status === 403
+        ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+        : saleError.message)
+    } finally { setSubmitting(false); setPayConfirm(null); setCardRef('') }
   }
 
   const fmt = (n) => '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -319,11 +449,15 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px', paddingBottom: cart.length > 0 ? 200 : 20 }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-          <button onClick={() => navigate(flow.backTo)} style={{
-            width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
+          <button
+            type="button"
+            aria-label={flow.standalone ? 'Volver al inicio' : 'Volver a Admin Sucursal'}
+            onClick={() => navigate(flow.backTo)}
+            style={{
+              width: 44, height: 44, borderRadius: TOKENS.radius.md,
+              background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
@@ -345,9 +479,11 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
           )}
         </div>
 
-        {error && (
+        {(defaultCustomerState.status === 'failed' ? defaultCustomerState.message : error) && (
           <div style={{ padding: '10px 14px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`, marginBottom: 12 }}>
-            <span style={{ ...typo.caption, color: TOKENS.colors.error }}>{error}</span>
+            <span style={{ ...typo.caption, color: TOKENS.colors.error }}>
+              {defaultCustomerState.status === 'failed' ? defaultCustomerState.message : error}
+            </span>
           </div>
         )}
 
@@ -418,7 +554,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
               }}>
                 <span style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>{customer.name}</span>
               </div>
-              <button onClick={() => setShowCustomerSearch(!showCustomerSearch)} style={{
+              <button onClick={toggleCustomerSearch} style={{
                 padding: '6px 10px', borderRadius: TOKENS.radius.pill,
                 background: `${TOKENS.colors.blue2}18`, border: `1px solid ${TOKENS.colors.blue2}30`,
               }}>
@@ -459,7 +595,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
               }}>
                 <input
                   type="text" placeholder="Buscar cliente por nombre..."
-                  value={customerQuery} onChange={e => setCustomerQuery(e.target.value)}
+                  value={customerQuery} onChange={e => changeCustomerQuery(e.target.value)}
                   autoFocus
                   style={{
                     width: '100%', padding: '8px 12px', borderRadius: TOKENS.radius.sm,
@@ -473,7 +609,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
                   </div>
                 )}
                 {customerResults.map(c => (
-                  <button key={c.id} onClick={() => selectCustomer(c)} style={{
+                  <button key={c.id} onClick={() => selectCustomer(c, customerResultRequestId)} style={{
                     display: 'block', width: '100%', textAlign: 'left',
                     padding: '8px 10px', borderRadius: TOKENS.radius.sm,
                     background: 'transparent', marginBottom: 2,
@@ -540,9 +676,16 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
       {/* Sticky Footer */}
       {cart.length > 0 && (
         <div style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0,
+          position: 'fixed',
+          bottom: flow.posScope === 'day'
+            ? 'calc(64px + env(safe-area-inset-bottom))'
+            : 0,
+          left: 0, right: 0,
           background: TOKENS.colors.bg0, borderTop: `1px solid ${TOKENS.colors.border}`,
-          padding: '12px 16px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
+          padding: '12px 16px',
+          paddingBottom: flow.posScope === 'day'
+            ? 12
+            : 'calc(12px + env(safe-area-inset-bottom))',
         }}>
           <div style={{ maxWidth: 480, margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -559,17 +702,53 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
                 <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, textAlign: 'center', marginBottom: 8 }}>
                   Confirmar pago con {payConfirm === 'cash' ? 'Efectivo' : 'Terminal'}: {fmt(total)}
                 </p>
+                {payConfirm === 'card' && (
+                  <div>
+                    <label
+                      htmlFor="mobile-pos-card-reference"
+                      style={{ ...typo.caption, color: TOKENS.colors.warning, fontWeight: 700 }}
+                    >
+                      Folio de la terminal
+                    </label>
+                    <input
+                      id="mobile-pos-card-reference"
+                      type="text"
+                      value={cardRef}
+                      onChange={(event) => setCardRef(event.target.value)}
+                      placeholder="Ej: 0012345"
+                      aria-describedby="mobile-pos-card-reference-help"
+                      autoFocus
+                      maxLength={32}
+                      style={{
+                        width: '100%', padding: '10px 12px', marginTop: 4,
+                        borderRadius: TOKENS.radius.md,
+                        background: TOKENS.colors.surface,
+                        border: `1px solid ${TOKENS.colors.warning}`,
+                        color: TOKENS.colors.text,
+                      }}
+                    />
+                    <p
+                      id="mobile-pos-card-reference-help"
+                      style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 8px' }}
+                    >
+                      Copia el folio exacto del comprobante (mínimo 4 caracteres).
+                    </p>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setPayConfirm(null)} style={{
+                  <button onClick={resetPaymentContext} style={{
                     flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
                     background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
                   }}>
                     <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>Cancelar</span>
                   </button>
-                  <button onClick={confirmPay} disabled={submitting} style={{
+                  <button
+                    onClick={confirmPay}
+                    disabled={submitting || (payConfirm === 'card' && cardRef.trim().length < 4)}
+                    style={{
                     flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
                     background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
-                    opacity: submitting ? 0.6 : 1,
+                    opacity: (submitting || (payConfirm === 'card' && cardRef.trim().length < 4)) ? 0.6 : 1,
                   }}>
                     {submitting ? (
                       <div style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
@@ -582,7 +761,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
             ) : (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
-                  onClick={() => canOpenPayment && setPayConfirm('cash')}
+                  onClick={() => openPayment('cash')}
                   disabled={!canOpenPayment}
                   style={{
                     flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
@@ -594,7 +773,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
                   <span style={{ ...typo.body, color: 'white', fontWeight: 700 }}>Efectivo</span>
                 </button>
                 <button
-                  onClick={() => canOpenPayment && setPayConfirm('card')}
+                  onClick={() => openPayment('card')}
                   disabled={!canOpenPayment}
                   style={{
                     flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
