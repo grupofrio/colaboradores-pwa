@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 import { buildSupervisorV2SessionProjection } from '../src/modules/supervisor-ventas/v2/sessionProjection.js'
 
@@ -123,4 +125,12 @@ test('login projection: merging an OFF projection overwrites a prior ON projecti
     capabilities: { supervisorV2: false },
     branch: { supervisor_v2_enabled: false },
   })
+})
+
+test('ScreenLogin imports and merges the pure projection into fallbackPayload', () => {
+  const src = readFileSync(fileURLToPath(
+    new URL('../src/screens/ScreenLogin.jsx', import.meta.url),
+  ), 'utf8')
+  assert.match(src, /buildSupervisorV2SessionProjection/)
+  assert.match(src, /\.\.\.buildSupervisorV2SessionProjection\(result\)/)
 })

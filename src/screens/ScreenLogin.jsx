@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../App";
 import { normalizeSessionRoleContext } from "../lib/roleContext";
+import { buildSupervisorV2SessionProjection } from '../modules/supervisor-ventas/v2/sessionProjection.js'
 import { buildSessionEmployee } from "../modules/torre/e1/employeeSessionFields";
 
 // ── Login directo a Odoo ──────────────────────────────────────────────────
@@ -156,6 +157,7 @@ function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
     || 0;
 
   const fallbackPayload = {
+    ...buildSupervisorV2SessionProjection(result),
     source: "odoo",
     role,
     job_key: role,
