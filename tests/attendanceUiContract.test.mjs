@@ -127,7 +127,11 @@ test('attendance ui: mutation drafts retain employee date version and administra
 })
 
 test('attendance ui: unscheduled absence confirms explicitly and attachments fail before FileReader', async () => {
-  const { validateAttachmentFile, readAttendanceAttachment } = await importJsx('components/AbsenceModal.jsx')
+  const {
+    getAttachmentSelectionState,
+    readAttendanceAttachment,
+    validateAttachmentFile,
+  } = await importJsx('components/AbsenceModal.jsx')
   assert.equal(validateAttachmentFile({
     name: 'comprobante.pdf',
     type: 'application/pdf',
@@ -155,6 +159,16 @@ test('attendance ui: unscheduled absence confirms explicitly and attachments fai
   )
   assert.equal(readersCreated, 0)
 
+  const invalidFile = {
+    name: 'rechazado.txt',
+    type: 'text/plain',
+    size: 128,
+  }
+  const invalidSelection = getAttachmentSelectionState(invalidFile)
+  assert.equal(invalidSelection.file, invalidFile, 'el archivo rechazado se conserva hasta retirarlo o reemplazarlo')
+  assert.match(invalidSelection.error, /PDF, JPG o PNG/)
+  assert.deepEqual(getAttachmentSelectionState(null), { file: null, error: '' })
+
   const modalSource = await source('components/AbsenceModal.jsx')
   assert.match(modalSource, /confirm_unscheduled/)
   assert.match(modalSource, /Falta no programada/)
@@ -166,13 +180,31 @@ test('attendance ui: save controls remain disabled while requests are pending', 
     'components/AbsenceModal.jsx',
   ]) {
     const componentSource = await source(relativePath)
-    assert.match(componentSource, /disabled=\{saving\}/, relativePath)
+    assert.match(componentSource, /disabled=\{(?:saving|busy)\}/, relativePath)
   }
   const screen = await source('ScreenAsistencias.jsx')
   assert.match(screen, /setSaving\(true\)/)
   assert.match(screen, /setSaving\(false\)/)
   assert.match(screen, /mutationInFlightRef\.current/)
   assert.match(screen, /toast\.success/)
+})
+
+test('attendance ui: attachment reading blocks dismissal and ignores continuations after unmount', async () => {
+  const { isCurrentAttachmentRead } = await importJsx('components/AbsenceModal.jsx')
+  assert.equal(isCurrentAttachmentRead({ mounted: true, activeSequence: 4, requestSequence: 4 }), true)
+  assert.equal(isCurrentAttachmentRead({ mounted: false, activeSequence: 4, requestSequence: 4 }), false)
+  assert.equal(isCurrentAttachmentRead({ mounted: true, activeSequence: 5, requestSequence: 4 }), false)
+
+  const modalSource = await source('components/AbsenceModal.jsx')
+  assert.match(modalSource, /aria-label="Cerrar formulario" disabled=\{busy\}/)
+  assert.match(modalSource, /className="attendance-button" disabled=\{busy\}/)
+  assert.match(modalSource, /mountedRef/)
+  assert.match(modalSource, /readSequenceRef\.current \+= 1/)
+  assert.ok(
+    modalSource.indexOf('if (!isCurrentRead()) return')
+      < modalSource.lastIndexOf('onSubmit({ mode, row, payload })'),
+    'la vigencia de la lectura se comprueba antes de enviar',
+  )
 })
 
 test('attendance ui: modal and drawer dialogs trap keyboard focus', async () => {
@@ -219,4 +251,14 @@ test('attendance ui: filters expose date presets bounds scope search status and 
   }
   assert.match(filters, /type="date"/)
   assert.match(filters, /type="search"/)
+})
+
+test('attendance ui: invalid filters clear a refresh cancelled by the effect cleanup', async () => {
+  const screen = await source('ScreenAsistencias.jsx')
+  const invalidBranch = screen.slice(
+    screen.indexOf("if (accessState !== 'allowed' || !filterValidation.valid)"),
+    screen.indexOf('const requestSequence = ++requestSequenceRef.current'),
+  )
+  assert.match(invalidBranch, /setLoading\(false\)/)
+  assert.match(invalidBranch, /setRefreshing\(false\)/)
 })

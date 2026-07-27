@@ -22,6 +22,19 @@ export function validateAttachmentFile(file) {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
+export function getAttachmentSelectionState(file) {
+  return {
+    file: file || null,
+    error: validateAttachmentFile(file),
+  }
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function isCurrentAttachmentRead({ mounted, activeSequence, requestSequence }) {
+  return mounted === true && activeSequence === requestSequence
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
 export function readAttendanceAttachment(file, {
   readerFactory = () => new FileReader(),
 } = {}) {
@@ -83,9 +96,19 @@ export function AbsenceModal({
   const [reading, setReading] = useState(false)
   const firstFieldRef = useRef(null)
   const dialogRef = useRef(null)
+  const mountedRef = useRef(true)
+  const readSequenceRef = useRef(0)
   const justify = mode === 'justify'
   const needsUnscheduledConfirmation = !row.expected_workday || forceUnscheduledConfirmation
   const busy = saving || reading
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      readSequenceRef.current += 1
+    }
+  }, [])
 
   useEffect(() => {
     const previouslyFocused = document.activeElement
@@ -120,9 +143,9 @@ export function AbsenceModal({
   }
 
   function selectFile(selected) {
-    const validationError = validateAttachmentFile(selected)
-    setFile(validationError ? null : selected)
-    setErrors((current) => ({ ...current, document_base64: validationError || undefined }))
+    const selection = getAttachmentSelectionState(selected)
+    setFile(selection.file)
+    setErrors((current) => ({ ...current, document_base64: selection.error || undefined }))
   }
 
   async function submit(event) {
@@ -153,17 +176,25 @@ export function AbsenceModal({
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
+    const requestSequence = ++readSequenceRef.current
+    const isCurrentRead = () => isCurrentAttachmentRead({
+      mounted: mountedRef.current,
+      activeSequence: readSequenceRef.current,
+      requestSequence,
+    })
     setReading(true)
     try {
       const attachment = file ? await readAttendanceAttachment(file) : {}
+      if (!isCurrentRead()) return
       const payload = { ...draft, ...attachment }
       const finalValidation = validateJustificationForm(payload)
       setErrors(finalValidation.errors)
       if (finalValidation.valid) onSubmit({ mode, row, payload })
     } catch (error) {
+      if (!isCurrentRead()) return
       setErrors((current) => ({ ...current, document_base64: error.message }))
     } finally {
-      setReading(false)
+      if (isCurrentRead()) setReading(false)
     }
   }
 
@@ -183,7 +214,7 @@ export function AbsenceModal({
             <p>Faltas · Iguala</p>
             <h2 id="absence-modal-title">{title}</h2>
           </div>
-          <button aria-label="Cerrar formulario" disabled={saving} onClick={onClose} type="button">×</button>
+          <button aria-label="Cerrar formulario" disabled={busy} onClick={onClose} type="button">×</button>
         </header>
 
         <form onSubmit={submit}>
@@ -292,7 +323,7 @@ export function AbsenceModal({
           {serverError ? <div className="attendance-form-error" role="alert">{serverError}</div> : null}
 
           <footer>
-            <button className="attendance-button" disabled={saving} onClick={onClose} type="button">
+            <button className="attendance-button" disabled={busy} onClick={onClose} type="button">
               Cancelar
             </button>
             <button className="attendance-button attendance-button--primary" disabled={busy} type="submit">

@@ -109,7 +109,10 @@ export default function ScreenAsistencias() {
 
   useEffect(() => {
     if (accessState !== 'allowed' || !filterValidation.valid) {
-      if (accessState === 'allowed') setLoading(false)
+      if (accessState === 'allowed') {
+        setLoading(false)
+        setRefreshing(false)
+      }
       return undefined
     }
 
