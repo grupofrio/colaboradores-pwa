@@ -136,6 +136,24 @@ export const MODULES = [
     navPriority: 10,
   },
 
+  // ── Asistencias de Iguala — allowlist exacta por employee_id ────────────
+  // `roles` es solo metadata de contexto. La política attendance_manager es
+  // la única autoridad local para tarjeta, nav y clic; Odoo revalida todo.
+  {
+    id:     'asistencias',
+    label:  'Asistencias',
+    shortLabel: 'Asistencias',
+    route:  '/asistencias',
+    tone:   'blueSoft',
+    roles:  ['gerente_sucursal'],
+    accessPolicy: 'attendance_manager',
+    status: 'live',
+    icon:   'equipo',
+    navPriority: 11,
+    showOnHome: true,
+    showInNav:  true,
+  },
+
   // ── Administración ───────────────────────────────────────────────────────
   {
     id: 'pos_nocturno',

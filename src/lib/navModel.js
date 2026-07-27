@@ -24,6 +24,7 @@ import { readM5Access } from '../modules/inventario/m5/access.js'
 import { readM6Access } from '../modules/caja-conciliacion/m6/access.js'
 import { readM7Access } from '../modules/rentabilidad-costos/m7/access.js'
 import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
+import { readAttendanceAccess } from '../modules/asistencias/access.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
 // Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
@@ -35,6 +36,11 @@ import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
 // readAuthoritativeTowerStatus (M1 intacto — no se convierte a x_job_key ni a
 // accessPolicy).
 export const ACCESS_POLICY_RESOLVERS = Object.freeze({
+  attendance_manager: (session, attendanceManagerIdsRaw) => ({
+    level: readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
+      ? 'global'
+      : 'none',
+  }),
   hectorNightPos: (session) => ({
     level: canAccessHectorNightPos(session) ? 'global' : 'none',
   }),
@@ -49,10 +55,10 @@ export const ACCESS_POLICY_RESOLVERS = Object.freeze({
 // Resuelve una accessPolicy. FAIL-CLOSED: si la política no está registrada
 // (typo, módulo nuevo sin dar de alta, resolver borrado) devuelve false — nunca
 // cae al camino por rol, porque eso expondría el módulo a quien no debe verlo.
-export function resolveAccessPolicy(policy, session) {
+export function resolveAccessPolicy(policy, session, attendanceManagerIdsRaw) {
   const resolver = ACCESS_POLICY_RESOLVERS[policy]
   if (typeof resolver !== 'function') return false
-  return resolver(session)?.level === 'global'
+  return resolver(session, attendanceManagerIdsRaw)?.level === 'global'
 }
 
 // Anclas fijas (no son módulos del registry). Siempre presentes con sesión:
@@ -154,11 +160,13 @@ function navPriorityOf(module) {
 //   2. module.accessPolicy        => resolver del registro; desconocida => deny
 //   3. module.towerGated          => tower_status autoritativo (M1, intacto)
 //   4. resto                      => roles x_job_key
-export function isModuleVisibleForSession(module, session) {
+export function isModuleVisibleForSession(module, session, attendanceManagerIdsRaw) {
   if (!module) return false
   if (module.showInNav === false && module.showOnHome === false) return false
   if (!isValidAuthenticatedSession(session)) return false
-  if (module.accessPolicy) return resolveAccessPolicy(module.accessPolicy, session)
+  if (module.accessPolicy) {
+    return resolveAccessPolicy(module.accessPolicy, session, attendanceManagerIdsRaw)
+  }
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
 }
@@ -186,14 +194,14 @@ export function getHomeModulesForSession(session = null) {
 // visibilidad: módulos accessPolicy entran/deniegan por su contrato (navegan
 // directo, sin role-context); el resto delega en la lógica por rol.
 // El route guard (App.jsx) sigue siendo la autoridad final.
-export function getModuleEntryDecisionForSession(module, session) {
+export function getModuleEntryDecisionForSession(module, session, attendanceManagerIdsRaw) {
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
   // Toda accessPolicy registrada entra o se deniega por SU contrato, sin role-context.
   // Una política desconocida no tiene resolver ⇒ resolveAccessPolicy deniega.
   if (module?.accessPolicy) {
-    return resolveAccessPolicy(module.accessPolicy, session)
+    return resolveAccessPolicy(module.accessPolicy, session, attendanceManagerIdsRaw)
       ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
       : { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
