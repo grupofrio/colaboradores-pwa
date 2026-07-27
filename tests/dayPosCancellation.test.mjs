@@ -100,6 +100,7 @@ function order(state = 'sale') {
     cancel_block_code: state === 'sale' ? null : 'already_cancelled',
     date_order: '2026-07-26 18:15:00',
     partner_name: 'VENTA PUBLICO IGUALA',
+    warehouse_id: [89, 'CEDIS AUTORIZADO'],
     payment_method: 'cash',
     lines: [{ qty: 2, price_unit: 42, product_name: 'Hielo Prueba' }],
   }
@@ -261,6 +262,8 @@ test('day ticket scopes detail and cancellation, uses closed reasons, and prints
 
   const renderer = await mountTicket()
   assert.match(renderedText(renderer), /DIA-9001/)
+  assert.match(renderedText(renderer), /CEDIS AUTORIZADO/)
+  assert.doesNotMatch(renderedText(renderer), /\bIguala\b/)
 
   await act(async () => {
     findButton(renderer, 'Imprimir').props.onClick()
@@ -271,6 +274,8 @@ test('day ticket scopes detail and cancellation, uses closed reasons, and prints
   assert.match(rawTicket, /DIA-9001/)
   assert.match(rawTicket, /VENTA PUBLICO IGUALA/)
   assert.match(rawTicket, /Hielo Prueba/)
+  assert.match(rawTicket, /CEDIS AUTORIZADO/)
+  assert.doesNotMatch(rawTicket, /\bIguala\b/)
 
   act(() => findButton(renderer, 'Cancelar venta').props.onClick())
   assert.equal(renderer.root.findAllByType('textarea').length, 0)
@@ -302,6 +307,52 @@ test('day ticket scopes detail and cancellation, uses closed reasons, and prints
   activeRenderers.delete(renderer)
 })
 
+test('browser ticket fallback prints the warehouse authorized by order detail', async () => {
+  globalThis.fetch = async (url) => {
+    if (url === '/odoo-api/pwa-admin/sale-detail?order_id=9001&pos_scope=day') {
+      return response(200, { ok: true, data: order('sale') })
+    }
+    throw new Error(`Unexpected ${url}`)
+  }
+
+  let writtenHtml = ''
+  globalThis.document = {
+    body: { appendChild() {}, removeChild() {} },
+    createElement() {
+      return {
+        setAttribute() {},
+        style: {},
+        contentWindow: {
+          document: {
+            readyState: 'complete',
+            open() {},
+            write(html) { writtenHtml += html },
+            close() {},
+          },
+          addEventListener() {},
+          focus() {},
+          print() {},
+        },
+      }
+    },
+  }
+  qz.websocket.isActive = () => true
+  qz.printers.getDefault = async () => 'POS-80'
+  qz.configs.create = () => ({})
+  qz.print = async () => { throw new Error('QZ unavailable') }
+
+  const renderer = await mountTicket()
+  await act(async () => {
+    findButton(renderer, 'Imprimir').props.onClick()
+    await flush()
+  })
+
+  assert.match(writtenHtml, /CEDIS AUTORIZADO/)
+  assert.doesNotMatch(writtenHtml, /\bIguala\b/)
+  act(() => renderer.unmount())
+  activeRenderers.delete(renderer)
+})
+
 test('cached day ticket shows a safe 403 error once without retry or scope downgrade', async () => {
   const calls = []
   globalThis.fetch = async (url, options = {}) => {
@@ -317,6 +368,35 @@ test('cached day ticket shows a safe 403 error once without retry or scope downg
   ])
   act(() => renderer.unmount())
   activeRenderers.delete(renderer)
+})
+
+test('day ticket hides HTTP 500 detail messages without retry or scope fallback', async () => {
+  const secret = 'SENSITIVE_DAY_TICKET_DATABASE_TRACE_5XX'
+  const calls = []
+  const warnings = []
+  const previousWarn = console.warn
+  console.warn = (...args) => { warnings.push(args.map(String).join(' ')) }
+  try {
+    globalThis.fetch = async (url, options = {}) => {
+      calls.push({ url, options })
+      return response(500, { message: secret, code: 'pwa_admin_internal_error' })
+    }
+
+    const renderer = await mountTicket()
+    const text = renderedText(renderer)
+    assert.match(text, /No se pudo consultar el POS día/)
+    assert.doesNotMatch(text, new RegExp(secret))
+    assert.doesNotMatch(warnings.join('\n'), new RegExp(secret))
+    assert.equal(findButton(renderer, 'Reintentar'), undefined)
+    assert.deepEqual(calls.map((call) => call.url), [
+      '/odoo-api/pwa-admin/sale-detail?order_id=9001&pos_scope=day',
+    ])
+
+    act(() => renderer.unmount())
+    activeRenderers.delete(renderer)
+  } finally {
+    console.warn = previousWarn
+  }
 })
 
 test('revoked day permission during cancellation fails closed without retry or false success', async () => {

@@ -1963,7 +1963,6 @@ async function directAdmin(method, path, body) {
     return odooJson('/pwa-admin/sale-cancel', {
       order_id: id,
       reason: body?.reason || '',
-      employee_id: getSession().employee_id || undefined,
     })
   }
 

@@ -319,7 +319,6 @@ test('sale cancel delegates authorization and cancellation to the secured Odoo c
   assert.deepEqual(call.payload.params, {
     order_id: 9001,
     reason: 'Captura duplicada',
-    employee_id: 699,
   })
   assert.equal(calls.some((entry) => entry.url === '/odoo-api/api/create_update'), false)
   assert.equal(result.data.state, 'cancel')
@@ -446,7 +445,6 @@ test('admin cancelSaleOrder keeps the legacy free-text transport contract', asyn
   assert.deepEqual(calls[0].payload.params, {
     order_id: 9002,
     reason: 'Captura duplicada',
-    employee_id: 699,
   })
 })
 
@@ -467,7 +465,27 @@ test('cancelSaleOrder handles null as legacy empty text instead of options', asy
   assert.deepEqual(calls[0].payload.params, {
     order_id: 9003,
     reason: '',
-    employee_id: 699,
+  })
+})
+
+test('sale cancellation never derives authorization identity from mutable cached employee_id', async () => {
+  setSession({ employee_id: 999999 })
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+    return createJsonResponse(200, {
+      result: { ok: true, data: { id: 9004, state: 'cancel' } },
+    })
+  }
+
+  await cancelSaleOrder(9004, 'Error operativo')
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].options.headers['X-GF-Employee-Token'], 'employee-token-test')
+  assert.deepEqual(calls[0].payload.params, {
+    order_id: 9004,
+    reason: 'Error operativo',
   })
 })
 

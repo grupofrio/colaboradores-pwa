@@ -154,6 +154,7 @@ export function buildPosTicketPath(flow = ADMIN_POS_FLOW, orderId) {
 export function canOpenPosPayment(cart = [], customer = {}, readiness) {
   if (!Array.isArray(cart) || cart.length === 0 || !hasValidPosCustomer(customer)) return false
   if (readiness === undefined) return true
+  if (readiness?.defaultCustomerReady === false) return false
 
   const customerId = toPositiveSafeIntegerId(customer.id)
   const catalogCustomerId = toPositiveSafeIntegerId(readiness?.catalogCustomerId)

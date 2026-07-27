@@ -273,7 +273,6 @@ test('admin ticket keeps the free-text workflow and trims its transport reason',
   assert.deepEqual(cancelCall.payload.params, {
     order_id: 9001,
     reason: 'Captura duplicada',
-    employee_id: 730,
   })
 
   act(() => renderer.unmount())

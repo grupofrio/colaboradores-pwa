@@ -65,6 +65,11 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   const [catalogCustomerId, setCatalogCustomerId] = useState(null)
   const catalogRequestSeq = useRef(0)
   const defaultCustomerRequestSeq = useRef(0)
+  const manualCustomerSelectionSeq = useRef(0)
+  const [defaultCustomerState, setDefaultCustomerState] = useState({
+    status: flow.posScope === 'day' ? 'pending' : 'ready',
+    message: '',
+  })
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
   const [customerResultRequestId, setCustomerResultRequestId] = useState(0)
@@ -75,9 +80,16 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   const [cardRef, setCardRef] = useState('')
   const toast = useToast()
 
+  function resetPaymentContext() {
+    setPayConfirm(null)
+    setCardRef('')
+  }
+
   const loadCatalog = useCallback(async (selectedPartnerId) => {
     const requestId = ++catalogRequestSeq.current
     const requestedCustomerId = toPositiveSafeIntegerId(selectedPartnerId) || null
+    setPayConfirm(null)
+    setCardRef('')
     setCatalogCustomerId(null)
     if (!warehouseId) {
       setProducts([])
@@ -124,11 +136,28 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   useEffect(() => {
     let alive = true
     const requestId = ++defaultCustomerRequestSeq.current
+    const manualSelectionAtStart = manualCustomerSelectionSeq.current
+    if (flow.posScope === 'day') {
+      setDefaultCustomerState({ status: 'pending', message: '' })
+    }
     ;(async () => {
       try {
         const res = await getDefaultCustomer(companyId, { posScope: flow.posScope })
         const c = normalizeDefaultCustomerResponse(res)
-        if (alive && requestId === defaultCustomerRequestSeq.current && c && c.id) {
+        if (!alive || requestId !== defaultCustomerRequestSeq.current) return
+        if (!c?.id) {
+          if (flow.posScope === 'day') {
+            setDefaultCustomerState({
+              status: 'failed',
+              message: 'No se pudo consultar el POS día. Inténtalo de nuevo.',
+            })
+          }
+          return
+        }
+        if (flow.posScope === 'day') {
+          setDefaultCustomerState({ status: 'ready', message: '' })
+        }
+        if (manualSelectionAtStart === manualCustomerSelectionSeq.current) {
           setCustomer({ id: c.id, name: c.name || defaultCustomerName })
         }
       } catch (e) {
@@ -137,6 +166,12 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
         setError(flow.posScope === 'day' && e?.status === 403
           ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
           : (e?.message || 'No se pudo cargar el cliente predeterminado.'))
+        if (flow.posScope === 'day') {
+          setDefaultCustomerState({
+            status: 'failed',
+            message: e?.message || 'No se pudo consultar el POS día. Inténtalo de nuevo.',
+          })
+        }
       }
     })()
     return () => {
@@ -150,6 +185,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   useEffect(() => {
     setCart([])
     setPayConfirm(null)
+    setCardRef('')
   }, [companyId, warehouseId])
 
   const filtered = useMemo(() => {
@@ -162,22 +198,34 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   }, [products, search])
 
   function addToCart(product) {
+    resetPaymentContext()
     setCart((prev) => addProductToCart(prev, product))
   }
 
   function updateQty(productId, delta) {
+    resetPaymentContext()
     setCart((prev) => changeCartItemQty(prev, productId, delta))
   }
 
   function removeItem(productId) {
+    resetPaymentContext()
     setCart((prev) => prev.filter((c) => c.product_id !== productId))
   }
 
   const { subtotal, total } = computePosSummary(cart)
+  const defaultCustomerReady = flow.posScope !== 'day'
+    || defaultCustomerState.status === 'ready'
   const canOpenPayment = canOpenPosPayment(cart, customer, {
     loading,
     catalogCustomerId,
+    defaultCustomerReady,
   })
+
+  function openPayment(method) {
+    if (!canOpenPayment) return
+    setCardRef('')
+    setPayConfirm(method)
+  }
 
   useEffect(() => {
     const requestId = ++customerSearchSeq.current
@@ -205,8 +253,8 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
           if (!isCurrent()) return
           logScreenError('AdminPosForm', 'searchCustomers', e)
           setCustomerResults([])
-          if (flow.posScope === 'day' && e?.status === 403) {
-            setError('Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.')
+          if (flow.posScope === 'day') {
+            setError(e?.message || 'No se pudo consultar el POS día. Inténtalo de nuevo.')
           }
         } finally {
           if (isCurrent()) setSearchingCustomer(false)
@@ -229,6 +277,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   }
 
   function toggleCustomerSearch() {
+    resetPaymentContext()
     invalidateCustomerSearch()
     setShowCustomerSearch((visible) => !visible)
   }
@@ -245,11 +294,13 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
     ) return
     const selectedCustomerId = toPositiveSafeIntegerId(c.id)
     const isSameCustomer = selectedCustomerId === toPositiveSafeIntegerId(customer.id)
-    defaultCustomerRequestSeq.current += 1
+    manualCustomerSelectionSeq.current += 1
+    if (flow.posScope !== 'day') defaultCustomerRequestSeq.current += 1
     catalogRequestSeq.current += 1
     invalidateCustomerSearch()
     setCatalogCustomerId(null)
     setPayConfirm(null)
+    setCardRef('')
     setLoading(true)
     setCustomer({ id: c.id, name: c.name })
     setError('')
@@ -273,8 +324,11 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
     if (!canOpenPosPayment(cart, customer, {
       loading,
       catalogCustomerId,
+      defaultCustomerReady,
     })) {
-      setError('Espera a que termine de cargar la lista de precios del cliente antes de cobrar.')
+      setError(defaultCustomerReady
+        ? 'Espera a que termine de cargar la lista de precios del cliente antes de cobrar.'
+        : (defaultCustomerState.message || 'Espera a validar el cliente predeterminado del POS día.'))
       return
     }
 
@@ -374,7 +428,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
         </h1>
       </div>
 
-      {error && (
+      {(defaultCustomerState.status === 'failed' ? defaultCustomerState.message : error) && (
         <div style={{
           padding: '10px 14px',
           borderRadius: TOKENS.radius.sm,
@@ -385,7 +439,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
           fontWeight: 600,
           color: TOKENS.colors.error,
         }}>
-          {error}
+          {defaultCustomerState.status === 'failed' ? defaultCustomerState.message : error}
         </div>
       )}
 
@@ -849,14 +903,19 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
 
               {payConfirm === 'card' && (
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: TOKENS.colors.warning }}>
+                  <label
+                    htmlFor="desktop-pos-card-reference"
+                    style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: TOKENS.colors.warning }}
+                  >
                     FOLIO DE LA TERMINAL *
                   </label>
                   <input
+                    id="desktop-pos-card-reference"
                     type="text"
                     value={cardRef}
                     onChange={(e) => setCardRef(e.target.value)}
                     placeholder="Ej: 0012345"
+                    aria-describedby="desktop-pos-card-reference-help"
                     autoFocus
                     maxLength={32}
                     style={{
@@ -865,7 +924,10 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
                       borderColor: cardRef.trim().length >= 4 ? TOKENS.colors.border : TOKENS.colors.warning,
                     }}
                   />
-                  <p style={{ fontSize: 10, color: TOKENS.colors.textLow, margin: '4px 0 0' }}>
+                  <p
+                    id="desktop-pos-card-reference-help"
+                    style={{ fontSize: 10, color: TOKENS.colors.textLow, margin: '4px 0 0' }}
+                  >
                     Copia el folio exacto del comprobante de la terminal (mín. 4 caracteres).
                   </p>
                 </div>
@@ -874,7 +936,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  onClick={() => { setPayConfirm(null); setCardRef('') }}
+                  onClick={resetPaymentContext}
                   disabled={submitting}
                   style={{
                     flex: 1,
@@ -915,7 +977,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
-                onClick={() => canOpenPayment && setPayConfirm('cash')}
+                onClick={() => openPayment('cash')}
                 disabled={!canOpenPayment}
                 style={{
                   flex: 1,
@@ -937,7 +999,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
               </button>
               <button
                 type="button"
-                onClick={() => canOpenPayment && setPayConfirm('card')}
+                onClick={() => openPayment('card')}
                 disabled={!canOpenPayment}
                 style={{
                   flex: 1,

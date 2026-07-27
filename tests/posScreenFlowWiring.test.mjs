@@ -33,18 +33,19 @@ function assertCatalogCoherenceContract(source, loaderName) {
 
   assert.match(
     source,
-    /canOpenPosPayment\(cart, customer, \{\s*loading,\s*catalogCustomerId,\s*\}\)/,
+    /canOpenPosPayment\(cart, customer, \{\s*loading,\s*catalogCustomerId,\s*defaultCustomerReady,\s*\}\)/,
   )
   const confirmPay = sliceFunction(source, 'async function confirmPay()', '\n\n  const ')
   assert.match(
     confirmPay,
-    /canOpenPosPayment\(cart, customer, \{\s*loading,\s*catalogCustomerId,\s*\}\)/,
+    /canOpenPosPayment\(cart, customer, \{\s*loading,\s*catalogCustomerId,\s*defaultCustomerReady,\s*\}\)/,
   )
   assert.match(confirmPay, /Espera a que termine de cargar la lista de precios/)
 
   const selectCustomer = sliceFunction(source, 'function selectCustomer(c, resultRequestId)', '\n\n  ')
   assert.match(selectCustomer, /resultRequestId !== customerSearchSeq\.current/)
-  assert.match(selectCustomer, /defaultCustomerRequestSeq\.current \+= 1/)
+  assert.match(selectCustomer, /manualCustomerSelectionSeq\.current \+= 1/)
+  assert.match(selectCustomer, /flow\.posScope !== 'day'[\s\S]{0,100}defaultCustomerRequestSeq\.current \+= 1/)
   assert.match(selectCustomer, /catalogRequestSeq\.current \+= 1/)
   assert.match(selectCustomer, /setCatalogCustomerId\(null\)/)
   assert.match(selectCustomer, /setPayConfirm\(null\)/)

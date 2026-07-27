@@ -41,8 +41,31 @@ function readOwnIntent(source, propertyName, validator) {
 
 // ── POS Mostrador ────────────────────────────────────────────────────────────
 
-function requireSuccessfulPosRead(response) {
+const DAY_POS_ACCESS_ERROR = 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+const DAY_POS_READ_ERROR = 'No se pudo consultar el POS día. Inténtalo de nuevo.'
+
+function safeDayPosReadError(error, posScope) {
+  if (posScope !== 'day') return error
+  if (error?.status === 403) {
+    return new ApiError(DAY_POS_ACCESS_ERROR, { status: 403, code: 'forbidden' })
+  }
+  if (Number(error?.status || 0) >= 500) {
+    return new ApiError(DAY_POS_READ_ERROR, {
+      status: Number(error.status),
+      code: 'day_pos_service_unavailable',
+    })
+  }
+  return error
+}
+
+function requireSuccessfulPosRead(response, posScope) {
   if (response?.ok !== false) return response
+  if (posScope === 'day') {
+    throw new ApiError(DAY_POS_READ_ERROR, {
+      status: 200,
+      code: String(response?.data?.code || response?.code || 'day_pos_read_failed'),
+    })
+  }
   throw new ApiError(
     String(response?.message || 'No fue posible consultar el POS.'),
     {
@@ -57,26 +80,51 @@ function requireSuccessfulPosRead(response) {
 }
 
 /** Catálogo POS con stock y pricelist aplicados para el cliente seleccionado */
-export async function getPosCatalog(filters = {}) {
-  const response = await api('GET', buildPosCatalogPath(filters))
-  return normalizePosCatalogResponse(requireSuccessfulPosRead(response))
+export function getPosCatalog(filters = {}) {
+  const posScope = readPosScopeOption(filters)
+  return api('GET', buildPosCatalogPath({
+    warehouseId: filters?.warehouseId,
+    companyId: filters?.companyId,
+    partnerId: filters?.partnerId,
+    ...(posScope === undefined ? {} : { posScope }),
+  }))
+    .then((response) => normalizePosCatalogResponse(
+      requireSuccessfulPosRead(response, posScope),
+    ))
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Productos disponibles con stock en el CEDIS del empleado */
-export async function getPosProducts(arg) {
+export function getPosProducts(arg) {
   const filters = typeof arg === 'object'
     ? arg
     : { warehouseId: arg }
-  const response = await api('GET', buildPosCatalogPath(filters))
-  return normalizePosProductsResponse(requireSuccessfulPosRead(response))
+  const posScope = readPosScopeOption(filters)
+  return api('GET', buildPosCatalogPath({
+    warehouseId: filters?.warehouseId,
+    companyId: filters?.companyId,
+    partnerId: filters?.partnerId,
+    ...(posScope === undefined ? {} : { posScope }),
+  }))
+    .then((response) => normalizePosProductsResponse(
+      requireSuccessfulPosRead(response, posScope),
+    ))
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Buscar clientes (para factura) */
 export function searchCustomers(query, companyId, options = {}) {
+  const posScope = readPosScopeOption(options)
   return api(
     'GET',
-    buildPosCustomerSearchPath(query, companyId, options),
-  ).then(requireSuccessfulPosRead)
+    buildPosCustomerSearchPath(
+      query,
+      companyId,
+      posScope === undefined ? {} : { posScope },
+    ),
+  )
+    .then((response) => requireSuccessfulPosRead(response, posScope))
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Cliente default "Publico Mostrador" de la sucursal */
@@ -85,7 +133,9 @@ export function getDefaultCustomer(companyId, options = {}) {
   return api('GET', `/pwa-admin/default-customer${toQuery({
     company_id: companyId,
     pos_scope: posScope,
-  })}`).then(requireSuccessfulPosRead)
+  })}`)
+    .then((response) => requireSuccessfulPosRead(response, posScope))
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Crear venta (sale.order + confirmar) */
@@ -114,6 +164,7 @@ export function getSaleOrder(orderId, options = {}) {
     order_id: orderId,
     pos_scope: posScope,
   })}`)
+    .catch((error) => { throw safeDayPosReadError(error, posScope) })
 }
 
 /** Cancela una venta (sale.order.action_cancel). Revierte stock moves.

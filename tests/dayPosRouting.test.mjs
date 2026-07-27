@@ -613,6 +613,351 @@ test('manual customer selection wins over a late default-customer response in bo
   }
 })
 
+test('day checkout stays blocked after failed default resolution even with a manual customer', async () => {
+  for (const [width, viewport] of [[390, 'mobile'], [1280, 'desktop']]) {
+    const calls = []
+    const warnings = []
+    const previousWarn = console.warn
+    console.warn = (...args) => { warnings.push(args.map(String).join(' ')) }
+    try {
+      globalThis.fetch = async (url, options = {}) => {
+        const payload = options.body ? JSON.parse(options.body) : null
+        calls.push({ url, options, payload })
+        if (url.startsWith('/odoo-api/pwa-admin/pos-products?')) {
+          return response(200, {
+            ok: true,
+            data: { products: [{ id: 501, name: 'Hielo Prueba', price_unit: 42, stock: 10 }] },
+          })
+        }
+        if (url.startsWith('/odoo-api/pwa-admin/default-customer?')) {
+          return response(500, {
+            message: 'SENSITIVE_DEFAULT_DATABASE_TRACE',
+            code: 'pwa_admin_internal_error',
+          })
+        }
+        if (url.startsWith('/odoo-api/pwa-admin/customers?')) {
+          return response(200, {
+            ok: true,
+            data: { customers: [{ id: 74, name: 'DIANA MANUAL' }] },
+          })
+        }
+        throw new Error(`Unexpected ${url}`)
+      }
+
+      const renderer = await mountPos(width)
+      act(() => findButton(renderer, viewport === 'mobile' ? 'Cambiar cliente' : 'Cambiar').props.onClick())
+      await act(async () => { await settle(420) })
+      act(() => findButton(renderer, 'DIANA MANUAL').props.onClick())
+      await act(async () => { await settle() })
+      const productButton = renderer.root.findAllByType('button').find((button) => (
+        renderedInstanceText(button).includes('Hielo Prueba')
+      ))
+      act(() => productButton.props.onClick())
+
+      assert.equal(findButton(renderer, 'Efectivo').props.disabled, true, `${viewport}: default fallido bloquea`)
+      assert.equal(calls.some((call) => call.url === '/odoo-api/pwa-admin/sale-create'), false)
+      assert.doesNotMatch(renderedText(renderer), /SENSITIVE_DEFAULT_DATABASE_TRACE/)
+      assert.doesNotMatch(warnings.join('\n'), /SENSITIVE_DEFAULT_DATABASE_TRACE/)
+
+      act(() => renderer.unmount())
+      activeRenderers.delete(renderer)
+    } finally {
+      console.warn = previousWarn
+    }
+  }
+})
+
+test('day checkout remains blocked while default is pending and unlocks manual selection only after unique success', async () => {
+  for (const [width, viewport] of [[390, 'mobile'], [1280, 'desktop']]) {
+    const pendingDefault = deferred()
+    globalThis.fetch = async (url) => {
+      if (url.startsWith('/odoo-api/pwa-admin/pos-products?')) {
+        return response(200, {
+          ok: true,
+          data: { products: [{ id: 501, name: 'Hielo Prueba', price_unit: 42, stock: 10 }] },
+        })
+      }
+      if (url.startsWith('/odoo-api/pwa-admin/default-customer?')) return pendingDefault.promise
+      if (url.startsWith('/odoo-api/pwa-admin/customers?')) {
+        return response(200, {
+          ok: true,
+          data: { customers: [{ id: 74, name: 'DIANA MANUAL' }] },
+        })
+      }
+      throw new Error(`Unexpected ${url}`)
+    }
+
+    const renderer = await mountPos(width)
+    act(() => findButton(renderer, viewport === 'mobile' ? 'Cambiar cliente' : 'Cambiar').props.onClick())
+    await act(async () => { await settle(420) })
+    act(() => findButton(renderer, 'DIANA MANUAL').props.onClick())
+    await act(async () => { await settle() })
+    const productButton = renderer.root.findAllByType('button').find((button) => (
+      renderedInstanceText(button).includes('Hielo Prueba')
+    ))
+    act(() => productButton.props.onClick())
+    assert.equal(findButton(renderer, 'Efectivo').props.disabled, true, `${viewport}: pending bloquea`)
+
+    await act(async () => {
+      pendingDefault.resolve(response(200, {
+        ok: true,
+        data: { id: 61, name: 'VENTA PUBLICO IGUALA' },
+      }))
+      await settle()
+    })
+    assert.match(renderedText(renderer), /DIANA MANUAL/)
+    assert.equal(findButton(renderer, 'Efectivo').props.disabled, false, `${viewport}: unique default habilita`)
+
+    act(() => renderer.unmount())
+    activeRenderers.delete(renderer)
+  }
+})
+
+test('mobile terminal requires a four-character reference and submits the valid reference', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+    if (url.startsWith('/odoo-api/pwa-admin/pos-products?')) {
+      return response(200, {
+        ok: true,
+        data: { products: [{ id: 501, name: 'Hielo Prueba', price_unit: 42, stock: 10 }] },
+      })
+    }
+    if (url.startsWith('/odoo-api/pwa-admin/default-customer?')) {
+      return response(200, { ok: true, data: { id: 61, name: 'VENTA PUBLICO IGUALA' } })
+    }
+    if (url === '/odoo-api/pwa-admin/sale-create') {
+      return response(200, { result: { ok: true, data: { order_id: 9001 } } })
+    }
+    throw new Error(`Unexpected ${url}`)
+  }
+
+  const renderer = await mountPos(390)
+  const productButton = renderer.root.findAllByType('button').find((button) => (
+    renderedInstanceText(button).includes('Hielo Prueba')
+  ))
+  act(() => productButton.props.onClick())
+  act(() => findButton(renderer, 'Terminal').props.onClick())
+  const terminalInput = renderer.root.findAllByType('input').find((input) => (
+    String(input.props.placeholder || '').includes('0012345')
+  ))
+  assert.ok(terminalInput, 'mobile: captura folio terminal')
+  act(() => terminalInput.props.onChange({ target: { value: 'abc' } }))
+  assert.equal(findButton(renderer, 'Confirmar').props.disabled, true)
+  assert.equal(calls.some((call) => call.url === '/odoo-api/pwa-admin/sale-create'), false)
+
+  act(() => terminalInput.props.onChange({ target: { value: ' A1234 ' } }))
+  await act(async () => {
+    findButton(renderer, 'Confirmar').props.onClick()
+    await settle()
+  })
+  const create = calls.find((call) => call.url === '/odoo-api/pwa-admin/sale-create')
+  assert.equal(create.payload.params.payment_method, 'card')
+  assert.equal(create.payload.params.payment_reference, 'A1234')
+
+  act(() => renderer.unmount())
+  activeRenderers.delete(renderer)
+})
+
+for (const [width, viewport] of [[390, 'mobile'], [1280, 'desktop']]) {
+  test(`${viewport} terminal field has a programmatic label and described help`, async () => {
+    globalThis.fetch = async (url) => {
+      if (url.startsWith('/odoo-api/pwa-admin/pos-products?')) {
+        return response(200, {
+          ok: true,
+          data: { products: [{ id: 501, name: 'Hielo Prueba', price_unit: 42, stock: 10 }] },
+        })
+      }
+      if (url.startsWith('/odoo-api/pwa-admin/default-customer?')) {
+        return response(200, { ok: true, data: { id: 61, name: 'VENTA PUBLICO IGUALA' } })
+      }
+      throw new Error(`Unexpected ${url}`)
+    }
+
+    const renderer = await mountPos(width)
+    const productButton = renderer.root.findAllByType('button').find((button) => (
+      renderedInstanceText(button).includes('Hielo Prueba')
+    ))
+    act(() => productButton.props.onClick())
+    act(() => findButton(renderer, 'Terminal').props.onClick())
+    const input = renderer.root.findAllByType('input').find((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    ))
+    assert.ok(input?.props.id, `${viewport}: input con id estable`)
+    const label = renderer.root.findAllByType('label').find((candidate) => (
+      candidate.props.htmlFor === input.props.id
+    ))
+    assert.ok(label, `${viewport}: etiqueta asociada por htmlFor`)
+    assert.ok(input.props['aria-describedby'], `${viewport}: ayuda descrita`)
+    const help = renderer.root.findAll((candidate) => (
+      candidate.props?.id === input.props['aria-describedby']
+    ))
+    assert.equal(help.length, 1, `${viewport}: texto de ayuda enlazado`)
+  })
+
+  test(`${viewport} terminal reference resets across payment context changes`, async () => {
+    globalThis.fetch = async (url) => {
+      if (url.startsWith('/odoo-api/pwa-admin/pos-products?')) {
+        return response(200, {
+          ok: true,
+          data: { products: [{ id: 501, name: 'Hielo Prueba', price_unit: 42, stock: 10 }] },
+        })
+      }
+      if (url.startsWith('/odoo-api/pwa-admin/default-customer?')) {
+        return response(200, { ok: true, data: { id: 61, name: 'VENTA PUBLICO IGUALA' } })
+      }
+      if (url.startsWith('/odoo-api/pwa-admin/customers?')) {
+        return response(200, {
+          ok: true,
+          data: { customers: [{ id: 74, name: 'CLIENTE ALTERNO' }] },
+        })
+      }
+      throw new Error(`Unexpected ${url}`)
+    }
+
+    const renderer = await mountPos(width)
+    const productButton = renderer.root.findAllByType('button').find((button) => (
+      renderedInstanceText(button).includes('Hielo Prueba')
+    ))
+    act(() => productButton.props.onClick())
+    act(() => findButton(renderer, 'Terminal').props.onClick())
+    let input = renderer.root.findAllByType('input').find((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    ))
+    act(() => input.props.onChange({ target: { value: 'KEEP-1234' } }))
+    await act(async () => { await settle() })
+    input = renderer.root.findAllByType('input').find((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    ))
+    assert.equal(input.props.value, 'KEEP-1234', `${viewport}: no borra al escribir`)
+
+    await act(async () => {
+      findButton(renderer, 'Actualizar lista').props.onClick()
+      await settle()
+    })
+    assert.equal(renderer.root.findAllByType('input').some((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    )), false, `${viewport}: refrescar/repreciar cierra confirmación`)
+    act(() => findButton(renderer, 'Terminal').props.onClick())
+    input = renderer.root.findAllByType('input').find((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    ))
+    assert.equal(input.props.value, '', `${viewport}: refrescar/repreciar limpia folio`)
+
+    const refreshedProductButton = renderer.root.findAllByType('button').find((button) => (
+      renderedInstanceText(button).includes('Hielo Prueba')
+    ))
+    act(() => refreshedProductButton.props.onClick())
+    assert.equal(renderer.root.findAllByType('input').some((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    )), false, `${viewport}: cambio de carrito cierra confirmación`)
+    act(() => findButton(renderer, 'Terminal').props.onClick())
+    input = renderer.root.findAllByType('input').find((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    ))
+    assert.equal(input.props.value, '', `${viewport}: el folio no reaparece`)
+
+    act(() => input.props.onChange({ target: { value: 'CANCEL-1234' } }))
+    act(() => findButton(renderer, 'Cancelar').props.onClick())
+    act(() => findButton(renderer, 'Terminal').props.onClick())
+    input = renderer.root.findAllByType('input').find((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    ))
+    assert.equal(input.props.value, '', `${viewport}: cancelar limpia el folio`)
+
+    act(() => input.props.onChange({ target: { value: 'OPEN-1234' } }))
+    const customerButtonLabel = viewport === 'mobile' ? 'Cambiar cliente' : 'Cambiar'
+    act(() => findButton(renderer, customerButtonLabel).props.onClick())
+    assert.equal(renderer.root.findAllByType('input').some((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    )), false, `${viewport}: abrir selector cierra confirmación`)
+
+    act(() => findButton(renderer, 'Terminal').props.onClick())
+    input = renderer.root.findAllByType('input').find((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    ))
+    act(() => input.props.onChange({ target: { value: 'CLOSE-1234' } }))
+    act(() => findButton(renderer, customerButtonLabel).props.onClick())
+    assert.equal(renderer.root.findAllByType('input').some((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    )), false, `${viewport}: cerrar selector cierra confirmación`)
+    act(() => findButton(renderer, 'Terminal').props.onClick())
+    input = renderer.root.findAllByType('input').find((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    ))
+    assert.equal(input.props.value, '', `${viewport}: cerrar selector limpia folio`)
+
+    act(() => input.props.onChange({ target: { value: 'CUSTOMER-1234' } }))
+    act(() => findButton(
+      renderer,
+      customerButtonLabel,
+    ).props.onClick())
+    await act(async () => { await settle(420) })
+    act(() => findButton(renderer, 'CLIENTE ALTERNO').props.onClick())
+    await act(async () => {
+      await settle()
+      await settle()
+    })
+    assert.equal(renderer.root.findAllByType('input').some((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    )), false, `${viewport}: cambio de cliente cierra confirmación`)
+    act(() => findButton(renderer, 'Terminal').props.onClick())
+    input = renderer.root.findAllByType('input').find((candidate) => (
+      String(candidate.props.placeholder || '').includes('0012345')
+    ))
+    assert.equal(input.props.value, '', `${viewport}: cambio de cliente no revive el folio`)
+  })
+}
+
+test('both POS layouts clear card state when company or warehouse changes', () => {
+  for (const [source, viewport] of [[mobileSource, 'mobile'], [desktopSource, 'desktop']]) {
+    const effect = source.match(/useEffect\(\(\) => \{[\s\S]*?\}, \[companyId, warehouseId\]\)/)?.[0] || ''
+    assert.match(effect, /setPayConfirm\(null\)/, `${viewport}: cierra confirmación`)
+    assert.match(effect, /setCardRef\(''\)/, `${viewport}: limpia el folio`)
+  }
+})
+
+test('day catalog and customer-search 5xx details are neither rendered nor logged', async () => {
+  for (const target of ['catalog', 'customers']) {
+    const secret = `SENSITIVE_${target.toUpperCase()}_INTERNAL_TRACE`
+    const warnings = []
+    const previousWarn = console.warn
+    console.warn = (...args) => { warnings.push(args.map(String).join(' ')) }
+    try {
+      globalThis.fetch = async (url) => {
+        if (url.startsWith('/odoo-api/pwa-admin/default-customer?')) {
+          return response(200, { ok: true, data: { id: 61, name: 'VENTA PUBLICO IGUALA' } })
+        }
+        if (url.startsWith('/odoo-api/pwa-admin/pos-products?')) {
+          return target === 'catalog'
+            ? response(500, { message: secret, code: 'internal_error' })
+            : response(200, { ok: true, data: { products: [] } })
+        }
+        if (url.startsWith('/odoo-api/pwa-admin/customers?')) {
+          return response(500, { message: secret, code: 'internal_error' })
+        }
+        throw new Error(`Unexpected ${url}`)
+      }
+      const renderer = await mountPos(390)
+      if (target === 'customers') {
+        act(() => findButton(renderer, 'Cambiar cliente').props.onClick())
+        await act(async () => { await settle(420) })
+      }
+      assert.doesNotMatch(renderedText(renderer), new RegExp(secret))
+      assert.doesNotMatch(warnings.join('\n'), new RegExp(secret))
+      assert.match(
+        renderedText(renderer),
+        /No se pudo consultar el POS día|servicio del POS día no está disponible/i,
+      )
+      act(() => renderer.unmount())
+      activeRenderers.delete(renderer)
+    } finally {
+      console.warn = previousWarn
+    }
+  }
+})
+
 test('standalone mobile POS back control has a stable accessible name and 44px touch target', async () => {
   globalThis.fetch = async (url) => {
     if (url.startsWith('/odoo-api/pwa-admin/pos-products?')) {
@@ -709,8 +1054,50 @@ test('cached day role history shows a safe 403 state and makes one scoped reques
     await settle()
   })
 
-  assert.match(renderedText(renderer), /No se pudieron cargar las ventas de hoy/)
+  assert.match(renderedText(renderer), /Tu perfil ya no tiene acceso al POS día/)
   assert.doesNotMatch(renderedText(renderer), /SENSITIVE_HISTORY_SCOPE/)
+  assert.equal(renderer.root.findAllByType('button').some((button) => (
+    renderedInstanceText(button) === 'Reintentar'
+  )), false)
+  assert.deepEqual(calls.map((call) => call.url), [
+    '/odoo-api/pwa-admin/today-sales?pos_scope=day',
+  ])
+  act(() => renderer.unmount())
+})
+
+test('legacy day history forbidden envelope stays safe and never offers retry', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return response(200, {
+      ok: false,
+      message: 'SENSITIVE_LEGACY_HISTORY_SCOPE',
+      data: { code: 'pos_access_denied' },
+    })
+  }
+  installWindow(390)
+  const runtime = await loadRuntime()
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(
+      React.createElement(
+        MemoryRouter,
+        {
+          initialEntries: [runtime.DAY_POS_FLOW.salesRoute],
+          future: { v7_startTransition: true, v7_relativeSplatPath: true },
+        },
+        React.createElement(runtime.ScreenDayPosSales),
+      ),
+    )
+    await settle()
+    await settle()
+  })
+
+  assert.match(renderedText(renderer), /Tu perfil ya no tiene acceso al POS día/)
+  assert.doesNotMatch(renderedText(renderer), /SENSITIVE_LEGACY_HISTORY_SCOPE/)
+  assert.equal(renderer.root.findAllByType('button').some((button) => (
+    renderedInstanceText(button) === 'Reintentar'
+  )), false)
   assert.deepEqual(calls.map((call) => call.url), [
     '/odoo-api/pwa-admin/today-sales?pos_scope=day',
   ])

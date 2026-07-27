@@ -286,6 +286,29 @@ test('shared screen treats thrown and nested failure envelopes as safe retryable
   }
 })
 
+test('day history treats a thrown 403 as a safe permission state without retry', async () => {
+  let attempts = 0
+  const permissionError = new Error('SENSITIVE_REVOKED_DAY_HISTORY')
+  permissionError.status = 403
+  const renderer = await createSharedScreen({
+    flow: DAY_POS_FLOW,
+    screenName: 'POS día',
+    loadSales: async () => {
+      attempts += 1
+      throw permissionError
+    },
+  })
+
+  const text = renderedText(renderer)
+  assert.match(text, /Tu perfil ya no tiene acceso al POS día/)
+  assert.doesNotMatch(text, /SENSITIVE_REVOKED_DAY_HISTORY|Revisa tu conexión/)
+  assert.equal(renderer.root.findAllByType('button').some((button) => (
+    button.children.join('') === 'Reintentar'
+  )), false)
+  assert.equal(attempts, 1)
+  act(() => renderer.unmount())
+})
+
 test('shared screen suppresses stale request results when the loader changes', async () => {
   const first = deferred()
   const second = deferred()

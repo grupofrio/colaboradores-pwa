@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
@@ -72,7 +71,6 @@ function getResolvedCancellationFailure(response) {
 }
 
 export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
-  const { session } = useSession()
   const navigate = useNavigate()
   const { orderId } = useParams()
   const [sw, setSw] = useState(window.innerWidth)
@@ -280,6 +278,14 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: MX_TZ })
   const folio = order?.name || `S${String(orderId).padStart(5, '0')}`
   const customerName = resolveTicketCustomerName(order)
+  const authorizedWarehouseName = String(
+    (Array.isArray(order?.warehouse_id) ? order.warehouse_id[1] : '')
+    || (order?.warehouse_id && typeof order.warehouse_id === 'object'
+      ? (order.warehouse_id.name || order.warehouse_id.display_name)
+      : '')
+    || order?.warehouse_name
+    || 'Sucursal',
+  ).trim() || 'Sucursal'
 
   // Mapping completo de métodos de pago (alineado con gf_pwa_admin.sale-create
   // y catálogo de account.payment.method + Odoo 18 POS payment terms)
@@ -367,7 +373,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
     </style></head><body>
       <div class="ticket">
         <div class="center brand">GRUPO FRIO</div>
-        <div class="center sub">${esc(session?.warehouse_name || 'Sucursal')}</div>
+        <div class="center sub">${esc(authorizedWarehouseName)}</div>
         <div class="meta"><span>Fecha: ${esc(dateStr)}</span><span>Hora: ${esc(timeStr)}</span></div>
         <div class="folio">Folio: ${esc(folio)}</div>
         <div class="customer">Cliente: ${esc(customerName)}</div>
@@ -394,7 +400,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
     const expectedGeneration = routeGenerationRef.current
     try {
       await printTicketViaQz({
-        sucursal: session?.warehouse_name || 'Sucursal',
+        sucursal: authorizedWarehouseName,
         dateStr,
         timeStr,
         folio,
@@ -542,7 +548,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
                 <img src="/icons/logo-grupo-frio.svg" alt="Grupo Frio" style={{ height: 40, marginBottom: 6 }} />
                 <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>GRUPO FRIO</p>
-                <p style={{ fontSize: 11, color: '#666', margin: '2px 0 0' }}>{session?.warehouse_name || 'Sucursal'}</p>
+                <p style={{ fontSize: 11, color: '#666', margin: '2px 0 0' }}>{authorizedWarehouseName}</p>
               </div>
 
               {/* Date / Folio */}

@@ -94,6 +94,15 @@ function isFailureEnvelope(response) {
   ))
 }
 
+const FORBIDDEN_ENVELOPE_CODES = new Set(['forbidden', 'pos_access_denied'])
+
+function isForbiddenEnvelope(response) {
+  return responseLayers(response).some((layer) => (
+    Number(layer.status) === 403
+    || FORBIDDEN_ENVELOPE_CODES.has(String(layer.code || '').trim().toLowerCase())
+  ))
+}
+
 function SaleRow({ flow, sale, onOpen }) {
   const ticketPath = buildPosTicketPath(flow, sale.order_id)
   const folio = sale.name || `Venta #${sale.order_id}`
@@ -251,9 +260,13 @@ function RestrictedPosSalesView({
         ) : error ? (
           <div role="alert">
             <ErrorState
-              title="No se pudieron cargar las ventas de hoy"
-              message="Revisa tu conexión e inténtalo de nuevo."
-              onRetry={onRetry}
+              title={error === 'forbidden'
+                ? 'Tu perfil ya no tiene acceso al POS día'
+                : 'No se pudieron cargar las ventas de hoy'}
+              message={error === 'forbidden'
+                ? 'Solicita revisar el permiso antes de continuar.'
+                : 'Revisa tu conexión e inténtalo de nuevo.'}
+              onRetry={error === 'forbidden' ? undefined : onRetry}
             />
           </div>
         ) : items.length === 0 ? (
@@ -292,35 +305,45 @@ export default function ScreenRestrictedPosSales({
   const navigate = useNavigate()
   const requestSequence = useRef(0)
   const [retryKey, setRetryKey] = useState(0)
-  const [state, setState] = useState({ loading: true, error: false, items: [] })
+  const [state, setState] = useState({ loading: true, error: null, items: [] })
 
   useEffect(() => {
     const requestId = ++requestSequence.current
     let active = true
-    setState({ loading: true, error: false, items: [] })
+    setState({ loading: true, error: null, items: [] })
 
     Promise.resolve()
       .then(() => loadSales())
       .then((response) => {
         if (!active || requestId !== requestSequence.current) return
+        if (flow.posScope === 'day' && isForbiddenEnvelope(response)) {
+          setState({ loading: false, error: 'forbidden', items: [] })
+          return
+        }
         if (isFailureEnvelope(response)) {
           throw new Error('restricted_pos_sales_failure_envelope')
         }
         setState({
           loading: false,
-          error: false,
+          error: null,
           items: normalizeRestrictedPosSalesResponse(response),
         })
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active || requestId !== requestSequence.current) return
-        setState({ loading: false, error: true, items: [] })
+        setState({
+          loading: false,
+          error: flow.posScope === 'day' && error?.status === 403
+            ? 'forbidden'
+            : 'retryable',
+          items: [],
+        })
       })
 
     return () => {
       active = false
     }
-  }, [loadSales, retryKey])
+  }, [flow.posScope, loadSales, retryKey])
 
   const handleBack = useCallback(() => {
     navigate(flow.posRoute)
