@@ -63,6 +63,11 @@ Desde esta superficie Angélica podrá:
 controlador solo traducirá HTTP/JSON; la autenticación, alcance, validaciones,
 serialización y auditoría vivirán en helpers o servicios testeables.
 
+El manifest de `gf_hr_ops` declarará dependencia explícita de
+`gf_logistics_ops`, que es el módulo propietario de
+`gf.employee.mobile.session`. La autenticación no dependerá de que ese modelo
+esté instalado accidentalmente por otro módulo.
+
 Cada endpoint seguirá esta secuencia:
 
 1. leer la presencia de `X-GF-Employee-Token`;
@@ -90,13 +95,19 @@ parcial.
 
 El registry declarará `Asistencias` como módulo con una política nominal
 propia. La visibilidad, la decisión de navegación y el guard de `/asistencias`
-usarán el `employee_id` de sesión autorizado para evitar mostrar la superficie
-a otros gerentes.
+usarán un helper puro en `src/modules/asistencias/access.js`. El helper leerá
+la allowlist de IDs desde `VITE_ATTENDANCE_MANAGER_EMPLOYEE_IDS`; producción la
+configurará con `717`, la identidad productiva verificada de Angélica. No se
+usará nombre ni rol para conceder visibilidad.
 
 Este gate cliente solo mejora la experiencia. El backend seguirá siendo la
 única autoridad de lectura y escritura. La pantalla consultará además un
 endpoint de capacidades al montar; una discrepancia entre el gate local y la
 configuración server-side mostrará acceso denegado y nunca datos parciales.
+La configuración de despliegue actualizará conjuntamente la variable de la
+PWA y `gf_hr_ops.pwa_attendance_manager_employee_ids`; una prueba de smoke
+comparará el resultado del helper con `capabilities.allowed` para detectar
+drift sin convertir el gate local en autoridad.
 
 ### 3. Fuentes de datos
 
@@ -107,11 +118,21 @@ El tablero combinará:
 - registros `x_kold.hr.falta` del mismo rango;
 - calendario laboral de cada empleado para determinar si era un día esperado.
 
+La unidad canónica del tablero será un **empleado-día**. Un empleado-día puede
+contener cero, uno o varios tramos `hr.attendance` no traslapados. Esto permite
+representar salidas a comida y reingresos sin perder registros.
+
 `Sin registro` será un indicador operativo, no una falta creada
 automáticamente. Solo se mostrará cuando el calendario del empleado indique
 que debía laborar y no exista asistencia ni falta. Angélica deberá confirmar
 explícitamente `Registrar falta`. Si el empleado no tiene calendario laboral
 utilizable, la PWA no inferirá una falta.
+
+Un tramo nocturno se asignará al empleado-día de su `check_in` convertido a
+`America/Mexico_City`, aunque su `check_out` ocurra al día siguiente. Los
+filtros de rango usarán esa fecha local de entrada. El servicio ampliará sus
+límites UTC internos para no perder registros que crucen medianoche y después
+aplicará la fecha local canónica.
 
 ## Contrato de endpoints
 
@@ -160,10 +181,14 @@ Respuesta normalizada:
 ```json
 {
   "summary": {
+    "employees_in_scope": 48,
     "expected": 48,
     "present": 42,
+    "unscheduled_present": 1,
     "absent": 3,
+    "unscheduled_absent": 1,
     "incomplete": 2,
+    "missing_expected": 3,
     "worked_hours": 331.5
   },
   "rows": [
@@ -177,17 +202,38 @@ Respuesta normalizada:
       },
       "date": "2026-07-26",
       "expected_workday": true,
-      "attendance": {
-        "id": 500,
-        "check_in": "2026-07-26T08:03:00-06:00",
-        "check_out": "2026-07-26T17:02:00-06:00",
-        "worked_hours": 8.98
-      },
+      "attendances": [
+        {
+          "id": 500,
+          "check_in": "2026-07-26T08:03:00-06:00",
+          "check_out": "2026-07-26T17:02:00-06:00",
+          "worked_hours": 8.98,
+          "version": "2026-07-26T23:03:15Z"
+        }
+      ],
+      "worked_hours": 8.98,
       "absence": null,
       "status": "complete",
       "notes": ""
     }
   ]
+}
+```
+
+Cuando existe una falta, `absence` usa esta forma:
+
+```json
+{
+  "id": 700,
+  "date": "2026-07-26",
+  "absence_reason": "no_show",
+  "state": "pendiente",
+  "justified": false,
+  "notes": "",
+  "rolling_count_30d": 2,
+  "justification_date": null,
+  "justified_by": null,
+  "version": "2026-07-26T14:05:00Z"
 }
 ```
 
@@ -201,6 +247,40 @@ Estados mínimos:
 - `missing_expected`;
 - `not_scheduled`.
 
+Los totales se definen así:
+
+- `employees_in_scope`: empleados distintos incluidos después de filtros;
+- `expected`: empleado-días con jornada esperada;
+- `present`: empleado-días esperados con al menos un tramo de asistencia;
+- `unscheduled_present`: empleado-días no programados con al menos un tramo de
+  asistencia;
+- `absent`: empleado-días esperados con una falta y sin asistencia;
+- `unscheduled_absent`: empleado-días no programados con una falta y sin
+  asistencia;
+- `missing_expected`: empleado-días esperados sin asistencia ni falta;
+- `incomplete`: empleado-días con al menos un tramo abierto; es un subconjunto
+  diagnóstico de los días con asistencia y puede coincidir con `present` o
+  `unscheduled_present`, por lo que no es una categoría sumable aparte;
+- `worked_hours`: suma de horas de tramos cerrados.
+
+Para empleado-días esperados se cumple
+`present + absent + missing_expected = expected`. Las asistencias en un día no
+programado cuentan en `unscheduled_present`, pero no en `present` ni
+`expected`. Las faltas de días no programados cuentan en
+`unscheduled_absent`, pero no en `absent` ni `expected`.
+
+La precedencia de estado será:
+
+1. si existe una falta, `absence_pending`, `absence_justified` o
+   `absence_processed` según su estado;
+2. si no hay falta y algún tramo está abierto, `open`;
+3. si no hay falta y hay uno o más tramos cerrados, `complete`;
+4. sin registros en jornada esperada, `missing_expected`;
+5. sin registros ni jornada esperada, `not_scheduled`.
+
+El backend no permitirá crear una falta para un empleado-día que ya tenga
+asistencia, por lo que los casos 1 y 2/3 no coexistirán.
+
 ### `POST /pwa-hr/attendance`
 
 Crea una asistencia con:
@@ -208,23 +288,70 @@ Crea una asistencia con:
 - `employee_id`;
 - `check_in` local ISO;
 - `check_out` local ISO opcional;
-- `reason` obligatorio como motivo administrativo de la creación.
+- `change_reason` obligatorio como motivo administrativo de la creación.
+
+Respuesta:
+
+```json
+{
+  "ok": true,
+  "record": {
+    "id": 500,
+    "employee_id": 100,
+    "check_in": "2026-07-26T08:03:00-06:00",
+    "check_out": null,
+    "worked_hours": 0,
+    "version": "2026-07-26T14:03:15Z"
+  },
+  "audit_id": 900
+}
+```
 
 ### `PATCH /pwa-hr/attendance/<attendance_id>`
 
-Permite corregir `check_in`, `check_out` y registrar `reason` obligatorio. No
-permite cambiar el empleado propietario. Cerrar un registro abierto utiliza el
-mismo endpoint enviando `check_out`.
+Permite corregir `check_in` y `check_out`. No permite cambiar el empleado
+propietario. Cerrar un registro abierto utiliza el mismo endpoint enviando
+`check_out`; toda operación exige `change_reason`.
+
+Payload exacto:
+
+```json
+{
+  "check_in": "2026-07-26T08:03:00-06:00",
+  "check_out": "2026-07-26T17:02:00-06:00",
+  "version": "2026-07-26T14:03:15Z",
+  "change_reason": "Corrección autorizada por supervisión"
+}
+```
+
+Al menos uno de `check_in` o `check_out` debe estar presente. `version` y
+`change_reason` son obligatorios. La respuesta conserva la envoltura de
+creación con el registro actualizado, su nueva versión y `audit_id`.
 
 ### `POST /pwa-hr/faltas`
 
 Crea una falta para un empleado y fecha con:
 
-- `reason`: `retardo_bloqueado`, `no_show` u `otro`;
+- `employee_id`;
+- `date=YYYY-MM-DD`;
+- `absence_reason`: `retardo_bloqueado`, `no_show` u `otro`;
 - `notes` opcionales;
-- motivo administrativo de la captura.
+- `confirm_unscheduled` booleano, requerido en `true` solo cuando el calendario
+  no marca la fecha como jornada esperada;
+- `change_reason` obligatorio como motivo administrativo de la captura.
 
-Respeta la unicidad existente por empleado y fecha.
+Respeta la unicidad existente por empleado y fecha. Si ya existe cualquier
+tramo de asistencia en ese empleado-día, responde
+`409 attendance_exists_for_date`; no existe un flag cliente para sobrepasar
+esta regla.
+
+Si el día no es esperado y `confirm_unscheduled` no es `true`, responde
+`409 unscheduled_absence_confirmation_required`. El servidor determina el
+calendario; el cliente no puede declarar por sí mismo que el día era o no
+programado.
+
+La respuesta usa `{ ok, record, audit_id }`, donde `record` tiene la forma de
+`absence` documentada por el endpoint de lectura e incluye `version`.
 
 ### `POST /pwa-hr/faltas/<falta_id>/justify`
 
@@ -232,10 +359,70 @@ Justifica una falta usando la lógica de negocio existente. Acepta tipo de
 justificación, notas y comprobante opcional con nombre, MIME y contenido
 base64. El backend validará límite de tamaño y tipos permitidos.
 
+Payload exacto:
+
+```json
+{
+  "justification_type": "cita_medica",
+  "notes": "Consulta médica",
+  "document_base64": "<opcional>",
+  "document_name": "comprobante.pdf",
+  "document_mime": "application/pdf",
+  "version": "2026-07-26T14:03:15Z",
+  "change_reason": "Comprobante revisado"
+}
+```
+
+`justification_type` admite `imss`, `funeral`, `cita_medica` u `otro`.
+`version` y `change_reason` son obligatorios. Si no se envía documento, los
+tres campos de documento se omiten; si se envía, los tres son obligatorios.
+La respuesta usa `{ ok, record, audit_id }` e incluye la nueva versión de la
+falta.
+
+El comprobante tendrá un máximo de 5 MiB después de decodificar y solo aceptará
+`application/pdf`, `image/jpeg` o `image/png`. El backend validará MIME,
+extensión y firma del archivo; un base64 inválido o un contenido que no
+corresponda a su tipo declarado responderá `422 invalid_attachment`.
+
 ### `GET /pwa-hr/audit`
 
 Devuelve el historial paginado de un `hr.attendance` o `x_kold.hr.falta`
 autorizado. No acepta IDs fuera de `IGU`/`IGU34`.
+
+Parámetros:
+
+- `model=hr.attendance|x_kold.hr.falta`;
+- `record_id=<entero positivo>`;
+- `limit`, con valor predeterminado 25 y máximo 100;
+- `offset`, con valor predeterminado 0.
+
+Respuesta:
+
+```json
+{
+  "total": 2,
+  "limit": 25,
+  "offset": 0,
+  "rows": [
+    {
+      "id": 900,
+      "action": "update",
+      "actor": { "id": 717, "name": "Angelica Jaimes Dominguez" },
+      "target_employee": { "id": 100, "name": "Empleado" },
+      "change_reason": "Corrección autorizada por supervisión",
+      "before": {
+        "check_in": "2026-07-26T08:10:00-06:00",
+        "check_out": "2026-07-26T17:02:00-06:00"
+      },
+      "after": {
+        "check_in": "2026-07-26T08:03:00-06:00",
+        "check_out": "2026-07-26T17:02:00-06:00"
+      },
+      "changed_at": "2026-07-26T23:03:15Z"
+    }
+  ]
+}
+```
 
 ### `GET /pwa-hr/attendance/export.xlsx`
 
@@ -255,7 +442,7 @@ partir de estado posiblemente desactualizado.
   escritura.
 - `check_out`, cuando exista, debe ser posterior a `check_in`.
 - No se permiten asistencias traslapadas del mismo empleado.
-- Un registro abierto posterior del mismo empleado bloquea una nueva creación.
+- Un registro abierto del mismo empleado bloquea una nueva creación posterior.
 - Los datetimes deben incluir fecha y hora válidas; el backend normaliza desde
   `America/Mexico_City` a UTC.
 - Los cambios administrativos exigen motivo no vacío.
@@ -265,8 +452,8 @@ partir de estado posiblemente desactualizado.
 ### Faltas
 
 - Solo se permite una falta por empleado y fecha.
-- Registrar una falta cuando existe asistencia del mismo día exige una
-  confirmación explícita y queda marcado como conflicto en auditoría.
+- Registrar una falta cuando existe asistencia del mismo empleado-día se
+  rechaza con `409 attendance_exists_for_date`.
 - Justificar reutiliza el wizard o servicio de `gf_hr_ops` para conservar
   estado, usuario, fecha y recomputación de `rolling_count_30d`.
 - Una falta procesada no puede editarse desde la PWA; requiere un nuevo evento
@@ -274,9 +461,10 @@ partir de estado posiblemente desactualizado.
 
 ### Concurrencia
 
-La respuesta de lectura incluirá `write_date` o un `version` equivalente. Los
-PATCH exigirán esa versión. Si otro usuario o proceso cambió el registro, Odoo
-responderá `409 stale_record` y la PWA recargará antes de permitir reintento.
+La respuesta de lectura incluirá `version`, derivado de `write_date` en UTC,
+en cada asistencia y falta. `PATCH` y la acción de justificar exigirán esa
+versión. Si otro usuario o proceso cambió el registro, Odoo responderá
+`409 stale_record` y la PWA recargará antes de permitir reintento.
 
 ## Auditoría
 
@@ -298,6 +486,8 @@ snapshots no almacenarán el binario del comprobante; solo metadatos seguros.
 Una falla al registrar auditoría impedirá confirmar la escritura para evitar
 cambios sin trazabilidad.
 
+Los historiales se ordenarán de forma estable por `changed_at desc, id desc`.
+
 ## Experiencia de usuario
 
 ### Encabezado y filtros
@@ -311,28 +501,36 @@ La ruta `/asistencias` abrirá en el día actual con:
 - filtro por estado;
 - botón `Exportar Excel`.
 
-El encabezado mostrará tarjetas con empleados esperados, presentes, faltas,
-registros incompletos y horas trabajadas.
+El encabezado mostrará tarjetas con jornadas esperadas, presentes, faltas,
+registros incompletos y horas trabajadas. La tarjeta `Presentes` mostrará
+`present + unscheduled_present` y desglosará las no programadas. La tarjeta
+`Faltas` mostrará `absent + unscheduled_absent` y desglosará las no
+programadas. Así la operación ve el total real sin alterar la ecuación de
+jornadas esperadas.
 
 ### Lista
 
 En escritorio se usará una tabla compacta. En móvil se usarán tarjetas. Cada
-fila mostrará:
+fila representará un empleado-día y mostrará:
 
 - número, nombre y puesto;
 - cuenta analítica;
 - fecha;
-- entrada y salida;
-- horas trabajadas;
+- todos los tramos de entrada y salida de ese día;
+- horas trabajadas totales;
 - estado;
 - acciones contextuales.
 
 Acciones:
 
 - `Registrar asistencia` para un día sin registro;
-- `Corregir horario` para un registro existente;
-- `Registrar salida` para un registro abierto;
-- `Registrar falta` para un día esperado sin asistencia;
+- `Agregar tramo` para un empleado-día que ya tiene tramos cerrados y no tiene
+  una falta ni un tramo abierto;
+- `Corregir horario` para un tramo existente;
+- `Registrar salida` para el tramo abierto;
+- `Registrar falta` para un día sin asistencia; si no era una jornada esperada,
+  el formulario advertirá que se contabilizará como falta no programada y
+  exigirá confirmación explícita;
 - `Justificar falta` cuando esté pendiente;
 - `Ver historial` cuando exista auditoría.
 
@@ -358,13 +556,15 @@ actor que exportó. Tabla por empleado con:
 - días esperados;
 - días con asistencia;
 - faltas;
+- asistencias no programadas;
+- faltas no programadas;
 - faltas justificadas;
 - registros incompletos;
 - horas trabajadas.
 
 ### Hoja `Asistencias`
 
-Una fila por registro con:
+Una fila por tramo `hr.attendance` con:
 
 - número de empleado;
 - empleado;
@@ -410,6 +610,12 @@ incluirán comprobantes ni imágenes biométricas.
 - `409 stale_record`: recargar antes de reintentar.
 - `422 invalid_datetime_range`: mantener formulario y marcar campos.
 - `409 absence_already_exists`: abrir la falta existente.
+- `409 attendance_exists_for_date`: no registrar falta; mostrar los tramos
+  existentes del empleado-día.
+- `409 unscheduled_absence_confirmation_required`: advertir que el día no era
+  programado y pedir confirmación antes de reenviar.
+- `422 invalid_attachment`: conservar el formulario y pedir un PDF, JPG o PNG
+  válido de hasta 5 MiB.
 - error de exportación: conservar filtros y permitir reintento sin descargar un
   archivo parcial.
 
@@ -427,8 +633,11 @@ solicitados ni información de empleados fuera del alcance.
 - excluye empleados inactivos y cualquier otra cuenta;
 - falla explícitamente si falta alguno de los códigos analíticos;
 - crea y corrige `hr.attendance` con conversión local/UTC;
+- conserva varios tramos no traslapados en un mismo empleado-día;
+- asigna un turno nocturno a la fecha local de su entrada;
 - rechaza salida anterior, traslape y registro abierto conflictivo;
 - crea una falta única y reutiliza la lógica de justificación;
+- exige confirmación server-side para una falta no programada;
 - recomputa `rolling_count_30d` al justificar;
 - rechaza escrituras fuera de alcance aunque el ID exista;
 - detecta versión obsoleta con 409;
@@ -443,6 +652,10 @@ solicitados ni información de empleados fuera del alcance.
 - el fallo de capacidades niega la superficie;
 - los filtros generan los parámetros correctos;
 - los estados se normalizan y resumen correctamente;
+- los totales cuentan empleado-días, separan `unscheduled_present` y
+  `unscheduled_absent`, y tratan `incomplete` como diagnóstico no sumable de
+  los días con asistencia;
+- se puede agregar un segundo tramo no traslapado a un empleado-día existente;
 - formularios validan campos y bloquean doble envío;
 - crear, corregir, cerrar, registrar falta y justificar refrescan la fila;
 - `Exportar Excel` conserva filtros y descarga el nombre esperado;
