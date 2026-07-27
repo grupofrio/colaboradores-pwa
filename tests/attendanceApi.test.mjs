@@ -326,32 +326,78 @@ test('attendance api: structured backend errors preserve status code details and
   assert.deepEqual(events, ['gf:session-expired'])
 })
 
-test('attendance api: xlsx returns a Blob, safe filename and download helper always revokes URL', async () => {
+test('attendance api: xlsx uses exact active filters and only accepts a non-empty workbook Blob', async () => {
   assert.ok(attendanceApi, 'debe existir la fachada API de asistencias')
   const xlsx = new Blob(['xlsx-bytes'], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
-  globalThis.fetch = async () => new Response(xlsx, {
-    status: 200,
-    headers: {
-      'Content-Disposition': 'attachment; filename="../../asistencias Iguala.xlsx"',
-    },
-  })
+  const calls = []
+  globalThis.fetch = async (url) => {
+    calls.push(url)
+    return new Response(xlsx, {
+      status: 200,
+      headers: {
+        'Content-Disposition': 'attachment; filename="../../asistencias Iguala.xlsx"',
+      },
+    })
+  }
 
   const file = await attendanceApi.downloadAttendanceWorkbook({
     date_from: '2026-07-01',
     date_to: '2026-07-31',
     analytic_code: 'IGU',
+    employee_id: 105,
+    status: 'open',
+    search: 'no debe viajar',
   })
   assert.equal(file.blob instanceof Blob, true)
   assert.equal(file.filename, 'asistencias Iguala.xlsx')
+  assert.deepEqual(calls, [
+    '/odoo-api/pwa-hr/attendance/export.xlsx?date_from=2026-07-01&date_to=2026-07-31&analytic_code=IGU&employee_id=105&status=open',
+  ])
+
+  for (const invalidBlob of [
+    new Blob([], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    new Blob(['not xlsx'], { type: 'text/plain' }),
+  ]) {
+    globalThis.fetch = async () => new Response(invalidBlob, { status: 200 })
+    await assert.rejects(
+      attendanceApi.downloadAttendanceWorkbook({
+        date_from: '2026-07-01',
+        date_to: '2026-07-31',
+      }),
+      (error) => error instanceof coreApi.ApiError
+        && error.code === 'invalid_workbook'
+        && /Excel/.test(error.message),
+    )
+  }
+})
+
+test('attendance api: download helper attaches one anchor and always removes and revokes it', async () => {
+  const file = {
+    blob: new Blob(['xlsx-bytes'], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    filename: 'asistencias Iguala.xlsx',
+  }
 
   const lifecycle = []
   const anchor = {
     click() { lifecycle.push('click') },
     remove() { lifecycle.push('remove') },
   }
-  globalThis.document = { createElement() { return anchor } }
+  globalThis.document = {
+    body: {
+      appendChild(node) {
+        assert.equal(node, anchor)
+        lifecycle.push('append')
+      },
+    },
+    createElement() {
+      lifecycle.push('anchor')
+      return anchor
+    },
+  }
   globalThis.URL = {
     createObjectURL(blob) {
       assert.equal(blob, file.blob)
@@ -366,12 +412,24 @@ test('attendance api: xlsx returns a Blob, safe filename and download helper alw
   attendanceApi.saveAttendanceWorkbook(file)
   assert.equal(anchor.href, 'blob:attendance')
   assert.equal(anchor.download, 'asistencias Iguala.xlsx')
-  assert.deepEqual(lifecycle, ['create', 'click', 'remove', 'revoke:blob:attendance'])
+  assert.deepEqual(lifecycle, [
+    'create', 'anchor', 'append', 'click', 'remove', 'revoke:blob:attendance',
+  ])
+
+  lifecycle.length = 0
+  anchor.click = () => {
+    lifecycle.push('click')
+    throw new Error('click failed')
+  }
+  assert.throws(() => attendanceApi.saveAttendanceWorkbook(file), /click failed/)
+  assert.deepEqual(lifecycle, [
+    'create', 'anchor', 'append', 'click', 'remove', 'revoke:blob:attendance',
+  ])
 })
 
 test('attendance api: unsafe or absent workbook filename uses the canonical fallback', async () => {
   assert.ok(attendanceApi, 'debe existir la fachada API de asistencias')
-  globalThis.fetch = async () => new Response(new Blob(['xlsx']), {
+  globalThis.fetch = async () => new Response(new Blob([Uint8Array.from([0x50, 0x4b, 0x03, 0x04])]), {
     status: 200,
     headers: { 'Content-Disposition': 'attachment; filename="not-a-workbook.txt"' },
   })
@@ -381,4 +439,79 @@ test('attendance api: unsafe or absent workbook filename uses the canonical fall
     date_to: '2026-07-31',
   })
   assert.equal(file.filename, 'asistencias_IGU_IGU34_2026-07-01_2026-07-31.xlsx')
+})
+
+test('attendance api: every attendance backend code has an actionable Spanish message with details', () => {
+  const cases = [
+    ['invalid_employee_token', {}, /sesión/i],
+    ['no_session', {}, /sesión/i],
+    ['attendance_access_denied', {}, /acceso/i],
+    ['analytic_scope_not_configured', { missing_codes: ['IGU34'] }, /IGU34/],
+    ['invalid_analytic_filter', {}, /IGU.*IGU34/i],
+    ['invalid_employee_filter', {}, /empleado/i],
+    ['invalid_date_range', {}, /fecha/i],
+    ['date_range_too_large', { max_days: 93 }, /93 días/i],
+    ['invalid_status_filter', {}, /estado/i],
+    ['invalid_json', {}, /solicitud/i],
+    ['invalid_payload', {}, /datos/i],
+    ['change_reason_required', {}, /motivo administrativo/i],
+    ['invalid_record_id', {}, /registro/i],
+    ['invalid_employee_id', {}, /empleado/i],
+    ['invalid_attendance_id', {}, /asistencia/i],
+    ['invalid_absence_id', {}, /falta/i],
+    ['invalid_datetime', {}, /fecha.*hora/i],
+    ['invalid_datetime_range', {}, /salida.*entrada/i],
+    ['employee_out_of_scope', {}, /cuenta.*recarg/i],
+    ['attendance_overlap', { conflict_id: 88 }, /#88/],
+    ['absence_exists_for_date', { absence_id: 41, date: '2026-07-27' }, /falta #41.*2026-07-27/i],
+    ['absence_already_exists', { absence_id: 42, date: '2026-07-28' }, /falta #42.*2026-07-28/i],
+    ['attendance_exists_for_date', { attendance_id: 93, date: '2026-07-29' }, /asistencia #93.*2026-07-29/i],
+    ['absence_not_found', {}, /falta.*no existe/i],
+    ['attendance_not_found', {}, /asistencia.*no existe/i],
+    ['absence_not_editable', {}, /pendiente/i],
+    ['stale_record', {}, /cambió.*recarg/i],
+    ['invalid_attachment', {}, /PDF.*JPG.*PNG.*5 MiB/i],
+    ['unscheduled_absence_confirmation_required', {}, /no programad.*confirma/i],
+    ['attendance_manager_user_not_configured', {}, /empleado 717.*res\.users/i],
+    ['invalid_audit_target', {}, /historial/i],
+    ['audit_target_not_found', {}, /historial.*no existe/i],
+    ['invalid_pagination', {}, /paginación/i],
+    ['internal_error', {}, /equipo de soporte/i],
+    ['network', {}, /conexión/i],
+    ['invalid_workbook', {}, /Excel/i],
+    ['route_not_found', {}, /servicio.*no está disponible/i],
+    ['method_not_allowed', {}, /operación.*no está disponible/i],
+    ['http_error', {}, /intenta nuevamente/i],
+  ]
+
+  for (const [code, details, expected] of cases) {
+    const message = attendanceApi.getAttendanceErrorMessage({
+      code,
+      details,
+      message: 'Raw backend error in English',
+    })
+    assert.match(message, expected, code)
+    assert.doesNotMatch(message, /Raw backend error|Attendance|The /, code)
+  }
+
+  assert.equal(attendanceApi.getAttendanceErrorField({ code: 'attendance_overlap' }), 'check_in')
+  assert.equal(attendanceApi.getAttendanceErrorField({ code: 'invalid_datetime_range' }), 'check_out')
+  assert.equal(attendanceApi.getAttendanceErrorField({ code: 'invalid_attachment' }), 'attachment')
+  assert.equal(attendanceApi.getAttendanceErrorField({ code: 'unscheduled_absence_confirmation_required' }), 'confirm_unscheduled')
+  assert.deepEqual(attendanceApi.getAttendanceConflictTarget({
+    code: 'absence_already_exists',
+    details: { absence_id: 42, date: '2026-07-28' },
+  }), {
+    model: 'x_kold.hr.falta',
+    recordId: 42,
+    label: 'Falta existente · 2026-07-28',
+  })
+  assert.deepEqual(attendanceApi.getAttendanceConflictTarget({
+    code: 'attendance_exists_for_date',
+    details: { attendance_id: 93, date: '2026-07-29' },
+  }), {
+    model: 'hr.attendance',
+    recordId: 93,
+    label: 'Asistencia existente · 2026-07-29',
+  })
 })

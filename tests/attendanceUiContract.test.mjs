@@ -296,6 +296,86 @@ test('attendance ui: invalid filters clear a refresh cancelled by the effect cle
   assert.match(invalidBranch, /setRefreshing\(false\)/)
 })
 
+test('attendance ui: export keeps exact filters and uses a synchronous double-click lock', async () => {
+  const screen = await source('ScreenAsistencias.jsx')
+  const exportBlock = screen.slice(
+    screen.indexOf('async function exportWorkbook()'),
+    screen.indexOf("if (accessState === 'denied')"),
+  )
+  assert.match(screen, /exportInFlightRef = useRef\(false\)/)
+  assert.match(exportBlock, /exportInFlightRef\.current/)
+  assert.match(exportBlock, /downloadAttendanceWorkbook\(activeFilters\)/)
+  assert.match(exportBlock, /saveAttendanceWorkbook\(workbook\)/)
+  assert.match(exportBlock, /finally[\s\S]*exportInFlightRef\.current = false/)
+  assert.doesNotMatch(exportBlock, /setFilters\(/)
+})
+
+test('attendance ui: recovery keeps recoverable forms and opens concrete conflicts after refresh', async () => {
+  const screen = await source('ScreenAsistencias.jsx')
+  assert.match(screen, /getAttendanceErrorField/)
+  assert.match(screen, /querySelector\(`\[role="dialog"\] \[name="\$\{fieldName\}"\]`\)/)
+  assert.match(screen, /unscheduled_absence_confirmation_required/)
+  assert.match(screen, /attendance_manager_user_not_configured/)
+  assert.match(screen, /stale_record/)
+  assert.match(screen, /employee_out_of_scope/)
+  assert.match(screen, /getAttendanceConflictTarget/)
+  assert.match(screen, /EXISTING_RECORD_CODES\.has\(requestError\?\.code\)/)
+  assert.match(screen, /if \(conflictTarget\) setAuditTarget\(conflictTarget\)/)
+  assert.match(screen, /setReloadVersion/)
+  assert.match(screen, /setAccessState\('denied'\)/)
+})
+
+test('attendance ui: operations manuals document the final attendance contract and recovery', async () => {
+  const codeManual = await readFile(path.join(root, 'docs/CODE_MANUAL.md'), 'utf8')
+  const userManual = await readFile(path.join(root, 'docs/USER_MANUAL_BY_ROLE.md'), 'utf8')
+
+  for (const endpoint of [
+    'GET /pwa-hr/attendance/capabilities',
+    'GET /pwa-hr/attendance',
+    'POST /pwa-hr/attendance',
+    'PATCH /pwa-hr/attendance/<attendance_id>',
+    'POST /pwa-hr/faltas',
+    'POST /pwa-hr/faltas/<falta_id>/justify',
+    'GET /pwa-hr/audit',
+    'GET /pwa-hr/attendance/export.xlsx',
+  ]) {
+    assert.match(codeManual, new RegExp(endpoint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), endpoint)
+  }
+  for (const contract of [
+    'X-GF-Employee-Token',
+    'gf_hr_ops.pwa_attendance_manager_employee_ids',
+    'VITE_ATTENDANCE_MANAGER_EMPLOYEE_IDS',
+    'IGU',
+    'IGU34',
+    'America/Mexico_City',
+    '5 MiB',
+    'Resumen',
+    'Asistencias',
+    'Faltas',
+    'backend-first',
+    'biometría',
+  ]) {
+    assert.match(codeManual, new RegExp(contract), contract)
+  }
+  for (const workflow of [
+    'Angélica',
+    'Día',
+    'Semana',
+    'Rango',
+    'Agregar tramo',
+    'Corregir horario',
+    'Registrar salida',
+    'Registrar falta',
+    'Falta no programada',
+    'Justificar falta',
+    'Ver historial',
+    'Exportar Excel',
+    '5 MiB',
+  ]) {
+    assert.match(userManual, new RegExp(workflow), workflow)
+  }
+})
+
 test('attendance ui: mobile segment lists shrink without overflowing narrow cards', async () => {
   const styles = await source('asistencias.css')
   const mobileStyles = styles.slice(styles.indexOf('@media (max-width: 760px)'))

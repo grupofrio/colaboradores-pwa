@@ -1,6 +1,8 @@
 # Manual de Uso por Puesto — PWA Colaboradores Grupo Frío
 
-> Guía operativa para usuarios internos de Grupo Frío. Documenta el estado real al **2026-04-27** sobre el commit `2476ea3`.
+> Guía operativa para usuarios internos de Grupo Frío. Actualizada al
+> **2026-07-27**. La sección de asistencias describe el flujo preparado; su
+> habilitación productiva requiere un despliegue autorizado por separado.
 > Este manual NO es para desarrolladores — para eso ver [`docs/CODE_MANUAL.md`](CODE_MANUAL.md).
 
 ---
@@ -1014,7 +1016,96 @@ Centro de **control comercial** de la sucursal: ver el día y el día anterior, 
 
 ---
 
-## 13. Glosario operativo
+## 13. Angélica — Administración de asistencias de Iguala
+
+### 13.1 Alcance y entrada
+
+El módulo **Asistencias** (`/asistencias`) es exclusivo para Angélica. Muestra
+empleados activos asignados a las cuentas `IGU` e `IGU34`. Odoo valida tu
+sesión en cada consulta y cambio; si el módulo aparece pero Odoo niega acceso,
+no se mostrará información parcial.
+
+### 13.2 Consultar y filtrar
+
+1. En Inicio, abre **Asistencias**.
+2. Elige **Día**, **Semana** o **Rango** y confirma fecha inicial/final.
+3. Elige **Todas**, **IGU** o **IGU34**.
+4. Si hace falta, busca por nombre/número y filtra por estado.
+5. Revisa jornadas esperadas, presentes, faltas, incompletos y horas. Cada
+   renglón representa un empleado-día y puede contener múltiples tramos.
+
+Los filtros permanecen seleccionados después de guardar, recargar o fallar una
+exportación. `Sin registro` es una alerta operativa: nunca crea una falta por sí
+sola.
+
+### 13.3 Registrar, corregir y cerrar asistencias
+
+- **Registrar asistencia:** abre un empleado-día sin registro, confirma
+  empleado/fecha, captura entrada, salida opcional y motivo administrativo.
+- **Agregar tramo:** úsalo para comida o reingreso cuando todos los tramos
+  anteriores estén cerrados. No captures horarios traslapados.
+- **Corregir horario:** abre el tramo correcto, ajusta entrada/salida y explica
+  el motivo. La versión evita sobrescribir un cambio de otra persona.
+- **Registrar salida:** cierra un tramo abierto con la hora real y un motivo.
+
+Si aparece un traslape o rango inválido, el formulario conserva lo capturado y
+enfoca el horario a corregir. Si el registro cambió (`stale_record`) o el
+empleado salió de alcance, el sistema recarga primero; abre de nuevo el registro
+actualizado antes de reintentar.
+
+### 13.4 Registrar y justificar faltas
+
+1. En un empleado-día sin asistencia, pulsa **Registrar falta**.
+2. Selecciona motivo, agrega notas y escribe el motivo administrativo.
+3. Si aparece **Falta no programada**, verifica el calendario y activa la
+   confirmación explícita antes de reenviar. Sin esa confirmación no se guarda.
+4. Para una falta pendiente, pulsa **Justificar falta**, elige el tipo, agrega
+   notas y, opcionalmente, un PDF, JPG o PNG de hasta **5 MiB**.
+
+No es posible registrar una falta si ya hay asistencia. Si ya existe una falta
+o asistencia para esa fecha, el formulario se cierra, el listado se recarga y
+se abre el historial del registro existente cuando Odoo entrega su ID. Una
+falta procesada ya no puede justificarse desde esta pantalla.
+
+Si aparece que el administrador no tiene usuario Odoo, no reintentes la
+justificación: soporte debe vincular primero al empleado 717 con una cuenta
+`res.users` activa. Un comprobante inválido conserva el formulario; reemplázalo
+por un archivo permitido de hasta 5 MiB.
+
+### 13.5 Historial y Excel
+
+- **Ver historial** muestra quién creó, corrigió, cerró o justificó el registro,
+  cuándo ocurrió, el motivo y valores anteriores/posteriores. No muestra
+  tokens ni el contenido binario de comprobantes.
+- **Exportar Excel** descarga exactamente el rango, cuenta, empleado y estado
+  activos. El archivo contiene `Resumen`, `Asistencias` y `Faltas`. Espera a que
+  termine; el botón queda bloqueado para evitar doble descarga.
+- Si la exportación falla, no se descarga un archivo parcial ni se pierden los
+  filtros. Corrige la conexión/configuración indicada y vuelve a pulsar
+  **Exportar Excel**.
+
+### 13.6 Errores y recuperación
+
+- **Sesión vencida:** vuelve a iniciar sesión.
+- **Acceso denegado:** vuelve al inicio y pide que revisen ambas allowlists; no
+  intentes entrar por URL directa.
+- **Falta configurar IGU o IGU34:** reporta exactamente el código indicado para
+  que lo creen/corrijan en Odoo.
+- **Registro cambió / empleado cambió de cuenta:** espera la recarga y vuelve a
+  abrir el registro vigente.
+- **Traslape o salida anterior a entrada:** corrige el campo enfocado; no se
+  pierde el formulario.
+- **Falta/asistencia existente:** revisa el historial que se abre y evita crear
+  un duplicado.
+- **Día no programado:** confirma solo después de verificar que realmente debe
+  contabilizarse como falta.
+- **Comprobante inválido:** usa PDF, JPG o PNG, no vacío y máximo 5 MiB.
+- **Error de Excel:** conserva los filtros y reintenta desde el mismo botón; si
+  persiste, reporta rango y hora sin adjuntar datos sensibles.
+
+---
+
+## 14. Glosario operativo
 
 | Término | Significado |
 |---------|-------------|
@@ -1044,7 +1135,7 @@ Centro de **control comercial** de la sucursal: ver el día y el día anterior, 
 
 ---
 
-## 14. Errores frecuentes y solución rápida
+## 15. Errores frecuentes y solución rápida
 
 | Mensaje | Significado | Qué hacer |
 |---------|-------------|-----------|
@@ -1061,7 +1152,7 @@ Centro de **control comercial** de la sucursal: ver el día y el día anterior, 
 
 ---
 
-## 15. Escalamiento y soporte
+## 16. Escalamiento y soporte
 
 ### Niveles de escalamiento
 
@@ -1092,7 +1183,7 @@ Lista completa: ver [`docs/GAPS_BACKLOG.md`](GAPS_BACKLOG.md).
 
 ---
 
-## 16. Changelog
+## 17. Changelog
 
 | Fecha | Versión | Cambios |
 |-------|---------|---------|

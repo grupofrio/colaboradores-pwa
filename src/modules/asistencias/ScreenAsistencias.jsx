@@ -6,6 +6,9 @@ import {
   createAbsence,
   createAttendance,
   downloadAttendanceWorkbook,
+  getAttendanceConflictTarget,
+  getAttendanceErrorField,
+  getAttendanceErrorMessage,
   getCapabilities,
   getAttendance,
   justifyAbsence,
@@ -15,8 +18,6 @@ import {
 import {
   filterAttendanceRows,
   getAttendanceDatePreset,
-  getAttendanceErrorMessage,
-  needsReload,
   serializeAttendanceFilters,
   validateAttendanceFilters,
 } from './attendanceState.js'
@@ -29,6 +30,11 @@ import { AuditDrawer } from './components/AuditDrawer.jsx'
 import './asistencias.css'
 
 const ACCESS_DENIED_CODE = 'attendance_access_denied'
+const EXISTING_RECORD_CODES = new Set([
+  'absence_already_exists',
+  'absence_exists_for_date',
+  'attendance_exists_for_date',
+])
 
 function initialFilters() {
   return {
@@ -41,6 +47,13 @@ function initialFilters() {
 
 function emptySnapshot() {
   return { summary: {}, rows: [] }
+}
+
+function focusAttendanceModalField(fieldName) {
+  if (!fieldName) return
+  setTimeout(() => {
+    document.querySelector(`[role="dialog"] [name="${fieldName}"]`)?.focus()
+  }, 0)
 }
 
 export default function ScreenAsistencias() {
@@ -62,6 +75,7 @@ export default function ScreenAsistencias() {
   const requestSequenceRef = useRef(0)
   const hasSnapshotRef = useRef(false)
   const mutationInFlightRef = useRef(false)
+  const exportInFlightRef = useRef(false)
 
   const filterValidation = useMemo(() => validateAttendanceFilters(filters), [filters])
   const serverFilters = useMemo(() => serializeAttendanceFilters(filters), [filters])
@@ -93,7 +107,7 @@ export default function ScreenAsistencias() {
       })
       .catch((requestError) => {
         if (cancelled) return
-        if (requestError?.status === 403 || requestError?.code === ACCESS_DENIED_CODE) {
+        if (requestError?.code === ACCESS_DENIED_CODE) {
           setAccessState('denied')
         } else {
           setAccessState('error')
@@ -133,7 +147,7 @@ export default function ScreenAsistencias() {
       })
       .catch((requestError) => {
         if (cancelled || requestSequence !== requestSequenceRef.current) return
-        if (requestError?.status === 403 || requestError?.code === ACCESS_DENIED_CODE) {
+        if (requestError?.code === ACCESS_DENIED_CODE) {
           setAccessState('denied')
         }
         setError(getAttendanceErrorMessage(requestError))
@@ -192,13 +206,36 @@ export default function ScreenAsistencias() {
       const message = getAttendanceErrorMessage(requestError)
       setModalError(message)
       toast.error(message)
+      if (requestError?.code === ACCESS_DENIED_CODE) {
+        setModal(null)
+        setAccessState('denied')
+        setError(message)
+        return
+      }
+
+      const conflictTarget = getAttendanceConflictTarget(requestError)
+      if (EXISTING_RECORD_CODES.has(requestError?.code)) {
+        setModal(null)
+        setModalError('')
+        setError(message)
+        setReloadVersion((version) => version + 1)
+        if (conflictTarget) setAuditTarget(conflictTarget)
+        return
+      }
+
       if (requestError?.code === 'unscheduled_absence_confirmation_required') {
         setModal((current) => current ? { ...current, forceUnscheduledConfirmation: true } : current)
       }
-      if (needsReload(requestError)) {
-        setModal(null)
-        setReloadVersion((version) => version + 1)
+      if (requestError?.code === 'attendance_manager_user_not_configured') {
+        focusAttendanceModalField('justification_type')
       }
+      if (requestError?.code === 'stale_record' || requestError?.code === 'employee_out_of_scope') {
+        setModal(null)
+        setError(message)
+        setReloadVersion((version) => version + 1)
+        return
+      }
+      focusAttendanceModalField(getAttendanceErrorField(requestError))
     } finally {
       mutationInFlightRef.current = false
       setSaving(false)
@@ -225,17 +262,22 @@ export default function ScreenAsistencias() {
   }
 
   async function exportWorkbook() {
-    if (exporting || !filterValidation.valid) return
+    if (exportInFlightRef.current || !filterValidation.valid) return
+    exportInFlightRef.current = true
     setExporting(true)
+    setError('')
+    const activeFilters = { ...serverFilters }
     try {
-      const workbook = await downloadAttendanceWorkbook(serverFilters)
+      const workbook = await downloadAttendanceWorkbook(activeFilters)
       saveAttendanceWorkbook(workbook)
       toast.success('Excel descargado correctamente.')
     } catch (requestError) {
-      const message = getAttendanceErrorMessage(requestError)
+      const message = `${getAttendanceErrorMessage(requestError)} Los filtros se conservaron; pulsa Exportar Excel para reintentar.`
       setError(message)
       toast.error(message)
+      if (requestError?.code === ACCESS_DENIED_CODE) setAccessState('denied')
     } finally {
+      exportInFlightRef.current = false
       setExporting(false)
     }
   }
