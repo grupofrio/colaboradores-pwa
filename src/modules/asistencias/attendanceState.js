@@ -13,6 +13,8 @@ const JUSTIFICATION_TYPES = new Set(['imss', 'funeral', 'cita_medica', 'otro'])
 const ATTACHMENT_MIMES = new Set(['application/pdf', 'image/jpeg', 'image/png'])
 const MAX_RANGE_DAYS = 93
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+const ATTENDANCE_TIME_ZONE = 'America/Mexico_City'
+const DATE_TIME_PATTERN = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?)(Z|([+-])(\d{2}):(\d{2}))?$/
 
 const STATUS_LABELS = {
   complete: 'Completa',
@@ -44,17 +46,119 @@ function parseDateValue(value) {
   return { year, month, day, date }
 }
 
-function parseDateTimeValue(value) {
-  const match = String(value || '').match(
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?$/,
+function dateTimeParts(value) {
+  const match = String(value || '').match(DATE_TIME_PATTERN)
+  if (!match) return null
+  const local = match[1]
+  const localMatch = local.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?)?$/,
   )
-  if (!match || !parseDateValue(`${match[1]}-${match[2]}-${match[3]}`)) return null
-  const hour = Number(match[4])
-  const minute = Number(match[5])
-  const second = Number(match[6] || 0)
-  if (hour > 23 || minute > 59 || second > 59) return null
-  const timestamp = Date.parse(String(value))
-  return Number.isFinite(timestamp) ? timestamp : null
+  if (!localMatch || !parseDateValue(`${localMatch[1]}-${localMatch[2]}-${localMatch[3]}`)) return null
+  const parts = {
+    year: Number(localMatch[1]),
+    month: Number(localMatch[2]),
+    day: Number(localMatch[3]),
+    hour: Number(localMatch[4]),
+    minute: Number(localMatch[5]),
+    second: Number(localMatch[6] || 0),
+    millisecond: Number(String(localMatch[7] || '').padEnd(3, '0').slice(0, 3) || 0),
+  }
+  if (parts.hour > 23 || parts.minute > 59 || parts.second > 59) return null
+  return {
+    local,
+    suffix: match[2] || '',
+    offsetHour: Number(match[4] || 0),
+    offsetMinute: Number(match[5] || 0),
+    parts,
+  }
+}
+
+function namedZoneFormatter(timeZone) {
+  try {
+    return new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+      timeZone,
+      calendar: 'gregory',
+      numberingSystem: 'latn',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+  } catch {
+    throw new RangeError('Zona horaria de asistencias no disponible.')
+  }
+}
+
+function formattedZoneParts(formatter, timestamp) {
+  const result = {}
+  for (const part of formatter.formatToParts(new Date(timestamp))) {
+    if (part.type !== 'literal') result[part.type] = Number(part.value)
+  }
+  return result
+}
+
+function sameWallClock(actual, expected) {
+  return ['year', 'month', 'day', 'hour', 'minute', 'second']
+    .every((key) => actual[key] === expected[key])
+}
+
+function formatOffset(offsetMinutes) {
+  const sign = offsetMinutes < 0 ? '-' : '+'
+  const absolute = Math.abs(offsetMinutes)
+  return `${sign}${String(Math.floor(absolute / 60)).padStart(2, '0')}:${String(absolute % 60).padStart(2, '0')}`
+}
+
+export function toAttendanceIsoWithOffset(value, { timeZone = ATTENDANCE_TIME_ZONE } = {}) {
+  const parsed = dateTimeParts(value)
+  if (!parsed) throw new RangeError('Fecha u hora de asistencia inválida.')
+
+  if (parsed.suffix) {
+    if (parsed.suffix !== 'Z' && (
+      parsed.offsetHour > 14
+      || parsed.offsetMinute > 59
+      || (parsed.offsetHour === 14 && parsed.offsetMinute !== 0)
+    )) {
+      throw new RangeError('Offset de asistencia inválido.')
+    }
+    if (!Number.isFinite(Date.parse(String(value)))) {
+      throw new RangeError('Fecha u hora de asistencia inválida.')
+    }
+    return String(value)
+  }
+
+  const formatter = namedZoneFormatter(timeZone)
+  const wallClockUtc = Date.UTC(
+    parsed.parts.year,
+    parsed.parts.month - 1,
+    parsed.parts.day,
+    parsed.parts.hour,
+    parsed.parts.minute,
+    parsed.parts.second,
+    parsed.parts.millisecond,
+  )
+  const candidates = []
+  for (let offsetMinutes = -14 * 60; offsetMinutes <= 14 * 60; offsetMinutes += 15) {
+    const timestamp = wallClockUtc - offsetMinutes * 60000
+    if (sameWallClock(formattedZoneParts(formatter, timestamp), parsed.parts)) {
+      candidates.push(offsetMinutes)
+    }
+  }
+  if (candidates.length !== 1) {
+    throw new RangeError('La hora local es inexistente o ambigua en la zona de asistencias.')
+  }
+  return `${parsed.local}${formatOffset(candidates[0])}`
+}
+
+function parseDateTimeValue(value) {
+  try {
+    const timestamp = Date.parse(toAttendanceIsoWithOffset(value))
+    return Number.isFinite(timestamp) ? timestamp : null
+  } catch {
+    return null
+  }
 }
 
 function positiveInteger(value) {

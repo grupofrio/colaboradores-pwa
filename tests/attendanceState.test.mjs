@@ -3,6 +3,38 @@ import assert from 'node:assert/strict'
 
 const state = await import('../src/modules/asistencias/attendanceState.js').catch(() => null)
 
+test('attendance state: datetime-local values gain the named Mexico timezone offset', () => {
+  assert.equal(
+    state.toAttendanceIsoWithOffset('2026-07-27T08:00'),
+    '2026-07-27T08:00-06:00',
+  )
+  assert.equal(
+    state.toAttendanceIsoWithOffset('2026-07-27T08:00:30.125'),
+    '2026-07-27T08:00:30.125-06:00',
+  )
+})
+
+test('attendance state: explicit valid offsets are preserved and invalid local times fail closed', () => {
+  assert.equal(
+    state.toAttendanceIsoWithOffset('2026-07-27T14:00:00Z'),
+    '2026-07-27T14:00:00Z',
+  )
+  assert.equal(
+    state.toAttendanceIsoWithOffset('2026-07-27T08:00:00-06:00'),
+    '2026-07-27T08:00:00-06:00',
+  )
+  assert.throws(() => state.toAttendanceIsoWithOffset('2026-02-30T08:00'))
+  assert.throws(() => state.toAttendanceIsoWithOffset('2026-07-27T08:00+25:00'))
+  assert.throws(() => state.toAttendanceIsoWithOffset(
+    '2026-03-08T02:30',
+    { timeZone: 'America/New_York' },
+  ), /inexistente|ambigua/i)
+  assert.throws(() => state.toAttendanceIsoWithOffset(
+    '2026-11-01T01:30',
+    { timeZone: 'America/New_York' },
+  ), /inexistente|ambigua/i)
+})
+
 test('attendance state: day week and custom presets use local YYYY-MM-DD values', () => {
   assert.ok(state, 'debe existir el estado puro de asistencias')
   const now = new Date(2026, 6, 29, 23, 30, 0)

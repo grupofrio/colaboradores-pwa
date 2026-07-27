@@ -224,6 +224,41 @@ test('attendance api: every mutation and audit request keeps only its contract f
   assert.equal(calls[3].url, '/odoo-api/pwa-hr/audit?model=hr.attendance&record_id=9&limit=25&offset=50')
 })
 
+test('attendance api: create and update always send explicit Mexico offsets', async () => {
+  assert.ok(attendanceApi, 'debe existir la fachada API de asistencias')
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+  }
+
+  await attendanceApi.createAttendance({
+    employee_id: 105,
+    check_in: '2026-07-27T08:00',
+    check_out: '2026-07-27T17:00',
+    change_reason: 'Captura autorizada',
+  })
+  await attendanceApi.updateAttendance(9, {
+    check_in: '2026-07-28T08:15',
+    check_out: '2026-07-28T17:30:15',
+    version: 'v1',
+    change_reason: 'Corrección autorizada',
+  })
+
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    employee_id: 105,
+    check_in: '2026-07-27T08:00-06:00',
+    check_out: '2026-07-27T17:00-06:00',
+    change_reason: 'Captura autorizada',
+  })
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    check_in: '2026-07-28T08:15-06:00',
+    check_out: '2026-07-28T17:30:15-06:00',
+    version: 'v1',
+    change_reason: 'Corrección autorizada',
+  })
+})
+
 test('attendance api: structured backend errors preserve status code details and expire invalid token', async () => {
   assert.ok(attendanceApi, 'debe existir la fachada API de asistencias')
   const events = []

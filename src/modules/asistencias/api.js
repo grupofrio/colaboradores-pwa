@@ -1,4 +1,5 @@
 import { ApiError, api } from '../../lib/api.js'
+import { toAttendanceIsoWithOffset } from './attendanceState.js'
 
 const READ_FILTER_FIELDS = [
   'date_from',
@@ -35,6 +36,16 @@ function positiveId(value, field = 'record_id') {
   return text
 }
 
+function withExplicitAttendanceOffsets(payload) {
+  const result = { ...payload }
+  for (const field of ['check_in', 'check_out']) {
+    if (result[field] !== undefined && result[field] !== null) {
+      result[field] = toAttendanceIsoWithOffset(result[field])
+    }
+  }
+  return result
+}
+
 export function getCapabilities() {
   return api('GET', '/pwa-hr/attendance/capabilities')
 }
@@ -44,21 +55,21 @@ export function getAttendance(filters = {}) {
 }
 
 export function createAttendance(payload = {}) {
-  return api('POST', '/pwa-hr/attendance', pickFields(payload, [
+  return api('POST', '/pwa-hr/attendance', withExplicitAttendanceOffsets(pickFields(payload, [
     'employee_id',
     'check_in',
     'check_out',
     'change_reason',
-  ]))
+  ])))
 }
 
 export function updateAttendance(id, payload = {}) {
-  return api('PATCH', `/pwa-hr/attendance/${positiveId(id, 'attendance_id')}`, pickFields(payload, [
+  return api('PATCH', `/pwa-hr/attendance/${positiveId(id, 'attendance_id')}`, withExplicitAttendanceOffsets(pickFields(payload, [
     'check_in',
     'check_out',
     'version',
     'change_reason',
-  ]))
+  ])))
 }
 
 export function createAbsence(payload = {}) {
