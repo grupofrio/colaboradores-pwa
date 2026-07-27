@@ -48,6 +48,8 @@ pg_ctl -D "$GF_ATTENDANCE_TEST_RUNTIME/pgdata" \
 
 These provisioning commands are one-time and network access for the shallow Odoo clone/package installation requires the normal execution approval. If the directories already exist, validate and reuse them instead of cloning or initializing over them.
 
+The local repository does not include the Enterprise `web_map` addon declared by `os_customer_zones`, and the starting `gf_logistics_ops` branch cannot install on a fresh database because legacy `_auto_init` migration code assumes its route tables already exist. Do not expand this attendance change into an unrelated logistics migration repair. For tests only, shadow `gf_logistics_ops` under `$GF_ATTENDANCE_TEST_RUNTIME/test-addons/gf_logistics_ops` with a minimal manifest depending on `hr` and the standard `analytic` addon; its model initializer must load the repository's real `gf_logistics_ops/models/gf_mobile_session.py` and `os_customer_zones/models/model_hr_employee_analytic.py` sources. This exercises the actual token implementation and exact employee analytic field required by `gf_hr_ops` without loading unrelated logistics models. Keep this shim outside Git and never deploy it. A minimal `web_map` shim may remain in the same temporary path for direct logistics diagnostics, but the attendance suite must not depend on it.
+
 Canonical clean backend test sequence used below:
 
 ```bash
@@ -55,7 +57,7 @@ dropdb --if-exists -h "$GF_ODOO_TEST_PGSOCKET" -p "$GF_ODOO_TEST_PGPORT" "$GF_OD
 createdb -h "$GF_ODOO_TEST_PGSOCKET" -p "$GF_ODOO_TEST_PGPORT" "$GF_ODOO_TEST_DB"
 "$GF_ATTENDANCE_TEST_RUNTIME/venv/bin/python" "$GF_ODOO_BIN" -d "$GF_ODOO_TEST_DB" \
   --db_host="$GF_ODOO_TEST_PGSOCKET" --db_port="$GF_ODOO_TEST_PGPORT" \
-  --addons-path="$GF_ODOO_CORE_ADDONS,$BACKEND_ROOT" \
+  --addons-path="$GF_ATTENDANCE_TEST_RUNTIME/test-addons,$GF_ODOO_CORE_ADDONS,$BACKEND_ROOT" \
   --without-demo=all --test-enable --stop-after-init -i gf_hr_ops \
   --test-tags /gf_hr_ops
 ```
@@ -527,7 +529,7 @@ dropdb --if-exists -h "$GF_ODOO_TEST_PGSOCKET" -p "$GF_ODOO_TEST_PGPORT" "$GF_OD
 createdb -h "$GF_ODOO_TEST_PGSOCKET" -p "$GF_ODOO_TEST_PGPORT" "$GF_ODOO_TEST_DB"
 "$GF_ATTENDANCE_TEST_RUNTIME/venv/bin/python" "$GF_ODOO_BIN" -d "$GF_ODOO_TEST_DB" \
   --db_host="$GF_ODOO_TEST_PGSOCKET" --db_port="$GF_ODOO_TEST_PGPORT" \
-  --addons-path="$GF_ODOO_CORE_ADDONS,$BACKEND_ROOT" \
+  --addons-path="$GF_ATTENDANCE_TEST_RUNTIME/test-addons,$GF_ODOO_CORE_ADDONS,$BACKEND_ROOT" \
   --without-demo=all --test-enable --stop-after-init -i gf_hr_ops \
   --test-tags /gf_hr_ops
 /Users/sebis/Documents/odoo/GrupoFrio/.graphify-env/bin/graphify update .
@@ -855,7 +857,7 @@ dropdb --if-exists -h "$GF_ODOO_TEST_PGSOCKET" -p "$GF_ODOO_TEST_PGPORT" "$GF_OD
 createdb -h "$GF_ODOO_TEST_PGSOCKET" -p "$GF_ODOO_TEST_PGPORT" "$GF_ODOO_TEST_DB"
 "$GF_ATTENDANCE_TEST_RUNTIME/venv/bin/python" "$GF_ODOO_BIN" -d "$GF_ODOO_TEST_DB" \
   --db_host="$GF_ODOO_TEST_PGSOCKET" --db_port="$GF_ODOO_TEST_PGPORT" \
-  --addons-path="$GF_ODOO_CORE_ADDONS,$BACKEND_ROOT" \
+  --addons-path="$GF_ATTENDANCE_TEST_RUNTIME/test-addons,$GF_ODOO_CORE_ADDONS,$BACKEND_ROOT" \
   --without-demo=all --test-enable --stop-after-init -i gf_hr_ops \
   --test-tags /gf_hr_ops
 /Users/sebis/Documents/odoo/GrupoFrio/.graphify-env/bin/graphify update .
