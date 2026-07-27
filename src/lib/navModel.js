@@ -36,11 +36,6 @@ import { readAttendanceAccess } from '../modules/asistencias/access.js'
 // readAuthoritativeTowerStatus (M1 intacto — no se convierte a x_job_key ni a
 // accessPolicy).
 export const ACCESS_POLICY_RESOLVERS = Object.freeze({
-  attendance_manager: (session, attendanceManagerIdsRaw) => ({
-    level: readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
-      ? 'global'
-      : 'none',
-  }),
   hectorNightPos: (session) => ({
     level: canAccessHectorNightPos(session) ? 'global' : 'none',
   }),
@@ -55,10 +50,10 @@ export const ACCESS_POLICY_RESOLVERS = Object.freeze({
 // Resuelve una accessPolicy. FAIL-CLOSED: si la política no está registrada
 // (typo, módulo nuevo sin dar de alta, resolver borrado) devuelve false — nunca
 // cae al camino por rol, porque eso expondría el módulo a quien no debe verlo.
-export function resolveAccessPolicy(policy, session, attendanceManagerIdsRaw) {
+export function resolveAccessPolicy(policy, session) {
   const resolver = ACCESS_POLICY_RESOLVERS[policy]
   if (typeof resolver !== 'function') return false
-  return resolver(session, attendanceManagerIdsRaw)?.level === 'global'
+  return resolver(session)?.level === 'global'
 }
 
 // Anclas fijas (no son módulos del registry). Siempre presentes con sesión:
@@ -164,9 +159,10 @@ export function isModuleVisibleForSession(module, session, attendanceManagerIdsR
   if (!module) return false
   if (module.showInNav === false && module.showOnHome === false) return false
   if (!isValidAuthenticatedSession(session)) return false
-  if (module.accessPolicy) {
-    return resolveAccessPolicy(module.accessPolicy, session, attendanceManagerIdsRaw)
+  if (module.accessPolicy === 'attendance_manager') {
+    return readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
   }
+  if (module.accessPolicy) return resolveAccessPolicy(module.accessPolicy, session)
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
 }
@@ -198,10 +194,15 @@ export function getModuleEntryDecisionForSession(module, session, attendanceMana
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
-  // Toda accessPolicy registrada entra o se deniega por SU contrato, sin role-context.
-  // Una política desconocida no tiene resolver ⇒ resolveAccessPolicy deniega.
+  if (module?.accessPolicy === 'attendance_manager') {
+    return readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
+      ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
+      : { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  // Toda política del registro canónico entra o se deniega por SU contrato,
+  // sin role-context. Una política desconocida falla cerrada.
   if (module?.accessPolicy) {
-    return resolveAccessPolicy(module.accessPolicy, session, attendanceManagerIdsRaw)
+    return resolveAccessPolicy(module.accessPolicy, session)
       ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
       : { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
