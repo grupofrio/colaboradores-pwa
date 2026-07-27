@@ -133,6 +133,28 @@ test('attendance state: strict attendance form validation covers create update a
   assert.equal(Boolean(badRange.errors.check_out), true)
 })
 
+test('attendance state: optional checkout treats whitespace as absent and explicit null as reopen', () => {
+  assert.deepEqual(state.validateAttendanceForm({
+    employee_id: 22,
+    check_in: '2026-07-27T08:00',
+    check_out: '   ',
+    change_reason: 'Entrada abierta',
+  }, { mode: 'create' }), { valid: true, errors: {} })
+
+  assert.deepEqual(state.validateAttendanceForm({
+    check_in: '2026-07-27T08:15',
+    check_out: '   ',
+    version: 'v1',
+    change_reason: 'Ajustar entrada',
+  }, { mode: 'update' }), { valid: true, errors: {} })
+
+  assert.deepEqual(state.validateAttendanceForm({
+    check_out: null,
+    version: 'v2',
+    change_reason: 'Reabrir asistencia',
+  }, { mode: 'update' }), { valid: true, errors: {} })
+})
+
 test('attendance state: absence and justification forms enforce enums confirmation and attachment tuple', () => {
   assert.ok(state, 'debe existir el estado puro de asistencias')
   assert.deepEqual(state.validateAbsenceForm({
@@ -264,6 +286,13 @@ test('attendance state: documented backend errors map to actionable Spanish UX',
   assert.equal(
     state.getAttendanceErrorMessage({ code: 'unknown', message: 'Mensaje seguro del servidor' }),
     'Mensaje seguro del servidor',
+  )
+})
+
+test('attendance state: actual duplicate absence code maps to actionable Spanish UX', () => {
+  assert.match(
+    state.getAttendanceErrorMessage({ code: 'absence_exists_for_date' }),
+    /ya existe una falta/i,
   )
 })
 

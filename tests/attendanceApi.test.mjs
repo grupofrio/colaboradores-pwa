@@ -259,6 +259,49 @@ test('attendance api: create and update always send explicit Mexico offsets', as
   })
 })
 
+test('attendance api: optional empty checkout is safe without erasing an update implicitly', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+  }
+
+  await attendanceApi.createAttendance({
+    employee_id: 105,
+    check_in: '2026-07-27T08:00',
+    check_out: '',
+    change_reason: 'Entrada abierta',
+  })
+  await attendanceApi.updateAttendance(9, {
+    check_in: '2026-07-27T08:15',
+    check_out: '   ',
+    version: 'v1',
+    change_reason: 'Ajustar entrada',
+  })
+  await attendanceApi.updateAttendance(9, {
+    check_out: null,
+    version: 'v2',
+    change_reason: 'Reabrir asistencia',
+  })
+
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    employee_id: 105,
+    check_in: '2026-07-27T08:00-06:00',
+    check_out: null,
+    change_reason: 'Entrada abierta',
+  })
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    check_in: '2026-07-27T08:15-06:00',
+    version: 'v1',
+    change_reason: 'Ajustar entrada',
+  })
+  assert.deepEqual(JSON.parse(calls[2].options.body), {
+    check_out: null,
+    version: 'v2',
+    change_reason: 'Reabrir asistencia',
+  })
+})
+
 test('attendance api: structured backend errors preserve status code details and expire invalid token', async () => {
   assert.ok(attendanceApi, 'debe existir la fachada API de asistencias')
   const events = []

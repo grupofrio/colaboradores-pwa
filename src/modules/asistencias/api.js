@@ -36,9 +36,14 @@ function positiveId(value, field = 'record_id') {
   return text
 }
 
-function withExplicitAttendanceOffsets(payload) {
+function withExplicitAttendanceOffsets(payload, { emptyCheckout } = {}) {
   const result = { ...payload }
   for (const field of ['check_in', 'check_out']) {
+    if (field === 'check_out' && typeof result[field] === 'string' && !result[field].trim()) {
+      if (emptyCheckout === 'null') result[field] = null
+      else delete result[field]
+      continue
+    }
     if (result[field] !== undefined && result[field] !== null) {
       result[field] = toAttendanceIsoWithOffset(result[field])
     }
@@ -60,7 +65,7 @@ export function createAttendance(payload = {}) {
     'check_in',
     'check_out',
     'change_reason',
-  ])))
+  ]), { emptyCheckout: 'null' }))
 }
 
 export function updateAttendance(id, payload = {}) {
@@ -69,7 +74,7 @@ export function updateAttendance(id, payload = {}) {
     'check_out',
     'version',
     'change_reason',
-  ])))
+  ]), { emptyCheckout: 'omit' }))
 }
 
 export function createAbsence(payload = {}) {

@@ -229,14 +229,21 @@ export function validateAttendanceForm(form = {}, { mode = 'create' } = {}) {
   const create = mode === 'create'
   if (create && !positiveInteger(form.employee_id)) errors.employee_id = 'Selecciona un empleado.'
 
-  const checkIn = form.check_in ? parseDateTimeValue(form.check_in) : null
-  const checkOut = form.check_out ? parseDateTimeValue(form.check_out) : null
-  if ((create || (!form.check_in && !form.check_out)) && checkIn === null) {
+  const hasCheckIn = form.check_in !== undefined && form.check_in !== null
+    && !(typeof form.check_in === 'string' && !form.check_in.trim())
+  const hasCheckOut = form.check_out !== undefined && form.check_out !== null
+    && !(typeof form.check_out === 'string' && !form.check_out.trim())
+  const explicitReopen = !create
+    && Object.prototype.hasOwnProperty.call(form, 'check_out')
+    && form.check_out === null
+  const checkIn = hasCheckIn ? parseDateTimeValue(form.check_in) : null
+  const checkOut = hasCheckOut ? parseDateTimeValue(form.check_out) : null
+  if ((create || (!hasCheckIn && !hasCheckOut && !explicitReopen)) && checkIn === null) {
     errors.check_in = create ? 'Indica una entrada válida.' : 'Indica una entrada o una salida.'
-  } else if (form.check_in && checkIn === null) {
+  } else if (hasCheckIn && checkIn === null) {
     errors.check_in = 'Indica una entrada válida.'
   }
-  if (form.check_out && checkOut === null) errors.check_out = 'Indica una salida válida.'
+  if (hasCheckOut && checkOut === null) errors.check_out = 'Indica una salida válida.'
   if (checkIn !== null && checkOut !== null && checkOut <= checkIn) {
     errors.check_out = 'La salida debe ser posterior a la entrada.'
   }
@@ -350,6 +357,7 @@ const ERROR_MESSAGES = {
   stale_record: 'El registro cambió. Recarga antes de volver a guardar.',
   invalid_datetime_range: 'Revisa las fechas y horas capturadas.',
   absence_already_exists: 'Ya existe una falta para ese empleado y fecha.',
+  absence_exists_for_date: 'Ya existe una falta para ese empleado y fecha.',
   attendance_exists_for_date: 'No se puede registrar la falta porque ya existen tramos de asistencia.',
   unscheduled_absence_confirmation_required: 'El día no era programado. Confirma explícitamente la falta no programada.',
   invalid_attachment: 'Adjunta un PDF, JPG o PNG válido de hasta 5 MiB.',
