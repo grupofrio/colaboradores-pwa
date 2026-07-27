@@ -11,6 +11,7 @@ import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/s
 import { getModuleById, isModuleVisibleForRoles } from './modules/registry'
 import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
 import { isValidAuthenticatedSession } from './lib/session'
+import { isModuleVisibleForSession } from './lib/navModel'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
@@ -48,6 +49,7 @@ const ScreenInventarioM5 = lazy(() => import('./modules/inventario/ScreenInventa
 const ScreenCajaConciliacionM6 = lazy(() => import('./modules/caja-conciliacion/ScreenCajaConciliacionM6'))
 // KOLD OS · M7 — Rentabilidad y costos (observatorio read-only, gate propio M7RentabilidadRoute)
 const ScreenRentabilidadCostosM7 = lazy(() => import('./modules/rentabilidad-costos/ScreenRentabilidadCostosM7'))
+const ScreenAsistencias = lazy(() => import('./modules/asistencias/ScreenAsistencias'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -305,6 +307,16 @@ function NightPosRoute({ children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   if (!canAccessHectorNightPos(session)) return <Navigate to="/" replace />
+  return children
+}
+
+// La misma política session-aware controla tarjeta, navegación, clic y URL.
+// Este gate cliente es UX; Odoo permanece como autoridad de cada petición.
+function AttendanceRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  const module = getModuleById('asistencias')
+  if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
   return children
 }
 
@@ -819,6 +831,9 @@ export default function App() {
             <Route path="/caja-conciliacion" element={<M6CajaRoute><ScreenCajaConciliacionM6Mount /></M6CajaRoute>} />
             {/* ── KOLD OS · M7 — Rentabilidad y costos (read-only) ─────── */}
             <Route path="/rentabilidad-costos" element={<M7RentabilidadRoute><ScreenRentabilidadCostosM7Mount /></M7RentabilidadRoute>} />
+
+            {/* ── Asistencias de Iguala — allowlist exacta por employee_id ── */}
+            <Route path="/asistencias" element={<AttendanceRoute><ScreenAsistencias /></AttendanceRoute>} />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />

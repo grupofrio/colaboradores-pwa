@@ -1,7 +1,8 @@
 # CODE_MANUAL — PWA Colaboradores Grupo Frío
 
 > Documento de ingeniería de referencia para el repositorio [`sebascm0906/colaboradores-pwa`](https://github.com/sebascm0906/colaboradores-pwa).
-> Documenta el `as-is` al **2026-04-27** sobre el commit `52b7b5f`.
+> Documenta el `as-is` al **2026-07-27**; la administración de asistencias está
+> implementada localmente y su despliegue requiere autorización separada.
 > Este manual es generado automáticamente y requiere review humano antes de considerarse fuente única de verdad.
 
 ---
@@ -61,7 +62,9 @@ El PWA Colaboradores es una aplicación web instalable (PWA) construida en Vite 
 **Qué NO hace (alcance explícito).**
 
 - No es un ERP. No reemplaza Odoo: lo consume.
-- No gestiona RRHH (a pesar de lo que dice [README.md:1](../README.md), desactualizado). El portal RRHH/intranet es otro proyecto.
+- No reemplaza el portal RRHH/intranet ni Odoo. Su única escritura laboral es
+  la superficie aprobada de asistencias `IGU`/`IGU34`, siempre autorizada y
+  auditada por `gf_hr_ops`.
 - No es B2C. El frontend público de KOLD para distribuidores es un repo separado.
 - No corre lógica de negocio compleja en el cliente. Toda regla crítica (autorizaciones, validación de tenancy, posting de inventario) se valida en Odoo backend.
 - No tiene rutas API server-side propias: es un SPA puro. Las rewrites de Vercel proxean a Odoo y n8n.
@@ -728,7 +731,89 @@ Endpoints ~20 en [`src/modules/supervisor-ventas/api.js`](../src/modules/supervi
 | `/pwa-supv/tasks/*`, `/notes/*` | **Stub frontend** — `IS_STUB=true` en [`tareasService.js`](../src/modules/supervisor-ventas/tareasService.js) y [`notasService.js`](../src/modules/supervisor-ventas/notasService.js). Datos en localStorage. Gap G006 (P1). |
 | `/pwa-supv/customers/inactive`, `/recovery` | live |
 
-### 7.11 Endpoints n8n y voice
+### 7.11 Administración de asistencias de Iguala (`gf_hr_ops`)
+
+La ruta PWA `/asistencias` consume ocho endpoints HTTP directos de Odoo. No
+existe fallback a n8n ni se reconstruye información laboral en el navegador.
+
+| Contrato | Uso | Concurrencia / efecto |
+|----------|-----|-----------------------|
+| `GET /pwa-hr/attendance/capabilities` | Confirma autorización, zona horaria y funciones disponibles. | Solo lectura. Debe ejecutarse antes del listado. |
+| `GET /pwa-hr/attendance` | Devuelve el snapshot empleado-día y sus tramos, faltas y resumen. | Solo lectura; rango máximo de 93 días. |
+| `POST /pwa-hr/attendance` | Crea el primer tramo o agrega otro tramo no traslapado. | Exige `change_reason`; crea auditoría. |
+| `PATCH /pwa-hr/attendance/<attendance_id>` | Corrige entrada/salida o cierra un tramo abierto. | Exige `version` y `change_reason`; rechaza `stale_record`. |
+| `POST /pwa-hr/faltas` | Registra una falta explícita. | Rechaza días con asistencia; un día no programado exige confirmación. |
+| `POST /pwa-hr/faltas/<falta_id>/justify` | Justifica una falta pendiente y adjunta evidencia opcional. | Exige `version`, motivo administrativo y actor con usuario Odoo. |
+| `GET /pwa-hr/audit` | Consulta historial inmutable paginado de una asistencia o falta. | Orden estable por fecha e ID descendentes. |
+| `GET /pwa-hr/attendance/export.xlsx` | Descarga el mismo snapshot filtrado como libro Excel. | Solo lectura; Odoo genera el archivo completo. |
+
+#### Autoridad, alcance y tiempo
+
+- `X-GF-Employee-Token` es la autoridad de identidad. El backend resuelve al
+  actor desde la sesión móvil; nunca confía en `employee_id`, nombre, rol,
+  compañía o cuenta enviados por el cliente para ampliar permisos.
+- La allowlist autoritativa vive en el parámetro Odoo
+  `gf_hr_ops.pwa_attendance_manager_employee_ids`. La PWA usa
+  `VITE_ATTENDANCE_MANAGER_EMPLOYEE_IDS` solo como gate de navegación. Ambos
+  valores deben ser `717` para Angélica; una prueba de drift debe comparar el
+  gate local con `capabilities.allowed`. Odoo siempre gana ante discrepancias.
+- El alcance se resuelve cada vez por códigos analíticos exactos `IGU` y
+  `IGU34`, empleados activos y `hr.employee.x_analytic_account_id`. Si falta
+  cualquiera de los dos códigos, la operación falla cerrada e informa
+  `missing_codes`; no se busca por nombre ni por coincidencia parcial.
+- La zona operativa es `America/Mexico_City`. El navegador envía offset
+  explícito, Odoo almacena UTC y el empleado-día se asigna por la fecha local
+  de entrada, incluso en tramos nocturnos.
+
+#### Escrituras, adjuntos y auditoría
+
+- Cada asistencia/falta serializada incluye `version` derivada de
+  `write_date`; corrección, cierre y justificación usan control optimista y
+  obligan a recargar ante `409 stale_record`.
+- Cada escritura requiere `change_reason` y crea de forma atómica un evento
+  inmutable con actor, empleado objetivo, acción, fecha UTC, IP/user-agent y
+  snapshots anterior/posterior. Si la auditoría falla, también falla la
+  escritura. Los snapshots no guardan binarios.
+- Los comprobantes de justificación son opcionales y solo aceptan PDF, JPG o
+  PNG de hasta 5 MiB. La validación ocurre antes de decodificar base64 y vuelve
+  a validarse en Odoo.
+- No existen borrados desde la PWA. Tampoco se capturan o exportan biometría,
+  fotografías de reconocimiento facial ni documentos/comprobantes adjuntos.
+
+#### Contrato Excel
+
+Odoo es la única fuente del `.xlsx`. La descarga conserva exactamente los
+filtros activos, valida un `Blob` no vacío y usa el filename seguro del
+backend. El libro contiene las hojas `Resumen`, `Asistencias` y `Faltas`, con
+fechas/horas/números nativos, filtros, estilos legibles y neutralización de
+formula injection. El cliente crea un único enlace temporal, inicia la
+descarga, lo elimina y revoca el object URL; una falla no produce archivos
+parciales ni borra filtros.
+
+#### Handoff de despliegue backend-first (no ejecutar sin autorización)
+
+El orden es **backend-first** y requiere una autorización de producción
+separada:
+
+1. desplegar/actualizar `gf_hr_ops` y ejecutar sus pruebas;
+2. verificar que `hr.employee(717)` esté vinculado a un `res.users` activo;
+3. configurar `gf_hr_ops.pwa_attendance_manager_employee_ids=717`;
+4. ejecutar smoke checks de solo lectura para capacidades, listado y Excel con
+   una sesión autorizada, y confirmar que otra sesión reciba denegación;
+5. configurar el env de la PWA
+   `VITE_ATTENDANCE_MANAGER_EMPLOYEE_IDS=717`;
+6. desplegar la PWA;
+7. comprobar que el módulo aparece solo para Angélica y que no hay drift entre
+   el gate local y `capabilities.allowed`.
+
+Los smoke checks no deben crear, corregir, cerrar ni justificar registros de
+producción. Si el scope es incorrecto, el rollback consiste en quitar la
+allowlist PWA, limpiar la allowlist backend y volver a los artefactos previos;
+no hay datos que revertir. Registrar revisiones desplegadas, resultados,
+allowlists efectivas y verificación de ausencia de biometría/documentos en la
+entrega.
+
+### 7.12 Endpoints n8n y voice
 
 | Path | Workflow | Token |
 |------|----------|-------|

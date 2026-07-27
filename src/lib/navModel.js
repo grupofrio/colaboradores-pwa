@@ -24,6 +24,7 @@ import { readM5Access } from '../modules/inventario/m5/access.js'
 import { readM6Access } from '../modules/caja-conciliacion/m6/access.js'
 import { readM7Access } from '../modules/rentabilidad-costos/m7/access.js'
 import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
+import { readAttendanceAccess } from '../modules/asistencias/access.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
 // Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
@@ -161,10 +162,13 @@ function navPriorityOf(module) {
 //   2. module.accessPolicy        => resolver del registro; desconocida => deny
 //   3. module.towerGated          => tower_status autoritativo (M1, intacto)
 //   4. resto                      => roles x_job_key
-export function isModuleVisibleForSession(module, session) {
+export function isModuleVisibleForSession(module, session, attendanceManagerIdsRaw) {
   if (!module) return false
   if (module.showInNav === false && module.showOnHome === false) return false
   if (!isValidAuthenticatedSession(session)) return false
+  if (module.accessPolicy === 'attendance_manager') {
+    return readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
+  }
   if (module.accessPolicy) return resolveAccessPolicy(module.accessPolicy, session)
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
@@ -193,12 +197,17 @@ export function getHomeModulesForSession(session = null) {
 // visibilidad: módulos accessPolicy entran/deniegan por su contrato (navegan
 // directo, sin role-context); el resto delega en la lógica por rol.
 // El route guard (App.jsx) sigue siendo la autoridad final.
-export function getModuleEntryDecisionForSession(module, session) {
+export function getModuleEntryDecisionForSession(module, session, attendanceManagerIdsRaw) {
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
-  // Toda accessPolicy registrada entra o se deniega por SU contrato, sin role-context.
-  // Una política desconocida no tiene resolver ⇒ resolveAccessPolicy deniega.
+  if (module?.accessPolicy === 'attendance_manager') {
+    return readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
+      ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
+      : { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  // Toda política del registro canónico entra o se deniega por SU contrato,
+  // sin role-context. Una política desconocida falla cerrada.
   if (module?.accessPolicy) {
     return resolveAccessPolicy(module.accessPolicy, session)
       ? { type: 'direct', compatibleRoles: [], selectedRole: '' }

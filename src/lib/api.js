@@ -36,6 +36,10 @@ import {
   filterKoldOsM7Params,
 } from './koldOsM7Route.js'
 import {
+  isPwaHrNamespace,
+  matchPwaHrAttendanceRoute,
+} from './pwaHrRoute.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -99,11 +103,12 @@ const NO_DIRECT = Symbol('no_direct')
 //   e.status → HTTP status (404, 401, 500...) o 0 si no aplica
 //   e.code   → 'network' | 'bypass' | 'no_session' | 'http_error'
 export class ApiError extends Error {
-  constructor(message, { status = 0, code = 'http_error' } = {}) {
+  constructor(message, { status = 0, code = 'http_error', details = {} } = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.details = details && typeof details === 'object' ? details : {}
   }
 }
 
@@ -272,6 +277,9 @@ function extractErrorDetails(payload, status = 0) {
   return {
     code,
     message: String(message),
+    details: payload?.error?.details && typeof payload.error.details === 'object'
+      ? payload.error.details
+      : {},
   }
 }
 
@@ -583,7 +591,7 @@ function unwrapSalesOpsEnvelope(envelope, {
   }
 }
 
-async function odooHttp(method, path, query = {}, body) {
+async function odooHttpResponse(method, path, query = {}, body) {
   const url = query && Object.keys(query).length
     ? `${ODOO_BASE}${path}?${toQueryString(query)}`
     : `${ODOO_BASE}${path}`
@@ -596,7 +604,15 @@ async function odooHttp(method, path, query = {}, body) {
     opts.body = typeof body === 'string' ? body : JSON.stringify(body)
   }
 
-  const res = await fetch(url, opts)
+  let res
+  try {
+    res = await fetch(url, opts)
+  } catch (error) {
+    throw new ApiError(error?.message || 'Network error', { status: 0, code: 'network' })
+  }
+
+  if (res.ok) return res
+
   const text = await res.text().catch(() => '')
   let json = {}
   if (text) {
@@ -607,17 +623,69 @@ async function odooHttp(method, path, query = {}, body) {
     }
   }
 
-  if (!res.ok) {
-    const { message, code } = extractErrorDetails(json, res.status)
-    if ((res.status === 401 || String(code || '').toUpperCase() === 'UNAUTHORIZED') && !isOptionalEndpoint(path)) {
-      expireSession()
-    }
-    throw new ApiError(message, { status: res.status, code })
+  const { message, code, details } = extractErrorDetails(json, res.status)
+  if ((res.status === 401 || String(code || '').toUpperCase() === 'UNAUTHORIZED')
+    && !isOptionalEndpoint(path)) {
+    expireSession()
+  }
+  throw new ApiError(message, { status: res.status, code, details })
+}
+
+async function odooHttp(method, path, query = {}, body) {
+  const res = await odooHttpResponse(method, path, query, body)
+  const text = await res.text().catch(() => '')
+  if (!text) return {}
+  let json
+  try {
+    json = JSON.parse(text)
+  } catch {
+    json = { error: text }
   }
 
-  // §2: envelope UNAUTHORIZED con HTTP 200 (forma odooHttp) ⇒ expira sesión central.
+  // §2: envelope UNAUTHORIZED con HTTP 200 ⇒ expira sesión central.
   expireSessionIfUnauthorizedEnvelope(json, path)
   return json
+}
+
+function attendanceWorkbookFallback(query = {}) {
+  const safeDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))
+    ? String(value)
+    : 'rango'
+  return `asistencias_IGU_IGU34_${safeDate(query.date_from)}_${safeDate(query.date_to)}.xlsx`
+}
+
+function decodeDispositionFilename(value) {
+  if (!value) return ''
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return ''
+  }
+}
+
+function safeWorkbookFilename(contentDisposition, fallback) {
+  const header = String(contentDisposition || '')
+  const encoded = header.match(/filename\*\s*=\s*UTF-8''([^;]+)/i)?.[1]
+  const regular = header.match(/filename\s*=\s*(?:"([^"]*)"|([^;]*))/i)
+  let candidate = encoded
+    ? decodeDispositionFilename(encoded.trim())
+    : String(regular?.[1] ?? regular?.[2] ?? '').trim()
+  candidate = candidate.split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f]/g, '').trim()
+
+  if (!candidate || candidate === '.' || candidate === '..' || candidate.length > 180
+    || !candidate.toLowerCase().endsWith('.xlsx')) {
+    return fallback
+  }
+  return candidate
+}
+
+async function odooAttendanceWorkbook(path, query = {}) {
+  const res = await odooHttpResponse('GET', path, query)
+  const fallback = attendanceWorkbookFallback(query)
+  return {
+    blob: await res.blob(),
+    filename: safeWorkbookFilename(res.headers.get('Content-Disposition'), fallback),
+  }
 }
 
 async function readModel(model, {
@@ -9260,10 +9328,33 @@ async function directKoldOsM7(method, path) {
   return odooHttp('GET', cleanPath, filterKoldOsM7Params(query, cleanPath))
 }
 
+// ── Administración de asistencias (gf_hr_ops) ── Odoo directo; sin n8n ────
+async function directAttendance(method, path, body) {
+  if (!isPwaHrNamespace(path)) return NO_DIRECT
+
+  const route = matchPwaHrAttendanceRoute(method, path)
+  if (!route.recognized) {
+    throw new ApiError('route_not_found', { status: 404, code: 'route_not_found' })
+  }
+  if (!route.allowed) {
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+
+  const query = {}
+  for (const [key, value] of new URLSearchParams(String(path).split('?')[1] || '')) {
+    query[key] = value
+  }
+  if (route.name === 'export') {
+    return odooAttendanceWorkbook(route.path, query)
+  }
+  return odooHttp(String(method).toUpperCase(), route.path, query, body)
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
   const directHandlers = [
+    directAttendance,
     directTower,
     directKoldOsM2,
     directKoldOsM3,
