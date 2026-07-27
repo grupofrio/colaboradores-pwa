@@ -3,6 +3,7 @@ import { useSession } from '../../App.jsx'
 import { useToast } from '../../components/Toast.jsx'
 import { readAttendanceAccess } from './access.js'
 import {
+  ATTENDANCE_ACCESS_DENIED_EVENT,
   createAbsence,
   createAttendance,
   downloadAttendanceWorkbook,
@@ -72,10 +73,12 @@ export default function ScreenAsistencias() {
   const [modal, setModal] = useState(null)
   const [auditTarget, setAuditTarget] = useState(null)
   const [reloadVersion, setReloadVersion] = useState(0)
+  const [snapshotBlocked, setSnapshotBlocked] = useState(false)
   const requestSequenceRef = useRef(0)
   const hasSnapshotRef = useRef(false)
   const mutationInFlightRef = useRef(false)
   const exportInFlightRef = useRef(false)
+  const snapshotBlockedRef = useRef(false)
 
   const filterValidation = useMemo(() => validateAttendanceFilters(filters), [filters])
   const serverFilters = useMemo(() => serializeAttendanceFilters(filters), [filters])
@@ -86,6 +89,24 @@ export default function ScreenAsistencias() {
   )
   const localAccess = readAttendanceAccess(session)
   const gateDrift = accessState === 'allowed' && localAccess.level !== 'manager'
+
+  function blockAttendanceSnapshot() {
+    snapshotBlockedRef.current = true
+    setSnapshotBlocked(true)
+  }
+
+  useEffect(() => {
+    function handleAttendanceAccessDenied() {
+      setAuditTarget(null)
+      setModal(null)
+      setModalError('')
+      setAccessState('denied')
+      setError(getAttendanceErrorMessage({ code: ACCESS_DENIED_CODE }))
+    }
+
+    window.addEventListener(ATTENDANCE_ACCESS_DENIED_EVENT, handleAttendanceAccessDenied)
+    return () => window.removeEventListener(ATTENDANCE_ACCESS_DENIED_EVENT, handleAttendanceAccessDenied)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -144,6 +165,8 @@ export default function ScreenAsistencias() {
           rows: Array.isArray(response?.rows) ? response.rows : [],
         })
         hasSnapshotRef.current = true
+        snapshotBlockedRef.current = false
+        setSnapshotBlocked(false)
       })
       .catch((requestError) => {
         if (cancelled || requestSequence !== requestSequenceRef.current) return
@@ -183,17 +206,19 @@ export default function ScreenAsistencias() {
   }
 
   function openAttendance(mode, row, attendance = null) {
+    if (snapshotBlockedRef.current) return
     setModalError('')
     setModal({ type: 'attendance', mode, row, attendance })
   }
 
   function openAbsence(mode, row) {
+    if (snapshotBlockedRef.current) return
     setModalError('')
     setModal({ type: 'absence', mode, row })
   }
 
   async function performMutation(operation, successMessage) {
-    if (mutationInFlightRef.current) return
+    if (mutationInFlightRef.current || snapshotBlockedRef.current) return
     mutationInFlightRef.current = true
     setSaving(true)
     setModalError('')
@@ -215,6 +240,7 @@ export default function ScreenAsistencias() {
 
       const conflictTarget = getAttendanceConflictTarget(requestError)
       if (EXISTING_RECORD_CODES.has(requestError?.code)) {
+        blockAttendanceSnapshot()
         setModal(null)
         setModalError('')
         setError(message)
@@ -230,6 +256,7 @@ export default function ScreenAsistencias() {
         focusAttendanceModalField('justification_type')
       }
       if (requestError?.code === 'stale_record' || requestError?.code === 'employee_out_of_scope') {
+        blockAttendanceSnapshot()
         setModal(null)
         setError(message)
         setReloadVersion((version) => version + 1)
@@ -353,7 +380,7 @@ export default function ScreenAsistencias() {
 
       <AttendanceSummary summary={snapshot.summary} />
       <AttendanceRows
-        disabled={saving}
+        disabled={saving || snapshotBlocked}
         onAbsence={openAbsence}
         onAttendance={openAttendance}
         onAudit={setAuditTarget}

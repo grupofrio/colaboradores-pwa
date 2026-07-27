@@ -325,6 +325,42 @@ test('attendance ui: recovery keeps recoverable forms and opens concrete conflic
   assert.match(screen, /setAccessState\('denied'\)/)
 })
 
+test('attendance ui: stale and conflict recovery block row actions until a new snapshot succeeds', async () => {
+  const screen = await source('ScreenAsistencias.jsx')
+  const readSuccess = screen.slice(
+    screen.indexOf('getAttendance(JSON.parse(serverFilterKey))'),
+    screen.indexOf('.catch((requestError)', screen.indexOf('getAttendance(JSON.parse(serverFilterKey))')),
+  )
+  const readFailure = screen.slice(
+    screen.indexOf('.catch((requestError)', screen.indexOf('getAttendance(JSON.parse(serverFilterKey))')),
+    screen.indexOf('.finally(() =>', screen.indexOf('getAttendance(JSON.parse(serverFilterKey))')),
+  )
+  const mutationCatch = screen.slice(
+    screen.indexOf('} catch (requestError) {', screen.indexOf('async function performMutation')),
+    screen.indexOf('} finally {', screen.indexOf('async function performMutation')),
+  )
+
+  assert.match(screen, /snapshotBlockedRef = useRef\(false\)/)
+  assert.match(screen, /\[snapshotBlocked, setSnapshotBlocked\] = useState\(false\)/)
+  assert.match(mutationCatch, /blockAttendanceSnapshot\(\)/)
+  assert.match(readSuccess, /snapshotBlockedRef\.current = false/)
+  assert.match(readSuccess, /setSnapshotBlocked\(false\)/)
+  assert.doesNotMatch(readFailure, /setSnapshotBlocked\(false\)/)
+  assert.match(screen, /disabled=\{saving \|\| snapshotBlocked\}/)
+})
+
+test('attendance ui: audit access denial closes the drawer through a specific cleaned-up event', async () => {
+  const screen = await source('ScreenAsistencias.jsx')
+  const api = await source('api.js')
+  assert.match(api, /ATTENDANCE_ACCESS_DENIED_EVENT = 'gf:attendance-access-denied'/)
+  assert.match(screen, /ATTENDANCE_ACCESS_DENIED_EVENT/)
+  assert.match(screen, /window\.addEventListener\(ATTENDANCE_ACCESS_DENIED_EVENT/)
+  assert.match(screen, /window\.removeEventListener\(ATTENDANCE_ACCESS_DENIED_EVENT/)
+  assert.match(screen, /setAuditTarget\(null\)/)
+  assert.match(screen, /setAccessState\('denied'\)/)
+  assert.doesNotMatch(screen, /requestError\?\.status === 403/)
+})
+
 test('attendance ui: operations manuals document the final attendance contract and recovery', async () => {
   const codeManual = await readFile(path.join(root, 'docs/CODE_MANUAL.md'), 'utf8')
   const userManual = await readFile(path.join(root, 'docs/USER_MANUAL_BY_ROLE.md'), 'utf8')

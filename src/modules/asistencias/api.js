@@ -9,7 +9,13 @@ const READ_FILTER_FIELDS = [
   'status',
 ]
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-const ZIP_SIGNATURES = new Set(['80,75,3,4', '80,75,5,6', '80,75,7,8'])
+const ZIP_LOCAL_FILE_HEADER = [0x50, 0x4b, 0x03, 0x04]
+const ZIP_END_OF_CENTRAL_DIRECTORY = [0x50, 0x4b, 0x05, 0x06]
+const ZIP_END_MIN_SIZE = 22
+const ZIP_MAX_COMMENT_SIZE = 0xffff
+const XLSX_REQUIRED_ENTRIES = ['[Content_Types].xml', 'xl/workbook.xml']
+
+export const ATTENDANCE_ACCESS_DENIED_EVENT = 'gf:attendance-access-denied'
 
 const ATTENDANCE_ERROR_MESSAGES = {
   invalid_employee_token: () => 'Tu sesión venció. Inicia sesión nuevamente.',
@@ -124,13 +130,43 @@ export function getAttendanceConflictTarget(error = {}) {
   return null
 }
 
+function hasBytesAt(bytes, offset, expected) {
+  return expected.every((value, index) => bytes[offset + index] === value)
+}
+
+function includesAscii(bytes, text) {
+  const expected = [...text].map((character) => character.charCodeAt(0))
+  for (let offset = 0; offset <= bytes.length - expected.length; offset += 1) {
+    if (hasBytesAt(bytes, offset, expected)) return true
+  }
+  return false
+}
+
+function hasTerminalZipDirectory(bytes) {
+  if (bytes.length < ZIP_END_MIN_SIZE) return false
+  const firstCandidate = Math.max(0, bytes.length - ZIP_END_MIN_SIZE - ZIP_MAX_COMMENT_SIZE)
+  for (let offset = bytes.length - ZIP_END_MIN_SIZE; offset >= firstCandidate; offset -= 1) {
+    if (!hasBytesAt(bytes, offset, ZIP_END_OF_CENTRAL_DIRECTORY)) continue
+    const commentLength = bytes[offset + 20] | (bytes[offset + 21] << 8)
+    if (offset + ZIP_END_MIN_SIZE + commentLength === bytes.length) return true
+  }
+  return false
+}
+
 async function isWorkbookBlob(blob) {
-  if (!(blob instanceof Blob) || blob.size <= 0) return false
+  if (!(blob instanceof Blob) || blob.size < ZIP_END_MIN_SIZE) return false
   const mime = String(blob.type || '').split(';')[0].trim().toLowerCase()
-  if (mime) return mime === XLSX_MIME
-  if (blob.size < 4) return false
-  const signature = [...new Uint8Array(await blob.slice(0, 4).arrayBuffer())].join(',')
-  return ZIP_SIGNATURES.has(signature)
+  if (mime && mime !== XLSX_MIME) return false
+
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  return hasBytesAt(bytes, 0, ZIP_LOCAL_FILE_HEADER)
+    && hasTerminalZipDirectory(bytes)
+    && XLSX_REQUIRED_ENTRIES.every((entry) => includesAscii(bytes, entry))
+}
+
+function dispatchAttendanceAccessDenied() {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return
+  window.dispatchEvent(new Event(ATTENDANCE_ACCESS_DENIED_EVENT))
 }
 
 function pickFields(source, fields) {
@@ -232,6 +268,7 @@ export async function getAuditHistory(model, recordId, pagination = {}) {
       ...pickFields(pagination, ['limit', 'offset']),
     }))
   } catch (error) {
+    if (error?.code === 'attendance_access_denied') dispatchAttendanceAccessDenied()
     if (error && typeof error === 'object') error.message = getAttendanceErrorMessage(error)
     throw error
   }

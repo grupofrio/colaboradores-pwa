@@ -10,6 +10,75 @@ const originalFetch = globalThis.fetch
 const originalWindow = globalThis.window
 const originalDocument = globalThis.document
 const originalURL = globalThis.URL
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+function littleEndian(value, byteLength) {
+  const bytes = new Uint8Array(byteLength)
+  const view = new DataView(bytes.buffer)
+  if (byteLength === 2) view.setUint16(0, value, true)
+  else view.setUint32(0, value, true)
+  return bytes
+}
+
+function joinBytes(parts) {
+  const result = new Uint8Array(parts.reduce((size, part) => size + part.length, 0))
+  let offset = 0
+  for (const part of parts) {
+    result.set(part, offset)
+    offset += part.length
+  }
+  return result
+}
+
+function minimalZipBlob({
+  names = ['[Content_Types].xml', 'xl/workbook.xml'],
+  type = XLSX_MIME,
+} = {}) {
+  const encoder = new TextEncoder()
+  const localParts = []
+  const centralParts = []
+  let localOffset = 0
+
+  for (const name of names) {
+    const filename = encoder.encode(name)
+    const local = joinBytes([
+      littleEndian(0x04034b50, 4),
+      littleEndian(20, 2),
+      new Uint8Array(8),
+      new Uint8Array(12),
+      littleEndian(filename.length, 2),
+      littleEndian(0, 2),
+      filename,
+    ])
+    localParts.push(local)
+    centralParts.push(joinBytes([
+      littleEndian(0x02014b50, 4),
+      littleEndian(20, 2),
+      littleEndian(20, 2),
+      new Uint8Array(8),
+      new Uint8Array(12),
+      littleEndian(filename.length, 2),
+      new Uint8Array(12),
+      littleEndian(0, 4),
+      littleEndian(localOffset, 4),
+      filename,
+    ]))
+    localOffset += local.length
+  }
+
+  const locals = joinBytes(localParts)
+  const central = joinBytes(centralParts)
+  const eocd = joinBytes([
+    littleEndian(0x06054b50, 4),
+    new Uint8Array(4),
+    littleEndian(names.length, 2),
+    littleEndian(names.length, 2),
+    littleEndian(central.length, 4),
+    littleEndian(locals.length, 4),
+    littleEndian(0, 2),
+  ])
+  return new Blob([locals, central, eocd], { type })
+}
 
 function createLocalStorageMock() {
   let store = {}
@@ -326,11 +395,9 @@ test('attendance api: structured backend errors preserve status code details and
   assert.deepEqual(events, ['gf:session-expired'])
 })
 
-test('attendance api: xlsx uses exact active filters and only accepts a non-empty workbook Blob', async () => {
+test('attendance api: xlsx uses exact active filters and verifies the complete workbook container', async () => {
   assert.ok(attendanceApi, 'debe existir la fachada API de asistencias')
-  const xlsx = new Blob(['xlsx-bytes'], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  })
+  const xlsx = minimalZipBlob()
   const calls = []
   globalThis.fetch = async (url) => {
     calls.push(url)
@@ -356,9 +423,13 @@ test('attendance api: xlsx uses exact active filters and only accepts a non-empt
     '/odoo-api/pwa-hr/attendance/export.xlsx?date_from=2026-07-01&date_to=2026-07-31&analytic_code=IGU&employee_id=105&status=open',
   ])
 
+  const truncated = xlsx.slice(0, xlsx.size - 8, XLSX_MIME)
   for (const invalidBlob of [
-    new Blob([], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-    new Blob(['not xlsx'], { type: 'text/plain' }),
+    new Blob([], { type: XLSX_MIME }),
+    new Blob(['xlsx-bytes'], { type: XLSX_MIME }),
+    truncated,
+    minimalZipBlob({ type: 'application/zip' }),
+    minimalZipBlob({ names: ['readme.txt'], type: XLSX_MIME }),
   ]) {
     globalThis.fetch = async () => new Response(invalidBlob, { status: 200 })
     await assert.rejects(
@@ -375,9 +446,7 @@ test('attendance api: xlsx uses exact active filters and only accepts a non-empt
 
 test('attendance api: download helper attaches one anchor and always removes and revokes it', async () => {
   const file = {
-    blob: new Blob(['xlsx-bytes'], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    }),
+    blob: minimalZipBlob(),
     filename: 'asistencias Iguala.xlsx',
   }
 
@@ -429,7 +498,7 @@ test('attendance api: download helper attaches one anchor and always removes and
 
 test('attendance api: unsafe or absent workbook filename uses the canonical fallback', async () => {
   assert.ok(attendanceApi, 'debe existir la fachada API de asistencias')
-  globalThis.fetch = async () => new Response(new Blob([Uint8Array.from([0x50, 0x4b, 0x03, 0x04])]), {
+  globalThis.fetch = async () => new Response(minimalZipBlob({ type: '' }), {
     status: 200,
     headers: { 'Content-Disposition': 'attachment; filename="not-a-workbook.txt"' },
   })
@@ -439,6 +508,42 @@ test('attendance api: unsafe or absent workbook filename uses the canonical fall
     date_to: '2026-07-31',
   })
   assert.equal(file.filename, 'asistencias_IGU_IGU34_2026-07-01_2026-07-31.xlsx')
+})
+
+test('attendance api: audit access denial emits only the dedicated safe screen event', async () => {
+  const events = []
+  globalThis.window = {
+    dispatchEvent(event) {
+      events.push(event)
+    },
+  }
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    ok: false,
+    error: {
+      code: 'attendance_access_denied',
+      message: 'Attendance access denied.',
+      details: { token: 'must-not-be-forwarded' },
+    },
+  }), { status: 403 })
+
+  await assert.rejects(
+    attendanceApi.getAuditHistory('hr.attendance', 9),
+    (error) => error.code === 'attendance_access_denied'
+      && /acceso/i.test(error.message),
+  )
+  assert.deepEqual(events.map((event) => event.type), ['gf:attendance-access-denied'])
+  assert.equal('detail' in events[0], false, 'el evento no replica details ni token')
+
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    ok: false,
+    error: {
+      code: 'employee_out_of_scope',
+      message: 'Employee is outside scope.',
+      details: {},
+    },
+  }), { status: 403 })
+  await assert.rejects(attendanceApi.getAuditHistory('hr.attendance', 9))
+  assert.deepEqual(events.map((event) => event.type), ['gf:attendance-access-denied'])
 })
 
 test('attendance api: every attendance backend code has an actionable Spanish message with details', () => {
