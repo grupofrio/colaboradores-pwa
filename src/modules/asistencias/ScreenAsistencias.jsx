@@ -91,6 +91,7 @@ export default function ScreenAsistencias() {
   const gateDrift = accessState === 'allowed' && localAccess.level !== 'manager'
 
   function blockAttendanceSnapshot() {
+    requestSequenceRef.current += 1
     snapshotBlockedRef.current = true
     setSnapshotBlocked(true)
   }
@@ -224,10 +225,15 @@ export default function ScreenAsistencias() {
     setModalError('')
     try {
       await operation()
+      blockAttendanceSnapshot()
       setModal(null)
       toast.success(successMessage)
       setReloadVersion((version) => version + 1)
     } catch (requestError) {
+      const requiresSnapshotRecovery = EXISTING_RECORD_CODES.has(requestError?.code)
+        || requestError?.code === 'stale_record'
+        || requestError?.code === 'employee_out_of_scope'
+      if (requiresSnapshotRecovery) blockAttendanceSnapshot()
       const message = getAttendanceErrorMessage(requestError)
       setModalError(message)
       toast.error(message)
@@ -240,7 +246,6 @@ export default function ScreenAsistencias() {
 
       const conflictTarget = getAttendanceConflictTarget(requestError)
       if (EXISTING_RECORD_CODES.has(requestError?.code)) {
-        blockAttendanceSnapshot()
         setModal(null)
         setModalError('')
         setError(message)
@@ -256,7 +261,6 @@ export default function ScreenAsistencias() {
         focusAttendanceModalField('justification_type')
       }
       if (requestError?.code === 'stale_record' || requestError?.code === 'employee_out_of_scope') {
-        blockAttendanceSnapshot()
         setModal(null)
         setError(message)
         setReloadVersion((version) => version + 1)

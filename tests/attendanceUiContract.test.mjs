@@ -325,28 +325,65 @@ test('attendance ui: recovery keeps recoverable forms and opens concrete conflic
   assert.match(screen, /setAccessState\('denied'\)/)
 })
 
-test('attendance ui: stale and conflict recovery block row actions until a new snapshot succeeds', async () => {
+test('attendance ui: successful writes block stale row actions before the refresh is scheduled', async () => {
   const screen = await source('ScreenAsistencias.jsx')
+  const mutationStart = screen.indexOf('async function performMutation')
+  const mutationSuccess = screen.slice(
+    screen.indexOf('try {', mutationStart),
+    screen.indexOf('} catch (requestError) {', mutationStart),
+  )
+  const blockPosition = mutationSuccess.indexOf('blockAttendanceSnapshot()')
+  const refreshPosition = mutationSuccess.indexOf('setReloadVersion(')
+
+  assert.ok(blockPosition >= 0, 'la escritura exitosa bloquea el snapshot anterior')
+  assert.ok(blockPosition < refreshPosition, 'el bloqueo ocurre antes de programar la recuperación')
+  assert.match(screen, /disabled=\{saving \|\| snapshotBlocked\}/)
+})
+
+test('attendance ui: a late read started before a write cannot unlock the blocked snapshot', async () => {
+  const screen = await source('ScreenAsistencias.jsx')
+  const blocker = screen.slice(
+    screen.indexOf('function blockAttendanceSnapshot()'),
+    screen.indexOf('useEffect(() =>', screen.indexOf('function blockAttendanceSnapshot()')),
+  )
   const readSuccess = screen.slice(
     screen.indexOf('getAttendance(JSON.parse(serverFilterKey))'),
     screen.indexOf('.catch((requestError)', screen.indexOf('getAttendance(JSON.parse(serverFilterKey))')),
   )
-  const readFailure = screen.slice(
-    screen.indexOf('.catch((requestError)', screen.indexOf('getAttendance(JSON.parse(serverFilterKey))')),
-    screen.indexOf('.finally(() =>', screen.indexOf('getAttendance(JSON.parse(serverFilterKey))')),
+  const generationGuard = readSuccess.indexOf('requestSequence !== requestSequenceRef.current')
+  const unlockPosition = readSuccess.indexOf('snapshotBlockedRef.current = false')
+
+  assert.match(screen, /snapshotBlockedRef = useRef\(false\)/)
+  assert.match(screen, /\[snapshotBlocked, setSnapshotBlocked\] = useState\(false\)/)
+  assert.match(blocker, /requestSequenceRef\.current \+= 1/)
+  assert.ok(
+    blocker.indexOf('requestSequenceRef.current += 1') < blocker.indexOf('snapshotBlockedRef.current = true'),
+    'la generación anterior se invalida antes de marcar el bloqueo',
   )
+  assert.ok(generationGuard >= 0 && generationGuard < unlockPosition)
+  assert.match(readSuccess, /snapshotBlockedRef\.current = false/)
+  assert.match(readSuccess, /setSnapshotBlocked\(false\)/)
+})
+
+test('attendance ui: stale conflict and scope errors block immediately and failed recovery stays blocked', async () => {
+  const screen = await source('ScreenAsistencias.jsx')
   const mutationCatch = screen.slice(
     screen.indexOf('} catch (requestError) {', screen.indexOf('async function performMutation')),
     screen.indexOf('} finally {', screen.indexOf('async function performMutation')),
   )
+  const readFailure = screen.slice(
+    screen.indexOf('.catch((requestError)', screen.indexOf('getAttendance(JSON.parse(serverFilterKey))')),
+    screen.indexOf('return () => {', screen.indexOf('getAttendance(JSON.parse(serverFilterKey))')),
+  )
+  const recoveryBlockPosition = mutationCatch.indexOf('blockAttendanceSnapshot()')
+  const messagePosition = mutationCatch.indexOf('const message =')
 
-  assert.match(screen, /snapshotBlockedRef = useRef\(false\)/)
-  assert.match(screen, /\[snapshotBlocked, setSnapshotBlocked\] = useState\(false\)/)
-  assert.match(mutationCatch, /blockAttendanceSnapshot\(\)/)
-  assert.match(readSuccess, /snapshotBlockedRef\.current = false/)
-  assert.match(readSuccess, /setSnapshotBlocked\(false\)/)
+  assert.match(mutationCatch, /EXISTING_RECORD_CODES\.has\(requestError\?\.code\)/)
+  assert.match(mutationCatch, /stale_record/)
+  assert.match(mutationCatch, /employee_out_of_scope/)
+  assert.ok(recoveryBlockPosition >= 0 && recoveryBlockPosition < messagePosition)
+  assert.doesNotMatch(readFailure, /snapshotBlockedRef\.current = false/)
   assert.doesNotMatch(readFailure, /setSnapshotBlocked\(false\)/)
-  assert.match(screen, /disabled=\{saving \|\| snapshotBlocked\}/)
 })
 
 test('attendance ui: audit access denial closes the drawer through a specific cleaned-up event', async () => {
