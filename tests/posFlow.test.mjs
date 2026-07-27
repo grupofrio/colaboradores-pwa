@@ -11,6 +11,7 @@ import {
   normalizePosSaleResult,
   submitPosCancellation,
 } from '../src/modules/admin/posFlow.js'
+import * as posFlow from '../src/modules/admin/posFlow.js'
 
 const NIGHT_CANCEL_REASONS = [
   { code: 'duplicate', label: 'Duplicidad' },
@@ -54,6 +55,50 @@ test('NIGHT_POS_FLOW and its closed cancellation reasons are immutable', () => {
     NIGHT_POS_FLOW.cancelReasons.every((reason) => Object.isFrozen(reason)),
     true,
   )
+})
+
+test('DAY_POS_FLOW defines the frozen standalone day contract with shared reasons', () => {
+  assert.deepEqual(posFlow.DAY_POS_FLOW, {
+    backTo: '/',
+    posRoute: '/pos-diurno',
+    ticketBasePath: '/pos-diurno/ticket',
+    salesRoute: '/pos-diurno/ventas',
+    title: 'POS día',
+    standalone: true,
+    posScope: 'day',
+    defaultCustomerName: 'VENTA PUBLICO IGUALA',
+    allowSaleCancellation: true,
+    cancellationMode: 'closed-reasons',
+    cancelReasons: NIGHT_CANCEL_REASONS,
+  })
+  assert.equal(Object.isFrozen(posFlow.DAY_POS_FLOW), true)
+  assert.equal(posFlow.DAY_POS_FLOW.cancelReasons, NIGHT_POS_FLOW.cancelReasons)
+  assert.equal(Object.isFrozen(posFlow.DAY_POS_FLOW.cancelReasons), true)
+  assert.equal(
+    posFlow.DAY_POS_FLOW.cancelReasons.every((reason) => Object.isFrozen(reason)),
+    true,
+  )
+  assert.equal(
+    buildPosTicketPath(posFlow.DAY_POS_FLOW, 9001),
+    '/pos-diurno/ticket/9001',
+  )
+  assert.equal(
+    { ...posFlow.DAY_POS_FLOW }.cancelReasons,
+    NIGHT_POS_FLOW.cancelReasons,
+  )
+})
+
+test('normalizePosScope accepts only omitted or the exact day scalar', () => {
+  assert.equal(posFlow.normalizePosScope(undefined), undefined)
+  assert.equal(posFlow.normalizePosScope('day'), 'day')
+
+  for (const value of [null, '', ' day ', 'DAY', 'night', 1, true, [], {}]) {
+    assert.throws(
+      () => posFlow.normalizePosScope(value),
+      { name: 'TypeError', message: 'El alcance del POS no es válido.' },
+      String(value),
+    )
+  }
 })
 
 test('canCancelPosOrder preserves admin free-text eligibility', () => {
@@ -184,6 +229,19 @@ test('submitPosCancellation submits one allowed closed reason code', async () =>
 
   assert.equal(result, expected)
   assert.deepEqual(calls, [[9001, { reasonCode: 'duplicate' }]])
+})
+
+test('submitPosCancellation carries the day flow scope to cancellation', async () => {
+  const calls = []
+
+  await submitPosCancellation({
+    flow: posFlow.DAY_POS_FLOW,
+    orderId: 9001,
+    reasonCode: 'duplicate',
+    cancelFn: async (...args) => calls.push(args),
+  })
+
+  assert.deepEqual(calls, [[9001, { reasonCode: 'duplicate', posScope: 'day' }]])
 })
 
 test('submitPosCancellation rejects missing and unknown closed reason codes without calling', async () => {
