@@ -56,6 +56,7 @@ const WRITER_BINDINGS = [
 
 const WRITER_SET = new Set(WRITER_BINDINGS)
 const HTTP_WRITE_METHODS = new Set(['post', 'put', 'patch', 'delete'])
+const FETCH_GLOBALS = new Set(['window', 'globalThis'])
 
 function parseModule(source) {
   return parse(source, { sourceType: 'module', plugins: ['jsx'] })
@@ -107,7 +108,7 @@ function forbiddenMemberCall(callee) {
   if (callee?.type !== 'MemberExpression' && callee?.type !== 'OptionalMemberExpression') return null
   const property = memberPropertyName(callee)
   const objectName = callee.object?.type === 'Identifier' ? callee.object.name : null
-  if (objectName === 'window' && property === 'fetch') return 'window.fetch'
+  if (FETCH_GLOBALS.has(objectName) && property === 'fetch') return `${objectName}.fetch`
   if (objectName && /(?:api|client)$/i.test(objectName) && (HTTP_WRITE_METHODS.has(property) || WRITER_SET.has(property))) {
     return `${objectName}.${property}`
   }
@@ -280,6 +281,8 @@ test('la auditoría cierra writers importados y writes por miembro fuera de los 
 
   assert.throws(() => assertAuditedReadConsumerImports(file, `${withWriterFromOtherService}\nwriteDashboard()`))
   assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nwindow.fetch('/escritura')`))
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nglobalThis.fetch('/escritura')`))
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nglobalThis['fetch']('/escritura')`))
   assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\napiClient.post('/escritura')`))
   assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nclient.apiPost('/escritura')`))
   assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\nclient['apiPost']('/escritura')`))
