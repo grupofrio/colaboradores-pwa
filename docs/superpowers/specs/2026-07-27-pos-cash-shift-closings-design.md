@@ -162,6 +162,23 @@ ya ligados a otro turno y cualquier intervalo que traslape un corte existente.
 Después de la apertura inicial, las horas se derivarán exclusivamente de las
 transiciones y no serán editables.
 
+La activación se guardará por compañía y almacén. `sale-create`,
+`expense-create` y `cash-shifts/open` tomarán el mismo bloqueo de sucursal aun
+antes de que el nuevo módulo esté activo. Bajo ese bloqueo, la primera apertura:
+
+1. fijará un `activation_at` autoritativo con la hora del servidor;
+2. ligará los movimientos elegibles usando el intervalo semiabierto
+   `[start_at, activation_at)`;
+3. creará el turno abierto;
+4. activará la obligación de ligar los nuevos movimientos.
+
+Cada venta y gasto PWA tendrá un timestamp de caja fijado por el backend. Para el
+backfill único de movimientos anteriores a ese campo podrá usarse `create_date`,
+nunca una fecha enviada por el cliente. Si un movimiento concurrente termina
+antes de la activación será incluido en el backfill; si termina después verá la
+configuración activa y quedará ligado directamente al turno. No habrá una
+ventana intermedia que produzca movimientos huérfanos.
+
 ## Modelo de datos
 
 ### `gf.pos.cash.shift`
@@ -176,7 +193,7 @@ El nuevo modelo será la fuente de verdad de cada turno. Como mínimo contendrá
 - apertura y cierre en UTC;
 - empleado que abrió, cerró y reabrió;
 - fondo inicial;
-- otros ingresos y otros egresos;
+- líneas de otros ingresos y otros egresos;
 - ventas en efectivo y terminal;
 - gastos;
 - efectivo esperado, efectivo físico y diferencia;
@@ -185,8 +202,11 @@ El nuevo modelo será la fuente de verdad de cada turno. Como mínimo contendrá
 - enlace al turno anterior y al siguiente.
 
 Existirá una unicidad por compañía, almacén, fecha operativa y tipo de turno. La
-exclusión de dos turnos abiertos se protegerá mediante validación de modelo y
-bloqueo transaccional; no dependerá de una consulta de UI.
+exclusión de dos turnos abiertos se protegerá también con un índice único
+parcial de PostgreSQL sobre `(company_id, warehouse_id)` cuando `state='open'`,
+además de la validación de modelo y el bloqueo transaccional. `warehouse_id` será
+obligatorio. La integridad no dependerá de una consulta de UI ni de que todas las
+creaciones pasen por el mismo controlador.
 
 ### Denominaciones y fotografías
 
@@ -208,10 +228,35 @@ Se añadirá una relación de turno de caja a:
 El enlace se asignará en el backend a partir del turno abierto del alcance
 autenticado. El cliente no podrá enviar ni sustituir el ID de turno.
 
+Las ventas PWA tendrán además un registro estructurado e inmutable de
+cancelación. Guardará pedido, turno, código canónico cuando exista, etiqueta o
+texto aprobado, empleado, usuario, timestamp y origen. La escritura del registro
+y `action_cancel()` ocurrirán en la misma transacción. El flujo administrativo
+podrá conservar su razón de texto libre vigente; los POS diurno y nocturno
+seguirán usando sus códigos cerrados.
+
 Los pedidos externos, ecommerce y ventas ajenas a los tres flujos POS no se
 incorporarán. Los gastos creados después de cerrar un turno pertenecerán al turno
 activo, aunque el usuario les asigne una fecha contable anterior. Corregir el
 corte anterior requerirá la reapertura explícita.
+
+Todo gasto PWA ligado representará una salida de caja desde que se registra. Su
+estado de aprobación de `hr.expense` será informativo y no cambiará
+retroactivamente ese efecto: aprobado, pendiente o rechazado se mostrará en la
+fotografía, pero el dinero registrado seguirá descontado. Si el dinero se
+devuelve después de un rechazo, se registrará como ingreso del turno activo o se
+reabrirá el corte original.
+
+Cada línea de gasto fotografiada guardará ID, concepto, importe, estado, actor y
+timestamp. Mientras su turno esté `closed` o `pending_auth`, el modelo impedirá
+`unlink()` y cambios de importe, compañía, almacén, turno o efecto de caja. Los
+cambios de aprobación que no alteren el importe podrán continuar. Cualquier
+corrección monetaria del gasto exigirá que el corte esté `reopened` y producirá
+una nueva versión al recerrar.
+
+Los otros ingresos y egresos no serán dos importes libres. Se modelarán como
+líneas con tipo, importe positivo, concepto obligatorio, actor y timestamp, y se
+incluirán en la versión correspondiente de la fotografía.
 
 ## Cálculos del corte
 
@@ -219,7 +264,9 @@ corte anterior requerirá la reapertura explícita.
 
 Solo los pedidos del turno en estado `sale` o `done` sumarán a las ventas
 realizadas. Los pedidos `cancel` permanecerán visibles en una sección de
-cancelaciones, con folio, importe, empleado y razón, pero no sumarán al cobro.
+cancelaciones, con folio, importe y los metadatos estructurados de actor, fecha,
+origen y razón, pero no sumarán al cobro. El reporte no extraerá estos datos
+analizando HTML del chatter.
 
 El resumen de pagos separará como mínimo:
 
@@ -271,6 +318,13 @@ fotografía, no recalcularán resultados dinámicamente.
 Cuando un corte se reabra y vuelva a cerrar se creará una nueva versión de la
 fotografía. La bitácora conservará el actor, la razón y los totales anteriores.
 
+El consolidado de una fecha operativa agregará una sola vez los IDs únicos de
+ventas, pagos, gastos, ajustes y líneas de producto de `Noche` y `Día`. No sumará
+fondos iniciales, efectivo esperado, efectivo físico ni denominaciones, porque
+cada uno pertenece a un arqueo independiente. Esos valores se mostrarán por
+turno. Podrá mostrarse la suma de diferencias únicamente con la etiqueta
+explícita `Diferencia neta de ambos turnos`.
+
 ## Cancelación y reapertura
 
 La política de cancelación verificará el turno relacionado además de las reglas
@@ -280,6 +334,13 @@ actuales del POS:
 - turno `pending_auth` o `closed`: cancelación bloqueada con código seguro
   `cash_shift_closed`;
 - turno `reopened`: Angy puede cancelar después de las validaciones normales.
+
+Esta regla se aplicará en una extensión de `sale.order.action_cancel()`, no solo
+en `/pwa-admin/sale-cancel`. Una venta PWA ligada a un turno `closed` o
+`pending_auth` no podrá cancelarse desde la interfaz de Odoo, RPC ni otro
+controlador. Para ventas PWA, la llamada al modelo también exigirá el contexto
+interno que crea los metadatos estructurados de cancelación; los pedidos ajenos a
+este módulo conservarán su comportamiento actual.
 
 Para corregir una venta de un corte cerrado Angy deberá:
 
@@ -291,6 +352,20 @@ Para corregir una venta de un corte cerrado Angy deberá:
 Reabrir un corte no reabre su ventana temporal, no mueve ventas nuevas hacia él
 y no altera el turno actualmente abierto. No se permitirá borrar cortes ni
 desligar movimientos mediante el API PWA.
+
+El recierre será una transición distinta del corte normal:
+
+```text
+reopened -> pending_auth | closed
+```
+
+Solo recalculará el mismo registro y creará una nueva versión de su fotografía.
+No modificará `opened_at`, `closed_at`, fecha operativa, tipo ni enlaces, y no
+creará otro turno sucesor. La hora del recierre se guardará en la versión de
+auditoría. Al reabrir se invalidarán las autorizaciones y evidencia vigentes para
+el resultado anterior; al recerrar se recalcularán umbrales y se solicitarán
+nuevas autorizaciones/evidencia cuando correspondan. Un corte `pending_auth`
+deberá terminar su autorización antes de poder reabrirse.
 
 ## Permisos y alcance
 
@@ -309,6 +384,10 @@ El permiso permitirá:
 Gerencia y dirección conservarán sus permisos configurados para autorizar
 diferencias. Héctor y el usuario `pos_diurno` no podrán abrir, cerrar, reabrir ni
 consultar cortes administrativos por obtener acceso al POS.
+
+Los autorizadores tendrán acceso de solo lectura al detalle mínimo del corte
+pendiente dentro de su compañía, almacén y analítica autorizados. Ese permiso no
+les concederá administración general de cortes ni acceso a otras sucursales.
 
 Cada endpoint resolverá al empleado desde `X-GF-Employee-Token` y fijará la
 compañía, almacén y analítica desde su alcance confiable. IDs enviados por el
@@ -335,13 +414,18 @@ estado. `preview` devolverá los totales vivos sin crear una fotografía.
 `close` recibirá únicamente datos capturados por Angy:
 
 - conteos por denominación;
-- otros ingresos y egresos;
+- líneas de otros ingresos y egresos con concepto;
 - notas y evidencia cuando correspondan;
 - fondo inicial del siguiente turno;
 - versión esperada del turno para control optimista.
 
 El servidor decidirá el turno siguiente, su fecha operativa, la hora efectiva y
 todos los totales de ventas/gastos. El cliente no enviará importes autoritativos.
+
+Cuando el registro esté `reopened`, el mismo contrato de cierre operará en modo
+recierre: validará que ya existe `next_shift_id`, conservará el periodo original
+y no ejecutará la creación del siguiente turno. En ese modo no aceptará
+`next_opening_fund` ni permitirá cambiar el fondo del sucesor ya abierto.
 
 Los writes usarán una clave de idempotencia para que un reintento por pérdida de
 respuesta no cree dos cortes ni dos turnos siguientes. Una versión obsoleta
@@ -350,6 +434,12 @@ devolverá conflicto y obligará a recargar.
 `history` filtrará por fecha operativa, no por fecha calendario, y devolverá
 `Noche`, `Día` y el consolidado cuando existan. `detail` entregará la fotografía
 versionada y los datos necesarios para impresión.
+
+Los adjuntos de evidencia deberán pertenecer al empleado y flujo autenticados,
+tener modelo/registro o token temporal compatible con el corte y su versión,
+cumplir límites allowlisted de MIME y tamaño, y no haber sido consumidos por otro
+cierre. El backend enlazará el adjunto en la misma transacción del cierre o
+recierre.
 
 Las capacidades publicadas por el backend indicarán disponibilidad de lectura,
 escritura, reapertura, autorización e impresión del corte. La PWA fallará cerrada
@@ -423,8 +513,11 @@ cierre de calendario anterior con un corte por turno.
 ## Compatibilidad y migración
 
 - `gf.cash.closing` y sus registros existentes no se modificarán destructivamente.
-- Los endpoints actuales de cierre diario permanecerán disponibles durante la
-  transición.
+- Los endpoints actuales de lectura e historial del cierre diario permanecerán
+  disponibles durante la transición.
+- Una vez activados los cortes por turno para una compañía y almacén, el write
+  legado de cierre diario devolverá `legacy_cash_closing_read_only`. Solo las
+  sucursales que todavía no estén activadas podrán seguir creando cierres diarios.
 - El nuevo modelo vivirá en `gf_pwa_admin` y reutilizará helpers compartidos de
   denominaciones, diferencias y permisos donde sea seguro.
 - La PWA mostrará el nuevo módulo solo cuando las capacidades del backend estén
@@ -453,8 +546,14 @@ cierre de calendario anterior con un corte por turno.
 - autorizaciones y evidencia por diferencia;
 - idempotencia del cierre;
 - concurrencia real entre venta, gasto y corte;
+- concurrencia de la primera apertura contra una venta y un gasto;
 - aislamiento por compañía, almacén y empleado;
-- arranque inicial sin traslapes ni doble asignación.
+- arranque inicial sin traslapes ni doble asignación;
+- guard de cancelación tanto por endpoint como por llamada directa al modelo;
+- bloqueo de edición/eliminación monetaria de gastos cerrados;
+- aprobación/rechazo informativo del gasto sin alterar la fotografía;
+- recierre sin crear un segundo turno sucesor e invalidando autorizaciones;
+- índice único parcial contra dos turnos abiertos.
 
 ### PWA
 
@@ -466,6 +565,7 @@ cierre de calendario anterior con un corte por turno.
 - recuperación tras respuesta incierta;
 - conflicto por versión obsoleta;
 - historial ordenado `Noche`, `Día`, consolidado;
+- consolidado sin sumar dos veces fondos ni arqueos;
 - vista imprimible responsiva;
 - recordatorios de 06:00 y 18:00 sin cierre automático;
 - zona horaria de México alrededor de medianoche.
@@ -486,6 +586,13 @@ cierre de calendario anterior con un corte por turno.
 9. Héctor y el usuario POS día no pueden ejecutar endpoints administrativos de
    cortes.
 10. Los cierres diarios históricos siguen consultables y no se reinterpretan.
+11. El consolidado suma ventas, pagos, gastos y productos una sola vez, pero
+    conserva por separado el fondo y arqueo de cada turno.
+12. Recerrar `Noche 27` no crea otro `Día 27` ni cambia su periodo original.
+13. Una cancelación directa en Odoo de una venta ligada a un corte cerrado es
+    rechazada igual que una cancelación por API.
+14. Una venta o gasto concurrente con la primera activación queda ligado al
+    turno inicial exactamente una vez.
 
 ## Fuera de alcance
 
