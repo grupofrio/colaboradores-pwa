@@ -9,7 +9,10 @@
 // LÍMITES DECLARADOS (no se simulan aquí):
 //   · El rol lo impone `ModuleRoleRoute` en App.jsx (envuelve al gate). El gate
 //     NO es capa de autorización: se PRUEBA que ignora el rol a propósito.
-//   · La autoridad de seguridad final es el guard + rol + flags del BACKEND.
+//   · La autoridad de seguridad final es el guard + token válido + rol + scope
+//     de sucursal + flags del BACKEND. Los tests de backend sin token/token
+//     inválido son la autoridad; este gate no valida ni puede asegurar
+//     localStorage.
 //   · Sin jsdom/RTL en la suite ⇒ no hay click real ni back/forward del
 //     navegador; se cubre montaje, redirect declarado y cambio de flag.
 import test from 'node:test'
@@ -263,6 +266,28 @@ test('caso 9 · el gate NO es autorización: decide experiencia, no permiso', ()
   const v2 = makeSpy('v2')
   renderGate({ active: 'hoy', legacy: createElement('div'), children: createElement(v2.Component) })
   assert.equal(v2.calls, 1, 'el gate no filtra por rol (no es su responsabilidad)')
+})
+
+// Frontera UI-only: el gate sólo lee la caché local para elegir una experiencia.
+// Los endpoints exigen token válido, rol, scope de sucursal y flags; los tests
+// backend sin token/token inválido son la autoridad, no esta prueba de localStorage.
+test('cache local forjado puede montar UI pero no representa autorización', () => {
+  setSession({
+    employee_id: 999999,
+    session_token: 'forged.ui.only',
+    capabilities: { supervisorV2: true },
+    branch: { supervisor_v2_enabled: true },
+  })
+  const v2 = makeSpy('v2')
+  const legacy = makeSpy('legacy')
+  const html = renderGate({
+    active: 'hoy',
+    legacy: createElement(legacy.Component),
+    children: createElement(v2.Component),
+  })
+  assert.match(html, /branch:v2/)
+  assert.equal(v2.calls, 1)
+  assert.equal(legacy.calls, 0)
 })
 
 test('caso 10 · sesión ausente/corrupta ⇒ fail-closed al legacy, sin lanzar', () => {
