@@ -42,7 +42,9 @@ function assertCatalogCoherenceContract(source, loaderName) {
   )
   assert.match(confirmPay, /Espera a que termine de cargar la lista de precios/)
 
-  const selectCustomer = sliceFunction(source, 'function selectCustomer(c)', '\n\n  ')
+  const selectCustomer = sliceFunction(source, 'function selectCustomer(c, resultRequestId)', '\n\n  ')
+  assert.match(selectCustomer, /resultRequestId !== customerSearchSeq\.current/)
+  assert.match(selectCustomer, /defaultCustomerRequestSeq\.current \+= 1/)
   assert.match(selectCustomer, /catalogRequestSeq\.current \+= 1/)
   assert.match(selectCustomer, /setCatalogCustomerId\(null\)/)
   assert.match(selectCustomer, /setPayConfirm\(null\)/)
@@ -69,6 +71,18 @@ test('mobile POS uses configurable flow and defensive sale response wiring', () 
   assert.match(mobile, /saleResult\.status === 'uncertain'[\s\S]{0,300}setCart\(\[\]\)/)
   assertCatalogCoherenceContract(mobile, 'loadProducts')
   assertSaleCreateCatchContract(mobile)
+  assert.match(mobile, /posScope: flow\.posScope/)
+  assert.match(mobile, /flow\.posScope === undefined[\s\S]{0,180}\{ pos_scope: flow\.posScope \}/)
+  assert.match(
+    mobile,
+    /bottom: flow\.posScope === 'day'[\s\S]{0,160}'calc\(64px \+ env\(safe-area-inset-bottom\)\)'[\s\S]{0,80}: 0/,
+    'el footer diurno queda arriba de la barra global móvil de 64px',
+  )
+  assert.match(
+    mobile,
+    /paddingBottom: flow\.posScope === 'day'[\s\S]{0,100}\? 12[\s\S]{0,100}: 'calc\(12px \+ env\(safe-area-inset-bottom\)\)'/,
+    'el safe-area se reserva una sola vez en el flujo diurno',
+  )
 })
 
 test('desktop POS uses configurable flow and requires a customer before payment', () => {
@@ -79,13 +93,18 @@ test('desktop POS uses configurable flow and requires a customer before payment'
   assert.match(desktop, /saleResult\.status === 'uncertain'[\s\S]{0,300}setCart\(\[\]\)/)
   assertCatalogCoherenceContract(desktop, 'loadCatalog')
   assertSaleCreateCatchContract(desktop)
+  assert.match(desktop, /posScope: flow\.posScope/)
+  assert.match(desktop, /flow\.posScope === undefined[\s\S]{0,180}\{ pos_scope: flow\.posScope \}/)
 })
 
 test('ticket and shell respect the active flow standalone configuration', () => {
   assert.match(ticket, /flow = ADMIN_POS_FLOW/)
   assert.match(ticket, /navigate\(flow\.posRoute\)/)
   assert.match(ticket, /canCancelPosOrder\(flow, order, BACKEND_CAPS\.saleCancel\)/)
-  assert.match(ticket, /submitPosCancellation\(\{[\s\S]{0,300}flow,[\s\S]{0,300}orderId,[\s\S]{0,300}reasonCode: cancelReasonCode,[\s\S]{0,300}reason: cancelReason,[\s\S]{0,300}cancelFn: cancelSaleOrder/)
+  assert.match(ticket, /submitPosCancellation\(\{[\s\S]{0,300}flow,[\s\S]{0,300}orderId: normalizedRouteOrderId,[\s\S]{0,300}reasonCode: cancelReasonCode,[\s\S]{0,300}reason: cancelReason,[\s\S]{0,300}cancelFn: cancelSaleOrder/)
+  assert.match(ticket, /getSaleOrder\(normalizedTargetId, \{ posScope: targetPosScope \}\)/)
+  assert.match(ticket, /payloadOrderId !== normalizedTargetId/)
+  assert.match(ticket, /normalizedDisplayedOrderId !== normalizedRouteOrderId/)
   assert.doesNotMatch(ticket, /saleCreateManagerThreshold|amount_total\s*[<>]=?|5000/)
   const doCancel = sliceFunction(ticket, 'async function doCancel()', '\n\n  function resetCancelReasons')
   assert.doesNotMatch(doCancel, /flow\.allowSaleCancellation|BACKEND_CAPS|canCancel\b/)

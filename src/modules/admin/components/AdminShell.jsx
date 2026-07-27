@@ -62,6 +62,8 @@ export default function AdminShell({
   title = 'Administración de sucursal',
   children,
   onBack,
+  backButtonLabel,
+  backButtonSize = 38,
   hideActivityFeed = false,
   hideNavigation = false,
 }) {
@@ -122,11 +124,15 @@ export default function AdminShell({
         position: 'sticky', top: 0, zIndex: 500,
         backdropFilter: 'blur(8px)',
       }}>
-        <button onClick={handleBack} style={{
-          width: 38, height: 38, borderRadius: TOKENS.radius.md,
-          background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}>
+        <button
+          type="button"
+          {...(backButtonLabel ? { 'aria-label': backButtonLabel } : {})}
+          onClick={handleBack}
+          style={{
+            width: backButtonSize, height: backButtonSize, borderRadius: TOKENS.radius.md,
+            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
           </svg>

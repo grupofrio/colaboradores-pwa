@@ -51,6 +51,7 @@ export const POS_THRESHOLDS = {
 export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   const navigate = useNavigate()
   const { companyId, companyLabel, warehouseId, sucursal } = useAdmin()
+  const defaultCustomerName = flow.defaultCustomerName || 'VENTA PUBLICO'
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -59,14 +60,17 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
   const [submitting, setSubmitting] = useState(false)
 
   const [cart, setCart] = useState([])
-  const [customer, setCustomer] = useState({ id: null, name: 'VENTA PUBLICO' })
+  const [customer, setCustomer] = useState({ id: null, name: defaultCustomerName })
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
   const [catalogCustomerId, setCatalogCustomerId] = useState(null)
   const catalogRequestSeq = useRef(0)
+  const defaultCustomerRequestSeq = useRef(0)
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
+  const [customerResultRequestId, setCustomerResultRequestId] = useState(0)
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
   const [searchingCustomer, setSearchingCustomer] = useState(false)
+  const customerSearchSeq = useRef(0)
   const [payConfirm, setPayConfirm] = useState(null)
   const [cardRef, setCardRef] = useState('')
   const toast = useToast()
@@ -90,6 +94,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
         warehouseId,
         companyId,
         partnerId: selectedPartnerId || undefined,
+        posScope: flow.posScope,
       })
       if (requestId !== catalogRequestSeq.current) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
@@ -103,12 +108,14 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
       return true
     } catch (e) {
       if (requestId !== catalogRequestSeq.current) return false
-      setError(e?.message || 'Error cargando productos')
+      setError(flow.posScope === 'day' && e?.status === 403
+        ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+        : (e?.message || 'Error cargando productos'))
       return false
     } finally {
       if (requestId === catalogRequestSeq.current) setLoading(false)
     }
-  }, [companyId, warehouseId])
+  }, [companyId, flow.posScope, warehouseId])
 
   useEffect(() => {
     loadCatalog(customer.id)
@@ -116,20 +123,29 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
 
   useEffect(() => {
     let alive = true
+    const requestId = ++defaultCustomerRequestSeq.current
     ;(async () => {
       try {
-        const res = await getDefaultCustomer(companyId)
+        const res = await getDefaultCustomer(companyId, { posScope: flow.posScope })
         const c = normalizeDefaultCustomerResponse(res)
-        if (alive && c && c.id) {
-          setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
+        if (alive && requestId === defaultCustomerRequestSeq.current && c && c.id) {
+          setCustomer({ id: c.id, name: c.name || defaultCustomerName })
         }
       } catch (e) {
+        if (!alive || requestId !== defaultCustomerRequestSeq.current) return
         logScreenError('AdminPosForm', 'getDefaultCustomer', e)
-        setError(e?.message || 'No se pudo cargar el cliente predeterminado.')
+        setError(flow.posScope === 'day' && e?.status === 403
+          ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+          : (e?.message || 'No se pudo cargar el cliente predeterminado.'))
       }
     })()
-    return () => { alive = false }
-  }, [companyId])
+    return () => {
+      alive = false
+      if (defaultCustomerRequestSeq.current === requestId) {
+        defaultCustomerRequestSeq.current += 1
+      }
+    }
+  }, [companyId, defaultCustomerName, flow.posScope])
 
   useEffect(() => {
     setCart([])
@@ -163,37 +179,75 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
     catalogCustomerId,
   })
 
-  const doCustomerSearch = useCallback(async (q) => {
-    if (!shouldLoadCustomerSuggestions(q)) {
-      setCustomerResults([])
-      return
-    }
-    setSearchingCustomer(true)
-    try {
-      const res = await searchCustomers(q, companyId)
-      setCustomerResults(normalizeCustomerResults(res))
-    } catch (e) {
-      logScreenError('AdminPosForm', 'searchCustomers', e)
-      setCustomerResults([])
-    } finally {
-      setSearchingCustomer(false)
-    }
-  }, [companyId])
-
   useEffect(() => {
-    const t = setTimeout(() => doCustomerSearch(customerQuery), 400)
-    return () => clearTimeout(t)
-  }, [customerQuery, doCustomerSearch])
+    const requestId = ++customerSearchSeq.current
+    let active = true
+    let timer
+    const isCurrent = () => active && customerSearchSeq.current === requestId
 
-  useEffect(() => {
-    if (!showCustomerSearch) return
-    doCustomerSearch(customerQuery)
-  }, [showCustomerSearch, customerQuery, doCustomerSearch])
+    setSearchingCustomer(false)
+    setCustomerResults([])
+    setCustomerResultRequestId(0)
+    if (showCustomerSearch && shouldLoadCustomerSuggestions(customerQuery)) {
+      timer = setTimeout(async () => {
+        if (!isCurrent()) return
+        setSearchingCustomer(true)
+        try {
+          const res = await searchCustomers(
+            customerQuery,
+            companyId,
+            { posScope: flow.posScope },
+          )
+          if (!isCurrent()) return
+          setCustomerResults(normalizeCustomerResults(res))
+          setCustomerResultRequestId(requestId)
+        } catch (e) {
+          if (!isCurrent()) return
+          logScreenError('AdminPosForm', 'searchCustomers', e)
+          setCustomerResults([])
+          if (flow.posScope === 'day' && e?.status === 403) {
+            setError('Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.')
+          }
+        } finally {
+          if (isCurrent()) setSearchingCustomer(false)
+        }
+      }, 400)
+    }
 
-  function selectCustomer(c) {
+    return () => {
+      active = false
+      clearTimeout(timer)
+      if (customerSearchSeq.current === requestId) customerSearchSeq.current += 1
+    }
+  }, [companyId, customerQuery, flow.posScope, showCustomerSearch])
+
+  function invalidateCustomerSearch() {
+    customerSearchSeq.current += 1
+    setSearchingCustomer(false)
+    setCustomerResults([])
+    setCustomerResultRequestId(0)
+  }
+
+  function toggleCustomerSearch() {
+    invalidateCustomerSearch()
+    setShowCustomerSearch((visible) => !visible)
+  }
+
+  function changeCustomerQuery(value) {
+    invalidateCustomerSearch()
+    setCustomerQuery(value)
+  }
+
+  function selectCustomer(c, resultRequestId) {
+    if (
+      !showCustomerSearch
+      || resultRequestId !== customerSearchSeq.current
+    ) return
     const selectedCustomerId = toPositiveSafeIntegerId(c.id)
     const isSameCustomer = selectedCustomerId === toPositiveSafeIntegerId(customer.id)
+    defaultCustomerRequestSeq.current += 1
     catalogRequestSeq.current += 1
+    invalidateCustomerSearch()
     setCatalogCustomerId(null)
     setPayConfirm(null)
     setLoading(true)
@@ -201,7 +255,6 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
     setError('')
     setShowCustomerSearch(false)
     setCustomerQuery('')
-    setCustomerResults([])
     if (isSameCustomer) loadCatalog(selectedCustomerId)
   }
 
@@ -239,6 +292,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
       const result = await createSaleOrder({
         warehouse_id: warehouseId,
         company_id: companyId,
+        ...(flow.posScope === undefined ? {} : { pos_scope: flow.posScope }),
         sucursal_code: sucursal || undefined,
         partner_id: customer.id,
         payment_method: payConfirm,
@@ -275,7 +329,9 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
         setCart([])
         setPayConfirm(null)
       }
-      setError(saleError.message)
+      setError(flow.posScope === 'day' && e?.status === 403
+        ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+        : saleError.message)
     } finally {
       setSubmitting(false)
       setPayConfirm(null)
@@ -500,7 +556,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
             </div>
             <button
               type="button"
-              onClick={() => setShowCustomerSearch((v) => !v)}
+              onClick={toggleCustomerSearch}
               style={{
                 padding: '8px 12px',
                 borderRadius: TOKENS.radius.md,
@@ -553,7 +609,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
                 type="text"
                 placeholder="Buscar cliente..."
                 value={customerQuery}
-                onChange={(e) => setCustomerQuery(e.target.value)}
+                onChange={(e) => changeCustomerQuery(e.target.value)}
                 autoFocus
                 style={{
                   width: '100%',
@@ -596,7 +652,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => selectCustomer(c)}
+                    onClick={() => selectCustomer(c, customerResultRequestId)}
                     style={{
                       display: 'block',
                       width: '100%',

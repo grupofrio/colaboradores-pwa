@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
@@ -12,11 +12,14 @@ import {
 } from './nightPosSales'
 import { resolveTicketCustomerName } from './ticketCustomer'
 import { printTicketViaQz } from './ticketPrinter'
+import { toPositiveSafeIntegerId } from './posCustomers'
 import {
   ADMIN_POS_FLOW,
   canCancelPosOrder,
   submitPosCancellation,
 } from './posFlow'
+
+const DAY_POS_ACCESS_ERROR = 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
 
 function getResolvedCancellationFailure(response) {
   let current = response
@@ -87,6 +90,10 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   const [cancelError, setCancelError] = useState('')
   const [cancelResult, setCancelResult] = useState(null)
   const cancelRequestRef = useRef(false)
+  const cancelRequestSeq = useRef(0)
+  const detailRequestSeq = useRef(0)
+  const routeGenerationRef = useRef(0)
+  const printMessageTimerRef = useRef(null)
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -94,34 +101,109 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
-  useEffect(() => { loadOrder() }, [orderId])
-
-  async function loadOrder() {
-    if (!orderId) { setError('Sin ID de orden'); setLoading(false); return }
-    setLoading(true)
+  const loadOrder = useCallback(async (targetOrderId, targetPosScope, expectedGeneration) => {
+    const normalizedTargetId = toPositiveSafeIntegerId(targetOrderId)
+    const isCurrent = (requestId) => (
+      routeGenerationRef.current === expectedGeneration
+      && detailRequestSeq.current === requestId
+    )
+    const requestId = ++detailRequestSeq.current
+    if (!normalizedTargetId) {
+      if (isCurrent(requestId)) {
+        setOrder(null)
+        setError('Sin ID de orden')
+        setLoading(false)
+      }
+      return false
+    }
+    if (isCurrent(requestId)) setLoading(true)
     try {
-      const data = await getSaleOrder(orderId)
+      const data = await getSaleOrder(normalizedTargetId, { posScope: targetPosScope })
+      if (!isCurrent(requestId)) return false
       const payload = data?.data ?? data
+      const payloadOrderId = toPositiveSafeIntegerId(payload?.id)
+        || toPositiveSafeIntegerId(payload?.order_id)
+      if (payloadOrderId !== normalizedTargetId) {
+        setOrder(null)
+        setError('No se pudo validar el ticket solicitado.')
+        return false
+      }
       setOrder(payload)
+      setError('')
+      return true
     } catch (e) {
-      setError(e.message || 'Error cargando ticket')
-    } finally { setLoading(false) }
-  }
+      if (!isCurrent(requestId)) return false
+      setOrder(null)
+      setError(targetPosScope === 'day' && e?.status === 403
+        ? DAY_POS_ACCESS_ERROR
+        : (e.message || 'Error cargando ticket'))
+      return false
+    } finally {
+      if (isCurrent(requestId)) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const generation = ++routeGenerationRef.current
+    detailRequestSeq.current += 1
+    cancelRequestSeq.current += 1
+    cancelRequestRef.current = false
+    setOrder(null)
+    setError('')
+    setLoading(true)
+    setConfirmOpen(false)
+    setCancelReasonCode('')
+    setCancelReason('')
+    setCancelling(false)
+    setCancelError('')
+    setCancelResult(null)
+    clearTimeout(printMessageTimerRef.current)
+    printMessageTimerRef.current = null
+    setPrintMsg('')
+    loadOrder(orderId, flow.posScope, generation)
+
+    return () => {
+      if (routeGenerationRef.current === generation) {
+        routeGenerationRef.current += 1
+        detailRequestSeq.current += 1
+        cancelRequestSeq.current += 1
+        cancelRequestRef.current = false
+      }
+      clearTimeout(printMessageTimerRef.current)
+      printMessageTimerRef.current = null
+    }
+  }, [flow.posScope, loadOrder, orderId])
 
   async function doCancel() {
     if (cancelRequestRef.current) return
+    const normalizedRouteOrderId = toPositiveSafeIntegerId(orderId)
+    const normalizedDisplayedOrderId = toPositiveSafeIntegerId(order?.id)
+      || toPositiveSafeIntegerId(order?.order_id)
+    if (
+      !normalizedRouteOrderId
+      || normalizedDisplayedOrderId !== normalizedRouteOrderId
+    ) {
+      setCancelError('No se pudo validar el ticket solicitado.')
+      return
+    }
+    const expectedGeneration = routeGenerationRef.current
+    const requestId = ++cancelRequestSeq.current
+    const isCurrent = () => (
+      routeGenerationRef.current === expectedGeneration
+      && cancelRequestSeq.current === requestId
+    )
     cancelRequestRef.current = true
     setCancelling(true)
     setCancelError('')
     try {
       const result = await submitPosCancellation({
         flow,
-        orderId,
+        orderId: normalizedRouteOrderId,
         reasonCode: cancelReasonCode,
         reason: cancelReason,
         cancelFn: cancelSaleOrder,
       })
+      if (!isCurrent()) return
       const resolvedFailure = getResolvedCancellationFailure(result)
       if (resolvedFailure !== null) {
         setCancelError(usesClosedCancelReasons
@@ -134,14 +216,19 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
       setConfirmOpen(false)
       resetCancelReasons()
       // Refresca la orden para mostrar el state=cancel
-      await loadOrder()
+      await loadOrder(normalizedRouteOrderId, flow.posScope, expectedGeneration)
     } catch (e) {
-      setCancelError(usesClosedCancelReasons
-        ? getPosCancelBlockMessage(e?.code)
-        : (e?.message || 'Error al cancelar la venta'))
+      if (!isCurrent()) return
+      setCancelError(flow.posScope === 'day' && e?.status === 403
+        ? DAY_POS_ACCESS_ERROR
+        : (usesClosedCancelReasons
+          ? getPosCancelBlockMessage(e?.code)
+          : (e?.message || 'Error al cancelar la venta')))
     } finally {
-      cancelRequestRef.current = false
-      setCancelling(false)
+      if (isCurrent()) {
+        cancelRequestRef.current = false
+        setCancelling(false)
+      }
     }
   }
 
@@ -158,7 +245,12 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   }
 
   const orderState = order?.state || ''
-  const canCancel = canCancelPosOrder(flow, order, BACKEND_CAPS.saleCancel)
+  const routeOrderId = toPositiveSafeIntegerId(orderId)
+  const displayedOrderId = toPositiveSafeIntegerId(order?.id)
+    || toPositiveSafeIntegerId(order?.order_id)
+  const hasCurrentOrder = Boolean(routeOrderId) && displayedOrderId === routeOrderId
+  const canCancel = hasCurrentOrder
+    && canCancelPosOrder(flow, order, BACKEND_CAPS.saleCancel)
   const usesClosedCancelReasons = flow.cancellationMode === 'closed-reasons'
   const hasCancelReason = usesClosedCancelReasons
     ? Boolean(cancelReasonCode)
@@ -296,7 +388,10 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   // Impresión: intenta QZ Tray (ESC/POS directo — ancho completo, corte de
   // cuchilla). Si QZ no está corriendo o falla, cae al método de iframe.
   async function printTicket() {
+    clearTimeout(printMessageTimerRef.current)
+    printMessageTimerRef.current = null
     setPrintMsg('')
+    const expectedGeneration = routeGenerationRef.current
     try {
       await printTicketViaQz({
         sucursal: session?.warehouse_name || 'Sucursal',
@@ -312,9 +407,13 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
       })
       return
     } catch (e) {
+      if (routeGenerationRef.current !== expectedGeneration) return
       // QZ no disponible / rechazó → fallback iframe. Avisamos discretamente.
       setPrintMsg('Impresión directa no disponible, usando modo navegador.')
-      setTimeout(() => setPrintMsg(''), 4000)
+      printMessageTimerRef.current = setTimeout(() => {
+        if (routeGenerationRef.current === expectedGeneration) setPrintMsg('')
+        printMessageTimerRef.current = null
+      }, 4000)
       printTicketFallback()
     }
   }
@@ -386,11 +485,15 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
       <div id="ticket-wrap" style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-          <button onClick={() => navigate(flow.posRoute)} style={{
-            width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
+          <button
+            type="button"
+            aria-label="Volver al POS"
+            onClick={() => navigate(flow.posRoute)}
+            style={{
+              width: 44, height: 44, borderRadius: TOKENS.radius.md,
+              background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
