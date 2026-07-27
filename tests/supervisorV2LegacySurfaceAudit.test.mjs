@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { parse } from '@babel/parser'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
 
@@ -53,36 +54,170 @@ const WRITER_BINDINGS = [
   'apiPost', 'apiPut', 'apiDelete',
 ]
 
-function importedNames(source, specifier) {
-  const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = source.match(new RegExp(
-    `import\\s*\\{([^}]*)\\}\\s*from\\s*['"]${escaped}['"]`,
+const WRITER_SET = new Set(WRITER_BINDINGS)
+
+function parseModule(source) {
+  return parse(source, { sourceType: 'module', plugins: ['jsx'] })
+}
+
+function walkAst(node, visitor) {
+  if (Array.isArray(node)) {
+    for (const child of node) walkAst(child, visitor)
+    return
+  }
+  if (!node || typeof node !== 'object') return
+  if (typeof node.type === 'string') visitor(node)
+
+  for (const [key, value] of Object.entries(node)) {
+    if (['comments', 'leadingComments', 'trailingComments', 'innerComments', 'loc'].includes(key)) continue
+    walkAst(value, visitor)
+  }
+}
+
+function importedName(specifier) {
+  if (specifier.type !== 'ImportSpecifier') return null
+  return specifier.imported.type === 'Identifier'
+    ? specifier.imported.name
+    : specifier.imported.value
+}
+
+function jsxName(name) {
+  return name?.type === 'JSXIdentifier' ? name.name : null
+}
+
+function getJsxAttribute(openingElement, name) {
+  return openingElement.attributes.find((attribute) => (
+    attribute.type === 'JSXAttribute' && jsxName(attribute.name) === name
   ))
-  if (!match) return []
-  return match[1].split(',').map((name) => name.trim()).filter(Boolean).sort()
+}
+
+function jsxStringAttribute(openingElement, name) {
+  const attribute = getJsxAttribute(openingElement, name)
+  return attribute?.value?.type === 'StringLiteral' ? attribute.value.value : null
+}
+
+function containsJsxElement(node, name) {
+  let found = false
+  walkAst(node, (candidate) => {
+    if (candidate.type === 'JSXElement' && jsxName(candidate.openingElement.name) === name) found = true
+  })
+  return found
+}
+
+function replaceExactlyOnce(source, before, after) {
+  assert.equal(source.split(before).length - 1, 1, `mutation target must occur exactly once: ${before}`)
+  return source.replace(before, after)
+}
+
+function assertAuditedRouteStructure(app) {
+  const ast = parseModule(app)
+  const routeNodes = []
+  walkAst(ast, (node) => {
+    if (node.type === 'JSXElement' && jsxName(node.openingElement.name) === 'Route') routeNodes.push(node)
+  })
+
+  for (const [route, component] of Object.entries(ROUTES)) {
+    const matchingRoutes = routeNodes.filter((node) => jsxStringAttribute(node.openingElement, 'path') === route)
+    assert.equal(matchingRoutes.length, 1, `${route} debe tener exactamente una Route`)
+
+    const elementAttribute = getJsxAttribute(matchingRoutes[0].openingElement, 'element')
+    const roleRoute = elementAttribute?.value?.type === 'JSXExpressionContainer'
+      ? elementAttribute.value.expression
+      : null
+    assert.equal(roleRoute?.type, 'JSXElement', `${route} debe declarar su element JSX`)
+    assert.equal(jsxName(roleRoute?.openingElement?.name), 'ModuleRoleRoute', `${route} debe usar ModuleRoleRoute`)
+    assert.equal(jsxStringAttribute(roleRoute.openingElement, 'moduleId'), 'supervisor_ventas', `${route} debe conservar supervisor_ventas`)
+    assert.equal(containsJsxElement(roleRoute, 'V2ExcludedRoute'), false, `${route} no puede excluirse de V2`)
+
+    const directComponents = roleRoute.children.filter((child) => child.type === 'JSXElement')
+    assert.equal(directComponents.length, 1, `${route} debe exponer un único componente directo`)
+    assert.equal(jsxName(directComponents[0].openingElement.name), component, `${route} debe exponer ${component} directamente`)
+  }
+}
+
+function assertAuditedReadConsumerImports(file, source) {
+  const modules = AUDITED_IMPORTS[file]
+  const ast = parseModule(source)
+  const imports = ast.program.body.filter((node) => node.type === 'ImportDeclaration')
+  const auditedSpecifiers = new Set(Object.keys(modules))
+
+  for (const [specifier, allowed] of Object.entries(modules)) {
+    const declarations = imports.filter((node) => node.source.value === specifier)
+    assert.equal(declarations.length, 1, `${file} ${specifier} debe tener una sola declaración import`)
+
+    const declaration = declarations[0]
+    assert.equal(declaration.specifiers.length, allowed.length, `${file} ${specifier} no permite imports adicionales`)
+    const actual = declaration.specifiers.map((binding) => {
+      assert.equal(binding.type, 'ImportSpecifier', `${file} ${specifier} exige imports nombrados`)
+      const imported = importedName(binding)
+      assert.equal(binding.local?.name, imported, `${file} ${specifier} no permite aliases`)
+      return imported
+    }).sort()
+    assert.deepEqual(actual, [...allowed].sort(), `${file} ${specifier}`)
+  }
+
+  for (const declaration of imports) {
+    if (!auditedSpecifiers.has(declaration.source.value)) continue
+    for (const binding of declaration.specifiers) {
+      assert.equal(WRITER_SET.has(importedName(binding)), false, `${file} no debe importar writers de ${declaration.source.value}`)
+      assert.equal(WRITER_SET.has(binding.local?.name), false, `${file} no debe aliasar writers de ${declaration.source.value}`)
+    }
+  }
+
+  walkAst(ast, (node) => {
+    if (node.type !== 'CallExpression' && node.type !== 'OptionalCallExpression') return
+    if (node.callee?.type !== 'Identifier') return
+    assert.equal(
+      WRITER_SET.has(node.callee.name) || node.callee.name === 'api' || node.callee.name === 'fetch',
+      false,
+      `${file} no debe ejecutar ${node.callee.name}()`,
+    )
+  })
 }
 
 test('las siete rutas secundarias conservan role gate y componentes auditados', () => {
-  const app = src('App.jsx')
-  for (const [route, component] of Object.entries(ROUTES)) {
-    const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const re = new RegExp(`path="${escaped}"[^\\n]*ModuleRoleRoute moduleId="supervisor_ventas"[^\\n]*${component}`)
-    assert.match(app, re, route)
-  }
+  assertAuditedRouteStructure(src('App.jsx'))
 })
 
 test('cada superficie conserva exactamente sus imports de lectura auditados', () => {
-  for (const [file, modules] of Object.entries(AUDITED_IMPORTS)) {
-    const source = src(file)
-    for (const [specifier, allowed] of Object.entries(modules)) {
-      assert.deepEqual(importedNames(source, specifier), [...allowed].sort(), `${file} ${specifier}`)
-    }
-    for (const writer of WRITER_BINDINGS) {
-      assert.doesNotMatch(source, new RegExp(`\\b${writer}\\b`), `${file} no debe importar ${writer}`)
-    }
-    assert.doesNotMatch(source, /\bapi\s*\(/, `${file} no debe usar api() genérico`)
-    assert.doesNotMatch(source, /\bfetch\s*\(/, `${file} no debe usar fetch directo`)
+  for (const file of Object.keys(AUDITED_IMPORTS)) {
+    assertAuditedReadConsumerImports(file, src(file))
   }
+})
+
+test('la auditoría rechaza una importación default adicional del servicio auditado', () => {
+  const file = 'modules/supervisor-ventas/ScreenDashboardVentas.jsx'
+  const withExtraDefaultImport = replaceExactlyOnce(
+    src(file),
+    "import { apiGet, getSession } from '../../lib/api.js'",
+    "import { apiGet, getSession } from '../../lib/api.js'\nimport apiClient from '../../lib/api.js'",
+  )
+
+  assert.throws(() => assertAuditedReadConsumerImports(file, withExtraDefaultImport))
+
+  const withAliasedWriterImport = replaceExactlyOnce(
+    src(file),
+    "import { apiGet, getSession } from '../../lib/api.js'",
+    "import { apiGet, getSession, apiPost as sendDashboard } from '../../lib/api.js'",
+  )
+
+  assert.throws(() => assertAuditedReadConsumerImports(file, withAliasedWriterImport))
+})
+
+test('la auditoría rechaza una ruta secundaria envuelta en V2ExcludedRoute', () => {
+  const withExcludedDashboard = replaceExactlyOnce(
+    src('App.jsx'),
+    '<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDashboardVentas /></ModuleRoleRoute>',
+    '<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenDashboardVentas />} /></ModuleRoleRoute>',
+  )
+
+  assert.throws(() => assertAuditedRouteStructure(withExcludedDashboard))
+})
+
+test('la auditoría rechaza llamadas de escritura ejecutables, no comentarios ni strings', () => {
+  const file = 'modules/supervisor-ventas/ScreenDashboardVentas.jsx'
+  assert.throws(() => assertAuditedReadConsumerImports(file, `${src(file)}\napiPost()`))
+  assert.doesNotThrow(() => assertAuditedReadConsumerImports(file, `${src(file)}\n// apiPost()\nconst label = 'apiPost()'`))
 })
 
 test('Más enlaza únicamente las cuatro superficies secundarias aprobadas', () => {
