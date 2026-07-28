@@ -101,7 +101,8 @@ export function AdminProvider({ children }) {
     employeeId,
     employeeName,
     capsReady,
-  }), [companyId, companyLabel, availableCompanies, setCompanyId, sucursal, warehouseId, employeeId, employeeName, capsReady])
+    sessionIdentity,
+  }), [companyId, companyLabel, availableCompanies, setCompanyId, sucursal, warehouseId, employeeId, employeeName, capsReady, sessionIdentity])
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>
 }

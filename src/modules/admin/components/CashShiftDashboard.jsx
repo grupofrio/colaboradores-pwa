@@ -7,6 +7,7 @@ import {
 } from '../api.js'
 import { normalizeCashShift } from '../cashShiftModel.js'
 import { mutateShiftWithRecovery } from '../cashShiftService.js'
+import { readEvidenceFile } from '../cashShiftCloseModel.js'
 import CashShiftActivePanel from './CashShiftActivePanel.jsx'
 import CashShiftCloseForm from './CashShiftCloseForm.jsx'
 import CashShiftFirstOpenForm from './CashShiftFirstOpenForm.jsx'
@@ -199,6 +200,7 @@ function PendingAuthorization({ detail, busy, error, pendingRequest, onAuthorize
 }
 
 export default function CashShiftDashboard({
+  sessionIdentity = 'cash-shift-session',
   accessMode = 'denied',
   scopeReady = false,
   authorizerShiftId = null,
@@ -213,6 +215,7 @@ export default function CashShiftDashboard({
   uploadEvidence = uploadCashShiftEvidence,
   loadShiftDetail = getCashShiftDetail,
   reopenShift = defaultReopenShift,
+  readEvidence = readEvidenceFile,
   scheduleRefresh = defaultScheduleRefresh,
   cancelRefresh = defaultCancelRefresh,
 }) {
@@ -233,6 +236,31 @@ export default function CashShiftDashboard({
   const requestInFlight = useRef(null)
   const authorizationInFlight = useRef(false)
   const mounted = useRef(false)
+  const workflowIdentity = `${sessionIdentity}|${accessMode}|${scopeReady ? 'ready' : 'missing'}`
+  const workflowRef = useRef({ identity: workflowIdentity, generation: 0 })
+  if (workflowRef.current.identity !== workflowIdentity) {
+    workflowRef.current = {
+      identity: workflowIdentity,
+      generation: workflowRef.current.generation + 1,
+    }
+    requestGeneration.current += 1
+    requestInFlight.current = null
+    authorizationInFlight.current = false
+  }
+
+  const captureWorkflow = useCallback(() => {
+    return { ...workflowRef.current }
+  }, [])
+
+  const workflowIsCurrent = useCallback((guard, { manage = false } = {}) => {
+    return Boolean(
+      mounted.current
+      && guard.identity === workflowRef.current.identity
+      && guard.generation === workflowRef.current.generation
+      && scopeReady
+      && (manage ? accessMode === 'manage' : ['manage', 'authorize'].includes(accessMode)),
+    )
+  }, [accessMode, scopeReady])
 
   useEffect(() => {
     mounted.current = true
@@ -254,14 +282,18 @@ export default function CashShiftDashboard({
     setShowReopen(false)
     setRecloseTarget(null)
     setLastOperation(null)
-  }, [authorizerShiftId])
+    setView({ status: 'idle', kind: null, data: null })
+    authorizationInFlight.current = false
+  }, [authorizerShiftId, workflowIdentity])
 
   const load = useCallback(async ({ preserveActive = false } = {}) => {
     if (!scopeReady || !['manage', 'authorize'].includes(accessMode)) return
     if (accessMode === 'authorize' && selectedShiftId === null) return
     if (requestInFlight.current) return requestInFlight.current.promise
     const generation = ++requestGeneration.current
-    const marker = { generation, promise: null }
+    const workflow = captureWorkflow()
+    if (workflow.identity !== workflowIdentity) return
+    const marker = { generation, workflow, promise: null }
     requestInFlight.current = marker
     if (preserveActive) {
       setRefreshing(true)
@@ -273,25 +305,25 @@ export default function CashShiftDashboard({
       try {
         if (accessMode === 'authorize') {
           const detail = normalizePendingDetail(await loadPendingDetail({ shiftId: selectedShiftId }))
-          if (mounted.current && generation === requestGeneration.current) {
+          if (generation === requestGeneration.current && workflowIsCurrent(workflow)) {
             setView({ status: 'ready', kind: 'authorization', data: detail })
           }
           return
         }
         const data = unwrap(await loadActive())
         if (data?.active === false && data?.config_state === 'inactive') {
-          if (mounted.current && generation === requestGeneration.current) {
+          if (generation === requestGeneration.current && workflowIsCurrent(workflow)) {
             setView({ status: 'ready', kind: 'inactive', data: null })
           }
           return
         }
         const cashShift = normalizeCashShift(data)
-        if (mounted.current && generation === requestGeneration.current) {
+        if (generation === requestGeneration.current && workflowIsCurrent(workflow)) {
           setView({ status: 'ready', kind: 'active', data: cashShift })
           setRefreshError('')
         }
       } catch {
-        if (mounted.current && generation === requestGeneration.current) {
+        if (generation === requestGeneration.current && workflowIsCurrent(workflow)) {
           if (preserveActive) {
             setRefreshError('No se pudo actualizar el turno. Puedes reintentar manualmente.')
           } else {
@@ -300,11 +332,11 @@ export default function CashShiftDashboard({
         }
       } finally {
         if (requestInFlight.current === marker) requestInFlight.current = null
-        if (mounted.current && generation === requestGeneration.current) setRefreshing(false)
+        if (generation === requestGeneration.current && workflowIsCurrent(workflow)) setRefreshing(false)
       }
     })()
     return marker.promise
-  }, [accessMode, loadActive, loadPendingDetail, scopeReady, selectedShiftId])
+  }, [accessMode, captureWorkflow, loadActive, loadPendingDetail, scopeReady, selectedShiftId, workflowIdentity, workflowIsCurrent])
 
   useEffect(() => {
     void load()
@@ -407,16 +439,42 @@ export default function CashShiftDashboard({
   }
 
   async function handleReopened(shiftId) {
+    const workflow = captureWorkflow()
     const reopened = normalizeCashShift(unwrap(await previewActive({ mode: 'active', shiftId })))
+    if (!workflowIsCurrent(workflow, { manage: true })) return null
     if (reopened.shift.state !== 'reopened' || reopened.shift.id !== shiftId) {
       throw new TypeError('El servidor no confirmó el turno reabierto.')
     }
     setShowReopen(false)
     setRecloseTarget(reopened)
+    return reopened
   }
 
-  async function reloadStaleShift({ shiftId }) {
-    await loadShiftDetail({ shiftId })
+  async function reloadStaleShift({ shiftId, mode }) {
+    const workflow = captureWorkflow()
+    if (!workflowIsCurrent(workflow, { manage: true })) {
+      throw Object.assign(new Error('cash_shift_context_changed'), { code: 'cash_shift_context_changed' })
+    }
+    const raw = mode === 'reclose'
+      ? unwrap(await loadShiftDetail({ shiftId }))
+      : unwrap(await loadActive())
+    const normalized = normalizeCashShift(raw)
+    if (!workflowIsCurrent(workflow, { manage: true })) {
+      throw Object.assign(new Error('cash_shift_context_changed'), { code: 'cash_shift_context_changed' })
+    }
+    if (mode === 'reclose') {
+      if (normalized.shift.id !== shiftId || normalized.shift.state !== 'reopened') {
+        throw new TypeError('El recierre ya no está disponible en su versión autoritativa.')
+      }
+      setRecloseTarget(normalized)
+    } else {
+      if (!['open', 'reopened'].includes(normalized.shift.state)) {
+        throw new TypeError('El turno activo ya no está disponible para corte.')
+      }
+      setView({ status: 'ready', kind: 'active', data: normalized })
+      setRefreshError('')
+    }
+    return raw
   }
 
   function submitManualShift() {
@@ -481,6 +539,8 @@ export default function CashShiftDashboard({
           onEvidence={uploadEvidence}
           onCompleted={handleCloseCompleted}
           onStale={reloadStaleShift}
+          sessionIdentity={workflowIdentity}
+          readEvidence={readEvidence}
           onCancel={() => setRecloseTarget(null)}
         />
       </div>
@@ -492,6 +552,7 @@ export default function CashShiftDashboard({
         loadDetail={loadShiftDetail}
         reopenShift={reopenShift}
         onReopened={handleReopened}
+        sessionIdentity={workflowIdentity}
         onCancel={() => setShowReopen(false)}
       />
     )
@@ -505,6 +566,8 @@ export default function CashShiftDashboard({
         onEvidence={uploadEvidence}
         onCompleted={handleCloseCompleted}
         onStale={reloadStaleShift}
+        sessionIdentity={workflowIdentity}
+        readEvidence={readEvidence}
         onCancel={() => setShowClose(false)}
       />
     )

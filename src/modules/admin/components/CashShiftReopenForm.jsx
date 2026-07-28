@@ -14,7 +14,13 @@ function unwrap(raw) {
   return envelope?.data ?? envelope
 }
 
-export default function CashShiftReopenForm({ loadDetail, reopenShift, onReopened, onCancel }) {
+export default function CashShiftReopenForm({
+  sessionIdentity = 'cash-shift-session',
+  loadDetail,
+  reopenShift,
+  onReopened,
+  onCancel,
+}) {
   const [shiftId, setShiftId] = useState('')
   const [detail, setDetail] = useState(null)
   const [reason, setReason] = useState('')
@@ -24,20 +30,56 @@ export default function CashShiftReopenForm({ loadDetail, reopenShift, onReopene
   const [error, setError] = useState('')
   const mounted = useRef(false)
   const lookupGeneration = useRef(0)
-  const lookupInFlight = useRef(false)
-  const mutationInFlight = useRef(false)
+  const lookupInFlight = useRef(null)
+  const mutationInFlight = useRef(null)
   const formLocked = useRef(false)
+  const workflowRef = useRef({ identity: sessionIdentity, generation: 0 })
+  if (workflowRef.current.identity !== sessionIdentity) {
+    workflowRef.current = {
+      identity: sessionIdentity,
+      generation: workflowRef.current.generation + 1,
+    }
+    lookupGeneration.current += 1
+    lookupInFlight.current = null
+    mutationInFlight.current = null
+  }
+
+  function captureWorkflow() {
+    return { ...workflowRef.current }
+  }
+
+  function workflowIsCurrent(workflow) {
+    return Boolean(
+      mounted.current
+      && workflow.identity === workflowRef.current.identity
+      && workflow.generation === workflowRef.current.generation,
+    )
+  }
 
   useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
       lookupGeneration.current += 1
-      lookupInFlight.current = false
-      mutationInFlight.current = false
+      lookupInFlight.current = null
+      mutationInFlight.current = null
       formLocked.current = true
     }
   }, [])
+
+  useEffect(() => {
+    lookupGeneration.current += 1
+    lookupInFlight.current = null
+    mutationInFlight.current = null
+    formLocked.current = false
+    setShiftId('')
+    setDetail(null)
+    setReason('')
+    setPendingRequest(null)
+    setCompletedShiftId(null)
+    setBusy(false)
+    setError('')
+  }, [sessionIdentity])
 
   async function lookup() {
     if (lookupInFlight.current || formLocked.current) return
@@ -47,7 +89,9 @@ export default function CashShiftReopenForm({ loadDetail, reopenShift, onReopene
       return
     }
     const generation = ++lookupGeneration.current
-    lookupInFlight.current = true
+    const workflow = captureWorkflow()
+    const marker = { generation, workflow }
+    lookupInFlight.current = marker
     setBusy(true)
     setError('')
     try {
@@ -59,7 +103,7 @@ export default function CashShiftReopenForm({ loadDetail, reopenShift, onReopene
             : 'Solo un corte cerrado puede reabrirse.',
         )
       }
-      if (mounted.current && generation === lookupGeneration.current) {
+      if (workflowIsCurrent(workflow) && generation === lookupGeneration.current && lookupInFlight.current === marker) {
         setDetail(normalized)
         setReason('')
         setPendingRequest(null)
@@ -67,15 +111,15 @@ export default function CashShiftReopenForm({ loadDetail, reopenShift, onReopene
         formLocked.current = false
       }
     } catch (lookupError) {
-      if (mounted.current && generation === lookupGeneration.current) {
+      if (workflowIsCurrent(workflow) && generation === lookupGeneration.current && lookupInFlight.current === marker) {
         setDetail(null)
         setError(lookupError instanceof TypeError
           ? lookupError.message
           : 'No se pudo consultar el corte dentro de tu alcance.')
       }
     } finally {
-      lookupInFlight.current = false
-      if (mounted.current && generation === lookupGeneration.current) setBusy(false)
+      if (lookupInFlight.current === marker) lookupInFlight.current = null
+      if (workflowIsCurrent(workflow) && generation === lookupGeneration.current) setBusy(false)
     }
   }
 
@@ -91,14 +135,16 @@ export default function CashShiftReopenForm({ loadDetail, reopenShift, onReopene
       expectedVersion: detail.shift.version,
       reason: trimmedReason,
     }
-    mutationInFlight.current = true
+    const workflow = captureWorkflow()
+    const marker = { workflow }
+    mutationInFlight.current = marker
     formLocked.current = true
     setBusy(true)
     setError('')
     let keepLocked = Boolean(pendingRequest || completedShiftId !== null)
     try {
       const result = await reopenShift(request)
-      if (!mounted.current) return
+      if (!workflowIsCurrent(workflow) || mutationInFlight.current !== marker) return
       if (result?.status === 'pending') {
         keepLocked = true
         setPendingRequest(result.request || request)
@@ -111,37 +157,39 @@ export default function CashShiftReopenForm({ loadDetail, reopenShift, onReopene
       try {
         await onReopened(detail.shift.id)
       } catch {
-        if (mounted.current) {
+        if (workflowIsCurrent(workflow) && mutationInFlight.current === marker) {
           setError('La reapertura quedó confirmada, pero no se pudo cargar el recierre. Reintenta solo la carga; no se enviará otra reapertura.')
         }
       }
     } catch (mutationError) {
-      if (mounted.current) {
+      if (workflowIsCurrent(workflow) && mutationInFlight.current === marker) {
         setError(mutationError?.code === 'stale_version'
           ? 'El corte cambió en otra sesión. Consulta de nuevo; conservamos la razón capturada.'
           : 'No se pudo reabrir el corte. Conservamos la razón para reintentar.')
       }
     } finally {
-      mutationInFlight.current = false
+      if (mutationInFlight.current === marker) mutationInFlight.current = null
       if (!keepLocked) formLocked.current = false
-      if (mounted.current) setBusy(false)
+      if (workflowIsCurrent(workflow)) setBusy(false)
     }
   }
 
   async function loadCompletedReopen() {
     if (mutationInFlight.current || completedShiftId === null) return
-    mutationInFlight.current = true
+    const workflow = captureWorkflow()
+    const marker = { workflow }
+    mutationInFlight.current = marker
     setBusy(true)
     setError('')
     try {
       await onReopened(completedShiftId)
     } catch {
-      if (mounted.current) {
+      if (workflowIsCurrent(workflow) && mutationInFlight.current === marker) {
         setError('La reapertura sigue confirmada, pero no se pudo cargar el recierre. Inténtalo de nuevo.')
       }
     } finally {
-      mutationInFlight.current = false
-      if (mounted.current) setBusy(false)
+      if (mutationInFlight.current === marker) mutationInFlight.current = null
+      if (workflowIsCurrent(workflow)) setBusy(false)
     }
   }
 

@@ -19,7 +19,7 @@ function queryShiftId(search) {
 
 function CashShiftScreenContent() {
   const { session } = useSession()
-  const { capsReady, companyId, warehouseId } = useAdmin()
+  const { capsReady, companyId, warehouseId, sessionIdentity } = useAdmin()
   const location = useLocation()
   const navigate = useNavigate()
   const [width, setWidth] = useState(typeof window === 'undefined' ? 1280 : window.innerWidth)
@@ -34,12 +34,14 @@ function CashShiftScreenContent() {
   const accessMode = capabilitiesReady ? cashShiftAccessMode(BACKEND_CAPS) : 'loading'
   const token = session?.odoo_employee_token || session?.gf_employee_token || ''
   const scopeReady = Boolean(token && Number(companyId) > 0 && Number(warehouseId) > 0)
+  const cashShiftSessionIdentity = `${sessionIdentity}|${Number(companyId) || 0}|${Number(warehouseId) || 0}`
   const authorizerShiftId = useMemo(() => queryShiftId(location.search), [location.search])
   const dashboard = (
     <div className="cash-shift-page">
       <CashShiftDashboard
         accessMode={accessMode}
         scopeReady={scopeReady}
+        sessionIdentity={cashShiftSessionIdentity}
         authorizerShiftId={authorizerShiftId}
         layout={width < 1024 ? 'mobile' : 'desktop'}
       />

@@ -1226,22 +1226,50 @@ test('manager reopens by exact ID/reason, preserves pending request and enters r
   act(() => renderer.unmount())
 })
 
-test('stale close preserves the draft, invalidates old evidence and refreshes preview plus shift detail', async () => {
-  let previews = 0
-  let staleReads = 0
-  const renderer = await mountClose({
-    cashShift: cashShiftForClose(),
-    onPreview: async () => { previews += 1; return { ok: true, data: validShift() } },
-    readEvidence: async () => 'iVBORw0KGgo=',
-    onEvidence: async () => ({ ok: true, data: { evidence_token: 'old-version-evidence' } }),
-    onClose: async () => {
-      throw Object.assign(new Error('stale'), { code: 'stale_version' })
+test('pending then stale close clears the retry and stays blocked until an authoritative active reload succeeds', async () => {
+  let activeReads = 0
+  let closeAttempts = 0
+  const evidenceBindings = []
+  const original = validShift()
+  const updated = validShift({ type: 'day' })
+  updated.shift.id = 42
+  updated.totals.expected_cash = 1300
+  const preserved = {
+    shiftId: 41,
+    expectedVersion: 0,
+    denominations: [],
+    adjustments: [],
+    notes: 'Borrador preservado',
+    evidenceToken: 'old-version-evidence',
+    nextOpeningFund: 300,
+    idempotencyKey: 'pending-close-key',
+  }
+  const renderer = await mount({
+    sessionIdentity: 'session-a|34|89|manage',
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      activeReads += 1
+      if (activeReads === 2) throw new Error('reload unavailable')
+      return { ok: true, data: activeReads === 1 ? original : updated }
     },
-    onStale: async (request) => {
-      staleReads += 1
-      assert.deepEqual(request, { shiftId: 41 })
+    previewActive: async () => ({ ok: true, data: activeReads >= 3 ? updated : original }),
+    readEvidence: async () => 'iVBORw0KGgo=',
+    uploadEvidence: async (request) => {
+      evidenceBindings.push(`${request.shiftId}:${request.expectedVersion}`)
+      return { ok: true, data: { evidence_token: `evidence-${request.shiftId}-v${request.expectedVersion}` } }
+    },
+    closeShift: async (_operation, request) => {
+      closeAttempts += 1
+      if (closeAttempts === 1) return { status: 'pending', request: preserved, key: 'pending-close-key' }
+      if (closeAttempts === 2) throw Object.assign(new Error('stale'), { code: 'stale_version' })
+      assert.equal(request.shiftId, 42)
+      assert.equal(request.expectedVersion, 0)
+      assert.equal(request.evidenceToken, 'evidence-42-v0')
+      return { status: 'pending', request, key: 'new-close-key' }
     },
   })
+  act(() => button(renderer, 'Hacer corte').props.onClick())
   act(() => renderer.root.findByProps({ name: 'denomination-500' }).props.onChange({ target: { value: '2' } }))
   act(() => renderer.root.findByProps({ name: 'differenceNote' }).props.onChange({ target: { value: 'Borrador preservado' } }))
   act(() => renderer.root.findByProps({ name: 'nextOpeningFund' }).props.onChange({ target: { value: '300' } }))
@@ -1255,13 +1283,103 @@ test('stale close preserves the draft, invalidates old evidence and refreshes pr
     button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick()
     await flush()
   })
-  assert.equal(previews, 2)
-  assert.equal(staleReads, 1)
+  assert.match(renderedText(renderer), /Reintentar mismo corte/)
+  await act(async () => {
+    button(renderer, 'Reintentar mismo corte').props.onClick()
+    await flush()
+  })
+  assert.equal(activeReads, 2)
+  assert.equal(button(renderer, 'Reintentar mismo corte'), undefined)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27'), undefined)
+  assert.equal(button(renderer, 'Recargar corte')?.type, 'button')
   assert.equal(renderer.root.findByProps({ name: 'denomination-500' }).props.value, '2')
   assert.equal(renderer.root.findByProps({ name: 'differenceNote' }).props.value, 'Borrador preservado')
   assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
-  assert.match(renderedText(renderer), /cambió en otra sesión.*vuelve a subir/i)
-  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.props.disabled, true)
+  assert.match(renderedText(renderer), /cambió.*totales.*no son autoritativos/i)
+
+  await act(async () => {
+    button(renderer, 'Recargar corte').props.onClick()
+    await flush()
+  })
+  assert.equal(activeReads, 3)
+  assert.match(renderedText(renderer), /totales actualizados.*revisa.*fotograf/i)
+  assert.equal(button(renderer, 'Cerrar Día 27 y abrir Noche 28')?.props.disabled, true)
+  await act(async () => {
+    renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
+      target: { files: [{ name: 'arqueo-nuevo.png', type: 'image/png' }], value: 'fake' },
+    })
+    await flush()
+  })
+  assert.deepEqual(evidenceBindings, ['41:0', '42:0'], 'la evidencia del turno anterior nunca se reutiliza en el turno activo recargado')
+  await act(async () => {
+    button(renderer, 'Cerrar Día 27 y abrir Noche 28').props.onClick()
+    await flush()
+  })
+  assert.equal(closeAttempts, 3, 'recargar el turno nunca repite la mutación anterior')
+  act(() => renderer.unmount())
+})
+
+test('stale reclose consumes the refreshed detail/version and never reuses prior evidence', async () => {
+  const closed = closedResultDetail()
+  const reopened = structuredClone(closed)
+  reopened.shift.state = 'reopened'
+  reopened.version_id = false
+  reopened.closing_type = false
+  reopened.printable = false
+  const refreshed = structuredClone(reopened)
+  refreshed.shift.version = 2
+  refreshed.version_number = 2
+  refreshed.totals.expected_cash = 1300
+  const detailReads = []
+  const closeRequests = []
+  const evidenceBindings = []
+  const renderer = await mount({
+    sessionIdentity: 'session-a|34|89|manage',
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => ({ ok: true, data: validShift({ type: 'day' }) }),
+    loadShiftDetail: async (request) => {
+      detailReads.push(request)
+      return { ok: true, data: detailReads.length === 1 ? closed : refreshed }
+    },
+    reopenShift: async () => ({ status: 'completed', data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } } }),
+    previewActive: async () => ({ ok: true, data: detailReads.length > 1 ? refreshed : reopened }),
+    readEvidence: async () => 'iVBORw0KGgo=',
+    uploadEvidence: async (request) => {
+      evidenceBindings.push(request.expectedVersion)
+      return { ok: true, data: { evidence_token: `reclose-v${request.expectedVersion}` } }
+    },
+    closeShift: async (_operation, request) => {
+      closeRequests.push(structuredClone(request))
+      if (closeRequests.length === 1) throw Object.assign(new Error('stale'), { code: 'stale_version' })
+      return { status: 'pending', request, key: 'reclose-v2' }
+    },
+  })
+  act(() => button(renderer, 'Reabrir un corte').props.onClick())
+  act(() => renderer.root.findByProps({ name: 'reopenShiftId' }).props.onChange({ target: { value: '41' } }))
+  await act(async () => { button(renderer, 'Consultar corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'reopenReason' }).props.onChange({ target: { value: 'Corrección' } }))
+  await act(async () => { button(renderer, 'Reabrir corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'denomination-500' }).props.onChange({ target: { value: '2' } }))
+  act(() => renderer.root.findByProps({ name: 'differenceNote' }).props.onChange({ target: { value: 'Revisado' } }))
+  await act(async () => {
+    renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
+      target: { files: [{ name: 'old.png', type: 'image/png' }], value: 'fake' },
+    })
+    await flush()
+  })
+  await act(async () => { button(renderer, 'Volver a cerrar Noche 27').props.onClick(); await flush() })
+  assert.deepEqual(detailReads, [{ shiftId: 41 }, { shiftId: 41 }])
+  assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
+  await act(async () => {
+    renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
+      target: { files: [{ name: 'new.png', type: 'image/png' }], value: 'fake' },
+    })
+    await flush()
+  })
+  await act(async () => { button(renderer, 'Volver a cerrar Noche 27').props.onClick(); await flush() })
+  assert.deepEqual(evidenceBindings, [1, 2])
+  assert.deepEqual(closeRequests.map((request) => request.expectedVersion), [1, 2])
   act(() => renderer.unmount())
 })
 
@@ -1352,4 +1470,99 @@ test('a completed reopen with a lost preview retries only loading reclose and ne
   assert.equal(previewCalls, 3, 'carga el reopened y el formulario refresca su preview autoritativo')
   assert.match(renderedText(renderer), /Volver a cerrar Noche 27/)
   act(() => renderer.unmount())
+})
+
+test('an in-flight reopen from session A is ignored after session B replaces the same dashboard', async () => {
+  const mutation = deferred()
+  let reopenCalls = 0
+  let previewCalls = 0
+  const closed = closedResultDetail()
+  const sharedProps = {
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => ({ ok: true, data: validShift({ type: 'day' }) }),
+    loadShiftDetail: async () => ({ ok: true, data: closed }),
+    reopenShift: async () => { reopenCalls += 1; return mutation.promise },
+    previewActive: async () => { previewCalls += 1; return { ok: true, data: validShift() } },
+  }
+  const renderer = await mount({ ...sharedProps, sessionIdentity: 'session-a|34|89|manage' })
+  act(() => button(renderer, 'Reabrir un corte').props.onClick())
+  act(() => renderer.root.findByProps({ name: 'reopenShiftId' }).props.onChange({ target: { value: '41' } }))
+  await act(async () => { button(renderer, 'Consultar corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'reopenReason' }).props.onChange({ target: { value: 'Corrección A' } }))
+  await act(async () => {
+    button(renderer, 'Reabrir corte').props.onClick()
+    await flush()
+  })
+
+  await act(async () => {
+    renderer.update(React.createElement((await loadRuntime()).default, {
+      ...sharedProps,
+      sessionIdentity: 'session-b|34|89|manage',
+    }))
+    await flush()
+  })
+  await act(async () => {
+    mutation.resolve({ status: 'completed', data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } } })
+    await flush()
+  })
+  assert.equal(reopenCalls, 1)
+  assert.equal(previewCalls, 0, 'la sesión nueva no consume la reapertura iniciada por la anterior')
+  assert.doesNotMatch(renderedText(renderer), /Volver a cerrar/)
+  assert.match(renderedText(renderer), /Turno activo/)
+  act(() => renderer.unmount())
+})
+
+test('losing scope/access clears a loaded reclose and an unmounted pending reopen cannot publish it', async () => {
+  const reopened = validShift()
+  reopened.shift.state = 'reopened'
+  reopened.shift.version = 1
+  reopened.version_number = 1
+  const closed = closedResultDetail()
+  let mutation = Promise.resolve({ status: 'completed', data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } } })
+  let previewCalls = 0
+  const props = {
+    sessionIdentity: 'session-a|34|89|manage',
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => ({ ok: true, data: validShift({ type: 'day' }) }),
+    loadShiftDetail: async () => ({ ok: true, data: closed }),
+    reopenShift: async () => mutation,
+    previewActive: async () => { previewCalls += 1; return { ok: true, data: reopened } },
+  }
+  const renderer = await mount(props)
+  act(() => button(renderer, 'Reabrir un corte').props.onClick())
+  act(() => renderer.root.findByProps({ name: 'reopenShiftId' }).props.onChange({ target: { value: '41' } }))
+  await act(async () => { button(renderer, 'Consultar corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'reopenReason' }).props.onChange({ target: { value: 'Corrección' } }))
+  await act(async () => { button(renderer, 'Reabrir corte').props.onClick(); await flush() })
+  assert.match(renderedText(renderer), /Volver a cerrar/)
+
+  await act(async () => {
+    renderer.update(React.createElement((await loadRuntime()).default, { ...props, scopeReady: false }))
+    await flush()
+  })
+  assert.doesNotMatch(renderedText(renderer), /Volver a cerrar/)
+  assert.match(renderedText(renderer), /Falta alcance/)
+
+  const pending = deferred()
+  mutation = pending.promise
+  await act(async () => {
+    renderer.update(React.createElement((await loadRuntime()).default, props))
+    await flush()
+  })
+  act(() => button(renderer, 'Reabrir un corte').props.onClick())
+  act(() => renderer.root.findByProps({ name: 'reopenShiftId' }).props.onChange({ target: { value: '41' } }))
+  await act(async () => { button(renderer, 'Consultar corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'reopenReason' }).props.onChange({ target: { value: 'Otra corrección' } }))
+  await act(async () => {
+    button(renderer, 'Reabrir corte').props.onClick()
+    await flush()
+  })
+  act(() => renderer.unmount())
+  await act(async () => {
+    pending.resolve({ status: 'completed', data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } } })
+    await flush()
+  })
+  assert.equal(previewCalls, 2, 'desmontar no inicia una carga adicional del recierre')
 })

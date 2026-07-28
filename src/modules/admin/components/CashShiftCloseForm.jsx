@@ -94,6 +94,7 @@ function AuditPreview({ cashShift }) {
 
 export default function CashShiftCloseForm({
   cashShift,
+  sessionIdentity = 'cash-shift-session',
   onPreview,
   onClose,
   onEvidence,
@@ -114,14 +115,44 @@ export default function CashShiftCloseForm({
   const [mutationBusy, setMutationBusy] = useState(false)
   const [pendingRequest, setPendingRequest] = useState(null)
   const [completed, setCompleted] = useState(null)
+  const [staleStatus, setStaleStatus] = useState(null)
   const [error, setError] = useState('')
   const mounted = useRef(false)
   const previewGeneration = useRef(0)
   const uploadGeneration = useRef(0)
-  const mutationInFlight = useRef(false)
+  const staleReloadGeneration = useRef(0)
+  const mutationInFlight = useRef(null)
+  const staleReloadInFlight = useRef(null)
+  const staleRecoveryRef = useRef(false)
   const formLockedRef = useRef(false)
   const adjustmentSequence = useRef(0)
   const bindingRef = useRef(binding.key)
+  const previewBindingRef = useRef('')
+  const workflowRef = useRef({ identity: sessionIdentity, generation: 0 })
+  if (workflowRef.current.identity !== sessionIdentity) {
+    workflowRef.current = {
+      identity: sessionIdentity,
+      generation: workflowRef.current.generation + 1,
+    }
+    previewGeneration.current += 1
+    uploadGeneration.current += 1
+    staleReloadGeneration.current += 1
+    mutationInFlight.current = null
+    staleReloadInFlight.current = null
+    staleRecoveryRef.current = false
+  }
+
+  function captureWorkflow() {
+    return { ...workflowRef.current }
+  }
+
+  function workflowIsCurrent(workflow) {
+    return Boolean(
+      mounted.current
+      && workflow.identity === workflowRef.current.identity
+      && workflow.generation === workflowRef.current.generation,
+    )
+  }
 
   useEffect(() => {
     mounted.current = true
@@ -129,13 +160,38 @@ export default function CashShiftCloseForm({
       mounted.current = false
       previewGeneration.current += 1
       uploadGeneration.current += 1
-      mutationInFlight.current = false
+      staleReloadGeneration.current += 1
+      mutationInFlight.current = null
+      staleReloadInFlight.current = null
       formLockedRef.current = true
     }
   }, [])
 
+  useEffect(() => {
+    previewGeneration.current += 1
+    uploadGeneration.current += 1
+    staleReloadGeneration.current += 1
+    mutationInFlight.current = null
+    staleReloadInFlight.current = null
+    previewBindingRef.current = ''
+    formLockedRef.current = false
+    setPreview(null)
+    setCounts(initialCounts())
+    setAdjustments([])
+    setNotes('')
+    setNextOpeningFund('')
+    setEvidence(null)
+    setUploadBusy(false)
+    setMutationBusy(false)
+    setPendingRequest(null)
+    setCompleted(null)
+    setStaleStatus(null)
+    setError('')
+  }, [sessionIdentity])
+
   const refreshPreview = useCallback(async ({ preserveError = false } = {}) => {
     const generation = ++previewGeneration.current
+    const workflow = captureWorkflow()
     setPreviewBusy(true)
     if (!preserveError) setError('')
     try {
@@ -146,9 +202,12 @@ export default function CashShiftCloseForm({
           code: 'stale_preview',
         })
       }
-      if (mounted.current && generation === previewGeneration.current) setPreview(normalized)
+      if (workflowIsCurrent(workflow) && generation === previewGeneration.current) {
+        previewBindingRef.current = binding.key
+        setPreview(normalized)
+      }
     } catch (previewError) {
-      if (mounted.current && generation === previewGeneration.current) {
+      if (workflowIsCurrent(workflow) && generation === previewGeneration.current) {
         if (previewError?.code === 'stale_preview') {
           uploadGeneration.current += 1
           setEvidence(null)
@@ -158,12 +217,13 @@ export default function CashShiftCloseForm({
         }
       }
     } finally {
-      if (mounted.current && generation === previewGeneration.current) setPreviewBusy(false)
+      if (workflowIsCurrent(workflow) && generation === previewGeneration.current) setPreviewBusy(false)
     }
   }, [binding.key, binding.shiftId, onPreview])
 
   useEffect(() => {
     let bindingChanged = false
+    const authoritativeReload = staleRecoveryRef.current
     if (bindingRef.current !== binding.key) {
       bindingChanged = true
       bindingRef.current = binding.key
@@ -171,10 +231,16 @@ export default function CashShiftCloseForm({
       setEvidence(null)
       setPendingRequest(null)
       setCompleted(null)
-      formLockedRef.current = false
-      setError('La versión o el modo cambió. Vuelve a subir la fotografía para continuar.')
+      if (!authoritativeReload) {
+        setStaleStatus(null)
+        formLockedRef.current = false
+        setError('La versión o el modo cambió. Vuelve a subir la fotografía para continuar.')
+      }
+      if (authoritativeReload) staleRecoveryRef.current = false
     }
-    void refreshPreview({ preserveError: bindingChanged })
+    if (!authoritativeReload && previewBindingRef.current !== binding.key) {
+      void refreshPreview({ preserveError: bindingChanged })
+    }
     return () => { previewGeneration.current += 1 }
   }, [binding.key, refreshPreview])
 
@@ -216,11 +282,12 @@ export default function CashShiftCloseForm({
       return
     }
     const generation = uploadGeneration.current
+    const workflow = captureWorkflow()
     const expectedBinding = binding.key
     setUploadBusy(true)
     try {
       const fileBase64 = await readEvidence(file)
-      if (!mounted.current || generation !== uploadGeneration.current || expectedBinding !== bindingRef.current) return
+      if (!workflowIsCurrent(workflow) || generation !== uploadGeneration.current || expectedBinding !== bindingRef.current) return
       const response = await onEvidence({
         shiftId: binding.shiftId,
         expectedVersion: binding.expectedVersion,
@@ -232,15 +299,15 @@ export default function CashShiftCloseForm({
       const data = unwrap(response)
       const token = String(data?.evidence_token || '').trim()
       if (!token) throw new TypeError('El servidor no confirmó la evidencia.')
-      if (mounted.current && generation === uploadGeneration.current && expectedBinding === bindingRef.current) {
+      if (workflowIsCurrent(workflow) && generation === uploadGeneration.current && expectedBinding === bindingRef.current) {
         setEvidence({ token, filename: file.name, bindingKey: expectedBinding })
       }
     } catch {
-      if (mounted.current && generation === uploadGeneration.current) {
+      if (workflowIsCurrent(workflow) && generation === uploadGeneration.current) {
         setError('No se pudo subir la fotografía. Selecciónala de nuevo para reintentar.')
       }
     } finally {
-      if (mounted.current && generation === uploadGeneration.current) setUploadBusy(false)
+      if (workflowIsCurrent(workflow) && generation === uploadGeneration.current) setUploadBusy(false)
     }
   }
 
@@ -273,11 +340,61 @@ export default function CashShiftCloseForm({
     }
   }, [adjustments, binding.key, counts, evidence, nextOpeningFund, notes, preview])
   const feedback = draftState.operation?.feedback || draftState.feedback
-  const locked = mutationBusy || Boolean(pendingRequest) || Boolean(completed)
+  const staleLocked = ['reloading', 'stale_requires_reload'].includes(staleStatus)
+  const locked = mutationBusy || Boolean(pendingRequest) || Boolean(completed) || staleLocked
+
+  async function reloadAuthoritativeShift() {
+    if (staleReloadInFlight.current) return staleReloadInFlight.current.promise
+    const workflow = captureWorkflow()
+    const generation = ++staleReloadGeneration.current
+    const marker = { workflow, generation, promise: null }
+    staleReloadInFlight.current = marker
+    formLockedRef.current = true
+    setStaleStatus('reloading')
+    setPreviewBusy(true)
+    setError('El turno cambió y el arqueo conservado todavía no es autoritativo. Recargando los totales actuales…')
+    marker.promise = (async () => {
+      try {
+        const normalized = normalizeCashShift(unwrap(await onStale({
+          shiftId: binding.shiftId,
+          mode: binding.purpose,
+          expectedVersion: binding.expectedVersion,
+        })))
+        if (!workflowIsCurrent(workflow) || generation !== staleReloadGeneration.current) return null
+        const refreshedBinding = cashShiftEvidenceBinding(normalized)
+        if (
+          (binding.purpose === 'reclose' && (normalized.shift.state !== 'reopened' || normalized.shift.id !== binding.shiftId))
+          || (binding.purpose === 'close' && !['open', 'reopened'].includes(normalized.shift.state))
+        ) throw new TypeError('La recarga no corresponde al corte vigente.')
+        bindingRef.current = refreshedBinding.key
+        previewBindingRef.current = refreshedBinding.key
+        setPreview(normalized)
+        setPendingRequest(null)
+        setCompleted(null)
+        setEvidence(null)
+        setStaleStatus('review_required')
+        setError('Los totales actualizados cambiaron respecto al borrador. Revisa el arqueo conservado y vuelve a subir la fotografía antes de cerrar.')
+        formLockedRef.current = false
+        return normalized
+      } catch (reloadError) {
+        if (!workflowIsCurrent(workflow) || generation !== staleReloadGeneration.current) return null
+        setPreview(null)
+        setStaleStatus('stale_requires_reload')
+        setError('El turno cambió y los totales del borrador no son autoritativos. Recarga el corte antes de continuar.')
+        formLockedRef.current = true
+        return null
+      } finally {
+        if (staleReloadInFlight.current === marker) staleReloadInFlight.current = null
+        if (workflowIsCurrent(workflow) && generation === staleReloadGeneration.current) setPreviewBusy(false)
+      }
+    })()
+    return marker.promise
+  }
 
   async function submit() {
-    if (mutationInFlight.current || completed) return
+    if (mutationInFlight.current || completed || staleLocked) return
     setError('')
+    staleRecoveryRef.current = false
     const operation = pendingRequest
       ? { operation: binding.purpose, request: pendingRequest }
       : draftState.operation
@@ -285,13 +402,15 @@ export default function CashShiftCloseForm({
       setError(draftState.error || 'Completa el arqueo antes de continuar.')
       return
     }
-    mutationInFlight.current = true
+    const workflow = captureWorkflow()
+    const marker = { workflow }
+    mutationInFlight.current = marker
     formLockedRef.current = true
     setMutationBusy(true)
     let keepLocked = Boolean(pendingRequest || completed)
     try {
       const result = await onClose(operation.operation, operation.request)
-      if (!mounted.current) return
+      if (!workflowIsCurrent(workflow) || mutationInFlight.current !== marker) return
       if (result?.status === 'pending') {
         keepLocked = true
         setPendingRequest(result.request || operation.request)
@@ -304,21 +423,23 @@ export default function CashShiftCloseForm({
       setCompleted(response)
       await onCompleted({ mode: operation.operation, result: response, request: operation.request })
     } catch (mutationError) {
-      if (!mounted.current) return
+      if (!workflowIsCurrent(workflow) || mutationInFlight.current !== marker) return
       if (mutationError?.code === 'stale_version') {
+        staleRecoveryRef.current = true
         uploadGeneration.current += 1
         setEvidence(null)
-        const staleMessage = 'El turno cambió en otra sesión. Conservamos el arqueo; revisa la vista actualizada y vuelve a subir la fotografía.'
-        setError(staleMessage)
-        await Promise.allSettled([refreshPreview(), onStale({ shiftId: binding.shiftId })])
-        if (mounted.current) setError(staleMessage)
+        setPendingRequest(null)
+        setCompleted(null)
+        setPreview(null)
+        keepLocked = true
+        await reloadAuthoritativeShift()
       } else {
         setError('No se pudo guardar el corte. Conservamos el arqueo y la evidencia para reintentar.')
       }
     } finally {
-      mutationInFlight.current = false
+      if (mutationInFlight.current === marker) mutationInFlight.current = null
       if (!keepLocked) formLockedRef.current = false
-      if (mounted.current) setMutationBusy(false)
+      if (workflowIsCurrent(workflow)) setMutationBusy(false)
     }
   }
 
@@ -339,7 +460,7 @@ export default function CashShiftCloseForm({
         Se actualiza la vista del servidor antes de cerrar. Sus totales y la respuesta final son autoritativos.
       </p>
       {previewBusy ? <p role="status">Actualizando vista previa…</p> : null}
-      {!previewBusy && !preview ? <button className="cash-shift-primary" type="button" onClick={refreshPreview}>Reintentar vista previa</button> : null}
+      {!previewBusy && !preview && !staleStatus ? <button className="cash-shift-primary" type="button" onClick={refreshPreview}>Reintentar vista previa</button> : null}
       {preview ? <AuditPreview cashShift={preview} /> : null}
 
       <div className="cash-shift-reconciliation">
@@ -386,8 +507,13 @@ export default function CashShiftCloseForm({
               : `Corte guardado · versión ${completed.version}.`}
           </p>
         ) : null}
+        {staleStatus === 'review_required' ? (
+          <p className="cash-shift-warning" role="status">Los totales actualizados ya son autoritativos. Revisa el borrador y sube una fotografía nueva; la evidencia anterior quedó invalidada.</p>
+        ) : null}
         <div className="cash-shift-actions">
-          {pendingRequest ? (
+          {['reloading', 'stale_requires_reload'].includes(staleStatus) ? (
+            <button className="cash-shift-primary" type="button" disabled={staleStatus === 'reloading'} onClick={reloadAuthoritativeShift}>Recargar corte</button>
+          ) : pendingRequest ? (
             <button className="cash-shift-primary" type="button" disabled={mutationBusy} onClick={submit}>Reintentar mismo corte</button>
           ) : !completed ? (
             <button className="cash-shift-primary" type="button" disabled={previewBusy || uploadBusy || mutationBusy || !draftState.operation} onClick={submit}>{fallbackLabel}</button>
