@@ -1,7 +1,7 @@
 # Flujo completo de liquidaciones de ruta
 
-**Fecha:** 2026-07-28  
-**Estado:** Aprobado para revisión técnica  
+**Fecha:** 2026-07-28
+**Estado:** Aprobado para revisión técnica
 **Ámbito:** PWA Colaboradores y backend GrupoFrio (`gf_logistics_ops`, `gf_pwa_admin`)
 
 ## Problema
