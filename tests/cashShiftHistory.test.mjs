@@ -332,6 +332,22 @@ test('uses Mexico civil date and rejects invalid or future operational dates', (
   assert.throws(() => model.validateOperationalHistoryDate('2026-02-30', instant), /válida/i)
 })
 
+test('allows only the authoritative active shift date when it is still civilly future', () => {
+  const instant = Date.parse('2026-07-27T04:30:00Z') // 26th at 22:30 Mexico City
+  assert.equal(
+    model.validateOperationalHistoryDate('2026-07-27', instant, '2026-07-27'),
+    '2026-07-27',
+  )
+  assert.throws(
+    () => model.validateOperationalHistoryDate('2026-07-28', instant, '2026-07-27'),
+    /futura/i,
+  )
+  assert.throws(
+    () => model.validateOperationalHistoryDate('2026-07-27', instant, 'fecha-inválida'),
+    /válida/i,
+  )
+})
+
 test('print view includes exact snapshot audit fields and obeys printable gate', async () => {
   vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
   const { default: PrintView } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftPrintView.jsx')
@@ -397,6 +413,33 @@ test('history UI rejects future Mexico date without an API call and ignores stal
   })
   await act(async () => { requestA.resolve({ data: historyPayload() }); await flush() })
   assert.match(renderedText(renderer), /Noche 27/)
+})
+
+test('history UI starts on the exact future active shift date and blocks every other future date', async () => {
+  vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
+  const { default: History } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftHistory.jsx')
+  const calls = []
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(React.createElement(History, {
+      accessMode: 'manage',
+      sessionIdentity: 'future-active-day',
+      activeBusinessDate: '2026-07-27',
+      loadHistory: async ({ businessDate }) => {
+        calls.push(businessDate)
+        return { data: historyPayload() }
+      },
+      now: () => Date.parse('2026-07-27T04:30:00Z'),
+    }))
+    await flush()
+  })
+  assert.deepEqual(calls, ['2026-07-27'])
+  assert.match(renderedText(renderer), /Noche 27/)
+  const date = renderer.root.findByProps({ name: 'cashShiftBusinessDate' })
+  assert.equal(date.props.max, '2026-07-27')
+  await act(async () => date.props.onChange({ target: { value: '2026-07-28' } }))
+  assert.match(renderedText(renderer), /fecha operativa no puede ser futura/i)
+  assert.deepEqual(calls, ['2026-07-27'])
 })
 
 test('an invalid operational filter immediately invalidates old history success and failure', async () => {
@@ -624,10 +667,11 @@ test('dashboard exposes three manage-only tabs and loads history and legacy only
       accessMode: 'manage',
       scopeReady: true,
       sessionIdentity: 'manage-A',
-      loadActive: async () => fullShift({ id: 41, type: 'night', versionId: 701 }),
-      loadHistory: async () => { calls.push('operational'); return { data: historyPayload() } },
+      loadActive: async () => openUnversionedShift(),
+      loadHistory: async ({ businessDate }) => { calls.push(`operational:${businessDate}`); return { data: historyPayload() } },
       loadLegacyHistory: async () => { calls.push('legacy'); return { data: { total_count: 0, count: 0, limit: 25, offset: 0, closings: [] } } },
       loadLegacyDetail: async () => { calls.push('legacy-detail'); return { data: {} } },
+      historyNow: () => Date.parse('2026-07-27T04:30:00Z'),
       scheduleRefresh: () => 1,
       cancelRefresh: () => {},
     }))
@@ -637,10 +681,10 @@ test('dashboard exposes three manage-only tabs and loads history and legacy only
   assert.deepEqual(tabs.map((tab) => textOf(tab)), ['Turno activo', 'Historial operativo', 'Cierres diarios anteriores'])
   assert.deepEqual(calls, [])
   await act(async () => { tabs[1].props.onClick(); await flush() })
-  assert.deepEqual(calls, ['operational'])
+  assert.deepEqual(calls, ['operational:2026-07-27'])
   const updatedTabs = renderer.root.findAll((node) => node.props.role === 'tab')
   await act(async () => { updatedTabs[2].props.onClick(); await flush() })
-  assert.deepEqual(calls, ['operational', 'legacy'])
+  assert.deepEqual(calls, ['operational:2026-07-27', 'legacy'])
 
   await act(async () => {
     renderer.update(React.createElement(Dashboard, {
@@ -653,7 +697,7 @@ test('dashboard exposes three manage-only tabs and loads history and legacy only
     await flush()
   })
   assert.equal(renderer.root.findAll((node) => node.props.role === 'tab').length, 0)
-  assert.deepEqual(calls, ['operational', 'legacy'])
+  assert.deepEqual(calls, ['operational:2026-07-27', 'legacy'])
 })
 
 test('print stylesheet hides app navigation, tabs, controls and preserves report tables', () => {

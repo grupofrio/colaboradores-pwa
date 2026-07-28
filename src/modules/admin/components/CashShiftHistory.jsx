@@ -132,13 +132,30 @@ function ConsolidatedHistoryCard({ section }) {
 export default function CashShiftHistory({
   accessMode,
   sessionIdentity,
+  activeBusinessDate = null,
   loadHistory = getCashShiftHistory,
   loadDetail = getCashShiftDetail,
   printWindow,
   now = Date.now,
 }) {
-  const today = mexicoBusinessDate(now())
-  const [businessDate, setBusinessDate] = useState(() => today)
+  const renderNow = now()
+  const today = mexicoBusinessDate(renderNow)
+  let authorizedActiveDate = null
+  try {
+    if (activeBusinessDate != null) {
+      authorizedActiveDate = validateOperationalHistoryDate(
+        activeBusinessDate,
+        renderNow,
+        activeBusinessDate,
+      )
+    }
+  } catch {
+    authorizedActiveDate = null
+  }
+  const initialBusinessDate = authorizedActiveDate && authorizedActiveDate > today
+    ? authorizedActiveDate
+    : today
+  const [businessDate, setBusinessDate] = useState(() => initialBusinessDate)
   const [requestNonce, setRequestNonce] = useState(0)
   const [view, setView] = useState({ status: 'idle', data: null, error: '' })
   const [detailView, setDetailView] = useState({ status: 'idle', data: null, error: '' })
@@ -186,16 +203,20 @@ export default function CashShiftHistory({
     detailGeneration.current += 1
     historyInFlight.current = null
     detailInFlight.current = null
-    setBusinessDate(today)
+    setBusinessDate(initialBusinessDate)
     setView({ status: 'idle', data: null, error: '' })
     setDetailView({ status: 'idle', data: null, error: '' })
-  }, [accessMode, today, workflowIdentity])
+  }, [accessMode, initialBusinessDate, workflowIdentity])
 
   const load = useCallback(async () => {
     if (accessMode !== 'manage') return null
     let validatedDate
     try {
-      validatedDate = validateOperationalHistoryDate(businessDate, now())
+      validatedDate = validateOperationalHistoryDate(
+        businessDate,
+        now(),
+        authorizedActiveDate,
+      )
     } catch (error) {
       setView({ status: 'validation', data: null, error: error.message })
       return null
@@ -238,7 +259,7 @@ export default function CashShiftHistory({
       }
     })()
     return marker.promise
-  }, [accessMode, businessDate, captureWorkflow, isCurrent, loadHistory, now])
+  }, [accessMode, authorizedActiveDate, businessDate, captureWorkflow, isCurrent, loadHistory, now])
 
   useEffect(() => {
     void load()
@@ -296,7 +317,7 @@ export default function CashShiftHistory({
     setBusinessDate(value)
     setDetailView({ status: 'idle', data: null, error: '' })
     try {
-      validateOperationalHistoryDate(value, now())
+      validateOperationalHistoryDate(value, now(), authorizedActiveDate)
       setView({ status: 'idle', data: null, error: '' })
     } catch (error) {
       setView({ status: 'validation', data: null, error: error.message })
@@ -329,7 +350,7 @@ export default function CashShiftHistory({
           <input
             type="date"
             name="cashShiftBusinessDate"
-            max={today}
+            max={initialBusinessDate}
             value={businessDate}
             onChange={handleDateChange}
           />

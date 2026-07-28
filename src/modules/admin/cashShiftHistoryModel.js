@@ -312,9 +312,12 @@ export function mexicoBusinessDate(nowMs = Date.now()) {
   return `${parts.year}-${parts.month}-${parts.day}`
 }
 
-export function validateOperationalHistoryDate(value, nowMs = Date.now()) {
+export function validateOperationalHistoryDate(value, nowMs = Date.now(), activeBusinessDate = null) {
   const date = validDate(value)
-  if (date > mexicoBusinessDate(nowMs)) {
+  const authorizedActiveDate = activeBusinessDate == null
+    ? null
+    : validDate(activeBusinessDate)
+  if (date > mexicoBusinessDate(nowMs) && date !== authorizedActiveDate) {
     throw new TypeError('La fecha operativa no puede ser futura en México.')
   }
   return date
