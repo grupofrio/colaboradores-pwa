@@ -63,7 +63,12 @@ function validShift(overrides = {}) {
     physical_cash: 0,
     difference: -1200,
     products: [],
-    product_totals: {},
+    product_totals: {
+      quantity: 0,
+      amount_total: 0,
+      weight_total_kg: 0,
+      products_without_weight: 0,
+    },
     payments: { cash: 800, card: 200, total: 1000, rows: [] },
     sales: [],
     cancellations: [],
@@ -267,6 +272,26 @@ test('normaliza metadatos versionados e IDs históricos sin perder la fotografí
       reference: 'ir.attachment:991',
     },
     shift: { ...validShift().shift, version: 2, state: 'closed' },
+    denominations: [{
+      id: 801,
+      denomination: '500',
+      count: 2,
+      subtotal: 1000,
+    }],
+    adjustments: [{
+      id: 802,
+      type: 'expense',
+      amount: 25,
+      concept: 'Compra de bolsas',
+      actor_employee_id: 717,
+      recorded_at: '2026-07-27 06:03:00',
+    }],
+    authorizations: [{
+      id: 803,
+      level: 'manager',
+      actor_employee_id: 717,
+      authorized_at: '2026-07-27 06:05:00',
+    }],
     printable: true,
   }))
 
@@ -290,6 +315,26 @@ test('normaliza metadatos versionados e IDs históricos sin perder la fotografí
     digest: 'abc123',
     reference: 'ir.attachment:991',
   })
+  assert.deepEqual(dto.denominations, [{
+    id: 801,
+    denomination: '500',
+    count: 2,
+    subtotal: 1000,
+  }])
+  assert.deepEqual(dto.adjustments, [{
+    id: 802,
+    type: 'expense',
+    amount: 25,
+    concept: 'Compra de bolsas',
+    actor_employee_id: 717,
+    recorded_at: '2026-07-27 06:03:00',
+  }])
+  assert.deepEqual(dto.authorizations, [{
+    id: 803,
+    level: 'manager',
+    actor_employee_id: 717,
+    authorized_at: '2026-07-27 06:05:00',
+  }])
   assert.equal(dto.printable, true)
 })
 
@@ -301,7 +346,30 @@ test('normaliza profundamente payments y filas sin ejecutar getters ni permitir 
       total: 120,
       rows: [{ order_id: 501, method: 'cash', amount: 100 }],
     },
-    products: [{ product_id: 80, name: 'Bolsa', sources: [{ line_id: 91 }] }],
+    products: [{
+      product_id: 80,
+      sku: '',
+      product_name: 'Bolsa',
+      quantity: 1,
+      amount_total: 100,
+      weight_per_unit_kg: 0,
+      weight_total_kg: 0,
+      weight_unknown: true,
+      source_line_ids: [91],
+      sources: [{
+        line_id: 91,
+        order_id: 501,
+        quantity: 1,
+        amount_total: 100,
+        weight_total_kg: 0,
+      }],
+    }],
+    product_totals: {
+      quantity: 1,
+      amount_total: 100,
+      weight_total_kg: 0,
+      products_without_weight: 1,
+    },
   }))
   assert.deepEqual(dto.payments, {
     cash: 100,
@@ -310,7 +378,24 @@ test('normaliza profundamente payments y filas sin ejecutar getters ni permitir 
     rows: [{ order_id: 501, method: 'cash', amount: 100 }],
   })
   assert.deepEqual(dto.products, [
-    { product_id: 80, name: 'Bolsa', sources: [{ line_id: 91 }] },
+    {
+      product_id: 80,
+      sku: '',
+      product_name: 'Bolsa',
+      quantity: 1,
+      amount_total: 100,
+      weight_per_unit_kg: 0,
+      weight_total_kg: 0,
+      weight_unknown: true,
+      source_line_ids: [91],
+      sources: [{
+        line_id: 91,
+        order_id: 501,
+        quantity: 1,
+        amount_total: 100,
+        weight_total_kg: 0,
+      }],
+    },
   ])
 
   let getterReads = 0
@@ -324,6 +409,166 @@ test('normaliza profundamente payments y filas sin ejecutar getters ni permitir 
   const polluted = Object.create({ inherited_total: 999 })
   polluted.cash = 100
   assert.throws(() => normalizeCashShift(validShift({ payments: polluted })), TypeError)
+})
+
+test('valida y conserva el esquema exacto de snapshots live de productos y movimientos', () => {
+  const snapshot = {
+    products: [{
+      product_id: 80,
+      sku: 'BOLSA-5',
+      product_name: 'Bolsa de hielo 5 kg',
+      quantity: 2,
+      amount_total: 100,
+      weight_per_unit_kg: 5,
+      weight_total_kg: 10,
+      weight_unknown: false,
+      source_line_ids: [91],
+      sources: [{
+        line_id: 91,
+        order_id: 501,
+        quantity: 2,
+        amount_total: 100,
+        weight_total_kg: 10,
+      }],
+    }],
+    product_totals: {
+      quantity: 2,
+      amount_total: 100,
+      weight_total_kg: 10,
+      products_without_weight: 0,
+    },
+    payments: {
+      cash: 100,
+      card: 0,
+      total: 100,
+      rows: [{ order_id: 501, method: 'cash', amount: 100 }],
+    },
+    sales: [{
+      order_id: 501,
+      name: 'S00501',
+      amount_total: 100,
+      payment_method: 'cash',
+      employee_id: 717,
+      recorded_at: '2026-07-26 18:30:00',
+      channel: 'night',
+    }],
+    cancellations: [{
+      order_id: 502,
+      name: 'S00502',
+      amount_total: 50,
+      payment_method: 'card',
+      employee_id: 717,
+      recorded_at: '2026-07-26 19:00:00',
+      channel: 'night',
+      reason_code: 'duplicate',
+      reason_text: 'Duplicidad',
+      cancelled_by_employee_id: 717,
+      cancelled_by_user_id: 44,
+      cancelled_at: '2026-07-26 19:05:00',
+      origin: 'night',
+    }, {
+      order_id: 503,
+      name: 'S00503',
+      amount_total: 25,
+      payment_method: 'cash',
+      employee_id: 717,
+      recorded_at: '2026-07-26 20:30:00',
+      channel: 'admin',
+      reason_code: false,
+      reason_text: 'Cliente llamó para cancelar',
+      cancelled_by_employee_id: 717,
+      cancelled_by_user_id: 44,
+      cancelled_at: '2026-07-26 20:35:00',
+      origin: 'admin',
+    }],
+    expenses: [{
+      expense_id: 601,
+      name: 'Gasto 601',
+      concept: 'Compra de bolsas',
+      amount: 25,
+      approval_state: 'approved',
+      employee_id: 717,
+      recorded_at: '2026-07-26 20:00:00',
+    }],
+  }
+  const dto = normalizeCashShift(validShift(snapshot))
+  assert.deepEqual(dto.products, snapshot.products)
+  assert.deepEqual(dto.productTotals, snapshot.product_totals)
+  assert.deepEqual(dto.payments, snapshot.payments)
+  assert.deepEqual(dto.sales, snapshot.sales)
+  assert.deepEqual(dto.cancellations, snapshot.cancellations)
+  assert.deepEqual(dto.expenses, snapshot.expenses)
+})
+
+test('rechaza IDs, enums, importes y timestamps inválidos en cualquier snapshot nested', () => {
+  const product = {
+    product_id: 80,
+    sku: 'BOLSA-5',
+    product_name: 'Bolsa',
+    quantity: 2,
+    amount_total: 100,
+    weight_per_unit_kg: 5,
+    weight_total_kg: 10,
+    weight_unknown: false,
+    source_line_ids: [91],
+    sources: [{
+      line_id: 91, order_id: 501, quantity: 2, amount_total: 100, weight_total_kg: 10,
+    }],
+  }
+  const sale = {
+    order_id: 501,
+    name: 'S00501',
+    amount_total: 100,
+    payment_method: 'cash',
+    employee_id: 717,
+    recorded_at: '2026-07-26 18:30:00',
+    channel: 'night',
+  }
+  const expense = {
+    expense_id: 601,
+    name: 'Gasto 601',
+    concept: 'Bolsas',
+    amount: 25,
+    approval_state: 'approved',
+    employee_id: 717,
+    recorded_at: '2026-07-26 20:00:00',
+  }
+  const invalidSnapshots = [
+    { products: [{ ...product, product_id: '__proto__' }] },
+    { products: [{ ...product, unexpected: true }] },
+    { payments: { cash: 100, card: 0, total: 100, rows: [{ order_id: '501', method: 'cash', amount: 100 }] } },
+    { payments: { cash: 100, card: 0, total: 100, rows: [{ order_id: 501, method: 'wire', amount: 100 }] } },
+    { sales: [{ ...sale, employee_id: 'bad' }] },
+    { sales: [{ ...sale, recorded_at: '2026-02-30 18:00:00' }] },
+    { cancellations: [{
+      ...sale,
+      reason_code: 'other',
+      reason_text: 'Otro',
+      cancelled_by_employee_id: 717,
+      cancelled_by_user_id: 44,
+      cancelled_at: '2026-07-26 19:05:00',
+      origin: 'night',
+    }] },
+    { expenses: [{ ...expense, expense_id: true }] },
+    { expenses: [{ ...expense, amount: Number.POSITIVE_INFINITY }] },
+    { denominations: [{ denomination: '500', count: 2_147_483_648, subtotal: 0 }] },
+    { adjustments: [{ type: 'income', amount: 0, concept: 'Cambio' }] },
+    { authorizations: [{
+      id: 803,
+      level: 'manager',
+      actor_employee_id: 'bad',
+      authorized_at: '2026-07-27 06:05:00',
+    }] },
+    { authorizations: [{
+      id: 803,
+      level: 'director',
+      actor_employee_id: 717,
+      authorized_at: '2026-07-27 25:00:00',
+    }] },
+  ]
+  for (const override of invalidSnapshots) {
+    assert.throws(() => normalizeCashShift(validShift(override)), TypeError)
+  }
 })
 
 test('rechaza IDs históricos y de alcance que no sean enteros positivos reales', () => {

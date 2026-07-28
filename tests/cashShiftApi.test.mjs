@@ -452,6 +452,30 @@ test('si también se pierde status preserva pending con key, request y draft est
   assert.equal(result.retryable, true)
 })
 
+test('status incierto conserva la key generada y el draft en las cinco operaciones', async () => {
+  const { serviceModule } = await loadRuntime()
+  for (const operation of ['open', 'close', 'reclose', 'reopen', 'authorize']) {
+    const key = `${operation}-generated`
+    const input = {
+      shiftId: 41,
+      expectedVersion: operation === 'close' ? 0 : 2,
+      versionId: 701,
+    }
+    const expected = { ...input, idempotencyKey: key }
+    const result = await serviceModule.mutateShiftWithRecovery(operation, input, {
+      mutate: async () => { throw uncertain() },
+      getOperationStatus: async () => { throw uncertain('status lost') },
+      createKey: () => key,
+      requestRegistry: new Map(),
+    })
+    assert.equal(result.status, 'pending', operation)
+    assert.equal(result.key, key, operation)
+    assert.deepEqual(result.request, expected, operation)
+    assert.deepEqual(result.draft, expected, operation)
+    assert.equal(result.retryable, true, operation)
+  }
+})
+
 test('status determinista solo acepta completed propio, processing u operation_not_found', async () => {
   const { serviceModule } = await loadRuntime()
   const base = {

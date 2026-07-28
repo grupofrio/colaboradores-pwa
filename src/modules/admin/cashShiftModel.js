@@ -4,6 +4,17 @@ const DATETIME_PATTERN = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?
 const SHIFT_TYPES = new Set(['night', 'day'])
 const SHIFT_STATES = new Set(['open', 'pending_auth', 'closed', 'reopened'])
 const ADJUSTMENT_TYPES = new Set(['income', 'expense'])
+const PAYMENT_METHODS = new Set(['cash', 'credit', 'transfer', 'card'])
+const SALE_CHANNELS = new Set(['admin', 'day', 'night', 'legacy_pwa'])
+const CANCELLATION_REASONS = new Map([
+  ['duplicate', 'Duplicidad'],
+  ['error', 'Error'],
+  ['customer_cancelled', 'Canceló'],
+  ['out_of_stock', 'Falta de stock'],
+])
+const CANCELLATION_ORIGINS = new Set(['admin', 'day', 'night'])
+const EXPENSE_APPROVAL_STATES = new Set(['pending', 'approved', 'rejected'])
+const AUTHORIZATION_LEVELS = new Set(['manager', 'director'])
 
 export const CASH_SHIFT_DENOMINATIONS = Object.freeze([
   '1000', '500', '200', '100', '50', '20', '10', '5', '2', '1', '0.50',
@@ -60,6 +71,13 @@ function exactString(value, label, { allowEmpty = true } = {}) {
   return value
 }
 
+function exactEnum(value, allowed, label) {
+  if (typeof value !== 'string' || !allowed.has(value)) {
+    throw new TypeError(`${label} no es válido.`)
+  }
+  return value
+}
+
 function optionalId(value, label) {
   if (value === false || value === null || value === undefined) return null
   return exactInteger(value, label, 1)
@@ -103,6 +121,17 @@ function optionalDatetime(value, label) {
     }
   }
   return value
+}
+
+function exactDatetime(value, label) {
+  const normalized = optionalDatetime(value, label)
+  if (normalized === null) throw new TypeError(`${label} no es válida.`)
+  return normalized
+}
+
+function optionalSnapshotId(value, label) {
+  if (value === false) return false
+  return exactInteger(value, label, 1)
 }
 
 function safeArrayValues(value, label) {
@@ -151,6 +180,400 @@ function safeClone(value, label, seen = new Set()) {
   }
   seen.delete(value)
   return cloned
+}
+
+function exactRecord(value, keys, label) {
+  const record = plainRecord(value, label)
+  const actual = Object.keys(record).sort()
+  const expected = [...keys].sort()
+  if (
+    actual.length !== expected.length
+    || actual.some((key, index) => key !== expected[index])
+  ) {
+    throw new TypeError(`${label} no es válido.`)
+  }
+  return record
+}
+
+function uniqueId(value, seen, label) {
+  const id = exactInteger(value, label, 1)
+  if (seen.has(id)) throw new TypeError(`${label} está duplicado.`)
+  seen.add(id)
+  return id
+}
+
+function normalizeProductSources(value, label) {
+  const seen = new Set()
+  return safeArrayValues(value, label).map((raw, index) => {
+    const rowLabel = `${label} ${index + 1}`
+    const row = exactRecord(raw, [
+      'line_id', 'order_id', 'quantity', 'amount_total', 'weight_total_kg',
+    ], rowLabel)
+    return {
+      line_id: uniqueId(ownValue(row, 'line_id', 'La línea de venta'), seen, 'La línea de venta'),
+      order_id: exactInteger(ownValue(row, 'order_id', 'La venta'), 'La venta', 1),
+      quantity: finiteNumber(ownValue(row, 'quantity', 'La cantidad'), 'La cantidad'),
+      amount_total: finiteNumber(ownValue(row, 'amount_total', 'El importe'), 'El importe'),
+      weight_total_kg: finiteNumber(
+        ownValue(row, 'weight_total_kg', 'El peso total'),
+        'El peso total',
+      ),
+    }
+  })
+}
+
+function normalizeProductSnapshots(value) {
+  const products = safeArrayValues(value, 'Los productos')
+  const productIds = new Set()
+  return products.map((raw, index) => {
+    const label = `El producto ${index + 1}`
+    const row = exactRecord(raw, [
+      'product_id', 'sku', 'product_name', 'quantity', 'amount_total',
+      'weight_per_unit_kg', 'weight_total_kg', 'weight_unknown',
+      'source_line_ids', 'sources',
+    ], label)
+    const sourceLineIds = safeArrayValues(
+      ownValue(row, 'source_line_ids', 'Las líneas fuente'),
+      'Las líneas fuente',
+    )
+    const sourceIds = new Set()
+    const normalizedSourceLineIds = sourceLineIds.map((id) => (
+      uniqueId(id, sourceIds, 'La línea fuente')
+    ))
+    const sources = normalizeProductSources(ownValue(row, 'sources', 'Las fuentes'), 'La fuente')
+    if (
+      normalizedSourceLineIds.length !== sources.length
+      || normalizedSourceLineIds.some((id, sourceIndex) => id !== sources[sourceIndex].line_id)
+    ) {
+      throw new TypeError('Las fuentes del producto no son válidas.')
+    }
+    return {
+      product_id: uniqueId(
+        ownValue(row, 'product_id', 'El producto'),
+        productIds,
+        'El producto',
+      ),
+      sku: exactString(ownValue(row, 'sku', 'El SKU'), 'El SKU'),
+      product_name: exactString(
+        ownValue(row, 'product_name', 'El nombre del producto'),
+        'El nombre del producto',
+      ),
+      quantity: finiteNumber(ownValue(row, 'quantity', 'La cantidad'), 'La cantidad'),
+      amount_total: finiteNumber(ownValue(row, 'amount_total', 'El importe'), 'El importe'),
+      weight_per_unit_kg: finiteNumber(
+        ownValue(row, 'weight_per_unit_kg', 'El peso unitario'),
+        'El peso unitario',
+      ),
+      weight_total_kg: finiteNumber(
+        ownValue(row, 'weight_total_kg', 'El peso total'),
+        'El peso total',
+      ),
+      weight_unknown: exactBoolean(
+        ownValue(row, 'weight_unknown', 'El indicador de peso'),
+        'El indicador de peso',
+      ),
+      source_line_ids: normalizedSourceLineIds,
+      sources,
+    }
+  })
+}
+
+function normalizeProductTotals(value) {
+  const row = exactRecord(value, [
+    'quantity', 'amount_total', 'weight_total_kg', 'products_without_weight',
+  ], 'Los totales de producto')
+  return {
+    quantity: finiteNumber(ownValue(row, 'quantity', 'La cantidad total'), 'La cantidad total'),
+    amount_total: finiteNumber(ownValue(row, 'amount_total', 'El importe total'), 'El importe total'),
+    weight_total_kg: finiteNumber(
+      ownValue(row, 'weight_total_kg', 'El peso total'),
+      'El peso total',
+    ),
+    products_without_weight: exactInteger(
+      ownValue(row, 'products_without_weight', 'Los productos sin peso'),
+      'Los productos sin peso',
+    ),
+  }
+}
+
+function normalizePaymentSnapshots(value) {
+  const row = exactRecord(value, ['cash', 'card', 'total', 'rows'], 'Los pagos')
+  const orderIds = new Set()
+  const rows = safeArrayValues(ownValue(row, 'rows', 'Los pagos'), 'Los pagos').map((raw, index) => {
+    const label = `El pago ${index + 1}`
+    const payment = exactRecord(raw, ['order_id', 'method', 'amount'], label)
+    return {
+      order_id: uniqueId(ownValue(payment, 'order_id', 'La venta'), orderIds, 'La venta'),
+      method: exactEnum(
+        ownValue(payment, 'method', 'El método de pago'),
+        PAYMENT_METHODS,
+        'El método de pago',
+      ),
+      amount: finiteNumber(ownValue(payment, 'amount', 'El importe'), 'El importe'),
+    }
+  })
+  return {
+    cash: finiteNumber(ownValue(row, 'cash', 'El efectivo'), 'El efectivo'),
+    card: finiteNumber(ownValue(row, 'card', 'La terminal'), 'La terminal'),
+    total: finiteNumber(ownValue(row, 'total', 'El total de pagos'), 'El total de pagos'),
+    rows,
+  }
+}
+
+function normalizeSaleRow(raw, label) {
+  const row = exactRecord(raw, [
+    'order_id', 'name', 'amount_total', 'payment_method', 'employee_id',
+    'recorded_at', 'channel',
+  ], label)
+  return {
+    order_id: exactInteger(ownValue(row, 'order_id', 'La venta'), 'La venta', 1),
+    name: exactString(ownValue(row, 'name', 'El folio de venta'), 'El folio de venta'),
+    amount_total: finiteNumber(ownValue(row, 'amount_total', 'El total de venta'), 'El total de venta'),
+    payment_method: exactEnum(
+      ownValue(row, 'payment_method', 'El método de pago'),
+      PAYMENT_METHODS,
+      'El método de pago',
+    ),
+    employee_id: optionalSnapshotId(
+      ownValue(row, 'employee_id', 'El empleado de venta'),
+      'El empleado de venta',
+    ),
+    recorded_at: exactDatetime(
+      ownValue(row, 'recorded_at', 'La fecha de venta'),
+      'La fecha de venta',
+    ),
+    channel: exactEnum(
+      ownValue(row, 'channel', 'El canal de venta'),
+      SALE_CHANNELS,
+      'El canal de venta',
+    ),
+  }
+}
+
+function normalizeSaleSnapshots(value) {
+  const orderIds = new Set()
+  return safeArrayValues(value, 'Las ventas').map((raw, index) => {
+    const normalized = normalizeSaleRow(raw, `La venta ${index + 1}`)
+    uniqueId(normalized.order_id, orderIds, 'La venta')
+    return normalized
+  })
+}
+
+function normalizeCancellationSnapshots(value) {
+  const orderIds = new Set()
+  return safeArrayValues(value, 'Las cancelaciones').map((raw, index) => {
+    const label = `La cancelación ${index + 1}`
+    const row = exactRecord(raw, [
+      'order_id', 'name', 'amount_total', 'payment_method', 'employee_id',
+      'recorded_at', 'channel', 'reason_code', 'reason_text',
+      'cancelled_by_employee_id', 'cancelled_by_user_id', 'cancelled_at', 'origin',
+    ], label)
+    const base = normalizeSaleRow({
+      order_id: ownValue(row, 'order_id', 'La venta'),
+      name: ownValue(row, 'name', 'El folio de venta'),
+      amount_total: ownValue(row, 'amount_total', 'El total de venta'),
+      payment_method: ownValue(row, 'payment_method', 'El método de pago'),
+      employee_id: ownValue(row, 'employee_id', 'El empleado de venta'),
+      recorded_at: ownValue(row, 'recorded_at', 'La fecha de venta'),
+      channel: ownValue(row, 'channel', 'El canal de venta'),
+    }, label)
+    uniqueId(base.order_id, orderIds, 'La venta cancelada')
+    const reasonCode = ownValue(row, 'reason_code', 'La razón de cancelación')
+    const reasonText = ownValue(row, 'reason_text', 'La razón de cancelación')
+    const cancelledByEmployeeId = ownValue(
+      row,
+      'cancelled_by_employee_id',
+      'El empleado que canceló',
+    )
+    const cancelledByUserId = ownValue(row, 'cancelled_by_user_id', 'El usuario que canceló')
+    const cancelledAt = ownValue(row, 'cancelled_at', 'La fecha de cancelación')
+    const origin = ownValue(row, 'origin', 'El origen de cancelación')
+    const withoutAudit = [
+      reasonCode, reasonText, cancelledByEmployeeId, cancelledByUserId, cancelledAt, origin,
+    ].every((item) => item === false)
+    if (withoutAudit) {
+      return {
+        ...base,
+        reason_code: false,
+        reason_text: false,
+        cancelled_by_employee_id: false,
+        cancelled_by_user_id: false,
+        cancelled_at: false,
+        origin: false,
+      }
+    }
+    const normalizedOrigin = exactEnum(
+      origin,
+      CANCELLATION_ORIGINS,
+      'El origen de cancelación',
+    )
+    const normalizedReasonText = exactString(
+      reasonText,
+      'La razón de cancelación',
+      { allowEmpty: false },
+    )
+    const normalizedReason = reasonCode === false
+      ? false
+      : exactEnum(
+        reasonCode,
+        new Set(CANCELLATION_REASONS.keys()),
+        'La razón de cancelación',
+      )
+    if (
+      normalizedOrigin !== 'admin'
+      && (
+        normalizedReason === false
+        || normalizedReasonText !== CANCELLATION_REASONS.get(normalizedReason)
+      )
+    ) {
+      throw new TypeError('La razón de cancelación no es válida.')
+    }
+    return {
+      ...base,
+      reason_code: normalizedReason,
+      reason_text: normalizedReasonText,
+      cancelled_by_employee_id: exactInteger(
+        cancelledByEmployeeId,
+        'El empleado que canceló',
+        1,
+      ),
+      cancelled_by_user_id: optionalSnapshotId(cancelledByUserId, 'El usuario que canceló'),
+      cancelled_at: exactDatetime(cancelledAt, 'La fecha de cancelación'),
+      origin: normalizedOrigin,
+    }
+  })
+}
+
+function normalizeExpenseSnapshots(value) {
+  const expenseIds = new Set()
+  return safeArrayValues(value, 'Los gastos').map((raw, index) => {
+    const label = `El gasto ${index + 1}`
+    const row = exactRecord(raw, [
+      'expense_id', 'name', 'concept', 'amount', 'approval_state',
+      'employee_id', 'recorded_at',
+    ], label)
+    const approvalState = ownValue(row, 'approval_state', 'El estado de aprobación')
+    return {
+      expense_id: uniqueId(
+        ownValue(row, 'expense_id', 'El gasto'),
+        expenseIds,
+        'El gasto',
+      ),
+      name: exactString(ownValue(row, 'name', 'El nombre del gasto'), 'El nombre del gasto'),
+      concept: exactString(ownValue(row, 'concept', 'El concepto del gasto'), 'El concepto del gasto'),
+      amount: finiteNumber(ownValue(row, 'amount', 'El importe del gasto'), 'El importe del gasto'),
+      approval_state: approvalState === false
+        ? false
+        : exactEnum(approvalState, EXPENSE_APPROVAL_STATES, 'El estado de aprobación'),
+      employee_id: optionalSnapshotId(
+        ownValue(row, 'employee_id', 'El empleado del gasto'),
+        'El empleado del gasto',
+      ),
+      recorded_at: exactDatetime(
+        ownValue(row, 'recorded_at', 'La fecha del gasto'),
+        'La fecha del gasto',
+      ),
+    }
+  })
+}
+
+function normalizeDenominationSnapshots(value) {
+  const seen = new Set()
+  return safeArrayValues(value, 'El arqueo').map((raw, index) => {
+    const label = `La denominación ${index + 1}`
+    const record = plainRecord(raw, label)
+    const historical = OWN.call(record, 'id')
+    const row = exactRecord(record, historical
+      ? ['id', 'denomination', 'count', 'subtotal']
+      : ['denomination', 'count', 'subtotal'], label)
+    const denomination = exactEnum(
+      ownValue(row, 'denomination', 'La denominación'),
+      new Set(CASH_SHIFT_DENOMINATIONS),
+      'La denominación',
+    )
+    if (seen.has(denomination)) throw new TypeError('La denominación está duplicada.')
+    seen.add(denomination)
+    const count = exactInteger(ownValue(row, 'count', 'El conteo'), 'El conteo')
+    if (count > 2_147_483_647) throw new TypeError('El conteo excede el máximo válido.')
+    const normalized = {
+      denomination,
+      count,
+      subtotal: finiteNumber(ownValue(row, 'subtotal', 'El subtotal'), 'El subtotal'),
+    }
+    return historical
+      ? { id: exactInteger(ownValue(row, 'id', 'El ID de denominación'), 'El ID de denominación', 1), ...normalized }
+      : normalized
+  })
+}
+
+function normalizeAdjustmentSnapshots(value) {
+  const ids = new Set()
+  return safeArrayValues(value, 'Los ajustes').map((raw, index) => {
+    const label = `El ajuste ${index + 1}`
+    const record = plainRecord(raw, label)
+    const historical = OWN.call(record, 'id')
+    const row = exactRecord(record, historical
+      ? ['id', 'type', 'amount', 'concept', 'actor_employee_id', 'recorded_at']
+      : ['type', 'amount', 'concept'], label)
+    const amount = finiteNumber(ownValue(row, 'amount', 'El importe'), 'El importe')
+    if (amount <= 0) throw new TypeError('El importe del ajuste debe ser positivo.')
+    const normalized = {
+      type: exactEnum(
+        ownValue(row, 'type', 'El tipo de ajuste'),
+        ADJUSTMENT_TYPES,
+        'El tipo de ajuste',
+      ),
+      amount,
+      concept: exactString(
+        ownValue(row, 'concept', 'El concepto'),
+        'El concepto',
+        { allowEmpty: false },
+      ),
+    }
+    if (!historical) return normalized
+    return {
+      id: uniqueId(ownValue(row, 'id', 'El ID de ajuste'), ids, 'El ID de ajuste'),
+      ...normalized,
+      actor_employee_id: exactInteger(
+        ownValue(row, 'actor_employee_id', 'El actor del ajuste'),
+        'El actor del ajuste',
+        1,
+      ),
+      recorded_at: exactDatetime(
+        ownValue(row, 'recorded_at', 'La fecha del ajuste'),
+        'La fecha del ajuste',
+      ),
+    }
+  })
+}
+
+function normalizeAuthorizationSnapshots(value) {
+  const ids = new Set()
+  const levels = new Set()
+  return safeArrayValues(value, 'Las autorizaciones').map((raw, index) => {
+    const label = `La autorización ${index + 1}`
+    const row = exactRecord(raw, ['id', 'level', 'actor_employee_id', 'authorized_at'], label)
+    const level = exactEnum(
+      ownValue(row, 'level', 'El nivel de autorización'),
+      AUTHORIZATION_LEVELS,
+      'El nivel de autorización',
+    )
+    if (levels.has(level)) throw new TypeError('El nivel de autorización está duplicado.')
+    levels.add(level)
+    return {
+      id: uniqueId(ownValue(row, 'id', 'El ID de autorización'), ids, 'El ID de autorización'),
+      level,
+      actor_employee_id: exactInteger(
+        ownValue(row, 'actor_employee_id', 'El actor de autorización'),
+        'El actor de autorización',
+        1,
+      ),
+      authorized_at: exactDatetime(
+        ownValue(row, 'authorized_at', 'La fecha de autorización'),
+        'La fecha de autorización',
+      ),
+    }
+  })
 }
 
 function serverNumber(record, key, label) {
@@ -301,8 +724,7 @@ export function normalizeCashShift(value) {
       'La cuenta analítica',
     ),
   }
-  const payments = safeClone(ownValue(root, 'payments', 'Los pagos'), 'Los pagos')
-  plainRecord(payments, 'Los pagos')
+  const payments = normalizePaymentSnapshots(ownValue(root, 'payments', 'Los pagos'))
 
   return {
     folio,
@@ -342,15 +764,21 @@ export function normalizeCashShift(value) {
     openingFund: serverNumber(root, 'opening_fund', 'Fondo inicial'),
     physicalCash: serverNumber(root, 'physical_cash', 'Efectivo físico'),
     difference: serverNumber(root, 'difference', 'Diferencia'),
-    products: safeClone(ownValue(root, 'products', 'Los productos'), 'Los productos'),
-    productTotals: safeClone(ownValue(root, 'product_totals', 'Los totales de producto'), 'Los totales de producto'),
+    products: normalizeProductSnapshots(ownValue(root, 'products', 'Los productos')),
+    productTotals: normalizeProductTotals(
+      ownValue(root, 'product_totals', 'Los totales de producto'),
+    ),
     payments,
-    sales: safeClone(ownValue(root, 'sales', 'Las ventas'), 'Las ventas'),
-    cancellations: safeClone(ownValue(root, 'cancellations', 'Las cancelaciones'), 'Las cancelaciones'),
-    expenses: safeClone(ownValue(root, 'expenses', 'Los gastos'), 'Los gastos'),
-    denominations: normalizeDenominations(ownValue(root, 'denominations', 'El arqueo')),
-    adjustments: normalizeAdjustments(ownValue(root, 'adjustments', 'Los ajustes')),
-    authorizations: safeClone(ownValue(root, 'authorizations', 'Las autorizaciones'), 'Las autorizaciones'),
+    sales: normalizeSaleSnapshots(ownValue(root, 'sales', 'Las ventas')),
+    cancellations: normalizeCancellationSnapshots(
+      ownValue(root, 'cancellations', 'Las cancelaciones'),
+    ),
+    expenses: normalizeExpenseSnapshots(ownValue(root, 'expenses', 'Los gastos')),
+    denominations: normalizeDenominationSnapshots(ownValue(root, 'denominations', 'El arqueo')),
+    adjustments: normalizeAdjustmentSnapshots(ownValue(root, 'adjustments', 'Los ajustes')),
+    authorizations: normalizeAuthorizationSnapshots(
+      ownValue(root, 'authorizations', 'Las autorizaciones'),
+    ),
     differenceNote: exactString(ownValue(root, 'difference_note', 'La nota de diferencia'), 'La nota de diferencia'),
     evidencePresent: exactBoolean(ownValue(root, 'evidence_present', 'La evidencia presente'), 'La evidencia presente'),
     needsManagerAuth: exactBoolean(ownValue(root, 'needs_manager_auth', 'La autorización gerencial'), 'La autorización gerencial'),
