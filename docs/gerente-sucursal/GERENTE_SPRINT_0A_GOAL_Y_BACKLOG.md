@@ -27,6 +27,13 @@ funciones— y `require_employee_token` está apagado por default.
 **Mientras la puerta de autenticación siga abierta, endurecer lo de dentro no reduce exposición.** Por eso 0A
 precede a 0B y 0C, y por eso su primer épico no es un endpoint: es la llave.
 
+### 🟢 El patrón a propagar YA existe en producción
+
+La re-auditoría de `7989492d` encontró el patrón canónico **completo, desplegado y con tests** en
+`cash_shift_api.py`: **token → scope derivado del empleado → lock → revalidar rol y scope BAJO el lock**, con
+`idempotency_key` + fingerprint y `expected_version`. **0A no diseña seguridad: extiende un patrón que ya
+funciona.** Eso reduce el riesgo de ejecución y hace el trabajo estimable.
+
 ---
 
 ## ALCANCE
@@ -82,7 +89,7 @@ Cada ticket = **un PR vertical** con pruebas y rollback. Prioridad P0 > P1 > P2.
 
 | ID | Ticket | P | Notas |
 |---|---|---|---|
-| **0A-01** | **Re-auditar las filas A7–A13 contra la punta `7989492d`** | **P0** | 🔴 **Primero de todo.** Hay 70 commits de *liquidaciones* y *cash shift* sin auditar, más un controlador nuevo (`cash_shift_api.py`, 1.089 líneas). **Puede que parte del riesgo ya esté mitigado.** Escribir tickets para reparar lo ya reparado sería el error simétrico al que esta auditoría vino a evitar |
+| ~~0A-01~~ | **Re-auditar A7–A13 contra `7989492d`** | ✅ **EJECUTADO** | **Resultado: 10 de 15 filas corregidas.** Liquidaciones (A7–A10) y caja (A11) **cerradas**; A12/A13 parciales (falta lock); **requisiciones y gastos intactos**. Ver `GERENTE_MATRIZ_ESCRITURAS.md` §RE-AUDITORÍA |
 | **0A-02** | Instrumentar `/get_records_sorted` y `/api/create_update`: modelo, campos, app, origen | **P0** | Ventana mínima: **un ciclo mensual completo** (para capturar cierres) |
 | **0A-03** | Instrumentar el fallback de api-key: cuántas peticiones llegan sin llave o con llave inválida, y de quién | **P0** | Es la medición que dimensiona E1 |
 | **0A-04** | **Inventario automático de rutas de escritura** (`@http.route` POST/PUT/PATCH/DELETE + `create/write/unlink/action_*/button_validate`) | **P0** | Sustituye el censo manual |
@@ -104,8 +111,11 @@ Cada ticket = **un PR vertical** con pruebas y rollback. Prioridad P0 > P1 > P2.
 | ID | Ticket | P | Dominio |
 |---|---|---|---|
 | **0A-12** | Requisiciones: `approve`, `reject`, `cancel`, `torre/confirm`, `receive`, `create` | **P0** | Admin |
-| **0A-13** | Liquidaciones: `validate`, `receive-cash`, `authorize-discrepancy` | **P0** | Admin — **sujeto a 0A-01** |
-| **0A-14** | Caja: `cash-closing`, `authorize`, `reopen` | **P0** | Admin — **sujeto a 0A-01** |
+| ~~0A-13~~ | Liquidaciones: `validate`, `receive-cash`, `authorize-discrepancy` | ✅ **CERRADO por el delta** | Identidad confiable + rol + scope analítico + `FOR UPDATE`. **Sustituido por 0A-13b** |
+| **0A-13b** | Exigir token **siempre** en `liquidaciones/*` (hoy cae a `self._employee()` si falta el header) | P1 | Residual: falla cerrado solo por el scope. **Alinear con `cash-shifts/*`** — ticket pequeño |
+| ~~0A-14~~ | Caja: `cash-closing` | ✅ **CERRADO por el delta** | Token obligatorio, scope derivado, IDs del cliente rechazados, lock de sucursal |
+| **0A-14b** | **Locks e idempotencia** en `cash-closing/authorize` y `/reopen` (A12/A13) | **P0** | Identidad y scope ya corregidos; **el lock sigue faltando** |
+| **0A-14c** | `opening_fund`, `other_income`, `other_expense`, `date` derivados o validados server-side en `cash-closing` | P1 | `sales_total`/`expenses_total` ya son server-side; estos no |
 | **0A-15** | Gastos: `expense-approve`, `expense-reject`, `expense-attach` | **P0** | Admin |
 | **0A-16** | Producción · materiales: `settlement/{validate,reject,dispute}`, `issue/{create,validate-receipt,cancel}` | **P0** | Planta |
 | **0A-17** | Producción · turno: `shift/{open,start,close,operator-close,bag-reconciliation}` | P1 | Planta |
@@ -123,7 +133,7 @@ Cada ticket = **un PR vertical** con pruebas y rollback. Prioridad P0 > P1 > P2.
 | **0A-24** | Derivar alcance server-side en `gf_pwa_admin` (dejar de aceptar `company_id`/`warehouse_id`) | **P0** | Regla §6 |
 | **0A-25** | Derivar alcance server-side en `gf_production_ops` (planta desde el turno, no del payload) | **P0** | Bloqueado por el **modelo puente N:M sucursal–planta** (0B) |
 | **0A-26** | `sale-cancel` rama admin: aplicar `_sale_order_in_employee_scope` (ya existe, se usa en lectura) | P1 | Corrección de una línea, alto valor |
-| **0A-27** | `liquidaciones/detail`: separar lectura de recomputo (hoy **escribe en un GET** con `csrf=False`) | P1 | **Sujeto a 0A-01** |
+| ~~0A-27~~ | `liquidaciones/detail`: separar lectura de recomputo | ✅ **CERRADO por el delta** | El write desapareció (`_ensure_reconciliation(recompute=True)`: 2 → 0). Residual cosmético: sigue `methods=["GET","POST"]` |
 | **0A-28** | Separación de funciones: que el Gerente no apruebe lo que él mismo captura (gastos, requisiciones) | **P0** | Control interno, no solo técnico |
 
 ### E4 · Integridad de campos falseables
@@ -268,7 +278,7 @@ La de `GERENTE_DISENO_OBJETIVO_Y_PLAN.md` §3, resumida:
 | # | Riesgo | Mitigación |
 |---|---|---|
 | 1 | **Romper un consumidor no inventariado** | E0 antes que todo; ventana de observación; rollback sin deploy en los pasos 5–8 |
-| 2 | **Trabajar sobre un diagnóstico obsoleto** (70 commits sin auditar) | **0A-01 es el primer ticket** |
+| 2 | Trabajar sobre un diagnóstico obsoleto | ✅ **Mitigado**: 0A-01 ejecutado. **Repetir la verificación de punta al arrancar el sprint** — la rama avanza rápido |
 | 3 | **Falsa sensación de contención** por cerrar solo un fallback | Los pasos 5–9 se tratan como **un** objetivo, no como cinco opcionales |
 | 4 | Estrechar políticas sin rollback rápido | E7 al final, modelo a modelo, con deploy planificado |
 | 5 | Un PR monolítico irreversible | PRs verticales obligatorios |

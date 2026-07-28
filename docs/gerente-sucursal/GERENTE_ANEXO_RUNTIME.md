@@ -53,7 +53,7 @@ Ningún cambio en:
 ⇒ **Todas las conclusiones estructurales del paquete sobreviven al delta.** Lo que el delta añade es una
 **superficie nueva** (Asistencias) y dos correcciones de alcance, no un cambio de arquitectura.
 
-### §1.3 · ⚠️ Existe un tercer delta, POSTERIOR y NO auditado — declarado, no ocultado
+### §1.3 · ✅ Tercer delta `0a1b80ba → 7989492d` — RE-AUDITADO
 
 Al verificar las puntas para esta ronda, `origin/GrupoFrio` **ya no está en `0a1b80ba`**: está en **`7989492d`**,
 con **70 commits · 56 archivos · +20.919 / −660** por delante. **No es menor y toca áreas de esta auditoría.**
@@ -69,13 +69,16 @@ Lo que se observa en ese rango (verificado por nombre de archivo y volumen, **no
 | `gf_logistics_ops/models/gf_route_plan.py` **+228** | Es donde vive `action_close_route`, el efecto de `liquidaciones/validate` |
 | `os_api/controllers/employee_login.py` +12 · `os_customer_zones/models/models_hr.py` +5 | Eje de identidad |
 
-**Consecuencia honesta para este paquete:** el diseño técnico (autoridad, identidad, cardinalidad, M1–M7,
-cutover) **no depende de ese delta y queda cerrado**. Pero **las filas A7–A13 de la matriz de escrituras
-—liquidaciones y caja— deben re-auditarse contra `7989492d` antes de convertirse en tickets**, porque hay
-indicios fuertes de que parte de ese riesgo **ya fue mitigado**. Escribir tickets de 0A para reparar algo que
-ya está reparado sería el error simétrico al que esta auditoría vino a evitar.
+**RE-AUDITADO en esta ronda.** Los indicios se confirmaron: el delta **corrige 10 de 15 filas** del eje Admin.
+Liquidaciones (A7–A10) y caja (A11) quedan **cerradas**; A12/A13 cierran identidad y scope pero **siguen sin
+lock**; **requisiciones (A1–A6) y gastos (A14–A15) están byte-idénticos y siguen VIGENTES**.
 
-**Queda como tarea de preflight de Sprint 0A, no como bloqueo del diseño.**
+Aporta además el **patrón canónico completo** —token → scope derivado → lock → revalidar bajo el lock— ya
+implementado, desplegado y con tests, en `cash_shift_api.py`. **Detalle en `GERENTE_MATRIZ_ESCRITURAS.md`,
+sección «RE-AUDITORÍA contra la punta `7989492d`».**
+
+⚠️ **Lo que NO cambió:** `ir_http.py`, las políticas genéricas de `os_api` y `gf_saleops` **no están en el
+diffstat** ⇒ la conclusión de seguridad de §9–§10 queda **intacta**.
 
 Origen runtime de la evidencia de sesión: preview `fix/m4-unavailable-safe-state` (= `main` + 3 commits de M4).
 

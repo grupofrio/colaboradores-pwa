@@ -2,8 +2,8 @@
 
 **ESTADO: DRAFT — diseño técnico CERRADO documentalmente.** Pendientes trasladados a QA / preflight de 0A.
 **Inventario levantado contra:** PWA `674f6646` (`origin/main`) · Odoo **`0a1b80ba`** — *SHA de referencia del diseño*.
-⚠️ Punta Odoo al escribir: `7989492d` (**+70 commits sin auditar**). Las filas **A7–A13** (liquidaciones y caja)
-**deben re-auditarse** contra esa punta antes de convertirse en tickets — ver `GERENTE_ANEXO_RUNTIME.md` §1.3.
+✅ **Punta Odoo `7989492d` YA RE-AUDITADA** (+70 commits): corrige **10 de 15** filas del eje Admin.
+**Ver «RE-AUDITORÍA contra la punta `7989492d`» más abajo — manda sobre las tablas de arriba.**
 **Este inventario es MANUAL.** Sprint 0A entrega un inventario **generado automáticamente** + control de drift en CI.
 Leyenda de evidencia: **[E]** estático · **[R]** runtime · **[I]** inferido · **[N]** no ejecutado.
 
@@ -276,6 +276,104 @@ modelo por modelo (paso 9 de la secuencia), no de golpe.
 
 ---
 
+---
+
+# 🔄 RE-AUDITORÍA contra la punta `7989492d` — ticket 0A-01 EJECUTADO
+
+> **Delta re-auditado:** `0a1b80ba → 7989492d` · **70 commits · 56 archivos · +20.919 / −660** [E].
+> **Resultado: corrige 10 de 15 filas del eje Admin.** Esta sección **sustituye** el estado de esas filas en la
+> matriz de arriba. Donde hay conflicto, **manda esta sección**.
+
+## Estado real de las filas A1–A15
+
+| Fila | Endpoint | ¿Cambió? | Estado ahora | Veredicto |
+|---|---|---|---|---|
+| **A1–A6** | `requisition-*`, `torre/requisition-confirm` | **NO — cuerpos byte-idénticos** | identidad por `employee_id` del payload · sin scope de plaza · sin lock | 🔴 **VIGENTE** |
+| **A7** | `liquidaciones/validate` | **SÍ** | identidad confiable · rol POS-admin **o** `group_gf_logistics_admin` · scope company+warehouse+**analítica** derivado y contrastado contra el plan · `FOR UPDATE` plan→reconciliación · early-return idempotente | 🟢 **CORREGIDA** |
+| **A8** | `liquidaciones/receive-cash` | **SÍ** | igual que A7 + `_lock_liquidaciones_cash_plan` + savepoint | 🟢 **CORREGIDA** |
+| **A9** | `liquidaciones/authorize-discrepancy` | **SÍ** | identidad confiable + rol + **scope sobre `plan_id`** (antes ausente) + lock de fila | 🟢 **CORREGIDA** |
+| **A10** | `liquidaciones/detail` | **SÍ** | **el write desapareció**: `_ensure_reconciliation(recompute=True)` ya no se invoca desde el controlador (2 → 0 ocurrencias). Lectura pura con identidad y scope | 🟢 **CORREGIDA** — residual cosmético: sigue `methods=["GET","POST"]`, `csrf=False` |
+| **A11** | `cash-closing` | **SÍ** | **token obligatorio sin fallback** · rol `allow_manage_pos_cash_shifts` · company/warehouse/analítica derivados y **los del cliente rechazados si difieren** · `lock_branch` + `FOR UPDATE` | 🟢 **CORREGIDA** — residual: el cliente sigue declarando `opening_fund`, `other_income`, `other_expense`, `denominations`, `date` (pero `sales_total`/`expenses_total` **sí** son server-side) |
+| **A12** | `cash-closing/authorize` | **SÍ** | `_trusted_legacy_cash_scope` · `browse(id)` → `search([id, company_id, warehouse_id])`. **Sin lock, sin idempotencia** | 🟡 **PARCIAL** — identidad y scope corregidos, **lock VIGENTE** |
+| **A13** | `cash-closing/reopen` | **SÍ** | idéntico patrón a A12 | 🟡 **PARCIAL** — **lock VIGENTE** |
+| **A14** | `expense-approve` | **NO — cuerpo idéntico** | `_resolve_employee(data)` · `browse(expense_id)` **sin filtro de company/warehouse/plaza** | 🔴 **VIGENTE** |
+| **A15** | `expense-reject` | **NO — cuerpo idéntico** | igual que A14 | 🔴 **VIGENTE** |
+
+**Lo que esto significa:** el endurecimiento fue **quirúrgico sobre el frente de caja y liquidaciones**, y
+**no tocó requisiciones ni gastos**. Cuatro afirmaciones de la matriz quedan **invalidadas** y se retiran:
+(a) "las liquidaciones aceptan identidad por payload" · (b) "`liquidaciones/detail` escribe en un GET" ·
+(c) "`cash-closing` acepta company/warehouse del cliente" · (d) "no hay locks en las transiciones de efectivo".
+
+⚠️ **Residual de A7–A10:** `_resolve_liquidaciones_employee` **no exige** el token cuando el header está ausente —
+cae a `self._employee()` (el empleado ligado al usuario de la api-key). Falla cerrado **solo porque** el scope
+exige rol + almacén + plaza coincidentes. Es una superficie más estrecha que A11–A13, que **sí** exigen token
+siempre. **Alinearla con A11 es un ticket pequeño, no un rediseño.**
+
+## Superficie NUEVA: `cash_shift_api.py` — 9 rutas (4 escrituras)
+
+`GFPWACashShiftAPI(GFPWAAdminAPI)` · 1.089 líneas · todas `auth="api_key"`, `csrf=False`.
+
+**Lecturas (5):** `active` · `preview` · `history` · `detail` · `operations/status`.
+⚠️ `preview` **no escribe**, pero **toma `FOR UPDATE`** sobre la sucursal y la fila del turno: es un GET que
+bloquea filas. **Vector de contención, no de escritura** — anotarlo, no ignorarlo.
+
+**Escrituras (4) — 🟢 el estándar más alto del repositorio:**
+
+| Ruta | Identidad | Rol | Scope | Idempotencia / locks |
+|---|---|---|---|---|
+| `POST /pwa-admin/cash-shifts/open` | **token obligatorio, sin fallback** | `allow_manage_pos_cash_shifts`, **revalidado bajo lock** | 100% server-side; campos de scope del cliente ⇒ `AccessError`; allowlist estricta de claves | **`idempotency_key` obligatoria** + fingerprint SHA-256 del payload + lock de sucursal + revalidación |
+| `POST /cash-shifts/close` | idem | idem | idem + `_scoped_shift` | `idempotency_key` + **`expected_version`** (optimistic locking) + `FOR UPDATE` turno/empleado/config |
+| `POST /cash-shifts/reopen` | idem | idem | idem | `idempotency_key` + `expected_version ≥ 1` + lock |
+| `POST /cash-shifts/authorize` | idem | **doble check**: controlador + dentro del guard bajo lock | idem + `version_id` validado | `idempotency_key` + lock |
+
+**Idempotencia real:** fila `gf.pos.cash.shift.operation` por `(actor, operation, company, warehouse,
+idempotency_key)`; misma clave con distinto fingerprint ⇒ conflicto; estado `processing` ⇒ error;
+`completed` ⇒ **replay de la respuesta guardada**. Es la **única** familia de endpoints del módulo con
+idempotencia auténtica.
+
+## 🟢 EL PATRÓN CANÓNICO A PROPAGAR — ya existe, en producción, con tests
+
+```
+  1. token  →  2. scope derivado del empleado  →  3. lock  →  4. revalidar rol y scope BAJO el lock
+```
+
+| Helper | Archivo:línea | Cobertura |
+|---|---|---|
+| `_trusted_scope(employee)` | `models/gf_pos_cash_shift.py:1068` | núcleo: `(employee, company, warehouse, analytic)` derivados |
+| `_trusted_cash_scope` | `controllers/cash_shift_api.py:186` | las 9 rutas `cash-shifts/*` — **implementa los 4 pasos** |
+| `_trusted_legacy_cash_scope` | `controllers/pwa_admin_api.py:3462` | `cash-closing/*` — llega al paso 2 |
+| `_liquidaciones_employee_scope` | `controllers/pwa_admin_api.py:978` | `liquidaciones/*` — 4 pasos sin el paso 1 estricto |
+| `_reject_payload_scope` | `controllers/cash_shift_api.py:177` | convierte `company_id`/`warehouse_id`/`analytic_account_id` del cliente en `AccessError` |
+| `_lock_and_revalidate_initial_scope` | `models/gf_pos_cash_shift.py:1106` | revalidación **después** del lock |
+
+> **Esto confirma —y refuerza— la tesis del paquete: la brecha es de propagación, no de diseño.**
+> El patrón de §6 (autoridad como cadena, nunca IDs del cliente) **ya está implementado y desplegado**.
+> Sprint 0A deja de ser "diseñar seguridad" y pasa a ser **"extender un patrón que ya funciona"**.
+
+## Lo que NO cambió en este delta — verificado explícitamente
+
+| Área | Evidencia |
+|---|---|
+| **`os_api/controllers/ir_http.py`** | **No está en el diffstat.** El fallback de api-key sigue con default `"1"`, igual que los otros tres |
+| **Políticas genéricas** | `os_api/controllers/controllers.py` **no está en el diffstat**. Cero cambios en `generic_model_policies`, `/get_records_sorted`, `/api/create_update` |
+| **`gf_saleops`** | `git diff --stat` vacío. Las 31 escrituras siguen igual |
+| **Rutas de `pwa_admin_api.py`** | **63 en la base, 63 en la punta, diferencia simétrica vacía.** Las +1.476 líneas son endurecimiento y helpers, **no rutas nuevas** |
+| **Registro de roles** | Sin rol nuevo en `PWA_ADDITIONAL_ROLE_SPECS`. Se añadió un **permiso**, no un rol: `hr.employee.allow_manage_pos_cash_shifts` (`models_hr.py:312`) |
+| **`employee_login.py` (+12)** | Solo el **DTO de respuesta**: añade 3 booleanos de permiso y los normaliza a `bool()`. No toca emisión de token, rate-limit ni api-key compartida |
+
+⇒ **La conclusión de seguridad del paquete (§7) queda intacta:** la cadena de fallbacks públicos y las políticas
+genéricas **no se tocaron**. Sigue siendo la prioridad inmediata de 0A.
+
+## Nota sobre `gf_route_plan.py` (+228)
+
+`action_close_route` cambió el gate (exige `corte_validated` y `liquidacion_done_at`) y **eliminó** la llamada
+`_try_finalize_reconciliation()`: **cerrar ruta ya no finaliza la conciliación**. Esa transición queda solo en
+`action_mark_done()` — lo que dispara `liquidaciones/validate`. **No se añadió identidad ni lock en
+`action_close_route`**; los locks viven un nivel abajo, en `gf_dispatch_reconciliation._lock_route_plan_and_reconciliation`
+(orden canónico **plan → reconciliación**), que es lo que consume el controlador ya endurecido.
+
+---
+
 ## Corrección de alcance en LECTURAS de Admin POS (commit `244dbfd9`) [E]
 
 > **No afecta la matriz de escrituras.** Se registra porque corrige el **diagnóstico de alcance** de tres lecturas.
@@ -303,6 +401,7 @@ Cualquier tile que se apoye en ellas heredaría alcance de compañía.
 | Con rol server-side sobre una identidad **no** forjable | **~11** |
 | Con scope tomado del payload del cliente | **la mayoría** de `gf_pwa_admin` y `gf_production_ops` |
 | Que un `gerente_sucursal` puede disparar hoy desde la interfaz | **18 funcionan · 1 rota** (`forecast-unlock`) |
+| **Filas Admin corregidas por el delta `7989492d`** | **10 de 15** — liquidaciones y caja endurecidas; **requisiciones y gastos intactos** |
 | Escrituras por ORM genérico con `sudo:1` desde el navegador | **19 rutas** `/pwa-prod/*` + `/pwa-sup/*` + gastos + forecast-unlock; **220 ocurrencias de `sudo: 1`** en `src/lib/api.js` |
 | Superficies muertas censadas | `dispatch-transfer`, `dispatch-config`, `/api/partner`, `forecast-unlock` |
 | Mecanismos de autenticación **distintos y coexistentes** | **3** — `auth="api_key"` (con fallback público) · `guard_request` (fail-open por default) · `auth="public"` + `X-GF-Employee-Token` |
