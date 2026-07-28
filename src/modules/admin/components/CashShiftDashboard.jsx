@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   getActiveCashShift,
   getCashShiftDetail,
+  getCashShiftHistory,
   previewCashShift,
   uploadCashShiftEvidence,
 } from '../api.js'
@@ -11,7 +12,9 @@ import { readEvidenceFile } from '../cashShiftCloseModel.js'
 import CashShiftActivePanel from './CashShiftActivePanel.jsx'
 import CashShiftCloseForm from './CashShiftCloseForm.jsx'
 import CashShiftFirstOpenForm from './CashShiftFirstOpenForm.jsx'
+import CashShiftHistory from './CashShiftHistory.jsx'
 import CashShiftReopenForm from './CashShiftReopenForm.jsx'
+import LegacyCashClosingHistory from './LegacyCashClosingHistory.jsx'
 
 const defaultOpenInitial = (input) => mutateShiftWithRecovery('open', input)
 const defaultAuthorizePending = (input) => mutateShiftWithRecovery('authorize', input)
@@ -199,6 +202,36 @@ function PendingAuthorization({ detail, busy, error, pendingRequest, onAuthorize
   )
 }
 
+function ManageWorkspace({ activeArea, onAreaChange, children }) {
+  const tabs = [
+    ['active', 'Turno activo'],
+    ['history', 'Historial operativo'],
+    ['legacy', 'Cierres diarios anteriores'],
+  ]
+  return (
+    <div className="cash-shift-stack">
+      <nav className="cash-shift-tabs cash-shift-print-hide" role="tablist" aria-label="Áreas de cortes de caja">
+        {tabs.map(([id, label]) => (
+          <button
+            key={id}
+            id={`cash-shift-tab-${id}`}
+            type="button"
+            role="tab"
+            aria-selected={activeArea === id}
+            aria-controls={`cash-shift-panel-${id}`}
+            onClick={() => onAreaChange(id)}
+          >{label}</button>
+        ))}
+      </nav>
+      <div
+        id={`cash-shift-panel-${activeArea}`}
+        role="tabpanel"
+        aria-labelledby={`cash-shift-tab-${activeArea}`}
+      >{children}</div>
+    </div>
+  )
+}
+
 export default function CashShiftDashboard({
   sessionIdentity = 'cash-shift-session',
   accessMode = 'denied',
@@ -214,6 +247,13 @@ export default function CashShiftDashboard({
   closeShift = defaultCloseShift,
   uploadEvidence = uploadCashShiftEvidence,
   loadShiftDetail = getCashShiftDetail,
+  loadHistory = getCashShiftHistory,
+  loadHistoryDetail = getCashShiftDetail,
+  loadLegacyHistory,
+  loadLegacyDetail,
+  printWindow,
+  historyNow,
+  legacyNow,
   reopenShift = defaultReopenShift,
   readEvidence = readEvidenceFile,
   scheduleRefresh = defaultScheduleRefresh,
@@ -234,6 +274,7 @@ export default function CashShiftDashboard({
   const [lastOperation, setLastOperation] = useState(null)
   const [transitionNotice, setTransitionNotice] = useState('')
   const [recloseVerification, setRecloseVerification] = useState(null)
+  const [activeArea, setActiveArea] = useState('active')
   const requestGeneration = useRef(0)
   const requestInFlight = useRef(null)
   const authorizationInFlight = useRef(null)
@@ -293,6 +334,7 @@ export default function CashShiftDashboard({
     setLastOperation(null)
     setTransitionNotice('')
     setRecloseVerification(null)
+    setActiveArea('active')
     setView({ status: 'idle', kind: null, data: null })
     authorizationInFlight.current = null
     recloseVerificationInFlight.current = null
@@ -367,13 +409,13 @@ export default function CashShiftDashboard({
   useEffect(() => {
     if (
       accessMode !== 'manage' || !scopeReady || view.status !== 'ready' || view.kind !== 'active'
-      || showClose || showReopen || recloseTarget
+      || activeArea !== 'active' || showClose || showReopen || recloseTarget
     ) {
       return undefined
     }
     const intervalId = scheduleRefresh(() => { void refreshActive() }, 60_000)
     return () => cancelRefresh(intervalId)
-  }, [accessMode, cancelRefresh, refreshActive, recloseTarget, scheduleRefresh, scopeReady, showClose, showReopen, view.kind, view.status])
+  }, [accessMode, activeArea, cancelRefresh, refreshActive, recloseTarget, scheduleRefresh, scopeReady, showClose, showReopen, view.kind, view.status])
 
   async function handleOpen(input) {
     const result = await openInitial(input)
@@ -603,11 +645,44 @@ export default function CashShiftDashboard({
       />
     )
   }
+
+  const wrapManage = (content) => (
+    accessMode === 'manage'
+      ? <ManageWorkspace activeArea={activeArea} onAreaChange={setActiveArea}>{content}</ManageWorkspace>
+      : content
+  )
+  if (accessMode === 'manage' && activeArea === 'history') {
+    return (
+      <ManageWorkspace activeArea={activeArea} onAreaChange={setActiveArea}>
+        <CashShiftHistory
+          accessMode={accessMode}
+          sessionIdentity={workflowIdentity}
+          loadHistory={loadHistory}
+          loadDetail={loadHistoryDetail}
+          printWindow={printWindow}
+          {...(historyNow ? { now: historyNow } : {})}
+        />
+      </ManageWorkspace>
+    )
+  }
+  if (accessMode === 'manage' && activeArea === 'legacy') {
+    return (
+      <ManageWorkspace activeArea={activeArea} onAreaChange={setActiveArea}>
+        <LegacyCashClosingHistory
+          accessMode={accessMode}
+          sessionIdentity={workflowIdentity}
+          {...(loadLegacyHistory ? { loadHistory: loadLegacyHistory } : {})}
+          {...(loadLegacyDetail ? { loadDetail: loadLegacyDetail } : {})}
+          {...(legacyNow ? { now: legacyNow } : {})}
+        />
+      </ManageWorkspace>
+    )
+  }
   if (view.status === 'loading' || view.status === 'idle') {
-    return <CashShiftState title="Cargando">Consultando el corte autorizado para tu alcance…</CashShiftState>
+    return wrapManage(<CashShiftState title="Cargando">Consultando el corte autorizado para tu alcance…</CashShiftState>)
   }
   if (view.status === 'error') {
-    return (
+    return wrapManage(
       <CashShiftState
         title="No se pudo consultar el turno activo"
         action={<button className="cash-shift-primary" type="button" onClick={load}>Reintentar</button>}
@@ -621,12 +696,12 @@ export default function CashShiftDashboard({
     return <CashShiftState title="Corte autorizado">La autorización se registró y el corte quedó cerrado.</CashShiftState>
   }
   if (view.kind === 'inactive') {
-    return <CashShiftFirstOpenForm onPreview={previewInitial} onOpen={handleOpen} />
+    return wrapManage(<CashShiftFirstOpenForm onPreview={previewInitial} onOpen={handleOpen} />)
   }
   if (recloseVerification) {
     const checking = recloseVerification.status === 'checking'
     const inconsistent = recloseVerification.status === 'inconsistent'
-    return (
+    return wrapManage(
       <CashShiftState
         title="Recierre confirmado"
         action={checking ? null : <button className="cash-shift-primary" type="button" onClick={() => verifyRecloseActive()}>Verificar turno activo</button>}
@@ -640,7 +715,7 @@ export default function CashShiftDashboard({
     )
   }
   if (recloseTarget) {
-    return (
+    return wrapManage(
       <div className="cash-shift-stack">
         <CashShiftState title="Turno sucesor sin cambios">El turno activo continúa operando mientras corriges el corte reabierto.</CashShiftState>
         <CashShiftCloseForm
@@ -658,7 +733,7 @@ export default function CashShiftDashboard({
     )
   }
   if (showReopen) {
-    return (
+    return wrapManage(
       <CashShiftReopenForm
         loadDetail={loadShiftDetail}
         reopenShift={reopenShift}
@@ -669,7 +744,7 @@ export default function CashShiftDashboard({
     )
   }
   if (showClose) {
-    return (
+    return wrapManage(
       <CashShiftCloseForm
         cashShift={view.data}
         onPreview={previewActive}
@@ -683,7 +758,7 @@ export default function CashShiftDashboard({
       />
     )
   }
-  return (
+  return wrapManage(
     <div className="cash-shift-stack">
       {transitionNotice ? <p className="cash-shift-warning" role="status">{transitionNotice}</p> : null}
       {lastOperation ? (
