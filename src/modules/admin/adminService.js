@@ -89,11 +89,32 @@ export const BACKEND_CAPS = {
   requisitionApproval: false,
   // Monto > threshold requiere aprobación de gerente/director
   requisitionApprovalThreshold: 5000,
+  // Cortes por turno: siempre fail-closed hasta recibir capabilities autenticadas.
+  cashShiftRead: false,
+  cashShiftManage: false,
+  cashShiftAuthorize: false,
+  cashShiftPendingDetail: false,
+  cashShiftReopen: false,
+  cashShiftPrint: false,
+}
+
+const CASH_SHIFT_CAPABILITY_KEYS = Object.freeze([
+  'cashShiftRead',
+  'cashShiftManage',
+  'cashShiftAuthorize',
+  'cashShiftPendingDetail',
+  'cashShiftReopen',
+  'cashShiftPrint',
+])
+
+function resetCashShiftCapabilities() {
+  for (const key of CASH_SHIFT_CAPABILITY_KEYS) BACKEND_CAPS[key] = false
 }
 
 /** Aplica en runtime la respuesta de GET /pwa-admin/capabilities.
  *  Si el backend no conoce un flag, se mantiene el default local. */
 export function applyCapabilities(caps) {
+  resetCashShiftCapabilities()
   if (!caps || typeof caps !== 'object') return BACKEND_CAPS
   for (const key of Object.keys(BACKEND_CAPS)) {
     if (!Object.prototype.hasOwnProperty.call(caps, key)) continue
@@ -107,6 +128,8 @@ export function applyCapabilities(caps) {
       if (Number.isFinite(n)) BACKEND_CAPS[key] = n
     } else if (currentType === 'string') {
       BACKEND_CAPS[key] = String(incoming)
+    } else if (CASH_SHIFT_CAPABILITY_KEYS.includes(key)) {
+      BACKEND_CAPS[key] = incoming === true
     } else {
       BACKEND_CAPS[key] = Boolean(incoming)
     }
@@ -122,7 +145,8 @@ export async function bootCapabilities() {
     const caps = res?.data || res
     return applyCapabilities(caps)
   } catch {
-    // Si falla, conservamos los defaults locales.
+    // Los permisos de cortes nunca sobreviven una lectura fallida o parcial.
+    resetCashShiftCapabilities()
     return BACKEND_CAPS
   }
 }
@@ -270,6 +294,10 @@ function normalizeAnalyticDistribution(input) {
 export async function createExpense(payload) {
   const clean = { ...payload }
 
+  // La identidad del empleado se deriva del token autenticado en backend.
+  // Nunca se permite que un payload de UI seleccione a otro empleado.
+  delete clean.employee_id
+
   // Analítica — Opción A (analytic_distribution dict Odoo 18)
   const dist = normalizeAnalyticDistribution(clean.analytic_distribution)
   if (BACKEND_CAPS.expenseAnalytics && dist) {
@@ -281,9 +309,8 @@ export async function createExpense(payload) {
   delete clean.analytic_account_id
   delete clean.analytic_tag_ids
 
-  // Metadata estructurada (employee_id + warehouse_id + sucursal_code)
+  // Metadata estructurada de sucursal (la identidad no forma parte del payload).
   if (!BACKEND_CAPS.expenseStructuredMeta) {
-    delete clean.employee_id
     delete clean.warehouse_id
     delete clean.sucursal_code
   }

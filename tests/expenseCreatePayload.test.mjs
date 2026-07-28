@@ -54,16 +54,16 @@ test.afterEach(() => {
   globalThis.window = originalWindow
 })
 
-test('expense create sends total_amount and omits unit_amount and account_id in create_update payload', async () => {
+test('expense create sends allowed amounts without employee identity to the authenticated controller', async () => {
   const calls = []
 
   globalThis.fetch = async (url, options = {}) => {
     const payload = options.body ? JSON.parse(options.body) : null
     calls.push({ url, payload })
 
-    if (url === '/odoo-api/api/create_update') {
+    if (url === '/odoo-api/pwa-admin/expense-create') {
       return createJsonResponse(200, {
-        result: { success: true, case: 1, id: 123 },
+        result: { ok: true, data: { id: 123 } },
       })
     }
 
@@ -81,13 +81,13 @@ test('expense create sends total_amount and omits unit_amount and account_id in 
     description: 'zzz',
   })
 
-  const createUpdateCall = calls.find((call) => call.url === '/odoo-api/api/create_update')
-  assert.ok(createUpdateCall, 'expected create_update call')
+  const controllerCall = calls.find((call) => call.url === '/odoo-api/pwa-admin/expense-create')
+  assert.ok(controllerCall, 'expected authenticated expense controller call')
 
-  const dict = createUpdateCall.payload?.params?.dict
-  assert.ok(dict, 'expected create_update payload dict')
+  const dict = controllerCall.payload?.params
+  assert.ok(dict, 'expected JSON-RPC controller params')
   assert.equal(dict.name, 'dddd')
-  assert.equal(dict.employee_id, 717)
+  assert.equal('employee_id' in dict, false)
   assert.equal(dict.company_id, 34)
   assert.equal(dict.quantity, 1)
   assert.equal(dict.payment_mode, 'company_account')

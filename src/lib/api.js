@@ -507,11 +507,16 @@ function pickListResponse(payload) {
 
 async function odooJson(path, params = {}) {
   const headers = buildBaseHeaders(path)
-  const res = await fetch(`${ODOO_BASE}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(buildJsonRpcPayload(params)),
-  })
+  let res
+  try {
+    res = await fetch(`${ODOO_BASE}${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(buildJsonRpcPayload(params)),
+    })
+  } catch (error) {
+    throw new ApiError(error?.message || 'Network error', { status: 0, code: 'network' })
+  }
 
   const text = await res.text().catch(() => '')
   let json = {}
@@ -1511,38 +1516,12 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/expense-create' && method === 'POST') {
-    const employeeId = getEmployeeId()
-    if (!employeeId) return { success: false, error: 'No employee session' }
-
-    const totalAmount = Number(body?.total_amount ?? body?.unit_amount ?? body?.amount ?? 0)
-    const quantity = Number(body?.quantity || 1) || 1
-    const companyIdPayload = Number(body?.company_id || companyId || 0)
-    const rawDescription = String(body?.description || '').trim()
-    const contextParts = []
-    if (body?.sucursal) contextParts.push(`[Sucursal: ${String(body.sucursal).trim()}]`)
-    if (body?.capturista) contextParts.push(`[Capturó: ${String(body.capturista).trim()}]`)
-    const description = [rawDescription, contextParts.join(' ')].filter(Boolean).join('\n') || '\n'
-
-    const expenseDict = {
-      name: String(body?.name || '').trim(),
-      date: body?.date || todayStart.slice(0, 10),
-      employee_id: employeeId,
-      company_id: companyIdPayload || undefined,
-      payment_mode: body?.payment_mode || 'company_account',
-      quantity,
-      total_amount: totalAmount,
-      description,
-      product_id: body?.product_id ? Number(body.product_id) : undefined,
-    }
-    const result = await createUpdate({
-      model: 'hr.expense',
-      method: 'create',
-      dict: expenseDict,
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-
-    return { success: true, data: result }
+    // El controller valida el token de empleado y deriva ahí la identidad.
+    // Evitar el antiguo create_update sudo, que confiaba en employee_id cacheado.
+    const expensePayload = { ...(body || {}) }
+    delete expensePayload.employee_id
+    delete expensePayload.account_id
+    return odooJson('/pwa-admin/expense-create', expensePayload)
   }
 
   if (cleanPath === '/pwa-admin/cash-closing' && method === 'GET') {
@@ -2553,6 +2532,17 @@ async function directAdmin(method, path, body) {
   // Backend espera `file_base64` (no `data`). Aceptamos ambas claves del
   // lado cliente pero siempre enviamos `file_base64` al controller Odoo.
   if (cleanPath === '/pwa/evidence/upload' && method === 'POST') {
+    if (body?.context === 'cash_shift') {
+      return odooJson('/pwa/evidence/upload', {
+        context: 'cash_shift',
+        shift_id: body?.shift_id,
+        expected_version: body?.expected_version,
+        purpose: body?.purpose,
+        filename: body?.filename,
+        file_base64: body?.file_base64,
+        mime_type: body?.mime_type,
+      })
+    }
     return odooJson('/pwa/evidence/upload', {
       filename:     body?.filename || 'evidencia.jpg',
       file_base64:  body?.file_base64 ?? body?.data ?? '',

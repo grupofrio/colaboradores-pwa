@@ -1,0 +1,436 @@
+import test, { after, afterEach, beforeEach } from 'node:test'
+import assert from 'node:assert/strict'
+import { createServer } from 'vite'
+
+const originalFetch = globalThis.fetch
+const originalLocalStorage = globalThis.localStorage
+const originalWindow = globalThis.window
+
+let vite
+let runtimePromise
+
+function createLocalStorageMock() {
+  const values = new Map()
+  return {
+    getItem(key) { return values.has(key) ? values.get(key) : null },
+    setItem(key, value) { values.set(key, String(value)) },
+    removeItem(key) { values.delete(key) },
+    clear() { values.clear() },
+  }
+}
+
+function createJsonResponse(status, payload) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async text() { return JSON.stringify(payload) },
+  }
+}
+
+async function loadRuntime() {
+  if (!runtimePromise) {
+    runtimePromise = (async () => {
+      vite = await createServer({
+        appType: 'custom',
+        logLevel: 'silent',
+        server: { middlewareMode: true },
+      })
+      const [apiModule, serviceModule, adminServiceModule] = await Promise.all([
+        vite.ssrLoadModule('/src/modules/admin/api.js'),
+        vite.ssrLoadModule('/src/modules/admin/cashShiftService.js'),
+        vite.ssrLoadModule('/src/modules/admin/adminService.js'),
+      ])
+      return { apiModule, serviceModule, adminServiceModule }
+    })()
+  }
+  return runtimePromise
+}
+
+function installSuccessApi() {
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, method: options.method, headers: options.headers, payload })
+    return createJsonResponse(200, { result: { ok: true, data: { accepted: true } } })
+  }
+  return calls
+}
+
+test.beforeEach(() => {
+  globalThis.localStorage = createLocalStorageMock()
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    session_token: 'session-token',
+    gf_employee_token: 'employee-token',
+    api_key: 'api-key',
+    employee_id: 717,
+    company_id: 34,
+    warehouse_id: 89,
+  }))
+  globalThis.window = { dispatchEvent() {}, addEventListener() {} }
+})
+
+test.afterEach(() => {
+  globalThis.fetch = originalFetch
+  globalThis.localStorage = originalLocalStorage
+  globalThis.window = originalWindow
+})
+
+after(async () => {
+  if (vite) await vite.close()
+})
+
+test('wrappers GET usan paths y query exactos sin alcance cliente', async () => {
+  const { apiModule } = await loadRuntime()
+  const calls = installSuccessApi()
+
+  await apiModule.getActiveCashShift()
+  await apiModule.previewCashShift({
+    mode: 'initial', shiftType: 'night', businessDate: '2026-07-27', startAt: '2026-07-26 18:00:00',
+    companyId: 34,
+  })
+  await apiModule.getCashShiftHistory({ businessDate: '2026-07-27', warehouseId: 89 })
+  await apiModule.getCashShiftDetail({ shiftId: 41, versionId: 7, analyticAccountId: 999 })
+  await apiModule.getCashShiftOperationStatus({ operation: 'reclose', idempotencyKey: 'same-key' })
+
+  assert.deepEqual(calls.map(({ url, method }) => [method, url]), [
+    ['GET', '/odoo-api/pwa-admin/cash-shifts/active'],
+    ['GET', '/odoo-api/pwa-admin/cash-shifts/preview?mode=initial&shift_type=night&business_date=2026-07-27&start_at=2026-07-26+18%3A00%3A00'],
+    ['GET', '/odoo-api/pwa-admin/cash-shifts/history?business_date=2026-07-27'],
+    ['GET', '/odoo-api/pwa-admin/cash-shifts/detail?shift_id=41&version_id=7'],
+    ['GET', '/odoo-api/pwa-admin/cash-shifts/operations/status?operation=reclose&key=same-key'],
+  ])
+})
+
+test('wrappers de mutación envían allowlists exactas y jamás scope ni totales', async () => {
+  const { apiModule } = await loadRuntime()
+  const calls = installSuccessApi()
+  const forbidden = {
+    company_id: 34,
+    warehouse_id: 89,
+    analytic_account_id: 12,
+    movement_ids: [1],
+    attachment_id: 99,
+    sales_total: 5000,
+    expected_cash: 2000,
+    physical_cash: 1900,
+  }
+
+  await apiModule.openCashShift({
+    shiftType: 'night', businessDate: '2026-07-27', startAt: '2026-07-26 18:00:00',
+    openingFund: 500, idempotencyKey: 'open-key', ...forbidden,
+  })
+  const closeInput = {
+    shiftId: 41,
+    expectedVersion: 0,
+    denominations: [{ denomination: '500', count: 2, subtotal: 1000 }],
+    adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20, total: 20 }],
+    notes: 'Arqueo revisado',
+    evidenceToken: 'ev-close',
+    nextOpeningFund: 300,
+    idempotencyKey: 'close-key',
+    ...forbidden,
+  }
+  await apiModule.closeCashShift(closeInput)
+  await apiModule.recloseCashShift({
+    ...closeInput,
+    expectedVersion: 1,
+    evidenceToken: 'ev-reclose',
+    nextOpeningFund: 999,
+    idempotencyKey: 'reclose-key',
+  })
+  await apiModule.reopenCashShift({
+    shiftId: 41, expectedVersion: 1, reason: 'Cancelar venta duplicada',
+    idempotencyKey: 'reopen-key', ...forbidden,
+  })
+  await apiModule.authorizeCashShift({
+    shiftId: 41, versionId: 7, expectedVersion: 999, level: 'manager',
+    idempotencyKey: 'authorize-key', ...forbidden,
+  })
+
+  const bodies = calls.map((call) => call.payload.params)
+  assert.deepEqual(bodies, [
+    {
+      shift_type: 'night', business_date: '2026-07-27', start_at: '2026-07-26 18:00:00',
+      opening_fund: 500, idempotency_key: 'open-key',
+    },
+    {
+      shift_id: 41, expected_version: 0,
+      denominations: [{ denomination: '500', count: 2 }],
+      adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20 }],
+      notes: 'Arqueo revisado', evidence_token: 'ev-close', next_opening_fund: 300,
+      idempotency_key: 'close-key',
+    },
+    {
+      shift_id: 41, expected_version: 1,
+      denominations: [{ denomination: '500', count: 2 }],
+      adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20 }],
+      notes: 'Arqueo revisado', evidence_token: 'ev-reclose',
+      idempotency_key: 'reclose-key',
+    },
+    {
+      shift_id: 41, expected_version: 1, reason: 'Cancelar venta duplicada',
+      idempotency_key: 'reopen-key',
+    },
+    {
+      shift_id: 41, version_id: 7, level: 'manager', idempotency_key: 'authorize-key',
+    },
+  ])
+  assert.deepEqual(calls.map((call) => call.url), [
+    '/odoo-api/pwa-admin/cash-shifts/open',
+    '/odoo-api/pwa-admin/cash-shifts/close',
+    '/odoo-api/pwa-admin/cash-shifts/close',
+    '/odoo-api/pwa-admin/cash-shifts/reopen',
+    '/odoo-api/pwa-admin/cash-shifts/authorize',
+  ])
+})
+
+test('evidence cash_shift conserva contexto, turno, versión, propósito, archivo y MIME exactos', async () => {
+  const { apiModule } = await loadRuntime()
+  const calls = installSuccessApi()
+
+  await apiModule.uploadCashShiftEvidence({
+    shiftId: 41,
+    expectedVersion: 1,
+    purpose: 'reclose',
+    filename: 'arqueo.webp',
+    fileBase64: 'UklGRg==',
+    mimeType: 'image/webp',
+    attachmentId: 999,
+    companyId: 34,
+  })
+
+  assert.equal(calls[0].url, '/odoo-api/pwa/evidence/upload')
+  assert.deepEqual(calls[0].payload.params, {
+    context: 'cash_shift',
+    shift_id: 41,
+    expected_version: 1,
+    purpose: 'reclose',
+    filename: 'arqueo.webp',
+    file_base64: 'UklGRg==',
+    mime_type: 'image/webp',
+  })
+})
+
+test('capacidades de cash shift fallan cerradas incluso tras respuestas parciales', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  const keys = [
+    'cashShiftRead', 'cashShiftManage', 'cashShiftAuthorize',
+    'cashShiftPendingDetail', 'cashShiftReopen', 'cashShiftPrint',
+  ]
+  for (const key of keys) adminServiceModule.BACKEND_CAPS[key] = true
+
+  adminServiceModule.applyCapabilities({ expenseAnalytics: true })
+
+  for (const key of keys) assert.equal(adminServiceModule.BACKEND_CAPS[key], false, key)
+  adminServiceModule.applyCapabilities({ cashShiftManage: true, cashShiftPendingDetail: true })
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftManage, true)
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftPendingDetail, true)
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftRead, false)
+
+  adminServiceModule.applyCapabilities({
+    cashShiftRead: 'true',
+    cashShiftManage: 1,
+    cashShiftAuthorize: {},
+    cashShiftPendingDetail: [],
+  })
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftRead, false)
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftManage, false)
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftAuthorize, false)
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftPendingDetail, false)
+})
+
+function uncertain(message = 'network lost') {
+  return Object.assign(new Error(message), { status: 0, code: 'network' })
+}
+
+test('errores de validación locales no son respuestas inciertas ni disparan replay/status', async () => {
+  const { serviceModule } = await loadRuntime()
+  assert.equal(serviceModule.isUncertainCashShiftError(new TypeError('dato inválido')), false)
+  let mutationCalls = 0
+  let statusCalls = 0
+  await assert.rejects(serviceModule.mutateShiftWithRecovery('close', {
+    shiftId: 41,
+    expectedVersion: 0,
+    idempotencyKey: 'local-validation',
+  }, {
+    mutate: async () => {
+      mutationCalls += 1
+      throw new TypeError('dato inválido')
+    },
+    getOperationStatus: async () => { statusCalls += 1 },
+    requestRegistry: new Map(),
+  }), /dato inválido/)
+  assert.equal(mutationCalls, 1)
+  assert.equal(statusCalls, 0)
+})
+
+test('errores lógicos del envelope se rechazan y no se reportan como completed', async () => {
+  const { serviceModule } = await loadRuntime()
+  await assert.rejects(serviceModule.mutateShiftWithRecovery('authorize', {
+    shiftId: 41,
+    versionId: 7,
+    level: 'manager',
+    idempotencyKey: 'logical-error',
+  }, {
+    mutate: async () => ({
+      ok: false,
+      message: 'Versión obsoleta',
+      data: { code: 'stale_version' },
+    }),
+    getOperationStatus: async () => { throw new Error('no debe consultarse') },
+    requestRegistry: new Map(),
+  }), (error) => error?.code === 'stale_version')
+})
+
+test('wrappers y recovery rechazan accessors sin ejecutarlos', async () => {
+  const { apiModule, serviceModule } = await loadRuntime()
+  let reads = 0
+  const input = {
+    shiftId: 41,
+    expectedVersion: 1,
+    reason: 'Corrección',
+    get idempotencyKey() { reads += 1; return 'accessor-key' },
+  }
+  assert.throws(() => apiModule.reopenCashShift(input), TypeError)
+  await assert.rejects(serviceModule.mutateShiftWithRecovery('reopen', input, {
+    mutate: async () => ({ ok: true }),
+    requestRegistry: new Map(),
+  }), TypeError)
+  assert.equal(reads, 0)
+})
+
+test('cada mutación recupera una respuesta perdida repitiendo el mismo body/key', async () => {
+  const { serviceModule } = await loadRuntime()
+  for (const operation of ['open', 'close', 'reclose', 'reopen', 'authorize']) {
+    const requests = []
+    const result = await serviceModule.mutateShiftWithRecovery(operation, {
+      shiftId: 41,
+      expectedVersion: operation === 'close' ? 0 : 1,
+      versionId: 7,
+      notes: undefined,
+      idempotencyKey: `${operation}-stable`,
+    }, {
+      mutate: async (_operation, request) => {
+        requests.push(structuredClone(request))
+        if (requests.length === 1) throw uncertain()
+        return { ok: true, operation }
+      },
+      getOperationStatus: async () => { throw new Error('status no debe consultarse') },
+      createKey: () => { throw new Error('la key existente debe conservarse') },
+      requestRegistry: new Map(),
+    })
+    assert.equal(result.status, 'completed')
+    assert.equal(result.key, `${operation}-stable`)
+    assert.deepEqual(requests[0], requests[1])
+    assert.equal(Object.hasOwn(requests[0], 'notes'), false)
+  }
+})
+
+test('si dos respuestas se pierden consulta status y recupera su respuesta guardada', async () => {
+  const { serviceModule } = await loadRuntime()
+  const requests = []
+  const statuses = []
+  const result = await serviceModule.mutateShiftWithRecovery('reclose', {
+    shiftId: 41,
+    expectedVersion: 2,
+    denominations: [{ denomination: '500', count: 1 }],
+    idempotencyKey: 'reclose-lost',
+  }, {
+    mutate: async (_operation, request) => {
+      requests.push(structuredClone(request))
+      throw uncertain()
+    },
+    getOperationStatus: async (query) => {
+      statuses.push(query)
+      return {
+        ok: true,
+        data: {
+          operation: 'reclose', key: 'reclose-lost', state: 'completed',
+          response: { ok: true, data: { shift_id: 41, version: 3 } },
+        },
+      }
+    },
+    createKey: () => 'unused',
+    requestRegistry: new Map(),
+  })
+
+  assert.equal(requests.length, 2)
+  assert.deepEqual(requests[0], requests[1])
+  assert.deepEqual(statuses, [{ operation: 'reclose', idempotencyKey: 'reclose-lost' }])
+  assert.deepEqual(result, {
+    status: 'completed',
+    data: { ok: true, data: { shift_id: 41, version: 3 } },
+    key: 'reclose-lost',
+  })
+})
+
+test('status incompleto preserva borrador/key y nunca infiere recierre por turno activo', async () => {
+  const { serviceModule } = await loadRuntime()
+  let activeReads = 0
+  const draft = {
+    shiftId: 41,
+    expectedVersion: 2,
+    denominations: [{ denomination: '500', count: 1 }],
+    idempotencyKey: 'pending-reclose',
+  }
+  const result = await serviceModule.mutateShiftWithRecovery('reclose', draft, {
+    mutate: async () => { throw uncertain() },
+    getOperationStatus: async () => ({
+      ok: false, data: { code: 'operation_not_found' },
+    }),
+    getActiveShift: async () => { activeReads += 1; return { shift: { id: 42 } } },
+    createKey: () => 'unused',
+    requestRegistry: new Map(),
+  })
+
+  assert.equal(result.status, 'pending')
+  assert.equal(result.key, 'pending-reclose')
+  assert.deepEqual(result.request, draft)
+  assert.equal(activeReads, 0)
+})
+
+test('una key reservada solo puede reintentarse con el mismo body', async () => {
+  const { serviceModule } = await loadRuntime()
+  const registry = new Map()
+  const deps = {
+    mutate: async () => { throw uncertain() },
+    getOperationStatus: async () => ({ ok: false, data: { code: 'operation_not_found' } }),
+    createKey: () => 'unused',
+    requestRegistry: registry,
+  }
+  await serviceModule.mutateShiftWithRecovery('close', {
+    shiftId: 41, expectedVersion: 0, notes: 'Primera', idempotencyKey: 'no-reuse',
+  }, deps)
+  await assert.rejects(
+    serviceModule.mutateShiftWithRecovery('close', {
+      shiftId: 41, expectedVersion: 0, notes: 'Cambiada', idempotencyKey: 'no-reuse',
+    }, deps),
+    /idempotencia|mismo contenido/i,
+  )
+})
+
+test('adminService elimina siempre employee_id del gasto aunque el caller lo inyecte', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  const calls = installSuccessApi()
+
+  await adminServiceModule.createExpense({
+    name: 'Gasolina', total_amount: 300, quantity: 1,
+    date: '2026-07-27', company_id: 34, warehouse_id: 89,
+    employee_id: 999999,
+  })
+
+  const directPayload = calls.find((call) => call.url === '/odoo-api/pwa-admin/expense-create')
+  assert.ok(directPayload, 'expense-create debe llegar al controller autenticado')
+  assert.equal(Object.hasOwn(directPayload.payload.params, 'employee_id'), false)
+  assert.equal(directPayload.headers['Api-Key'], 'api-key')
+  assert.equal(directPayload.headers['X-GF-Employee-Token'], 'employee-token')
+  assert.equal(JSON.stringify(calls).includes('999999'), false)
+})
+
+test('AdminGastosForm no construye employee_id controlado por la UI', async () => {
+  const source = await import('node:fs/promises').then((fs) => fs.readFile(
+    new URL('../src/modules/admin/forms/AdminGastosForm.jsx', import.meta.url),
+    'utf8',
+  ))
+  assert.doesNotMatch(source, /employee_id\s*:/)
+})
