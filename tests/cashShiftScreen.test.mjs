@@ -1002,6 +1002,21 @@ function evidenceResult({
   }
 }
 
+async function prepareCloseDifference(renderer, {
+  note = 'Arqueo pendiente',
+  filename = 'arqueo.png',
+} = {}) {
+  act(() => renderer.root.findByProps({ name: 'denomination-500' }).props.onChange({ target: { value: '2' } }))
+  act(() => renderer.root.findByProps({ name: 'differenceNote' }).props.onChange({ target: { value: note } }))
+  act(() => renderer.root.findByProps({ name: 'nextOpeningFund' }).props.onChange({ target: { value: '300' } }))
+  await act(async () => {
+    renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
+      target: { files: [{ name: filename, type: 'image/png', size: 8 }], value: 'fake' },
+    })
+    await flush()
+  })
+}
+
 test('close draft uses exact denomination math, validates adjustments and gates every nonzero difference', async () => {
   const shift = cashShiftForClose()
   assert.deepEqual(calculateCloseFeedback({
@@ -1239,7 +1254,7 @@ test('a deterministic expired-evidence replay clears pending recovery but preser
       }
       if (attempts.length === 2) {
         throw Object.assign(new Error('deterministic evidence rejection'), {
-          code: 'evidence_expired',
+          code: 'cash_shift_rejected',
         })
       }
       return { status: 'pending', request: { ...request, idempotencyKey: 'fresh-close-key' } }
@@ -1263,7 +1278,7 @@ test('a deterministic expired-evidence replay clears pending recovery but preser
   assert.equal(evidenceCalls, 1, 'el rechazo nunca sube evidencia automáticamente')
   assert.equal(Boolean(button(renderer, 'Reintentar mismo corte')), false)
   assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
-  assert.match(renderedText(renderer), /evidencia.*expiró.*sube.*nueva/i)
+  assert.match(renderedText(renderer), /intento.*rechazado.*fotografía nueva/i)
   assert.equal(renderer.root.findByProps({ name: 'denomination-500' }).props.value, '2')
   assert.equal(renderer.root.findByProps({ name: 'differenceNote' }).props.value, 'Arqueo pendiente')
   assert.equal(renderer.root.findByProps({ name: 'nextOpeningFund' }).props.value, '300')
@@ -1281,6 +1296,77 @@ test('a deterministic expired-evidence replay clears pending recovery but preser
   assert.equal(attempts.length, 3)
   assert.equal(attempts[2].evidenceToken, 'evidence-new')
   assert.equal(Object.hasOwn(attempts[2], 'idempotencyKey'), false)
+  act(() => renderer.unmount())
+})
+
+test('generic validation and forbidden errors settle an existing pending cut', async () => {
+  for (const deterministicError of [
+    Object.assign(new Error('validation rejected'), { code: 'validation_error' }),
+    Object.assign(new Error('access rejected'), { code: 'forbidden', status: 403 }),
+  ]) {
+    let calls = 0
+    const pendingRequest = {
+      shiftId: 41,
+      expectedVersion: 0,
+      denominations: [{ denomination: '500', count: 2 }],
+      adjustments: [],
+      notes: 'Arqueo pendiente',
+      evidenceToken: 'evidence-stable',
+      nextOpeningFund: 300,
+      idempotencyKey: `pending-${deterministicError.code}`,
+    }
+    const renderer = await mountClose({
+      cashShift: cashShiftForClose(),
+      onPreview: async () => ({ ok: true, data: validShift() }),
+      readEvidence: async () => 'iVBORw0KGgo=',
+      onEvidence: async () => evidenceResult(),
+      onClose: async () => {
+        calls += 1
+        if (calls === 1) return { status: 'pending', request: pendingRequest }
+        throw deterministicError
+      },
+    })
+    await prepareCloseDifference(renderer)
+    await act(async () => { button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick(); await flush() })
+    await act(async () => { button(renderer, 'Reintentar mismo corte').props.onClick(); await flush() })
+
+    assert.equal(calls, 2)
+    assert.equal(Boolean(button(renderer, 'Reintentar mismo corte')), false)
+    assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
+    assert.match(renderedText(renderer), /intento.*rechazado.*fotografía nueva/i)
+    assert.equal(renderer.root.findByProps({ name: 'denomination-500' }).props.value, '2')
+    assert.equal(renderer.root.findByProps({ name: 'differenceNote' }).props.value, 'Arqueo pendiente')
+    assert.equal(renderer.root.findByProps({ name: 'nextOpeningFund' }).props.value, '300')
+    assert.equal(renderer.root.findByProps({ name: 'evidencePhoto' }).props.disabled, false)
+    act(() => renderer.unmount())
+  }
+})
+
+test('a deterministic fresh close error keeps valid evidence and allows a fresh retry', async () => {
+  const attempts = []
+  const renderer = await mountClose({
+    cashShift: cashShiftForClose(),
+    onPreview: async () => ({ ok: true, data: validShift() }),
+    readEvidence: async () => 'iVBORw0KGgo=',
+    onEvidence: async () => evidenceResult(),
+    onClose: async (_operation, request) => {
+      attempts.push(structuredClone(request))
+      if (attempts.length === 1) {
+        throw Object.assign(new Error('validation rejected'), { code: 'cash_shift_rejected' })
+      }
+      return { status: 'pending', request: { ...request, idempotencyKey: 'fresh-retry-key' } }
+    },
+  })
+  await prepareCloseDifference(renderer, { note: 'Arqueo fresco' })
+  await act(async () => { button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick(); await flush() })
+
+  assert.equal(attempts.length, 1)
+  assert.match(renderedText(renderer), /Fotografía lista/)
+  assert.equal(Boolean(button(renderer, 'Reintentar mismo corte')), false)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.disabled, false)
+  assert.equal(renderer.root.findByProps({ name: 'evidencePhoto' }).props.disabled, false)
+  await act(async () => { button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick(); await flush() })
+  assert.deepEqual(attempts[1], attempts[0])
   act(() => renderer.unmount())
 })
 
