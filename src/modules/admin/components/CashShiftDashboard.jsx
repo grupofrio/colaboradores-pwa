@@ -3,14 +3,19 @@ import {
   getActiveCashShift,
   getCashShiftDetail,
   previewCashShift,
+  uploadCashShiftEvidence,
 } from '../api.js'
 import { normalizeCashShift } from '../cashShiftModel.js'
 import { mutateShiftWithRecovery } from '../cashShiftService.js'
 import CashShiftActivePanel from './CashShiftActivePanel.jsx'
+import CashShiftCloseForm from './CashShiftCloseForm.jsx'
 import CashShiftFirstOpenForm from './CashShiftFirstOpenForm.jsx'
+import CashShiftReopenForm from './CashShiftReopenForm.jsx'
 
 const defaultOpenInitial = (input) => mutateShiftWithRecovery('open', input)
 const defaultAuthorizePending = (input) => mutateShiftWithRecovery('authorize', input)
+const defaultCloseShift = (operation, input) => mutateShiftWithRecovery(operation, input)
+const defaultReopenShift = (input) => mutateShiftWithRecovery('reopen', input)
 const defaultScheduleRefresh = (callback, delay) => globalThis.setInterval(callback, delay)
 const defaultCancelRefresh = (intervalId) => globalThis.clearInterval(intervalId)
 const AUTHORIZATION_LEVELS = ['manager', 'director']
@@ -201,8 +206,13 @@ export default function CashShiftDashboard({
   loadActive = getActiveCashShift,
   loadPendingDetail = getCashShiftDetail,
   previewInitial = previewCashShift,
+  previewActive = previewCashShift,
   openInitial = defaultOpenInitial,
   authorizePending = defaultAuthorizePending,
+  closeShift = defaultCloseShift,
+  uploadEvidence = uploadCashShiftEvidence,
+  loadShiftDetail = getCashShiftDetail,
+  reopenShift = defaultReopenShift,
   scheduleRefresh = defaultScheduleRefresh,
   cancelRefresh = defaultCancelRefresh,
 }) {
@@ -215,8 +225,13 @@ export default function CashShiftDashboard({
   const [pendingAuthorization, setPendingAuthorization] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState('')
+  const [showClose, setShowClose] = useState(false)
+  const [showReopen, setShowReopen] = useState(false)
+  const [recloseTarget, setRecloseTarget] = useState(null)
+  const [lastOperation, setLastOperation] = useState(null)
   const requestGeneration = useRef(0)
   const requestInFlight = useRef(null)
+  const authorizationInFlight = useRef(false)
   const mounted = useRef(false)
 
   useEffect(() => {
@@ -225,6 +240,7 @@ export default function CashShiftDashboard({
       mounted.current = false
       requestGeneration.current += 1
       requestInFlight.current = null
+      authorizationInFlight.current = false
     }
   }, [])
 
@@ -234,6 +250,10 @@ export default function CashShiftDashboard({
     setLookupError('')
     setPendingAuthorization(null)
     setOperationError('')
+    setShowClose(false)
+    setShowReopen(false)
+    setRecloseTarget(null)
+    setLastOperation(null)
   }, [authorizerShiftId])
 
   const load = useCallback(async ({ preserveActive = false } = {}) => {
@@ -300,12 +320,15 @@ export default function CashShiftDashboard({
   )
 
   useEffect(() => {
-    if (accessMode !== 'manage' || !scopeReady || view.status !== 'ready' || view.kind !== 'active') {
+    if (
+      accessMode !== 'manage' || !scopeReady || view.status !== 'ready' || view.kind !== 'active'
+      || showClose || showReopen || recloseTarget
+    ) {
       return undefined
     }
     const intervalId = scheduleRefresh(() => { void refreshActive() }, 60_000)
     return () => cancelRefresh(intervalId)
-  }, [accessMode, cancelRefresh, refreshActive, scheduleRefresh, scopeReady, view.kind, view.status])
+  }, [accessMode, cancelRefresh, refreshActive, recloseTarget, scheduleRefresh, scopeReady, showClose, showReopen, view.kind, view.status])
 
   async function handleOpen(input) {
     const result = await openInitial(input)
@@ -314,7 +337,8 @@ export default function CashShiftDashboard({
   }
 
   async function handleAuthorize(level) {
-    if (view.kind !== 'authorization') return
+    if (view.kind !== 'authorization' || authorizationInFlight.current) return
+    authorizationInFlight.current = true
     setOperationBusy(true)
     setOperationError('')
     try {
@@ -342,8 +366,57 @@ export default function CashShiftDashboard({
     } catch {
       if (mounted.current) setOperationError('No se pudo autorizar el corte. Verifica tu nivel e inténtalo de nuevo.')
     } finally {
+      authorizationInFlight.current = false
       if (mounted.current) setOperationBusy(false)
     }
+  }
+
+  async function handleCloseCompleted({ mode, result, request }) {
+    const version = Number(result?.version)
+    const nextShiftId = positiveId(result?.next_shift_id)
+    const shiftId = positiveId(result?.shift_id)
+    const detail = normalizeCashShift(result?.detail)
+    if (
+      !Number.isSafeInteger(version) || version < 1
+      || shiftId === null || nextShiftId === null
+      || !['closed', 'pending_auth'].includes(result?.state)
+      || shiftId !== request.shiftId
+      || version !== request.expectedVersion + 1
+      || detail.shift.id !== shiftId
+      || detail.shift.version !== version
+      || detail.shift.state !== result.state
+    ) {
+      throw new TypeError('La respuesta final del corte no es válida.')
+    }
+    setLastOperation({
+      mode,
+      shiftId,
+      version,
+      state: result.state,
+      nextShiftId,
+      needsManagerAuth: detail.needsManagerAuth,
+      needsDirectorAuth: detail.needsDirectorAuth,
+      authorizationCount: detail.authorizations.length,
+    })
+    if (mode === 'reclose') {
+      setRecloseTarget(null)
+      return
+    }
+    setShowClose(false)
+    await load()
+  }
+
+  async function handleReopened(shiftId) {
+    const reopened = normalizeCashShift(unwrap(await previewActive({ mode: 'active', shiftId })))
+    if (reopened.shift.state !== 'reopened' || reopened.shift.id !== shiftId) {
+      throw new TypeError('El servidor no confirmó el turno reabierto.')
+    }
+    setShowReopen(false)
+    setRecloseTarget(reopened)
+  }
+
+  async function reloadStaleShift({ shiftId }) {
+    await loadShiftDetail({ shiftId })
   }
 
   function submitManualShift() {
@@ -397,13 +470,72 @@ export default function CashShiftDashboard({
   if (view.kind === 'inactive') {
     return <CashShiftFirstOpenForm onPreview={previewInitial} onOpen={handleOpen} />
   }
+  if (recloseTarget) {
+    return (
+      <div className="cash-shift-stack">
+        <CashShiftState title="Turno sucesor sin cambios">El turno activo continúa operando mientras corriges el corte reabierto.</CashShiftState>
+        <CashShiftCloseForm
+          cashShift={recloseTarget}
+          onPreview={previewActive}
+          onClose={closeShift}
+          onEvidence={uploadEvidence}
+          onCompleted={handleCloseCompleted}
+          onStale={reloadStaleShift}
+          onCancel={() => setRecloseTarget(null)}
+        />
+      </div>
+    )
+  }
+  if (showReopen) {
+    return (
+      <CashShiftReopenForm
+        loadDetail={loadShiftDetail}
+        reopenShift={reopenShift}
+        onReopened={handleReopened}
+        onCancel={() => setShowReopen(false)}
+      />
+    )
+  }
+  if (showClose) {
+    return (
+      <CashShiftCloseForm
+        cashShift={view.data}
+        onPreview={previewActive}
+        onClose={closeShift}
+        onEvidence={uploadEvidence}
+        onCompleted={handleCloseCompleted}
+        onStale={reloadStaleShift}
+        onCancel={() => setShowClose(false)}
+      />
+    )
+  }
   return (
-    <CashShiftActivePanel
-      cashShift={view.data}
-      layout={layout}
-      refreshing={refreshing}
-      refreshError={refreshError}
-      onRefresh={refreshActive}
-    />
+    <div className="cash-shift-stack">
+      {lastOperation ? (
+        <p className="cash-shift-info" role="status">
+          {lastOperation.mode === 'reclose'
+            ? `Recierre guardado en versión ${lastOperation.version}; el turno sucesor #${lastOperation.nextShiftId} no cambió.`
+            : lastOperation.state === 'pending_auth'
+              ? `Corte #${lastOperation.shiftId} guardado en autorización pendiente, versión ${lastOperation.version}. Requiere ${[
+                lastOperation.needsManagerAuth ? 'gerencia' : null,
+                lastOperation.needsDirectorAuth ? 'dirección' : null,
+              ].filter(Boolean).join(' y ') || 'revisión del servidor'}; ${lastOperation.authorizationCount} autorización(es) registrada(s). El turno sucesor #${lastOperation.nextShiftId} ya está activo.`
+              : `Corte #${lastOperation.shiftId} guardado en versión ${lastOperation.version}. Turno sucesor #${lastOperation.nextShiftId} activo.`}
+        </p>
+      ) : null}
+      <CashShiftActivePanel
+        cashShift={view.data}
+        layout={layout}
+        refreshing={refreshing}
+        refreshError={refreshError}
+        onRefresh={refreshActive}
+        onStartClose={() => setShowClose(true)}
+      />
+      <section className="cash-shift-card cash-shift-reopen-launch">
+        <h2>Corrección de un corte cerrado</h2>
+        <p className="cash-shift-muted">La reapertura exige una razón y no cambia el turno actualmente activo.</p>
+        <button className="cash-shift-secondary" type="button" onClick={() => setShowReopen(true)}>Reabrir un corte</button>
+      </section>
+    </div>
   )
 }

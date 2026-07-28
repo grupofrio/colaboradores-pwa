@@ -3,12 +3,19 @@ import assert from 'node:assert/strict'
 import React from 'react'
 import TestRenderer, { act } from 'react-test-renderer'
 import { createServer } from 'vite'
+import { normalizeCashShift } from '../src/modules/admin/cashShiftModel.js'
+import {
+  buildCashShiftCloseOperation,
+  calculateCloseFeedback,
+  cashShiftEvidenceBinding,
+} from '../src/modules/admin/cashShiftCloseModel.js'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 let vite
 let runtimePromise
 let firstOpenRuntimePromise
+let closeRuntimePromise
 
 function deferred() {
   let resolve
@@ -138,6 +145,14 @@ async function loadFirstOpenRuntime() {
   return firstOpenRuntimePromise
 }
 
+async function loadCloseRuntime() {
+  await loadRuntime()
+  if (!closeRuntimePromise) {
+    closeRuntimePromise = vite.ssrLoadModule('/src/modules/admin/components/CashShiftCloseForm.jsx')
+  }
+  return closeRuntimePromise
+}
+
 after(async () => {
   await vite?.close()
 })
@@ -177,6 +192,17 @@ async function mountFirstOpen(props) {
   let renderer
   await act(async () => {
     renderer = TestRenderer.create(React.createElement(FirstOpenForm, props))
+    await flush()
+  })
+  return renderer
+}
+
+async function mountClose(props) {
+  await loadRuntime()
+  const { default: CloseForm } = await loadCloseRuntime()
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(React.createElement(CloseForm, props))
     await flush()
   })
   return renderer
@@ -840,4 +866,490 @@ test('load errors are sanitized, retry is explicit, and an unmounted completion 
     request.resolve({ ok: true, data: validShift() })
     await flush()
   })
+})
+
+function cashShiftForClose({ state = 'open', version = 0, type = 'night' } = {}) {
+  const raw = validShift({ type })
+  raw.shift.state = state
+  raw.shift.version = version
+  raw.version_number = version
+  raw.totals.expected_cash = 1200
+  raw.opening_fund = 500
+  raw.sales = [{
+    order_id: 1001,
+    name: 'POS/1001',
+    amount_total: 1000,
+    payment_method: 'cash',
+    employee_id: 717,
+    recorded_at: '2026-07-27 05:30:00',
+    channel: 'admin',
+  }]
+  raw.payments.rows = [{ order_id: 1001, method: 'cash', amount: 1000 }]
+  raw.expenses = [{
+    expense_id: 2001,
+    name: 'EXP/2001',
+    concept: 'Bolsas',
+    amount: 100,
+    approval_state: 'pending',
+    employee_id: 717,
+    recorded_at: '2026-07-27 05:40:00',
+  }]
+  return normalizeCashShift(raw)
+}
+
+function closedResultDetail({ state = 'closed', version = 1, type = 'night' } = {}) {
+  const raw = validShift({ type })
+  raw.shift.state = state
+  raw.shift.version = version
+  raw.version_number = version
+  raw.version_id = 900 + version
+  raw.closing_type = version === 1 ? 'close' : 'reclose'
+  raw.period.closed_at = '2026-07-27 06:10:00'
+  raw.closed_or_reclosed_at = '2026-07-27 06:10:00'
+  raw.printable = true
+  return raw
+}
+
+test('close draft uses exact denomination math, validates adjustments and gates every nonzero difference', async () => {
+  const shift = cashShiftForClose()
+  assert.deepEqual(calculateCloseFeedback({
+    serverExpectedCash: 1200,
+    denominations: [{ denomination: '500', count: 2 }],
+    adjustments: [
+      { type: 'income', concept: 'Cambio recuperado', amount: 50 },
+      { type: 'expense', concept: 'Bolsas extras', amount: 25 },
+    ],
+  }), {
+    serverExpectedCash: 1200,
+    adjustedExpectedCash: 1225,
+    physicalCash: 1000,
+    difference: -225,
+  })
+
+  const base = {
+    cashShift: shift,
+    denominations: [{ denomination: '500', count: 2 }],
+    adjustments: [],
+    nextOpeningFund: 300,
+  }
+  assert.throws(
+    () => buildCashShiftCloseOperation({ ...base, notes: '', evidenceToken: '' }),
+    /nota.*fotograf/i,
+  )
+  assert.throws(
+    () => buildCashShiftCloseOperation({ ...base, notes: 'Revisado', evidenceToken: '' }),
+    /fotograf/i,
+  )
+  assert.throws(
+    () => buildCashShiftCloseOperation({ ...base, notes: '', evidenceToken: 'ev-1' }),
+    /nota/i,
+  )
+  assert.throws(
+    () => buildCashShiftCloseOperation({
+      ...base,
+      notes: 'Revisado',
+      evidenceToken: 'ev-1',
+      adjustments: [{ type: 'income', concept: ' ', amount: 10 }],
+    }),
+    /concepto/i,
+  )
+
+  const operation = buildCashShiftCloseOperation({
+    ...base,
+    notes: '  Arqueo revisado  ',
+    evidenceToken: 'ev-1',
+  })
+  assert.equal(operation.operation, 'close')
+  assert.equal(operation.label, 'Cerrar Noche 27 y abrir Día 27')
+  assert.deepEqual(operation.request, {
+    shiftId: 41,
+    expectedVersion: 0,
+    denominations: [{ denomination: '500', count: 2 }],
+    adjustments: [],
+    notes: 'Arqueo revisado',
+    evidenceToken: 'ev-1',
+    nextOpeningFund: 300,
+  })
+})
+
+test('reclose binds evidence to the current version and omits next opening fund completely', async () => {
+  const shift = cashShiftForClose({ state: 'reopened', version: 2 })
+  assert.deepEqual(cashShiftEvidenceBinding(shift), {
+    shiftId: 41,
+    expectedVersion: 2,
+    purpose: 'reclose',
+    key: '41:2:reclose',
+  })
+  const operation = buildCashShiftCloseOperation({
+    cashShift: shift,
+    denominations: [{ denomination: '500', count: 2 }, { denomination: '200', count: 1 }],
+    adjustments: [],
+    notes: '',
+    evidenceToken: '',
+    nextOpeningFund: 999,
+  })
+  assert.equal(operation.operation, 'reclose')
+  assert.equal(operation.label, 'Volver a cerrar Noche 27')
+  assert.equal(operation.request.expectedVersion, 2)
+  assert.equal(Object.hasOwn(operation.request, 'nextOpeningFund'), false)
+})
+
+test('close form refreshes authoritative preview and renders every audit section', async () => {
+  const calls = []
+  const shift = cashShiftForClose()
+  const renderer = await mountClose({
+    cashShift: shift,
+    onPreview: async (request) => {
+      calls.push(request)
+      return { ok: true, data: validShift() }
+    },
+    onClose: async () => { throw new Error('not submitted') },
+    onEvidence: async () => { throw new Error('not uploaded') },
+  })
+  assert.deepEqual(calls, [{ mode: 'active', shiftId: 41 }])
+  const text = renderedText(renderer)
+  for (const section of [
+    'Tickets y ventas', 'Pagos', 'Productos', 'Cancelaciones', 'Gastos',
+    'Fondo inicial', 'Efectivo esperado', 'Arqueo por denominación', 'Ajustes de caja',
+  ]) assert.match(text, new RegExp(section, 'i'))
+  assert.match(text, /servidor.*autoritativ/i)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.type, 'button')
+  act(() => renderer.unmount())
+})
+
+test('close UI requires note and uploaded photo for any difference and freezes a pending retry', async () => {
+  const attempts = []
+  const shift = cashShiftForClose()
+  const pendingRequest = {
+    shiftId: 41,
+    expectedVersion: 0,
+    denominations: [{ denomination: '500', count: 2 }],
+    adjustments: [],
+    notes: 'Conteo revisado',
+    evidenceToken: 'evidence-stable',
+    nextOpeningFund: 300,
+    idempotencyKey: 'close-stable-key',
+  }
+  const renderer = await mountClose({
+    cashShift: shift,
+    onPreview: async () => ({ ok: true, data: validShift() }),
+    readEvidence: async () => 'iVBORw0KGgo=',
+    onEvidence: async (request) => {
+      assert.deepEqual(request, {
+        shiftId: 41,
+        expectedVersion: 0,
+        purpose: 'close',
+        filename: 'arqueo.png',
+        fileBase64: 'iVBORw0KGgo=',
+        mimeType: 'image/png',
+      })
+      return { ok: true, data: { evidence_token: 'evidence-stable' } }
+    },
+    onClose: async (operation, request) => {
+      assert.equal(operation, 'close')
+      attempts.push(structuredClone(request))
+      return attempts.length === 1
+        ? { status: 'pending', request: pendingRequest, key: 'close-stable-key' }
+        : { status: 'completed', data: { ok: true }, key: 'close-stable-key' }
+    },
+    onCompleted: async () => {},
+  })
+
+  const denomination = renderer.root.findByProps({ name: 'denomination-500' })
+  act(() => denomination.props.onChange({ target: { value: '2' } }))
+  assert.match(renderedText(renderer), /Diferencia.*-\$200\.00/i)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.props.disabled, true)
+  act(() => renderer.root.findByProps({ name: 'differenceNote' }).props.onChange({ target: { value: 'Conteo revisado' } }))
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.props.disabled, true)
+  await act(async () => {
+    renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
+      target: { files: [{ name: 'arqueo.png', type: 'image/png' }], value: 'fake' },
+    })
+    await flush()
+  })
+  act(() => renderer.root.findByProps({ name: 'nextOpeningFund' }).props.onChange({ target: { value: '300' } }))
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.props.disabled, false)
+
+  await act(async () => {
+    button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick()
+    await flush()
+  })
+  assert.match(renderedText(renderer), /misma operación/i)
+  assert.equal(renderer.root.findByProps({ name: 'denomination-500' }).props.disabled, true)
+  await act(async () => {
+    button(renderer, 'Reintentar mismo corte').props.onClick()
+    await flush()
+  })
+  assert.deepEqual(attempts, [
+    {
+      shiftId: 41,
+      expectedVersion: 0,
+      denominations: [
+        { denomination: '1000', count: 0 },
+        { denomination: '500', count: 2 },
+        { denomination: '200', count: 0 },
+        { denomination: '100', count: 0 },
+        { denomination: '50', count: 0 },
+        { denomination: '20', count: 0 },
+        { denomination: '10', count: 0 },
+        { denomination: '5', count: 0 },
+        { denomination: '2', count: 0 },
+        { denomination: '1', count: 0 },
+        { denomination: '0.50', count: 0 },
+      ],
+      adjustments: [],
+      notes: 'Conteo revisado',
+      evidenceToken: 'evidence-stable',
+      nextOpeningFund: 300,
+    },
+    pendingRequest,
+  ])
+  act(() => renderer.unmount())
+})
+
+test('only a manager can enter the active close workflow and a completed close reloads its successor', async () => {
+  const calls = []
+  let activeReads = 0
+  const successor = validShift({ type: 'day' })
+  successor.shift.id = 42
+  const renderer = await mount({
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      activeReads += 1
+      return { ok: true, data: activeReads === 1 ? validShift() : successor }
+    },
+    previewActive: async (request) => {
+      calls.push(['preview', request])
+      return { ok: true, data: validShift() }
+    },
+    closeShift: async (operation, request) => {
+      calls.push([operation, request])
+      return {
+        status: 'completed',
+        data: {
+          ok: true,
+          data: {
+            shift_id: 41,
+            version_id: 901,
+            version: 1,
+            state: 'closed',
+            next_shift_id: 42,
+            detail: closedResultDetail(),
+          },
+        },
+        key: 'close-success',
+      }
+    },
+  })
+  assert.equal(button(renderer, 'Hacer corte')?.type, 'button')
+  await act(async () => {
+    button(renderer, 'Hacer corte').props.onClick()
+    await flush()
+  })
+  assert.deepEqual(calls, [['preview', { mode: 'active', shiftId: 41 }]])
+  act(() => renderer.root.findByProps({ name: 'denomination-1000' }).props.onChange({ target: { value: '1' } }))
+  act(() => renderer.root.findByProps({ name: 'denomination-200' }).props.onChange({ target: { value: '1' } }))
+  act(() => renderer.root.findByProps({ name: 'nextOpeningFund' }).props.onChange({ target: { value: '300' } }))
+  await act(async () => {
+    button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick()
+    await flush()
+  })
+  assert.equal(calls[1][0], 'close')
+  assert.equal(calls[1][1].nextOpeningFund, 300)
+  assert.equal(activeReads, 2)
+  assert.match(renderedText(renderer), /Turno activo · Día 27/)
+  act(() => renderer.unmount())
+})
+
+test('manager reopens by exact ID/reason, preserves pending request and enters reclose without reloading successor', async () => {
+  const reopenAttempts = []
+  let activeReads = 0
+  const closed = validShift()
+  closed.shift.state = 'closed'
+  closed.shift.version = 1
+  closed.version_number = 1
+  closed.version_id = 901
+  const reopened = structuredClone(closed)
+  reopened.shift.state = 'reopened'
+  reopened.closing_type = false
+  reopened.version_id = false
+  reopened.printable = false
+  const preserved = {
+    shiftId: 41,
+    expectedVersion: 1,
+    reason: 'Cancelar venta duplicada',
+    idempotencyKey: 'same-reopen-key',
+  }
+  const renderer = await mount({
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => { activeReads += 1; return { ok: true, data: validShift({ type: 'day' }) } },
+    loadShiftDetail: async (request) => {
+      assert.deepEqual(request, { shiftId: 41 })
+      return { ok: true, data: closed }
+    },
+    reopenShift: async (request) => {
+      reopenAttempts.push(structuredClone(request))
+      return reopenAttempts.length === 1
+        ? { status: 'pending', request: preserved, key: 'same-reopen-key' }
+        : { status: 'completed', data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } }, key: 'same-reopen-key' }
+    },
+    previewActive: async (request) => {
+      assert.deepEqual(request, { mode: 'active', shiftId: 41 })
+      return { ok: true, data: reopened }
+    },
+  })
+  act(() => button(renderer, 'Reabrir un corte').props.onClick())
+  act(() => renderer.root.findByProps({ name: 'reopenShiftId' }).props.onChange({ target: { value: '41' } }))
+  await act(async () => {
+    button(renderer, 'Consultar corte').props.onClick()
+    await flush()
+  })
+  act(() => renderer.root.findByProps({ name: 'reopenReason' }).props.onChange({ target: { value: 'Cancelar venta duplicada' } }))
+  await act(async () => {
+    button(renderer, 'Reabrir corte').props.onClick()
+    await flush()
+  })
+  assert.match(renderedText(renderer), /Reintentar misma reapertura/)
+  await act(async () => {
+    button(renderer, 'Reintentar misma reapertura').props.onClick()
+    await flush()
+  })
+  assert.deepEqual(reopenAttempts, [
+    { shiftId: 41, expectedVersion: 1, reason: 'Cancelar venta duplicada' },
+    preserved,
+  ])
+  assert.equal(activeReads, 1, 'el sucesor activo no cambia ni se recarga al reabrir')
+  assert.match(renderedText(renderer), /Volver a cerrar Noche 27/)
+  assert.equal(renderer.root.findAllByProps({ name: 'nextOpeningFund' }).length, 0)
+  act(() => renderer.unmount())
+})
+
+test('stale close preserves the draft, invalidates old evidence and refreshes preview plus shift detail', async () => {
+  let previews = 0
+  let staleReads = 0
+  const renderer = await mountClose({
+    cashShift: cashShiftForClose(),
+    onPreview: async () => { previews += 1; return { ok: true, data: validShift() } },
+    readEvidence: async () => 'iVBORw0KGgo=',
+    onEvidence: async () => ({ ok: true, data: { evidence_token: 'old-version-evidence' } }),
+    onClose: async () => {
+      throw Object.assign(new Error('stale'), { code: 'stale_version' })
+    },
+    onStale: async (request) => {
+      staleReads += 1
+      assert.deepEqual(request, { shiftId: 41 })
+    },
+  })
+  act(() => renderer.root.findByProps({ name: 'denomination-500' }).props.onChange({ target: { value: '2' } }))
+  act(() => renderer.root.findByProps({ name: 'differenceNote' }).props.onChange({ target: { value: 'Borrador preservado' } }))
+  act(() => renderer.root.findByProps({ name: 'nextOpeningFund' }).props.onChange({ target: { value: '300' } }))
+  await act(async () => {
+    renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
+      target: { files: [{ name: 'arqueo.png', type: 'image/png' }], value: 'fake' },
+    })
+    await flush()
+  })
+  await act(async () => {
+    button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick()
+    await flush()
+  })
+  assert.equal(previews, 2)
+  assert.equal(staleReads, 1)
+  assert.equal(renderer.root.findByProps({ name: 'denomination-500' }).props.value, '2')
+  assert.equal(renderer.root.findByProps({ name: 'differenceNote' }).props.value, 'Borrador preservado')
+  assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
+  assert.match(renderedText(renderer), /cambió en otra sesión.*vuelve a subir/i)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.props.disabled, true)
+  act(() => renderer.unmount())
+})
+
+test('reclose completes at N+1, omits successor fund and never reloads or changes the active successor', async () => {
+  let activeReads = 0
+  const closeCalls = []
+  const closed = validShift()
+  closed.shift.state = 'closed'
+  closed.shift.version = 1
+  closed.version_number = 1
+  closed.version_id = 901
+  const reopened = structuredClone(closed)
+  reopened.shift.state = 'reopened'
+  reopened.version_id = false
+  reopened.closing_type = false
+  reopened.printable = false
+  const renderer = await mount({
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => { activeReads += 1; return { ok: true, data: validShift({ type: 'day' }) } },
+    loadShiftDetail: async () => ({ ok: true, data: closed }),
+    reopenShift: async () => ({ status: 'completed', data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } }, key: 'reopen-done' }),
+    previewActive: async () => ({ ok: true, data: reopened }),
+    closeShift: async (operation, request) => {
+      closeCalls.push([operation, structuredClone(request)])
+      return {
+        status: 'completed',
+        data: { ok: true, data: { shift_id: 41, version_id: 902, version: 2, state: 'closed', next_shift_id: 77, detail: closedResultDetail({ version: 2 }) } },
+        key: 'reclose-done',
+      }
+    },
+  })
+  act(() => button(renderer, 'Reabrir un corte').props.onClick())
+  act(() => renderer.root.findByProps({ name: 'reopenShiftId' }).props.onChange({ target: { value: '41' } }))
+  await act(async () => { button(renderer, 'Consultar corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'reopenReason' }).props.onChange({ target: { value: 'Corrección' } }))
+  await act(async () => { button(renderer, 'Reabrir corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'denomination-1000' }).props.onChange({ target: { value: '1' } }))
+  act(() => renderer.root.findByProps({ name: 'denomination-200' }).props.onChange({ target: { value: '1' } }))
+  await act(async () => { button(renderer, 'Volver a cerrar Noche 27').props.onClick(); await flush() })
+  assert.equal(closeCalls.length, 1)
+  assert.equal(closeCalls[0][0], 'reclose')
+  assert.equal(closeCalls[0][1].expectedVersion, 1)
+  assert.equal(Object.hasOwn(closeCalls[0][1], 'nextOpeningFund'), false)
+  assert.equal(activeReads, 1)
+  assert.match(renderedText(renderer), /versión 2.*sucesor #77 no cambió/i)
+  assert.match(renderedText(renderer), /Turno activo · Día 27/)
+  act(() => renderer.unmount())
+})
+
+test('a completed reopen with a lost preview retries only loading reclose and never reopens again', async () => {
+  let reopenCalls = 0
+  let previewCalls = 0
+  const closed = validShift()
+  closed.shift.state = 'closed'
+  closed.shift.version = 1
+  closed.version_number = 1
+  closed.version_id = 901
+  const reopened = structuredClone(closed)
+  reopened.shift.state = 'reopened'
+  reopened.version_id = false
+  reopened.closing_type = false
+  reopened.printable = false
+  const renderer = await mount({
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => ({ ok: true, data: validShift({ type: 'day' }) }),
+    loadShiftDetail: async () => ({ ok: true, data: closed }),
+    reopenShift: async () => {
+      reopenCalls += 1
+      return { status: 'completed', data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } }, key: 'reopen-committed' }
+    },
+    previewActive: async () => {
+      previewCalls += 1
+      if (previewCalls === 1) throw Object.assign(new Error('lost'), { status: 0 })
+      return { ok: true, data: reopened }
+    },
+  })
+  act(() => button(renderer, 'Reabrir un corte').props.onClick())
+  act(() => renderer.root.findByProps({ name: 'reopenShiftId' }).props.onChange({ target: { value: '41' } }))
+  await act(async () => { button(renderer, 'Consultar corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'reopenReason' }).props.onChange({ target: { value: 'Corrección confirmada' } }))
+  await act(async () => { button(renderer, 'Reabrir corte').props.onClick(); await flush() })
+  assert.equal(reopenCalls, 1)
+  assert.match(renderedText(renderer), /reapertura.*confirmada/i)
+  await act(async () => { button(renderer, 'Cargar recierre reabierto').props.onClick(); await flush() })
+  assert.equal(reopenCalls, 1)
+  assert.equal(previewCalls, 3, 'carga el reopened y el formulario refresca su preview autoritativo')
+  assert.match(renderedText(renderer), /Volver a cerrar Noche 27/)
+  act(() => renderer.unmount())
 })

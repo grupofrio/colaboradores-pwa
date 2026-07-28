@@ -19,6 +19,7 @@ export default function CashShiftActivePanel({
   refreshing = false,
   refreshError = '',
   onRefresh,
+  onStartClose = null,
 }) {
   const { shift, period, schedule, totals } = cashShift
   const shiftLabel = shift.type === 'night' ? 'Noche' : 'Día'
@@ -53,6 +54,11 @@ export default function CashShiftActivePanel({
         <button className="cash-shift-primary" type="button" disabled={refreshing} onClick={onRefresh}>
           {refreshing ? 'Actualizando…' : 'Actualizar turno'}
         </button>
+        {onStartClose ? (
+          <button className="cash-shift-primary" type="button" disabled={refreshing} onClick={onStartClose}>
+            Hacer corte
+          </button>
+        ) : null}
       </div>
       {refreshError ? <p className="cash-shift-error" role="alert">{refreshError}</p> : null}
 
