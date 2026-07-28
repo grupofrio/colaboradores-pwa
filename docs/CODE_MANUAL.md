@@ -1333,14 +1333,30 @@ test -n "${PGDATABASE:?Run inside the intended Odoo.sh staging build}"
 odoo-bin -d "$PGDATABASE" -u os_api --stop-after-init --workers=0 --max-cron-threads=0
 odoo-bin -d "$PGDATABASE" -u os_customer_zones --stop-after-init --workers=0 --max-cron-threads=0
 odoo-bin -d "$PGDATABASE" -u gf_pwa_admin --stop-after-init --workers=0 --max-cron-threads=0
+GF_CASH_SHIFT_REQUIRE_INACTIVE=1 \
+  odoo-bin shell -d "$PGDATABASE" < tests/check_pos_cash_shift_rollout.py
+```
+
+Ese primer checker es el **preflight estricto**: el flag exacto
+`GF_CASH_SHIFT_REQUIRE_INACTIVE=1` hace fallar la validación si cualquier
+configuración no está `inactive`, conserva `active_shift_id` o ya tiene un turno
+abierto. Antes de la primera apertura, POS, gastos y cierre Legacy también deben
+continuar funcionando. Asignar el permiso al perfil administrador configurado
+—nunca por nombre/ID hardcodeado—, obtener un token fresco y comprobar
+capacidades. Tomar otro respaldo justo antes de activar y conciliar la vista
+previa inicial.
+
+Después de confirmar la primera apertura, ejecutar el checker otra vez en
+**modo normal post-activación**, ahora sin el flag estricto:
+
+```bash
 odoo-bin shell -d "$PGDATABASE" < tests/check_pos_cash_shift_rollout.py
 ```
 
-Antes de la primera apertura, las configuraciones deben seguir inactivas y POS,
-gastos y cierre Legacy deben continuar funcionando. Asignar el permiso al
-perfil administrador configurado —nunca por nombre/ID hardcodeado—, obtener un
-token fresco y comprobar capacidades. Tomar otro respaldo justo antes de
-activar y conciliar la vista previa inicial.
+El modo normal acepta configuraciones activas únicamente cuando cada una tiene
+exactamente un turno abierto coherente con `active_shift_id` y su alcance. No
+usar `GF_CASH_SHIFT_REQUIRE_INACTIVE=1` después de activar, porque ese modo está
+diseñado para demostrar que la apertura todavía no ocurrió.
 
 Antes de activar, el rollback es volver a los SHA anteriores y ejecutar las
 migraciones correspondientes. Después de activar, no se restaura ni baja la
