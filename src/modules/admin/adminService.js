@@ -15,6 +15,10 @@ import {
   createCashClosing as apiCreateCashClosing,
   getCapabilities as apiGetCapabilities,
 } from './api'
+import {
+  buildSessionIdentity,
+  readSessionRaw,
+} from '../supervisor-ventas/v2/sessionScope.js'
 
 // ── Feature caps del backend ────────────────────────────────────────────────
 // Los defaults están en true porque `gf_pwa_admin` ya expone todos estos
@@ -111,6 +115,33 @@ function resetCashShiftCapabilities() {
   for (const key of CASH_SHIFT_CAPABILITY_KEYS) BACKEND_CAPS[key] = false
 }
 
+let capabilityRequestGeneration = 0
+
+function employeeToken(session) {
+  return String(session?.odoo_employee_token || session?.gf_employee_token || '')
+}
+
+function capabilitySessionSnapshot(session) {
+  const value = session && typeof session === 'object' ? session : readSessionRaw()
+  return {
+    sessionKey: buildSessionIdentity(value).sessionKey,
+    employeeToken: employeeToken(value),
+  }
+}
+
+function isCurrentCapabilityRequest(generation, snapshot) {
+  if (generation !== capabilityRequestGeneration) return false
+  const current = capabilitySessionSnapshot(readSessionRaw())
+  return current.sessionKey === snapshot.sessionKey
+    && current.employeeToken === snapshot.employeeToken
+}
+
+export function invalidateCashShiftCapabilities() {
+  capabilityRequestGeneration += 1
+  resetCashShiftCapabilities()
+  return BACKEND_CAPS
+}
+
 /** Aplica en runtime la respuesta de GET /pwa-admin/capabilities.
  *  Si el backend no conoce un flag, se mantiene el default local. */
 export function applyCapabilities(caps) {
@@ -137,19 +168,23 @@ export function applyCapabilities(caps) {
   return BACKEND_CAPS
 }
 
-/** Boot-time fetch. Se llama desde AdminProvider una sola vez. */
-export async function bootCapabilities() {
+/** Lectura autenticada vinculada a una generación e identidad de sesión. */
+export async function bootCapabilities(session = null) {
+  const snapshot = capabilitySessionSnapshot(session)
+  const generation = ++capabilityRequestGeneration
   // Cerrar permisos sensibles antes de esperar la respuesta remota; así una
   // sesión nueva/stale nunca hereda temporalmente permisos del empleado previo.
   resetCashShiftCapabilities()
+  if (!snapshot.employeeToken) return BACKEND_CAPS
   try {
     const res = await apiGetCapabilities()
+    if (!isCurrentCapabilityRequest(generation, snapshot)) return BACKEND_CAPS
     // El módulo devuelve { ok: true, data: {...} } o el dict plano
     const caps = res?.data || res
     return applyCapabilities(caps)
   } catch {
     // Los permisos de cortes nunca sobreviven una lectura fallida o parcial.
-    resetCashShiftCapabilities()
+    if (isCurrentCapabilityRequest(generation, snapshot)) resetCashShiftCapabilities()
     return BACKEND_CAPS
   }
 }

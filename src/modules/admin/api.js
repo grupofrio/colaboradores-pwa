@@ -417,9 +417,13 @@ export function openCashShift(input) {
 
 function cashShiftClosePayload(input, { reclose }) {
   const value = cashShiftInput(input)
+  const expectedVersion = cashShiftInteger(value.expectedVersion, 'La versión esperada')
+  if ((!reclose && expectedVersion !== 0) || (reclose && expectedVersion < 1)) {
+    throw new TypeError('La versión esperada no corresponde al tipo de cierre.')
+  }
   const payload = {
     shift_id: cashShiftInteger(value.shiftId, 'El ID del turno', 1),
-    expected_version: cashShiftInteger(value.expectedVersion, 'La versión esperada'),
+    expected_version: expectedVersion,
     denominations: normalizeDenominations(value.denominations ?? []),
     adjustments: normalizeAdjustments(value.adjustments ?? []),
     notes: cashShiftText(value.notes, 'Las notas', { optional: true }),
@@ -509,10 +513,17 @@ export function uploadCashShiftEvidence(input) {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(value.mimeType)) {
     throw new TypeError('El MIME de evidencia no es válido.')
   }
+  const expectedVersion = cashShiftInteger(value.expectedVersion, 'La versión esperada')
+  if (
+    (value.purpose === 'close' && expectedVersion !== 0)
+    || (value.purpose === 'reclose' && expectedVersion < 1)
+  ) {
+    throw new TypeError('La versión esperada no corresponde al propósito de evidencia.')
+  }
   return api('POST', '/pwa/evidence/upload', {
     context: 'cash_shift',
     shift_id: cashShiftInteger(value.shiftId, 'El ID del turno', 1),
-    expected_version: cashShiftInteger(value.expectedVersion, 'La versión esperada'),
+    expected_version: expectedVersion,
     purpose: value.purpose,
     filename: cashShiftText(value.filename, 'El nombre del archivo'),
     file_base64: cashShiftText(value.fileBase64, 'El archivo'),

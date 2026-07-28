@@ -661,7 +661,40 @@ export function normalizeAdjustments(value) {
 }
 
 export function normalizeCashShift(value) {
-  const root = plainRecord(safeClone(value, 'El turno'), 'El turno')
+  const root = exactRecord(safeClone(value, 'El turno'), [
+    'folio',
+    'version_id',
+    'version_number',
+    'closing_type',
+    'responsible',
+    'closed_or_reclosed_at',
+    'evidence',
+    'previous_version_id',
+    'prior_totals',
+    'reopen_reason',
+    'shift',
+    'scope',
+    'period',
+    'schedule',
+    'totals',
+    'opening_fund',
+    'payments',
+    'products',
+    'product_totals',
+    'sales',
+    'cancellations',
+    'expenses',
+    'denominations',
+    'adjustments',
+    'authorizations',
+    'physical_cash',
+    'difference',
+    'difference_note',
+    'evidence_present',
+    'needs_manager_auth',
+    'needs_director_auth',
+    'printable',
+  ], 'El turno')
   const folio = exactString(ownValue(root, 'folio', 'El folio'), 'El folio', {
     allowEmpty: false,
   })
@@ -674,8 +707,9 @@ export function normalizeCashShift(value) {
   if (rawClosingType !== false && rawClosingType !== 'close' && rawClosingType !== 'reclose') {
     throw new TypeError('El tipo de cierre no es válido.')
   }
-  const rawResponsible = plainRecord(
+  const rawResponsible = exactRecord(
     ownValue(root, 'responsible', 'El responsable'),
+    ['employee_id', 'employee_name', 'user_id', 'user_name'],
     'El responsable',
   )
   const responsible = {
@@ -703,7 +737,9 @@ export function normalizeCashShift(value) {
   const rawEvidence = ownValue(root, 'evidence', 'La evidencia')
   let evidence = null
   if (rawEvidence !== false && rawEvidence !== null) {
-    const evidenceRecord = plainRecord(rawEvidence, 'La evidencia')
+    const evidenceRecord = exactRecord(rawEvidence, [
+      'id', 'name', 'mimetype', 'file_size', 'digest', 'reference',
+    ], 'La evidencia')
     evidence = {
       id: exactInteger(ownValue(evidenceRecord, 'id', 'El ID de evidencia'), 'El ID de evidencia', 1),
       name: exactString(ownValue(evidenceRecord, 'name', 'El nombre de evidencia'), 'El nombre de evidencia'),
@@ -717,7 +753,11 @@ export function normalizeCashShift(value) {
     ownValue(root, 'previous_version_id', 'La versión anterior'),
     'La versión anterior',
   )
-  const rawShift = plainRecord(ownValue(root, 'shift', 'El turno'), 'El turno')
+  const rawShift = exactRecord(
+    ownValue(root, 'shift', 'El turno'),
+    ['id', 'type', 'business_date', 'state', 'version'],
+    'El turno',
+  )
   const id = exactInteger(ownValue(rawShift, 'id', 'El ID del turno'), 'El ID del turno', 1)
   const type = ownValue(rawShift, 'type', 'El tipo de turno')
   if (typeof type !== 'string' || !SHIFT_TYPES.has(type)) {
@@ -737,14 +777,33 @@ export function normalizeCashShift(value) {
   )
   if (version !== versionNumber) throw new TypeError('La versión del turno no coincide.')
 
-  const rawPeriod = plainRecord(ownValue(root, 'period', 'El periodo'), 'El periodo')
+  const rawPeriod = exactRecord(
+    ownValue(root, 'period', 'El periodo'),
+    ['opened_at', 'closed_at', 'timezone'],
+    'El periodo',
+  )
   const timezone = ownValue(rawPeriod, 'timezone', 'La zona horaria')
   if (timezone !== 'America/Mexico_City') {
     throw new TypeError('La zona horaria del turno no es válida.')
   }
-  const rawSchedule = plainRecord(ownValue(root, 'schedule', 'El horario'), 'El horario')
-  const rawTotals = plainRecord(ownValue(root, 'totals', 'Los totales'), 'Los totales')
-  const rawScope = plainRecord(ownValue(root, 'scope', 'El alcance'), 'El alcance')
+  const rawSchedule = exactRecord(
+    ownValue(root, 'schedule', 'El horario'),
+    ['expected_close', 'overdue'],
+    'El horario',
+  )
+  const rawTotals = exactRecord(
+    ownValue(root, 'totals', 'Los totales'),
+    ['sales_cash', 'sales_card', 'sales_total', 'expenses', 'expected_cash'],
+    'Los totales',
+  )
+  const rawScope = exactRecord(
+    ownValue(root, 'scope', 'El alcance'),
+    [
+      'company_id', 'company_name', 'warehouse_id', 'warehouse_name',
+      'analytic_account_id', 'analytic_account_name',
+    ],
+    'El alcance',
+  )
   const scope = {
     companyId: exactInteger(ownValue(rawScope, 'company_id', 'La compañía'), 'La compañía', 1),
     companyName: exactString(ownValue(rawScope, 'company_name', 'La compañía'), 'La compañía'),

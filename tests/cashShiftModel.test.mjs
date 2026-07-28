@@ -654,6 +654,30 @@ test('prior_totals solo acepta vacío o los nueve importes finitos del backend',
   assert.equal(reads, 0)
 })
 
+test('rechaza campos desconocidos en root y cada objeto estructural del DTO full', () => {
+  const evidence = {
+    id: 991,
+    name: 'arqueo.webp',
+    mimetype: 'image/webp',
+    file_size: 2000,
+    digest: 'abc123',
+    reference: 'ir.attachment:991',
+  }
+  const invalid = [
+    { unknown_root: true },
+    { responsible: { ...validShift().responsible, unknown: true } },
+    { evidence: { ...evidence, unknown: true } },
+    { shift: { ...validShift().shift, unknown: true } },
+    { scope: { ...validShift().scope, unknown: true } },
+    { period: { ...validShift().period, unknown: true } },
+    { schedule: { ...validShift().schedule, unknown: true } },
+    { totals: { ...validShift().totals, unknown: true } },
+  ]
+  for (const override of invalid) {
+    assert.throws(() => normalizeCashShift(validShift(override)), TypeError)
+  }
+})
+
 test('rechaza IDs históricos y de alcance que no sean enteros positivos reales', () => {
   for (const version_id of ['701', true, -1, 1.5]) {
     assert.throws(() => normalizeCashShift(validShift({ version_id })), TypeError)

@@ -1,5 +1,6 @@
 import test, { after, afterEach, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { createServer } from 'vite'
 
 const originalFetch = globalThis.fetch
@@ -8,6 +9,7 @@ const originalWindow = globalThis.window
 
 let vite
 let runtimePromise
+const adminContextSource = readFileSync(new URL('../src/modules/admin/AdminContext.jsx', import.meta.url), 'utf8')
 
 function createLocalStorageMock() {
   const values = new Map()
@@ -25,6 +27,12 @@ function createJsonResponse(status, payload) {
     status,
     async text() { return JSON.stringify(payload) },
   }
+}
+
+function deferred() {
+  let resolve
+  const promise = new Promise((done) => { resolve = done })
+  return { promise, resolve }
 }
 
 async function loadRuntime() {
@@ -211,6 +219,53 @@ test('evidence cash_shift conserva contexto, turno, versión, propósito, archiv
   })
 })
 
+test('close, reclose y evidence validan localmente la versión semántica exacta', async () => {
+  const { apiModule } = await loadRuntime()
+  const calls = installSuccessApi()
+  const closeDraft = {
+    shiftId: 41,
+    denominations: [],
+    adjustments: [],
+    notes: '',
+    evidenceToken: '',
+    nextOpeningFund: 300,
+    idempotencyKey: 'semantic-version',
+  }
+  await assert.rejects(async () => apiModule.closeCashShift({
+    ...closeDraft,
+    expectedVersion: 1,
+  }), TypeError)
+  await assert.rejects(async () => apiModule.recloseCashShift({
+    ...closeDraft,
+    expectedVersion: 0,
+  }), TypeError)
+  const evidence = {
+    shiftId: 41,
+    filename: 'arqueo.webp',
+    fileBase64: 'UklGRg==',
+    mimeType: 'image/webp',
+  }
+  await assert.rejects(async () => apiModule.uploadCashShiftEvidence({
+    ...evidence,
+    purpose: 'close',
+    expectedVersion: 1,
+  }), TypeError)
+  await assert.rejects(async () => apiModule.uploadCashShiftEvidence({
+    ...evidence,
+    purpose: 'reclose',
+    expectedVersion: 0,
+  }), TypeError)
+  assert.equal(calls.length, 0)
+
+  await apiModule.uploadCashShiftEvidence({
+    ...evidence,
+    purpose: 'close',
+    expectedVersion: 0,
+  })
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].payload.params.expected_version, 0)
+})
+
 test('capacidades de cash shift fallan cerradas incluso tras respuestas parciales', async () => {
   const { adminServiceModule } = await loadRuntime()
   const keys = [
@@ -292,16 +347,71 @@ test('bootCapabilities con token ausente o stale falla cerrado y nunca conserva 
     }
 
     const caps = await adminServiceModule.bootCapabilities()
-    assert.equal(calls.length, 1, tokenCase)
-    assert.equal(calls[0].url, '/odoo-api/pwa-admin/capabilities')
+    assert.equal(calls.length, tokenCase === 'missing' ? 0 : 1, tokenCase)
+    if (tokenCase === 'stale') assert.equal(calls[0].url, '/odoo-api/pwa-admin/capabilities')
     if (tokenCase === 'missing') {
-      assert.equal(calls[0].headers['X-GF-Employee-Token'], undefined)
+      assert.equal(calls[0], undefined)
     }
     for (const key of [
       'cashShiftRead', 'cashShiftManage', 'cashShiftAuthorize',
       'cashShiftPendingDetail', 'cashShiftReopen', 'cashShiftPrint',
     ]) assert.equal(caps[key], false, `${tokenCase}:${key}`)
   }
+})
+
+test('capabilities ignora la respuesta tardía de la sesión anterior', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  const slowA = deferred()
+  const fastB = deferred()
+  const seenTokens = []
+  globalThis.fetch = async (_url, options = {}) => {
+    const token = options.headers['X-GF-Employee-Token']
+    seenTokens.push(token)
+    if (token === 'token-a') return slowA.promise
+    if (token === 'token-b') return fastB.promise
+    throw new Error(`Token inesperado: ${token}`)
+  }
+  const sessionA = {
+    session_token: 'session-a',
+    gf_employee_token: 'token-a',
+    api_key: 'api-key',
+    employee_id: 717,
+    company_id: 34,
+    warehouse_id: 89,
+    odoo_employee_session_id: 'identity-a',
+  }
+  const sessionB = {
+    ...sessionA,
+    session_token: 'session-b',
+    gf_employee_token: 'token-b',
+    employee_id: 801,
+    odoo_employee_session_id: 'identity-b',
+  }
+  globalThis.localStorage.setItem('gf_session', JSON.stringify(sessionA))
+  const requestA = adminServiceModule.bootCapabilities(sessionA)
+  while (!seenTokens.includes('token-a')) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  globalThis.localStorage.setItem('gf_session', JSON.stringify(sessionB))
+  const requestB = adminServiceModule.bootCapabilities(sessionB)
+  while (!seenTokens.includes('token-b')) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  fastB.resolve(createJsonResponse(200, { ok: true, data: { cashShiftManage: false } }))
+  await requestB
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftManage, false)
+  slowA.resolve(createJsonResponse(200, { ok: true, data: { cashShiftManage: true } }))
+  await requestA
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftManage, false)
+})
+
+test('AdminProvider reinicia readiness y estado cash al cambiar identidad de sesión', () => {
+  assert.match(adminContextSource, /buildSessionIdentity\(session\)\.sessionKey/)
+  assert.match(adminContextSource, /setCapsReady\(false\)/)
+  assert.match(adminContextSource, /bootCapabilities\(session\)/)
+  assert.match(adminContextSource, /invalidateCashShiftCapabilities\(\)/)
+  assert.match(adminContextSource, /\[[^\]]*sessionIdentity[^\]]*employeeToken[^\]]*\]/)
 })
 
 function uncertain(message = 'network lost') {
@@ -557,6 +667,100 @@ test('una key reservada solo puede reintentarse con el mismo body', async () => 
     }, deps),
     /idempotencia|mismo contenido/i,
   )
+})
+
+test('stableValue rechaza arrays con getters, huecos, propiedades extra o ciclos sin ejecutar accessors', async () => {
+  const { serviceModule } = await loadRuntime()
+  let reads = 0
+  const getterArray = []
+  Object.defineProperty(getterArray, '0', {
+    enumerable: true,
+    configurable: true,
+    get() { reads += 1; return { denomination: '500', count: 1 } },
+  })
+  const holeArray = Array(1)
+  const expandoArray = []
+  expandoArray.extra = true
+  const cyclicArray = []
+  cyclicArray.push(cyclicArray)
+  let mutations = 0
+  for (const [index, denominations] of [
+    getterArray, holeArray, expandoArray, cyclicArray,
+  ].entries()) {
+    await assert.rejects(async () => serviceModule.mutateShiftWithRecovery('close', {
+      shiftId: 41,
+      expectedVersion: 0,
+      denominations,
+      idempotencyKey: `hostile-array-${index}`,
+    }, {
+      mutate: async () => { mutations += 1; return { ok: true } },
+      requestRegistry: new Map(),
+    }), TypeError)
+  }
+  assert.equal(reads, 0)
+  assert.equal(mutations, 0)
+})
+
+test('registry default se limpia y aísla la misma key manual al cambiar sesión', async () => {
+  const { serviceModule } = await loadRuntime()
+  const baseSession = {
+    session_token: 'registry-session',
+    gf_employee_token: 'registry-token',
+    employee_id: 717,
+    company_id: 34,
+    warehouse_id: 89,
+  }
+  const run = (notes) => serviceModule.mutateShiftWithRecovery('close', {
+    shiftId: 41,
+    expectedVersion: 0,
+    notes,
+    idempotencyKey: 'same-manual-key-across-sessions',
+  }, {
+    mutate: async () => ({ ok: true }),
+  })
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    ...baseSession,
+    odoo_employee_session_id: 'registry-a',
+  }))
+  await run('Sesión A')
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    ...baseSession,
+    gf_employee_token: 'registry-token-b',
+    odoo_employee_session_id: 'registry-b',
+  }))
+  await run('Sesión B')
+})
+
+test('registry acotado conserva pending y elimina operaciones terminadas antiguas', async () => {
+  const { serviceModule } = await loadRuntime()
+  const registry = new Map()
+  const registryLimit = 3
+  const pending = await serviceModule.mutateShiftWithRecovery('close', {
+    shiftId: 41,
+    expectedVersion: 0,
+    idempotencyKey: 'pending-key',
+  }, {
+    mutate: async () => { throw uncertain() },
+    getOperationStatus: async () => ({ ok: false, data: { code: 'operation_not_found' } }),
+    requestRegistry: registry,
+    registryLimit,
+    sessionIdentity: 'bounded-session',
+  })
+  assert.equal(pending.status, 'pending')
+  for (let index = 0; index < 8; index += 1) {
+    await serviceModule.mutateShiftWithRecovery('close', {
+      shiftId: 41,
+      expectedVersion: 0,
+      idempotencyKey: `completed-${index}`,
+    }, {
+      mutate: async () => ({ ok: true }),
+      requestRegistry: registry,
+      registryLimit,
+      sessionIdentity: 'bounded-session',
+    })
+  }
+  assert.ok(registry.size <= registryLimit)
+  assert.ok([...registry.keys()].some((key) => key.endsWith(':close:pending-key')))
 })
 
 test('adminService elimina siempre employee_id del gasto aunque el caller lo inyecte', async () => {

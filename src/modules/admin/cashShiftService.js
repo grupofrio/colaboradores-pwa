@@ -6,9 +6,13 @@ import {
   recloseCashShift,
   reopenCashShift,
 } from './api.js'
+import { buildSessionIdentity } from '../supervisor-ventas/v2/sessionScope.js'
 
 const OPERATIONS = new Set(['open', 'close', 'reclose', 'reopen', 'authorize'])
 const DEFAULT_REQUEST_REGISTRY = new Map()
+const DEFAULT_REGISTRY_LIMIT = 128
+let defaultRegistryIdentity = null
+let registrySequence = 0
 
 function createIdempotencyKey() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
@@ -31,7 +35,25 @@ function stableValue(value, seen = new Set()) {
   if (seen.has(value)) throw new TypeError('El contenido de la operación no es válido.')
   seen.add(value)
   if (Array.isArray(value)) {
-    const normalized = value.map((item) => stableValue(item, seen))
+    const descriptors = Object.getOwnPropertyDescriptors(value)
+    const normalized = []
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = descriptors[String(index)]
+      if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+        throw new TypeError('El contenido de la operación no es válido.')
+      }
+      normalized.push(stableValue(descriptor.value, seen))
+    }
+    for (const key of Reflect.ownKeys(descriptors)) {
+      if (key === 'length') continue
+      if (
+        typeof key !== 'string'
+        || !/^(0|[1-9]\d*)$/.test(key)
+        || Number(key) >= value.length
+      ) {
+        throw new TypeError('El contenido de la operación no es válido.')
+      }
+    }
     seen.delete(value)
     return normalized
   }
@@ -50,6 +72,74 @@ function stableValue(value, seen = new Set()) {
   }
   seen.delete(value)
   return normalized
+}
+
+function registryLimit(value) {
+  return Number.isSafeInteger(value) && value > 0 ? value : DEFAULT_REGISTRY_LIMIT
+}
+
+function trimRegistry(registry, limit) {
+  while (registry.size > limit) {
+    let candidate = null
+    for (const [key, entry] of registry) {
+      if (!entry || typeof entry !== 'object' || entry.pending !== false) continue
+      if (!candidate || entry.sequence < candidate.sequence) candidate = { key, sequence: entry.sequence }
+    }
+    if (!candidate) return
+    registry.delete(candidate.key)
+  }
+}
+
+export function resetCashShiftRequestRegistry(identity = null) {
+  DEFAULT_REQUEST_REGISTRY.clear()
+  defaultRegistryIdentity = identity ? String(identity) : null
+}
+
+function requestRegistryContext(dependencies) {
+  const identity = String(
+    dependencies.sessionIdentity || buildSessionIdentity().sessionKey,
+  )
+  if (dependencies.requestRegistry) {
+    return {
+      registry: dependencies.requestRegistry,
+      identity,
+      limit: registryLimit(dependencies.registryLimit),
+    }
+  }
+  if (defaultRegistryIdentity !== identity) {
+    resetCashShiftRequestRegistry(identity)
+  }
+  return {
+    registry: DEFAULT_REQUEST_REGISTRY,
+    identity,
+    limit: registryLimit(dependencies.registryLimit),
+  }
+}
+
+function reserveRequest(registry, registryKey, fingerprint, limit) {
+  const reserved = registry.get(registryKey)
+  const reservedFingerprint = reserved && typeof reserved === 'object'
+    ? reserved.fingerprint
+    : reserved
+  if (reservedFingerprint !== undefined && reservedFingerprint !== fingerprint) {
+    throw new TypeError('Una clave de idempotencia solo puede reutilizarse con el mismo contenido.')
+  }
+  const entry = reserved && typeof reserved === 'object'
+    ? reserved
+    : { fingerprint }
+  entry.pending = true
+  entry.sequence = ++registrySequence
+  registry.set(registryKey, entry)
+  trimRegistry(registry, limit)
+  return entry
+}
+
+function settleRequest(registry, registryKey, limit) {
+  const entry = registry.get(registryKey)
+  if (!entry || typeof entry !== 'object') return
+  entry.pending = false
+  entry.sequence = ++registrySequence
+  trimRegistry(registry, limit)
 }
 
 function requestFingerprint(operation, request) {
@@ -167,35 +257,49 @@ export async function mutateShiftWithRecovery(operation, input, dependencies = {
   const key = String(normalizedInput.idempotencyKey || createKey()).trim()
   if (!key) throw new TypeError('La clave de idempotencia no es válida.')
   const request = { ...normalizedInput, idempotencyKey: key }
-  const registry = dependencies.requestRegistry || DEFAULT_REQUEST_REGISTRY
-  const registryKey = `${operation}:${key}`
+  const registryContext = requestRegistryContext(dependencies)
+  const { registry } = registryContext
+  const registryKey = `${registryContext.identity}:${operation}:${key}`
   const fingerprint = requestFingerprint(operation, request)
-  const reserved = registry.get(registryKey)
-  if (reserved !== undefined && reserved !== fingerprint) {
-    throw new TypeError('Una clave de idempotencia solo puede reutilizarse con el mismo contenido.')
-  }
-  registry.set(registryKey, fingerprint)
+  reserveRequest(registry, registryKey, fingerprint, registryContext.limit)
+  const settle = () => settleRequest(registry, registryKey, registryContext.limit)
 
   const mutate = dependencies.mutate || defaultMutate
   const getOperationStatus = dependencies.getOperationStatus || getCashShiftOperationStatus
   try {
     const data = successfulMutationResponse(await mutate(operation, request))
+    settle()
     return { status: 'completed', data, key }
   } catch (error) {
-    if (!isUncertainCashShiftError(error)) throw error
+    if (!isUncertainCashShiftError(error)) {
+      settle()
+      throw error
+    }
   }
   try {
     const data = successfulMutationResponse(await mutate(operation, request))
+    settle()
     return { status: 'completed', data, key }
   } catch (replayError) {
-    if (!isUncertainCashShiftError(replayError)) throw replayError
+    if (!isUncertainCashShiftError(replayError)) {
+      settle()
+      throw replayError
+    }
   }
   let result
   try {
     result = await getOperationStatus({ operation, idempotencyKey: key })
   } catch (statusError) {
     if (isUncertainCashShiftError(statusError)) return pendingOperation(key, request)
+    settle()
     throw statusError
   }
-  return recoverCommittedOperation(result, operation, key, request)
+  try {
+    const recovered = recoverCommittedOperation(result, operation, key, request)
+    if (recovered.status === 'completed') settle()
+    return recovered
+  } catch (statusContractError) {
+    settle()
+    throw statusContractError
+  }
 }

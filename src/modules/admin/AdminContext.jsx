@@ -9,7 +9,12 @@ import { createContext, useContext, useMemo, useState, useCallback, useEffect } 
 import { useSession } from '../../App'
 import { COMPANY_LABELS, getCompaniesForSucursal } from '../../tokens'
 import { softWarehouse, softEmployee } from '../../lib/sessionGuards'
-import { bootCapabilities } from './adminService'
+import { buildSessionIdentity } from '../supervisor-ventas/v2/sessionScope'
+import {
+  bootCapabilities,
+  invalidateCashShiftCapabilities,
+} from './adminService'
+import { resetCashShiftRequestRegistry } from './cashShiftService'
 
 const AdminContext = createContext(null)
 
@@ -48,15 +53,22 @@ export function AdminProvider({ children }) {
 
   const [companyId, setCompanyIdInternal] = useState(initialCompanyId)
   const [capsReady, setCapsReady] = useState(false)
+  const sessionIdentity = buildSessionIdentity(session).sessionKey
+  const employeeToken = session?.odoo_employee_token || session?.gf_employee_token || ''
 
-  // Boot-time: leer capabilities del backend para ajustar BACKEND_CAPS.
-  // Si el endpoint falla (ambiente sin gf_pwa_admin), conservamos los
-  // defaults locales y seguimos adelante.
+  // Cada identidad obtiene capacidades nuevas. Cleanup invalida tanto la
+  // respuesta en vuelo como cualquier permiso sensible de la sesión anterior.
   useEffect(() => {
     let alive = true
-    bootCapabilities().finally(() => { if (alive) setCapsReady(true) })
-    return () => { alive = false }
-  }, [])
+    setCapsReady(false)
+    resetCashShiftRequestRegistry(sessionIdentity)
+    bootCapabilities(session).finally(() => { if (alive) setCapsReady(true) })
+    return () => {
+      alive = false
+      invalidateCashShiftCapabilities()
+      resetCashShiftRequestRegistry()
+    }
+  }, [session, sessionIdentity, employeeToken])
 
   // Si cambia la sesión externa (logout/login), re-sincroniza
   useEffect(() => {
