@@ -124,6 +124,20 @@ function reserveRequest(registry, registryKey, fingerprint, limit) {
   if (reservedFingerprint !== undefined && reservedFingerprint !== fingerprint) {
     throw new TypeError('Una clave de idempotencia solo puede reutilizarse con el mismo contenido.')
   }
+  if (reservedFingerprint === undefined) {
+    // Abrir espacio únicamente con operaciones ya terminadas. Una operación
+    // pending conserva siempre su key y borrador para recuperación manual.
+    trimRegistry(registry, limit - 1)
+    if (registry.size >= limit) {
+      const error = new Error(
+        'Hay demasiadas operaciones de corte pendientes. Confirma o recupera una antes de continuar.',
+      )
+      error.name = 'CashShiftRegistryError'
+      error.code = 'cash_shift_pending_limit'
+      error.details = { limit }
+      throw error
+    }
+  }
   const entry = reserved && typeof reserved === 'object'
     ? reserved
     : { fingerprint }

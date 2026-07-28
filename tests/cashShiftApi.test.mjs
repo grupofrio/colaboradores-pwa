@@ -763,6 +763,52 @@ test('registry acotado conserva pending y elimina operaciones terminadas antigua
   assert.ok([...registry.keys()].some((key) => key.endsWith(':close:pending-key')))
 })
 
+test('registry rechaza una key nueva si el límite está ocupado solo por pending', async () => {
+  const { serviceModule } = await loadRuntime()
+  const registry = new Map()
+  const registryLimit = 2
+  let mutationCalls = 0
+  let statusCalls = 0
+  const pendingDependencies = {
+    mutate: async () => { mutationCalls += 1; throw uncertain() },
+    getOperationStatus: async () => {
+      statusCalls += 1
+      return { ok: false, data: { code: 'operation_not_found' } }
+    },
+    requestRegistry: registry,
+    registryLimit,
+    sessionIdentity: 'hard-bound-session',
+  }
+  const input = (key) => ({
+    shiftId: 41,
+    expectedVersion: 0,
+    idempotencyKey: key,
+  })
+  await serviceModule.mutateShiftWithRecovery('close', input('pending-1'), pendingDependencies)
+  await serviceModule.mutateShiftWithRecovery('close', input('pending-2'), pendingDependencies)
+  const callsBeforeReject = { mutationCalls, statusCalls }
+
+  await assert.rejects(
+    serviceModule.mutateShiftWithRecovery('close', input('pending-3'), pendingDependencies),
+    (error) => error?.code === 'cash_shift_pending_limit' && /pendientes/i.test(error.message),
+  )
+  assert.deepEqual({ mutationCalls, statusCalls }, callsBeforeReject)
+  assert.equal(registry.size, 2)
+  assert.ok([...registry.keys()].some((key) => key.endsWith(':close:pending-1')))
+  assert.ok([...registry.keys()].some((key) => key.endsWith(':close:pending-2')))
+
+  await serviceModule.mutateShiftWithRecovery('close', input('pending-1'), {
+    ...pendingDependencies,
+    mutate: async () => { mutationCalls += 1; return { ok: true } },
+  })
+  await serviceModule.mutateShiftWithRecovery('close', input('pending-3'), {
+    ...pendingDependencies,
+    mutate: async () => { mutationCalls += 1; return { ok: true } },
+  })
+  assert.equal(registry.size, 2)
+  assert.ok([...registry.keys()].some((key) => key.endsWith(':close:pending-3')))
+})
+
 test('adminService elimina siempre employee_id del gasto aunque el caller lo inyecte', async () => {
   const { adminServiceModule } = await loadRuntime()
   const calls = installSuccessApi()
