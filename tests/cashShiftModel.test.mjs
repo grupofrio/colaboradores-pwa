@@ -271,6 +271,17 @@ test('normaliza metadatos versionados e IDs históricos sin perder la fotografí
       digest: 'abc123',
       reference: 'ir.attachment:991',
     },
+    prior_totals: {
+      sales_cash: 600,
+      sales_card: 200,
+      sales_total: 800,
+      expenses_total: 50,
+      adjustment_income_total: 20,
+      adjustment_expense_total: 5,
+      expected_cash: 1065,
+      physical_cash: 1060,
+      difference: -5,
+    },
     shift: { ...validShift().shift, version: 2, state: 'closed' },
     denominations: [{
       id: 801,
@@ -314,6 +325,17 @@ test('normaliza metadatos versionados e IDs históricos sin perder la fotografí
     fileSize: 2000,
     digest: 'abc123',
     reference: 'ir.attachment:991',
+  })
+  assert.deepEqual(dto.priorTotals, {
+    salesCash: 600,
+    salesCard: 200,
+    salesTotal: 800,
+    expensesTotal: 50,
+    adjustmentIncomeTotal: 20,
+    adjustmentExpenseTotal: 5,
+    expectedCash: 1065,
+    physicalCash: 1060,
+    difference: -5,
   })
   assert.deepEqual(dto.denominations, [{
     id: 801,
@@ -480,6 +502,34 @@ test('valida y conserva el esquema exacto de snapshots live de productos y movim
       cancelled_by_user_id: 44,
       cancelled_at: '2026-07-26 20:35:00',
       origin: 'admin',
+    }, {
+      order_id: 504,
+      name: 'S00504',
+      amount_total: 30,
+      payment_method: 'cash',
+      employee_id: 717,
+      recorded_at: '2026-07-27 11:00:00',
+      channel: 'day',
+      reason_code: 'out_of_stock',
+      reason_text: 'Falta de stock',
+      cancelled_by_employee_id: 717,
+      cancelled_by_user_id: 44,
+      cancelled_at: '2026-07-27 11:05:00',
+      origin: 'day',
+    }, {
+      order_id: 505,
+      name: 'S00505',
+      amount_total: 40,
+      payment_method: 'transfer',
+      employee_id: false,
+      recorded_at: '2026-07-27 12:00:00',
+      channel: 'legacy_pwa',
+      reason_code: false,
+      reason_text: false,
+      cancelled_by_employee_id: false,
+      cancelled_by_user_id: false,
+      cancelled_at: false,
+      origin: false,
     }],
     expenses: [{
       expense_id: 601,
@@ -569,6 +619,39 @@ test('rechaza IDs, enums, importes y timestamps inválidos en cualquier snapshot
   for (const override of invalidSnapshots) {
     assert.throws(() => normalizeCashShift(validShift(override)), TypeError)
   }
+})
+
+test('prior_totals solo acepta vacío o los nueve importes finitos del backend', () => {
+  const valid = {
+    sales_cash: 600,
+    sales_card: 200,
+    sales_total: 800,
+    expenses_total: 50,
+    adjustment_income_total: 20,
+    adjustment_expense_total: 5,
+    expected_cash: 1065,
+    physical_cash: 1060,
+    difference: -5,
+  }
+  assert.deepEqual(normalizeCashShift(validShift({ prior_totals: {} })).priorTotals, {})
+
+  for (const prior_totals of [
+    { ...valid, sales_cash: '600' },
+    { ...valid, sales_cash: true },
+    { ...valid, unknown_total: 1 },
+    Object.fromEntries(Object.entries(valid).slice(1)),
+    Object.assign(Object.create({ sales_cash: 600 }), valid),
+  ]) {
+    assert.throws(() => normalizeCashShift(validShift({ prior_totals })), TypeError)
+  }
+
+  let reads = 0
+  const accessor = {
+    ...valid,
+    get difference() { reads += 1; return -5 },
+  }
+  assert.throws(() => normalizeCashShift(validShift({ prior_totals: accessor })), TypeError)
+  assert.equal(reads, 0)
 })
 
 test('rechaza IDs históricos y de alcance que no sean enteros positivos reales', () => {

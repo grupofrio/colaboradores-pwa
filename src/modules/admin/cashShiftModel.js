@@ -296,6 +296,41 @@ function normalizeProductTotals(value) {
   }
 }
 
+function normalizePriorTotals(value) {
+  const record = plainRecord(value, 'Los totales previos')
+  if (Object.keys(record).length === 0) return {}
+  const row = exactRecord(record, [
+    'sales_cash',
+    'sales_card',
+    'sales_total',
+    'expenses_total',
+    'adjustment_income_total',
+    'adjustment_expense_total',
+    'expected_cash',
+    'physical_cash',
+    'difference',
+  ], 'Los totales previos')
+  return {
+    salesCash: serverNumber(row, 'sales_cash', 'Las ventas previas en efectivo'),
+    salesCard: serverNumber(row, 'sales_card', 'Las ventas previas con terminal'),
+    salesTotal: serverNumber(row, 'sales_total', 'Las ventas previas totales'),
+    expensesTotal: serverNumber(row, 'expenses_total', 'Los gastos previos'),
+    adjustmentIncomeTotal: serverNumber(
+      row,
+      'adjustment_income_total',
+      'Los ingresos ajustados previos',
+    ),
+    adjustmentExpenseTotal: serverNumber(
+      row,
+      'adjustment_expense_total',
+      'Los egresos ajustados previos',
+    ),
+    expectedCash: serverNumber(row, 'expected_cash', 'El efectivo esperado previo'),
+    physicalCash: serverNumber(row, 'physical_cash', 'El efectivo físico previo'),
+    difference: serverNumber(row, 'difference', 'La diferencia previa'),
+  }
+}
+
 function normalizePaymentSnapshots(value) {
   const row = exactRecord(value, ['cash', 'card', 'total', 'rows'], 'Los pagos')
   const orderIds = new Set()
@@ -735,7 +770,7 @@ export function normalizeCashShift(value) {
     closedOrReclosedAt,
     evidence,
     previousVersionId,
-    priorTotals: safeClone(ownValue(root, 'prior_totals', 'Los totales previos'), 'Los totales previos'),
+    priorTotals: normalizePriorTotals(ownValue(root, 'prior_totals', 'Los totales previos')),
     reopenReason: exactString(ownValue(root, 'reopen_reason', 'La razón de reapertura'), 'La razón de reapertura'),
     shift: { id, type, businessDate, state, version },
     scope,
