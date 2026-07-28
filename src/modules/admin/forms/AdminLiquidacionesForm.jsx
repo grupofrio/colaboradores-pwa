@@ -26,9 +26,11 @@ import { BACKEND_CAPS } from '../adminService'
 import RouteFormatViewer from '../components/RouteFormatViewer'
 import {
   getDefaultLiquidationHistoryDateRange,
+  getLiquidationPlanId,
   getLiquidationValidationOutcome,
   normalizeLiquidationDetailResponse,
   normalizeLiquidationListResponse,
+  resolveLiquidationHistorySelection,
 } from '../liquidacionesResponse'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -206,6 +208,16 @@ export default function AdminLiquidacionesForm() {
         </div>
       )}
 
+      {success && (
+        <div style={{
+          padding: '10px 14px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
+          background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}40`,
+          fontSize: 12, fontWeight: 600, color: TOKENS.colors.success,
+        }}>
+          {success}
+        </div>
+      )}
+
       {view === 'history' ? (
         <LiquidacionesHistory
           companyId={companyId}
@@ -233,16 +245,6 @@ export default function AdminLiquidacionesForm() {
           {error}
         </div>
       )}
-      {success && (
-        <div style={{
-          padding: '10px 14px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
-          background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}40`,
-          fontSize: 12, fontWeight: 600, color: TOKENS.colors.success,
-        }}>
-          {success}
-        </div>
-      )}
-
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 0.85fr) minmax(0, 1.3fr)',
@@ -281,7 +283,7 @@ export default function AdminLiquidacionesForm() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 'calc(100dvh - 260px)', overflowY: 'auto' }}>
               {list.map(plan => {
-                const planId = plan.plan_id ?? plan.id
+                const planId = getLiquidationPlanId(plan)
                 const active = planId === selectedId
                 return (
                   <button
@@ -584,13 +586,11 @@ function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null
         const rows = normalizeLiquidationListResponse(res, ['plans', 'history'])
         if (alive) {
           setList(rows)
-          setSelectedId((current) => {
-            if (current && rows.some((plan) => plan.id === current)) return current
-            if (initialSelectedId && rows.some((plan) => plan.id === initialSelectedId)) {
-              return initialSelectedId
-            }
-            return null
-          })
+          setSelectedId((current) => resolveLiquidationHistorySelection(
+            rows,
+            current,
+            initialSelectedId,
+          ))
         }
       } catch (e) {
         if (alive) setError(e?.message || 'Error al cargar historial')
@@ -716,7 +716,7 @@ function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null
               maxHeight: 'calc(100dvh - 380px)', overflowY: 'auto',
             }}>
               {list.map(plan => {
-                const planId = plan.plan_id ?? plan.id
+                const planId = getLiquidationPlanId(plan)
                 const active = planId === selectedId
                 return (
                   <button

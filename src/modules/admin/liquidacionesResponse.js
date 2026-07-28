@@ -58,6 +58,18 @@ export function getLiquidationValidationOutcome(planId, response) {
   }
 }
 
+export function getLiquidationPlanId(plan) {
+  return plan?.plan_id ?? plan?.id ?? null
+}
+
+export function resolveLiquidationHistorySelection(rows, currentId, initialSelectedId) {
+  const includesId = (id) => id != null && rows.some((plan) => getLiquidationPlanId(plan) === id)
+
+  if (includesId(currentId)) return currentId
+  if (includesId(initialSelectedId)) return initialSelectedId
+  return null
+}
+
 export function getDefaultLiquidationHistoryDateRange(today = new Date()) {
   const currentDay = localIsoDate(today)
   return {

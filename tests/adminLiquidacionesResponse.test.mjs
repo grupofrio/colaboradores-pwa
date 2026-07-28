@@ -6,6 +6,7 @@ import * as liquidaciones from '../src/modules/admin/liquidacionesResponse.js'
 const {
   getLiquidationValidationOutcome,
   normalizeLiquidationListResponse,
+  resolveLiquidationHistorySelection,
 } = liquidaciones
 
 test('liquidation list response surfaces forbidden envelopes instead of empty rows', () => {
@@ -92,4 +93,12 @@ test('liquidation validation error envelope throws the exact physical receipt er
     }),
     new RegExp(physicalReceiptError.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
   )
+})
+
+test('liquidation history selection uses plan_id when the list exposes both identifiers', () => {
+  const rows = [{ id: 7, plan_id: 42, name: 'R-42' }]
+
+  assert.equal(resolveLiquidationHistorySelection(rows, 42, null), 42)
+  assert.equal(resolveLiquidationHistorySelection(rows, null, 42), 42)
+  assert.equal(resolveLiquidationHistorySelection(rows, 7, 42), 42)
 })
