@@ -99,6 +99,18 @@ function validDate(value, label = 'La fecha') {
   return value
 }
 
+function validTimezone(value, label = 'La zona horaria') {
+  if (typeof value !== 'string' || !value || value !== value.trim()) {
+    throw new TypeError(`${label} no es válida.`)
+  }
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format(0)
+  } catch {
+    throw new TypeError(`${label} no es válida.`)
+  }
+  return value
+}
+
 function optionalDatetime(value, label) {
   if (value === false || value === null || value === undefined || value === '') return null
   if (typeof value !== 'string') {
@@ -782,10 +794,10 @@ export function normalizeCashShift(value) {
     ['opened_at', 'closed_at', 'timezone'],
     'El periodo',
   )
-  const timezone = ownValue(rawPeriod, 'timezone', 'La zona horaria')
-  if (timezone !== 'America/Mexico_City') {
-    throw new TypeError('La zona horaria del turno no es válida.')
-  }
+  const timezone = validTimezone(
+    ownValue(rawPeriod, 'timezone', 'La zona horaria'),
+    'La zona horaria del turno',
+  )
   const rawSchedule = exactRecord(
     ownValue(root, 'schedule', 'El horario'),
     ['expected_close', 'overdue'],

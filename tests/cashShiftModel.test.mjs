@@ -92,6 +92,7 @@ test('normaliza un turno estricto sin recalcular ni aceptar autoridad local sobr
   assert.equal(dto.shift.type, 'night')
   assert.equal(dto.shift.businessDate, '2026-07-27')
   assert.equal(dto.shift.state, 'open')
+  assert.equal(dto.period.timezone, 'America/Mexico_City')
   assert.deepEqual(dto.totals, {
     salesCash: 800,
     salesCard: 200,
@@ -101,6 +102,14 @@ test('normaliza un turno estricto sin recalcular ni aceptar autoridad local sobr
   })
   assert.equal(dto.physicalCash, 0)
   assert.equal(dto.difference, -1200)
+})
+
+test('acepta la zona IANA autoritativa configurada por la sucursal', () => {
+  const dto = normalizeCashShift(validShift({
+    period: { ...validShift().period, timezone: 'America/Tijuana' },
+  }))
+
+  assert.equal(dto.period.timezone, 'America/Tijuana')
 })
 
 test('rechaza IDs, fechas, estados, tipos y zona horaria inválidos', () => {
@@ -130,7 +139,7 @@ test('rechaza IDs, fechas, estados, tipos y zona horaria inválidos', () => {
   )
   assert.throws(
     () => normalizeCashShift(validShift({
-      period: { ...validShift().period, timezone: 'UTC' },
+      period: { ...validShift().period, timezone: 'America/Iguala' },
     })),
     TypeError,
   )

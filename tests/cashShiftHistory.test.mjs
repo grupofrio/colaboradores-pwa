@@ -352,16 +352,18 @@ test('print view includes exact snapshot audit fields and obeys printable gate',
   vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
   const { default: PrintView } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftPrintView.jsx')
   const onPrintCalls = []
+  const payload = historyPayload()
+  payload.shifts.forEach((shift) => { shift.period.timezone = 'America/Tijuana' })
   let renderer
   await act(async () => {
     renderer = TestRenderer.create(React.createElement(PrintView, {
-      cashShift: model.normalizeCashShiftHistory(historyPayload(), '2026-07-27').shifts[0],
+      cashShift: model.normalizeCashShiftHistory(payload, '2026-07-27').shifts[0],
       onPrint: () => onPrintCalls.push('print'),
     }))
   })
   const text = renderedText(renderer)
   for (const expected of [
-    'CT/POS/2026/00041', 'Angy', 'Fecha operativa', 'Noche', 'America/Mexico_City',
+    'CT/POS/2026/00041', 'Angy', 'Fecha operativa', 'Noche', 'America/Tijuana',
     'Pagos', 'Productos', 'Gastos', 'Cancelaciones', 'Ventas y tickets', 'Ajustes',
     'Fondo inicial', 'Denominación', 'Físico', 'Esperado', 'Diferencia', 'Sobrante revisado',
     'ir.attachment:541', 'sha256-41', 'Autorizaciones', 'Versión 1',
