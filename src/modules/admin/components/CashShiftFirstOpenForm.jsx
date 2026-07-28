@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { zonedWallTimeToUtcMs } from '../cashShiftTime.js'
 
 function money(value) {
   return new Intl.NumberFormat('es-MX', {
@@ -58,39 +59,39 @@ function initialDraft() {
   return { shiftType: '', businessDate: '', startAt: '', openingFund: '' }
 }
 
-const MEXICO_CLOCK = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'America/Mexico_City',
-  year: 'numeric', month: '2-digit', day: '2-digit',
-  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-})
-
 function mexicoWallTimeToUtc(value) {
-  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
-  if (!match) throw new TypeError('La hora inicial no es válida.')
-  const desired = match.slice(1).map(Number)
-  const target = Date.UTC(desired[0], desired[1] - 1, desired[2], desired[3], desired[4], 0)
-  const semantic = new Date(target)
-  if (
-    semantic.getUTCFullYear() !== desired[0]
-    || semantic.getUTCMonth() !== desired[1] - 1
-    || semantic.getUTCDate() !== desired[2]
-    || desired[3] > 23 || desired[4] > 59
-  ) throw new TypeError('La hora inicial no es válida.')
-
-  let instant = target
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const parts = Object.fromEntries(
-      MEXICO_CLOCK.formatToParts(new Date(instant)).map((part) => [part.type, part.value]),
-    )
-    const represented = Date.UTC(
-      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
-      Number(parts.hour), Number(parts.minute), Number(parts.second),
-    )
-    const correction = target - represented
-    instant += correction
-    if (correction === 0) break
-  }
+  const instant = zonedWallTimeToUtcMs(value, 'America/Mexico_City')
+  if (!Number.isFinite(instant)) throw new TypeError('La hora inicial no es válida.')
   return new Date(instant).toISOString().replace('T', ' ').slice(0, 19)
+}
+
+function canonicalDraft(source) {
+  const openingFund = Number(source.openingFund)
+  if (
+    !['night', 'day'].includes(source.shiftType)
+    || !/^\d{4}-\d{2}-\d{2}$/.test(source.businessDate)
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(source.startAt)
+    || source.openingFund === ''
+    || !Number.isFinite(openingFund)
+    || openingFund < 0
+  ) {
+    throw new TypeError('Completa tipo, fecha operativa, hora inicial y fondo inicial.')
+  }
+  return {
+    shiftType: source.shiftType,
+    businessDate: source.businessDate,
+    startAt: mexicoWallTimeToUtc(source.startAt),
+    openingFund,
+  }
+}
+
+function draftFingerprint(request) {
+  return JSON.stringify([
+    request.shiftType,
+    request.businessDate,
+    request.startAt,
+    request.openingFund,
+  ])
 }
 
 export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
@@ -100,36 +101,43 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
   const [error, setError] = useState('')
   const [pendingRequest, setPendingRequest] = useState(null)
   const mounted = useRef(false)
+  const draftRef = useRef(draft)
+  const generationRef = useRef(0)
+  const previewData = preview?.data
 
   useEffect(() => {
     mounted.current = true
-    return () => { mounted.current = false }
+    return () => {
+      mounted.current = false
+      generationRef.current += 1
+    }
   }, [])
 
   function update(field, value) {
-    setDraft((current) => ({ ...current, [field]: value }))
+    const next = { ...draftRef.current, [field]: value }
+    draftRef.current = next
+    generationRef.current += 1
+    setDraft(next)
     setPreview(null)
+    setBusy(false)
     setError('')
   }
 
-  function validatedDraft() {
-    const openingFund = Number(draft.openingFund)
-    if (
-      !['night', 'day'].includes(draft.shiftType)
-      || !/^\d{4}-\d{2}-\d{2}$/.test(draft.businessDate)
-      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(draft.startAt)
-      || draft.openingFund === ''
-      || !Number.isFinite(openingFund)
-      || openingFund < 0
-    ) {
-      throw new TypeError('Completa tipo, fecha operativa, hora inicial y fondo inicial.')
+  function isCurrentPreviewRequest(generation, fingerprint) {
+    if (!mounted.current || generationRef.current !== generation) return false
+    try {
+      return draftFingerprint(canonicalDraft(draftRef.current)) === fingerprint
+    } catch {
+      return false
     }
-    return {
-      shiftType: draft.shiftType,
-      businessDate: draft.businessDate,
-      startAt: mexicoWallTimeToUtc(draft.startAt),
-      openingFund,
-    }
+  }
+
+  function previewMatchesCurrentDraft(candidate) {
+    return Boolean(
+      candidate
+      && candidate.generation === generationRef.current
+      && isCurrentPreviewRequest(candidate.generation, candidate.fingerprint),
+    )
   }
 
   async function review(event) {
@@ -137,11 +145,15 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
     setError('')
     let request
     try {
-      request = validatedDraft()
+      request = canonicalDraft(draftRef.current)
     } catch (validationError) {
       setError(validationError.message)
       return
     }
+    const fingerprint = draftFingerprint(request)
+    const generation = generationRef.current + 1
+    generationRef.current = generation
+    setPreview(null)
     setBusy(true)
     try {
       const response = await onPreview({
@@ -150,11 +162,20 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
         businessDate: request.businessDate,
         startAt: request.startAt,
       })
-      if (mounted.current) setPreview(normalizePreview(response))
+      if (isCurrentPreviewRequest(generation, fingerprint)) {
+        setPreview({
+          data: normalizePreview(response),
+          draft: request,
+          fingerprint,
+          generation,
+        })
+      }
     } catch {
-      if (mounted.current) setError('No se pudo obtener la vista previa del servidor. Inténtalo de nuevo.')
+      if (isCurrentPreviewRequest(generation, fingerprint)) {
+        setError('No se pudo obtener la vista previa del servidor. Inténtalo de nuevo.')
+      }
     } finally {
-      if (mounted.current) setBusy(false)
+      if (isCurrentPreviewRequest(generation, fingerprint)) setBusy(false)
     }
   }
 
@@ -162,7 +183,13 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
     setError('')
     let request
     try {
-      request = pendingRequest || validatedDraft()
+      if (pendingRequest) {
+        request = pendingRequest
+      } else if (previewMatchesCurrentDraft(preview)) {
+        request = preview.draft
+      } else {
+        throw new TypeError('El borrador cambió; vuelve a revisar los movimientos antes de abrir.')
+      }
     } catch (validationError) {
       setError(validationError.message)
       return
@@ -216,23 +243,23 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
 
       {error ? <p className="cash-shift-error" role="alert">{error}</p> : null}
 
-      {preview ? (
+      {previewData ? (
         <div className="cash-shift-preview" aria-live="polite">
           <h3>Vista previa del servidor</h3>
-          <p>Generada en: <strong>{preview.serverPreviewAt}</strong></p>
+          <p>Generada en: <strong>{previewData.serverPreviewAt}</strong></p>
           <p>
-            Intervalo: <strong>{preview.interval[0]}</strong> → <strong>{preview.interval[1]}</strong>.
+            Intervalo: <strong>{previewData.interval[0]}</strong> → <strong>{previewData.interval[1]}</strong>.
             Incluye el inicio y excluye la hora final.
           </p>
           <div className="cash-shift-preview-counts">
-            <span>{preview.salesCount} {preview.salesCount === 1 ? 'venta elegible' : 'ventas elegibles'}</span>
-            <span>{preview.expensesCount} {preview.expensesCount === 1 ? 'gasto elegible' : 'gastos elegibles'}</span>
+            <span>{previewData.salesCount} {previewData.salesCount === 1 ? 'venta elegible' : 'ventas elegibles'}</span>
+            <span>{previewData.expensesCount} {previewData.expensesCount === 1 ? 'gasto elegible' : 'gastos elegibles'}</span>
           </div>
           <div className="cash-shift-eligible-grid">
             <section aria-labelledby="cash-shift-eligible-sales-title">
               <h4 id="cash-shift-eligible-sales-title">Ventas elegibles</h4>
               <ul className="cash-shift-eligible-list">
-                {preview.sales.map((sale) => (
+                {previewData.sales.map((sale) => (
                   <li key={sale.key}><span>{sale.name}</span><strong>{money(sale.total)}</strong></li>
                 ))}
               </ul>
@@ -240,17 +267,17 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
             <section aria-labelledby="cash-shift-eligible-expenses-title">
               <h4 id="cash-shift-eligible-expenses-title">Gastos elegibles</h4>
               <ul className="cash-shift-eligible-list">
-                {preview.expenses.map((expense) => (
+                {previewData.expenses.map((expense) => (
                   <li key={expense.key}><span>{expense.name}</span><strong>{money(expense.total)}</strong></li>
                 ))}
               </ul>
             </section>
           </div>
           <dl className="cash-shift-preview-totals">
-            <div><dt>Ventas en efectivo</dt><dd>{money(preview.totals.cash)}</dd></div>
-            <div><dt>Ventas con terminal</dt><dd>{money(preview.totals.card)}</dd></div>
-            <div><dt>Ventas totales</dt><dd>{money(preview.totals.sales)}</dd></div>
-            <div><dt>Gastos</dt><dd>{money(preview.totals.expenses)}</dd></div>
+            <div><dt>Ventas en efectivo</dt><dd>{money(previewData.totals.cash)}</dd></div>
+            <div><dt>Ventas con terminal</dt><dd>{money(previewData.totals.card)}</dd></div>
+            <div><dt>Ventas totales</dt><dd>{money(previewData.totals.sales)}</dd></div>
+            <div><dt>Gastos</dt><dd>{money(previewData.totals.expenses)}</dd></div>
           </dl>
           <p className="cash-shift-info">
             Al confirmar, el servidor vuelve a evaluar bajo bloqueo los movimientos. Una venta recién creada quedará completa en el turno correcto.

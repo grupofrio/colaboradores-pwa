@@ -8,6 +8,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 let vite
 let runtimePromise
+let firstOpenRuntimePromise
 
 function deferred() {
   let resolve
@@ -94,15 +95,15 @@ function pendingDetail() {
   }
 }
 
-function initialPreview() {
+function initialPreview({ serverPreviewAt = '2026-07-26 23:55:00', saleName = 'POS/1001' } = {}) {
   return {
     mode: 'initial',
     config_state: 'inactive',
-    server_preview_at: '2026-07-26 23:55:00',
+    server_preview_at: serverPreviewAt,
     interval: ['2026-07-26 18:00:00', '2026-07-26 23:55:00'],
     requested_shift: { shift_type: 'night', business_date: '2026-07-27' },
     eligible_sales: [
-      { id: 1001, display_name: 'POS/1001', total: 350, state: 'sale', payment_method: 'cash', channel: 'admin' },
+      { id: 1001, display_name: saleName, total: 350, state: 'sale', payment_method: 'cash', channel: 'admin' },
     ],
     eligible_expenses: [
       { id: 2001, display_name: 'Hielo', total: 50 },
@@ -122,6 +123,13 @@ async function loadRuntime() {
     })()
   }
   return runtimePromise
+}
+
+async function loadFirstOpenRuntime() {
+  if (!firstOpenRuntimePromise) {
+    firstOpenRuntimePromise = vite.ssrLoadModule('/src/modules/admin/components/CashShiftFirstOpenForm.jsx')
+  }
+  return firstOpenRuntimePromise
 }
 
 after(async () => {
@@ -155,6 +163,40 @@ async function mount(props) {
     await flush()
   })
   return renderer
+}
+
+async function mountFirstOpen(props) {
+  await loadRuntime()
+  const { default: FirstOpenForm } = await loadFirstOpenRuntime()
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(React.createElement(FirstOpenForm, props))
+    await flush()
+  })
+  return renderer
+}
+
+function changeOpenField(renderer, name, value) {
+  const control = renderer.root.findByProps({ name })
+  act(() => control.props.onChange({ target: { value } }))
+}
+
+function fillOpenDraft(renderer, {
+  shiftType = 'night',
+  businessDate = '2026-07-27',
+  startAt = '2026-07-26T18:00',
+  openingFund = '500',
+} = {}) {
+  changeOpenField(renderer, 'shiftType', shiftType)
+  changeOpenField(renderer, 'businessDate', businessDate)
+  changeOpenField(renderer, 'startAt', startAt)
+  changeOpenField(renderer, 'openingFund', openingFund)
+}
+
+function submitPreview(renderer) {
+  act(() => {
+    void renderer.root.findByType('form').props.onSubmit({ preventDefault() {} })
+  })
 }
 
 test('loading, denied capability and missing scope fail closed without backend reads', async () => {
@@ -360,6 +402,112 @@ test('inactive config validates the four-field initial form and previews the ser
   assert.equal('movementIds' in opens[0], false)
   assert.match(renderedText(renderer), /Turno activo · Noche 27/)
   act(() => renderer.unmount())
+})
+
+test('a preview response is ignored after any field changes to a different draft', async () => {
+  const previewA = deferred()
+  const renderer = await mountFirstOpen({
+    onPreview: () => previewA.promise,
+    onOpen: async () => ({ status: 'completed' }),
+  })
+  fillOpenDraft(renderer)
+  submitPreview(renderer)
+  changeOpenField(renderer, 'openingFund', '750')
+
+  await act(async () => {
+    previewA.resolve({ ok: true, data: initialPreview({ saleName: 'VENTA-A' }) })
+    await flush()
+  })
+
+  assert.doesNotMatch(renderedText(renderer), /Vista previa del servidor|VENTA-A/)
+  assert.equal(button(renderer, 'Confirmar apertura'), undefined)
+  act(() => renderer.unmount())
+})
+
+test('overlapping previews keep the newest Mexico draft when the older response arrives last', async () => {
+  const previewA = deferred()
+  const previewB = deferred()
+  const opens = []
+  let calls = 0
+  const renderer = await mountFirstOpen({
+    onPreview: () => {
+      calls += 1
+      return calls === 1 ? previewA.promise : previewB.promise
+    },
+    onOpen: async (request) => {
+      opens.push(request)
+      return { status: 'completed' }
+    },
+  })
+
+  fillOpenDraft(renderer)
+  submitPreview(renderer)
+  changeOpenField(renderer, 'businessDate', '2026-07-28')
+  changeOpenField(renderer, 'startAt', '2026-07-27T18:00')
+  changeOpenField(renderer, 'openingFund', '750')
+  submitPreview(renderer)
+
+  await act(async () => {
+    previewB.resolve({ ok: true, data: initialPreview({ serverPreviewAt: 'B-PREVIEW', saleName: 'VENTA-B' }) })
+    await flush()
+  })
+  assert.match(renderedText(renderer), /B-PREVIEW|VENTA-B/)
+
+  await act(async () => {
+    previewA.resolve({ ok: true, data: initialPreview({ serverPreviewAt: 'A-PREVIEW', saleName: 'VENTA-A' }) })
+    await flush()
+  })
+  assert.match(renderedText(renderer), /B-PREVIEW|VENTA-B/)
+  assert.doesNotMatch(renderedText(renderer), /A-PREVIEW|VENTA-A/)
+
+  await act(async () => {
+    button(renderer, 'Confirmar apertura').props.onClick()
+    await flush()
+  })
+  assert.deepEqual(opens, [{
+    shiftType: 'night',
+    businessDate: '2026-07-28',
+    startAt: '2026-07-28 00:00:00',
+    openingFund: 750,
+  }])
+  act(() => renderer.unmount())
+})
+
+test('a stale confirm handler cannot open a draft different from the previewed draft', async () => {
+  const opens = []
+  const renderer = await mountFirstOpen({
+    onPreview: async () => ({ ok: true, data: initialPreview() }),
+    onOpen: async (request) => { opens.push(request); return { status: 'completed' } },
+  })
+  fillOpenDraft(renderer)
+  submitPreview(renderer)
+  await act(async () => { await flush() })
+  const staleConfirm = button(renderer, 'Confirmar apertura').props.onClick
+
+  changeOpenField(renderer, 'openingFund', '900')
+  await act(async () => {
+    staleConfirm()
+    await flush()
+  })
+
+  assert.deepEqual(opens, [])
+  assert.match(renderedText(renderer), /vuelve a revisar los movimientos/i)
+  act(() => renderer.unmount())
+})
+
+test('an unmounted first-open form ignores its pending preview completion', async () => {
+  const pending = deferred()
+  const renderer = await mountFirstOpen({
+    onPreview: () => pending.promise,
+    onOpen: async () => ({ status: 'completed' }),
+  })
+  fillOpenDraft(renderer)
+  submitPreview(renderer)
+  act(() => renderer.unmount())
+  await act(async () => {
+    pending.resolve({ ok: true, data: initialPreview() })
+    await flush()
+  })
 })
 
 test('desktop and mobile render the same authoritative active source, day/night copy and overdue warning', async () => {

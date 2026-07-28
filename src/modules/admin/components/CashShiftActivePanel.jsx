@@ -1,3 +1,5 @@
+import { durationFromWallTime } from '../cashShiftTime.js'
+
 function money(value) {
   return new Intl.NumberFormat('es-MX', {
     style: 'currency',
@@ -9,17 +11,6 @@ function money(value) {
 function dateTime(value) {
   if (!value) return 'Por confirmar'
   return String(value).replace('T', ' ')
-}
-
-function durationFrom(value) {
-  if (!value) return 'Duración no disponible'
-  const normalized = String(value).includes('T') ? String(value) : String(value).replace(' ', 'T')
-  const opened = new Date(normalized)
-  if (Number.isNaN(opened.getTime())) return 'Duración no disponible'
-  const minutes = Math.max(0, Math.floor((Date.now() - opened.getTime()) / 60_000))
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  return hours > 0 ? `${hours} h ${rest} min` : `${rest} min`
 }
 
 export default function CashShiftActivePanel({ cashShift, layout = 'desktop' }) {
@@ -54,7 +45,7 @@ export default function CashShiftActivePanel({ cashShift, layout = 'desktop' }) 
 
       <dl className="cash-shift-period-grid">
         <div><dt>Apertura real</dt><dd>{dateTime(period.openedAt)}</dd></div>
-        <div><dt>Duración</dt><dd>{durationFrom(period.openedAt)}</dd></div>
+        <div><dt>Duración</dt><dd>{durationFromWallTime(period.openedAt, period.timezone)}</dd></div>
         <div><dt>Próximo corte esperado</dt><dd>{dateTime(schedule.expectedClose)}</dd></div>
         <div><dt>Fecha operativa</dt><dd>{shift.businessDate}</dd></div>
       </dl>
