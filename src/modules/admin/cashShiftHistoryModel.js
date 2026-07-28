@@ -5,6 +5,7 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const SHIFT_TYPES = new Set(['night', 'day'])
 const SHIFT_STATES = new Set(['open', 'pending_auth', 'closed', 'reopened'])
 const DENOMINATIONS = new Set(CASH_SHIFT_DENOMINATIONS)
+export const DEFAULT_CASH_SHIFT_TIMEZONE = 'America/Mexico_City'
 const CONSOLIDATED_FIELDS = [
   'payments', 'sales_total', 'expenses_total', 'adjustment_income_total',
   'adjustment_expense_total', 'products', 'product_totals', 'realized_order_ids',
@@ -304,20 +305,39 @@ function normalizeConsolidated(value, businessDate, normalizedShifts) {
   }
 }
 
-export function mexicoBusinessDate(nowMs = Date.now()) {
+export function mexicoBusinessDate(
+  nowMs = Date.now(),
+  timezone = DEFAULT_CASH_SHIFT_TIMEZONE,
+) {
   if (!Number.isFinite(nowMs)) throw new TypeError('La hora actual no es válida.')
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date(nowMs)).map((part) => [part.type, part.value]))
+  if (typeof timezone !== 'string' || !timezone || timezone !== timezone.trim()) {
+    throw new TypeError('La zona horaria no es válida.')
+  }
+  let formatter
+  try {
+    formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    })
+  } catch {
+    throw new TypeError('La zona horaria no es válida.')
+  }
+  const parts = Object.fromEntries(
+    formatter.formatToParts(new Date(nowMs)).map((part) => [part.type, part.value]),
+  )
   return `${parts.year}-${parts.month}-${parts.day}`
 }
 
-export function validateOperationalHistoryDate(value, nowMs = Date.now(), activeBusinessDate = null) {
+export function validateOperationalHistoryDate(
+  value,
+  nowMs = Date.now(),
+  activeBusinessDate = null,
+  timezone = DEFAULT_CASH_SHIFT_TIMEZONE,
+) {
   const date = validDate(value)
   const authorizedActiveDate = activeBusinessDate == null
     ? null
     : validDate(activeBusinessDate)
-  if (date > mexicoBusinessDate(nowMs) && date !== authorizedActiveDate) {
+  if (date > mexicoBusinessDate(nowMs, timezone) && date !== authorizedActiveDate) {
     throw new TypeError('La fecha operativa no puede ser futura en México.')
   }
   return date

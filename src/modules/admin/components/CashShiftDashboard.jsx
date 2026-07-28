@@ -655,6 +655,9 @@ export default function CashShiftDashboard({
     view.kind === 'active'
     && ['open', 'reopened'].includes(view.data?.shift?.state)
   ) ? view.data.shift.businessDate : null
+  const activeHistoryTimezone = view.kind === 'active'
+    ? view.data?.period?.timezone
+    : undefined
   if (accessMode === 'manage' && activeArea === 'history') {
     return (
       <ManageWorkspace activeArea={activeArea} onAreaChange={setActiveArea}>
@@ -662,6 +665,7 @@ export default function CashShiftDashboard({
           accessMode={accessMode}
           sessionIdentity={workflowIdentity}
           activeBusinessDate={activeHistoryBusinessDate}
+          timezone={activeHistoryTimezone}
           loadHistory={loadHistory}
           loadDetail={loadHistoryDetail}
           printWindow={printWindow}

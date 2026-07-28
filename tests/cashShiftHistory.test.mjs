@@ -324,12 +324,34 @@ test('consolidated IDs are the exact union of persisted snapshots without compar
   assert.equal(normalized.consolidated.payments.total, 1234.56)
 })
 
-test('uses Mexico civil date and rejects invalid or future operational dates', () => {
+test('uses the configured IANA civil date and rejects invalid or future operational dates', () => {
   const instant = Date.parse('2026-07-28T04:30:00Z') // 27th at 22:30 Mexico City
   assert.equal(model.mexicoBusinessDate(instant), '2026-07-27')
   assert.equal(model.validateOperationalHistoryDate('2026-07-27', instant), '2026-07-27')
   assert.throws(() => model.validateOperationalHistoryDate('2026-07-28', instant), /futura/i)
   assert.throws(() => model.validateOperationalHistoryDate('2026-02-30', instant), /válida/i)
+
+  const zoneBoundary = Date.parse('2026-07-28T06:30:00Z')
+  assert.equal(model.mexicoBusinessDate(zoneBoundary), '2026-07-28')
+  assert.equal(model.mexicoBusinessDate(zoneBoundary, 'America/Tijuana'), '2026-07-27')
+  assert.equal(
+    model.validateOperationalHistoryDate(
+      '2026-07-27', zoneBoundary, null, 'America/Tijuana',
+    ),
+    '2026-07-27',
+  )
+  assert.throws(
+    () => model.validateOperationalHistoryDate(
+      '2026-07-28', zoneBoundary, null, 'America/Tijuana',
+    ),
+    /futura/i,
+  )
+  assert.throws(
+    () => model.validateOperationalHistoryDate(
+      '2026-07-27', zoneBoundary, null, 'America/Iguala',
+    ),
+    /zona horaria/i,
+  )
 })
 
 test('allows only the authoritative active shift date when it is still civilly future', () => {
@@ -345,6 +367,19 @@ test('allows only the authoritative active shift date when it is still civilly f
   assert.throws(
     () => model.validateOperationalHistoryDate('2026-07-27', instant, 'fecha-inválida'),
     /válida/i,
+  )
+  const zoneBoundary = Date.parse('2026-07-28T06:30:00Z')
+  assert.equal(
+    model.validateOperationalHistoryDate(
+      '2026-07-28', zoneBoundary, '2026-07-28', 'America/Tijuana',
+    ),
+    '2026-07-28',
+  )
+  assert.throws(
+    () => model.validateOperationalHistoryDate(
+      '2026-07-29', zoneBoundary, '2026-07-28', 'America/Tijuana',
+    ),
+    /futura/i,
   )
 })
 
@@ -663,17 +698,21 @@ test('dashboard exposes three manage-only tabs and loads history and legacy only
   vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
   const { default: Dashboard } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftDashboard.jsx')
   const calls = []
+  const activeShift = openUnversionedShift()
+  activeShift.period.timezone = 'America/Tijuana'
+  const tijuanaHistory = historyPayload()
+  tijuanaHistory.shifts.forEach((shift) => { shift.period.timezone = 'America/Tijuana' })
   let renderer
   await act(async () => {
     renderer = TestRenderer.create(React.createElement(Dashboard, {
       accessMode: 'manage',
       scopeReady: true,
       sessionIdentity: 'manage-A',
-      loadActive: async () => openUnversionedShift(),
-      loadHistory: async ({ businessDate }) => { calls.push(`operational:${businessDate}`); return { data: historyPayload() } },
+      loadActive: async () => activeShift,
+      loadHistory: async ({ businessDate }) => { calls.push(`operational:${businessDate}`); return { data: tijuanaHistory } },
       loadLegacyHistory: async () => { calls.push('legacy'); return { data: { total_count: 0, count: 0, limit: 25, offset: 0, closings: [] } } },
       loadLegacyDetail: async () => { calls.push('legacy-detail'); return { data: {} } },
-      historyNow: () => Date.parse('2026-07-27T04:30:00Z'),
+      historyNow: () => Date.parse('2026-07-28T06:30:00Z'),
       scheduleRefresh: () => 1,
       cancelRefresh: () => {},
     }))
@@ -684,6 +723,7 @@ test('dashboard exposes three manage-only tabs and loads history and legacy only
   assert.deepEqual(calls, [])
   await act(async () => { tabs[1].props.onClick(); await flush() })
   assert.deepEqual(calls, ['operational:2026-07-27'])
+  assert.equal(renderer.root.findByProps({ name: 'cashShiftBusinessDate' }).props.max, '2026-07-27')
   const updatedTabs = renderer.root.findAll((node) => node.props.role === 'tab')
   await act(async () => { updatedTabs[2].props.onClick(); await flush() })
   assert.deepEqual(calls, ['operational:2026-07-27', 'legacy'])

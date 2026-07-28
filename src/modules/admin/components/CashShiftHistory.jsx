@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getCashShiftDetail, getCashShiftHistory } from '../api.js'
 import { normalizeCashShift } from '../cashShiftModel.js'
 import {
+  DEFAULT_CASH_SHIFT_TIMEZONE,
   mexicoBusinessDate,
   normalizeCashShiftHistory,
   operationalHistorySections,
@@ -133,13 +134,14 @@ export default function CashShiftHistory({
   accessMode,
   sessionIdentity,
   activeBusinessDate = null,
+  timezone = DEFAULT_CASH_SHIFT_TIMEZONE,
   loadHistory = getCashShiftHistory,
   loadDetail = getCashShiftDetail,
   printWindow,
   now = Date.now,
 }) {
   const renderNow = now()
-  const today = mexicoBusinessDate(renderNow)
+  const today = mexicoBusinessDate(renderNow, timezone)
   let authorizedActiveDate = null
   try {
     if (activeBusinessDate != null) {
@@ -147,6 +149,7 @@ export default function CashShiftHistory({
         activeBusinessDate,
         renderNow,
         activeBusinessDate,
+        timezone,
       )
     }
   } catch {
@@ -216,6 +219,7 @@ export default function CashShiftHistory({
         businessDate,
         now(),
         authorizedActiveDate,
+        timezone,
       )
     } catch (error) {
       setView({ status: 'validation', data: null, error: error.message })
@@ -223,7 +227,7 @@ export default function CashShiftHistory({
     }
     const workflow = captureWorkflow()
     const generation = historyGeneration.current
-    const fingerprint = `${validatedDate}|${workflow.identity}|${workflow.generation}|${generation}`
+    const fingerprint = `${validatedDate}|${timezone}|${workflow.identity}|${workflow.generation}|${generation}`
     const currentMarker = historyInFlight.current
     if (currentMarker?.fingerprint === fingerprint) {
       return currentMarker.promise
@@ -259,7 +263,7 @@ export default function CashShiftHistory({
       }
     })()
     return marker.promise
-  }, [accessMode, authorizedActiveDate, businessDate, captureWorkflow, isCurrent, loadHistory, now])
+  }, [accessMode, authorizedActiveDate, businessDate, captureWorkflow, isCurrent, loadHistory, now, timezone])
 
   useEffect(() => {
     void load()
@@ -317,7 +321,7 @@ export default function CashShiftHistory({
     setBusinessDate(value)
     setDetailView({ status: 'idle', data: null, error: '' })
     try {
-      validateOperationalHistoryDate(value, now(), authorizedActiveDate)
+      validateOperationalHistoryDate(value, now(), authorizedActiveDate, timezone)
       setView({ status: 'idle', data: null, error: '' })
     } catch (error) {
       setView({ status: 'validation', data: null, error: error.message })
