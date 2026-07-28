@@ -6,7 +6,8 @@
 //
 // UI desktop (2 columnas):
 //   ┌───────────────────┬─────────────────────┐
-//   │ Planes pendientes │ Detalle del plan    │
+//   │ Pendientes por    │ Detalle del plan    │
+//   │ validar           │                    │
 //   │ (clickable list)  │  · pagos (efectivo, │
 //   │                   │    crédito, trans)  │
 //   │                   │  · líneas reconcil. │
@@ -25,6 +26,7 @@ import { BACKEND_CAPS } from '../adminService'
 import RouteFormatViewer from '../components/RouteFormatViewer'
 import {
   getDefaultLiquidationHistoryDateRange,
+  getLiquidationValidationOutcome,
   normalizeLiquidationDetailResponse,
   normalizeLiquidationListResponse,
 } from '../liquidacionesResponse'
@@ -69,7 +71,7 @@ export default function AdminLiquidacionesForm() {
         const rows = normalizeLiquidationListResponse(res)
         if (alive) setList(rows)
       } catch (e) {
-        if (alive) setError(e?.message || 'Error al cargar liquidaciones pendientes')
+        if (alive) setError(e?.message || 'Error al cargar conciliaciones pendientes por validar')
       } finally {
         if (alive) setLoading(false)
       }
@@ -106,9 +108,10 @@ export default function AdminLiquidacionesForm() {
     setError('')
     setSuccess('')
     try {
-      await validateLiquidation(validatedPlanId)
-      setSuccess(`Liquidación del plan #${validatedPlanId} validada`)
-      setConfirmOpen(false)
+      const validation = getLiquidationValidationOutcome(
+        validatedPlanId,
+        await validateLiquidation(validatedPlanId),
+      )
       // Recargar pendientes y abrir el mismo reporte en Validadas.
       const res = await getPendingLiquidations({ companyId, warehouseId })
       const rows = normalizeLiquidationListResponse(res)
@@ -117,6 +120,8 @@ export default function AdminLiquidacionesForm() {
       setView('history')
       setSelectedId(null)
       setDetail(null)
+      setSuccess(validation.message)
+      setConfirmOpen(false)
       setTimeout(() => setSuccess(''), 3500)
     } catch (e) {
       setError(e?.message || 'Error al validar liquidación')
@@ -176,7 +181,7 @@ export default function AdminLiquidacionesForm() {
           marginBottom: 16,
         }}>
           {[
-            { id: 'pending', label: 'Pendientes' },
+            { id: 'pending', label: 'Pendientes por validar' },
             { id: 'history', label: 'Validadas' },
           ].map(t => {
             const active = view === t.id
@@ -253,7 +258,7 @@ export default function AdminLiquidacionesForm() {
             fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
             color: TOKENS.colors.textLow, margin: '0 0 12px',
           }}>
-            PENDIENTES · {list.length}
+            PENDIENTES POR VALIDAR · {list.length}
           </p>
 
           {loading ? (
@@ -270,7 +275,7 @@ export default function AdminLiquidacionesForm() {
               background: TOKENS.glass.panelSoft, border: `1px dashed ${TOKENS.colors.border}`,
             }}>
               <p style={{ fontSize: 12, color: TOKENS.colors.textMuted, margin: 0 }}>
-                Sin liquidaciones pendientes
+                No hay conciliaciones de ruta pendientes por validar
               </p>
             </div>
           ) : (
@@ -301,13 +306,6 @@ export default function AdminLiquidacionesForm() {
                         }}>
                           {plan.name || `Plan #${planId}`}
                         </p>
-                        {plan.state === 'in_progress' && (
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, padding: '1px 5px',
-                            borderRadius: 4, background: 'rgba(245,158,11,0.15)',
-                            color: TOKENS.colors.warning, whiteSpace: 'nowrap', flexShrink: 0,
-                          }}>EN RUTA</span>
-                        )}
                       </div>
                       <p style={{ fontSize: 10, color: TOKENS.colors.textMuted, margin: '2px 0 0' }}>
                         {plan.date || ''}
@@ -341,7 +339,7 @@ export default function AdminLiquidacionesForm() {
               minHeight: 300,
             }}>
               <p style={{ fontSize: 13, color: TOKENS.colors.textMuted, margin: 0 }}>
-                Selecciona una liquidación pendiente
+                Selecciona una conciliación de ruta pendiente por validar
               </p>
             </div>
           ) : detailLoading ? (
@@ -495,7 +493,7 @@ export default function AdminLiquidacionesForm() {
                   background: `${TOKENS.colors.warning}10`, border: `1px solid ${TOKENS.colors.warning}40`,
                 }}>
                   <p style={{ fontSize: 12, color: TOKENS.colors.textSoft, margin: '0 0 10px', textAlign: 'center' }}>
-                    ¿Validar la liquidación del plan #{selectedId}? Marca la reconciliación como <strong>done</strong>.
+                    ¿Validar la conciliación de inventario del plan #{selectedId}? Marca la reconciliación como <strong>done</strong>.
                   </p>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
@@ -541,7 +539,7 @@ export default function AdminLiquidacionesForm() {
                     cursor: BACKEND_CAPS.liquidaciones ? 'pointer' : 'not-allowed',
                   }}
                 >
-                  Validar liquidación
+                  Validar conciliación
                 </button>
               )}
 

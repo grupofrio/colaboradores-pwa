@@ -42,6 +42,22 @@ export function normalizeLiquidationDetailResponse(response) {
   return envelope?.data ?? envelope ?? null
 }
 
+export function getLiquidationValidationOutcome(planId, response) {
+  const envelope = assertOkResponse(response)
+  if (envelope?.ok !== true) {
+    throw new Error('Respuesta inválida de validación de liquidación')
+  }
+  const data = envelope?.data ?? envelope ?? {}
+  const alreadyValidated = Boolean(data.already_validated)
+
+  return {
+    alreadyValidated,
+    message: alreadyValidated
+      ? `Liquidación del plan #${planId} ya estaba validada`
+      : `Liquidación del plan #${planId} validada`,
+  }
+}
+
 export function getDefaultLiquidationHistoryDateRange(today = new Date()) {
   const currentDay = localIsoDate(today)
   return {

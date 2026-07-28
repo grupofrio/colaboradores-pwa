@@ -3,7 +3,10 @@ import assert from 'node:assert/strict'
 
 import * as liquidaciones from '../src/modules/admin/liquidacionesResponse.js'
 
-const { normalizeLiquidationListResponse } = liquidaciones
+const {
+  getLiquidationValidationOutcome,
+  normalizeLiquidationListResponse,
+} = liquidaciones
 
 test('liquidation list response surfaces forbidden envelopes instead of empty rows', () => {
   assert.throws(
@@ -35,5 +38,58 @@ test('liquidation history default date range starts and ends today', () => {
       dateFrom: '2026-06-03',
       dateTo: '2026-06-03',
     },
+  )
+})
+
+test('already validated liquidation is a successful validation with distinct copy', () => {
+  assert.deepEqual(
+    getLiquidationValidationOutcome(42, {
+      jsonrpc: '2.0',
+      result: {
+        ok: true,
+        data: { already_validated: true },
+      },
+    }),
+    {
+      alreadyValidated: true,
+      message: 'Liquidación del plan #42 ya estaba validada',
+    },
+  )
+})
+
+test('newly validated liquidation uses the normal success copy', () => {
+  assert.deepEqual(
+    getLiquidationValidationOutcome(42, {
+      ok: true,
+      data: { already_validated: false },
+    }),
+    {
+      alreadyValidated: false,
+      message: 'Liquidación del plan #42 validada',
+    },
+  )
+})
+
+test('liquidation validation requires an explicit successful envelope', () => {
+  assert.throws(
+    () => getLiquidationValidationOutcome(42, {
+      data: { already_validated: true },
+    }),
+    /Respuesta inválida de validación de liquidación/,
+  )
+})
+
+test('liquidation validation error envelope throws the exact physical receipt error', () => {
+  const physicalReceiptError = 'La devolución del picking WH/IN/0042 para Queso Oaxaca requiere 12.00 kg; recibidos 9.00 kg.'
+
+  assert.throws(
+    () => getLiquidationValidationOutcome(42, {
+      jsonrpc: '2.0',
+      result: {
+        ok: false,
+        message: physicalReceiptError,
+      },
+    }),
+    new RegExp(physicalReceiptError.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
   )
 })
