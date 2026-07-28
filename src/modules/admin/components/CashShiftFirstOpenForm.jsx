@@ -97,13 +97,17 @@ function draftFingerprint(request) {
 export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
   const [draft, setDraft] = useState(initialDraft)
   const [preview, setPreview] = useState(null)
-  const [busy, setBusy] = useState(false)
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const [mutationBusy, setMutationBusy] = useState(false)
   const [error, setError] = useState('')
   const [pendingRequest, setPendingRequest] = useState(null)
   const mounted = useRef(false)
   const draftRef = useRef(draft)
   const generationRef = useRef(0)
+  const mutationLockedRef = useRef(false)
+  const mutationInFlightRef = useRef(false)
   const previewData = preview?.data
+  const mutationLocked = mutationBusy || Boolean(pendingRequest)
 
   useEffect(() => {
     mounted.current = true
@@ -114,12 +118,13 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
   }, [])
 
   function update(field, value) {
+    if (mutationLockedRef.current) return
     const next = { ...draftRef.current, [field]: value }
     draftRef.current = next
     generationRef.current += 1
     setDraft(next)
     setPreview(null)
-    setBusy(false)
+    setPreviewBusy(false)
     setError('')
   }
 
@@ -142,6 +147,7 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
 
   async function review(event) {
     event?.preventDefault?.()
+    if (mutationLockedRef.current) return
     setError('')
     let request
     try {
@@ -154,7 +160,7 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
     const generation = generationRef.current + 1
     generationRef.current = generation
     setPreview(null)
-    setBusy(true)
+    setPreviewBusy(true)
     try {
       const response = await onPreview({
         mode: 'initial',
@@ -175,11 +181,12 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
         setError('No se pudo obtener la vista previa del servidor. Inténtalo de nuevo.')
       }
     } finally {
-      if (isCurrentPreviewRequest(generation, fingerprint)) setBusy(false)
+      if (isCurrentPreviewRequest(generation, fingerprint)) setPreviewBusy(false)
     }
   }
 
   async function confirm() {
+    if (mutationInFlightRef.current) return
     setError('')
     let request
     try {
@@ -194,20 +201,27 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
       setError(validationError.message)
       return
     }
-    setBusy(true)
+    mutationLockedRef.current = true
+    mutationInFlightRef.current = true
+    setMutationBusy(true)
+    let keepLocked = Boolean(pendingRequest)
     try {
       const result = await onOpen(request)
       if (!mounted.current) return
       if (result?.status === 'pending') {
+        keepLocked = true
         setPendingRequest(result.request || request)
         setError('La respuesta quedó pendiente. Reintenta exactamente la misma apertura.')
         return
       }
+      keepLocked = false
       setPendingRequest(null)
     } catch {
       if (mounted.current) setError('No se pudo abrir el primer turno. Conservamos los datos para reintentar.')
     } finally {
-      if (mounted.current) setBusy(false)
+      mutationInFlightRef.current = false
+      if (!keepLocked) mutationLockedRef.current = false
+      if (mounted.current) setMutationBusy(false)
     }
   }
 
@@ -221,23 +235,23 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
 
       <form className="cash-shift-form" onSubmit={review} noValidate>
         <label>Tipo de turno
-          <select name="shiftType" value={draft.shiftType} onChange={(event) => update('shiftType', event.target.value)}>
+          <select name="shiftType" disabled={mutationLocked} value={draft.shiftType} onChange={(event) => update('shiftType', event.target.value)}>
             <option value="">Selecciona</option>
             <option value="night">Noche</option>
             <option value="day">Día</option>
           </select>
         </label>
         <label>Fecha operativa
-          <input name="businessDate" type="date" value={draft.businessDate} onChange={(event) => update('businessDate', event.target.value)} />
+          <input name="businessDate" type="date" disabled={mutationLocked} value={draft.businessDate} onChange={(event) => update('businessDate', event.target.value)} />
         </label>
         <label>Hora inicial
-          <input name="startAt" type="datetime-local" value={draft.startAt} onChange={(event) => update('startAt', event.target.value)} />
+          <input name="startAt" type="datetime-local" disabled={mutationLocked} value={draft.startAt} onChange={(event) => update('startAt', event.target.value)} />
         </label>
         <label>Fondo inicial
-          <input name="openingFund" type="number" min="0" step="0.01" inputMode="decimal" value={draft.openingFund} onChange={(event) => update('openingFund', event.target.value)} />
+          <input name="openingFund" type="number" min="0" step="0.01" inputMode="decimal" disabled={mutationLocked} value={draft.openingFund} onChange={(event) => update('openingFund', event.target.value)} />
         </label>
-        <button className="cash-shift-primary" type="button" onClick={(event) => { void review(event) }} disabled={busy || Boolean(pendingRequest)}>
-          {busy ? 'Consultando…' : 'Revisar movimientos elegibles'}
+        <button className="cash-shift-primary" type="button" onClick={(event) => { void review(event) }} disabled={previewBusy || mutationLocked}>
+          {previewBusy ? 'Consultando…' : 'Revisar movimientos elegibles'}
         </button>
       </form>
 
@@ -282,11 +296,14 @@ export default function CashShiftFirstOpenForm({ onPreview, onOpen }) {
           <p className="cash-shift-info">
             Al confirmar, el servidor vuelve a evaluar bajo bloqueo los movimientos. Una venta recién creada quedará completa en el turno correcto.
           </p>
-          <button className="cash-shift-primary" type="button" disabled={busy} onClick={confirm}>Confirmar apertura</button>
+          <button className="cash-shift-primary" type="button" disabled={mutationLocked} onClick={confirm}>Confirmar apertura</button>
         </div>
       ) : null}
       {pendingRequest ? (
-        <button className="cash-shift-primary" type="button" disabled={busy} onClick={confirm}>Reintentar misma apertura</button>
+        <div className="cash-shift-retry-block">
+          <p className="cash-shift-info">Se reutilizarán exactamente la misma solicitud y clave congeladas.</p>
+          <button className="cash-shift-primary" type="button" disabled={mutationBusy} onClick={confirm}>Reintentar misma apertura</button>
+        </div>
       ) : null}
     </section>
   )

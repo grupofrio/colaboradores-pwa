@@ -13,7 +13,13 @@ function dateTime(value) {
   return String(value).replace('T', ' ')
 }
 
-export default function CashShiftActivePanel({ cashShift, layout = 'desktop' }) {
+export default function CashShiftActivePanel({
+  cashShift,
+  layout = 'desktop',
+  refreshing = false,
+  refreshError = '',
+  onRefresh,
+}) {
   const { shift, period, schedule, totals } = cashShift
   const shiftLabel = shift.type === 'night' ? 'Noche' : 'Día'
   const day = Number(shift.businessDate.slice(-2))
@@ -42,6 +48,13 @@ export default function CashShiftActivePanel({ cashShift, layout = 'desktop' }) 
           El corte es manual; la hora esperada funciona como referencia.
         </p>
       )}
+
+      <div className="cash-shift-actions">
+        <button className="cash-shift-primary" type="button" disabled={refreshing} onClick={onRefresh}>
+          {refreshing ? 'Actualizando…' : 'Actualizar turno'}
+        </button>
+      </div>
+      {refreshError ? <p className="cash-shift-error" role="alert">{refreshError}</p> : null}
 
       <dl className="cash-shift-period-grid">
         <div><dt>Apertura real</dt><dd>{dateTime(period.openedAt)}</dd></div>

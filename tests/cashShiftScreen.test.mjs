@@ -78,7 +78,12 @@ function validShift({ type = 'night', overdue = false } = {}) {
   }
 }
 
-function pendingDetail() {
+function pendingDetail({
+  allowedLevels = ['manager'],
+  authorizations = [],
+  needsManagerAuth = true,
+  needsDirectorAuth = false,
+} = {}) {
   return {
     detail_kind: 'pending_authorization',
     shift_id: 77,
@@ -87,11 +92,12 @@ function pendingDetail() {
     state: 'pending_auth',
     scope: { company: 'Glaciem', warehouse: 'Iguala', analytic: 'IGU34' },
     difference: 245.5,
-    needs_manager_auth: true,
-    needs_director_auth: false,
+    needs_manager_auth: needsManagerAuth,
+    needs_director_auth: needsDirectorAuth,
     note: 'Diferencia revisada',
     evidence_present: true,
-    authorizations: [],
+    allowed_levels: allowedLevels,
+    authorizations,
   }
 }
 
@@ -245,6 +251,8 @@ test('authorizer-only asks for an explicit shift and calls only minimum detail/a
   assert.deepEqual(calls, [['detail', { shiftId: 77 }]])
   assert.match(renderedText(renderer), /Autorización pendiente/)
   assert.match(renderedText(renderer), /\$245\.50/)
+  assert.equal(button(renderer, 'Autorizar gerencia')?.type, 'button')
+  assert.equal(button(renderer, 'Autorizar dirección'), undefined)
   assert.doesNotMatch(renderedText(renderer), /Turno activo|Abrir primer turno|Historial|Imprimir|Reabrir|Hacer corte/)
 
   await act(async () => {
@@ -254,6 +262,111 @@ test('authorizer-only asks for an explicit shift and calls only minimum detail/a
   assert.deepEqual(calls[1], ['authorize', { shiftId: 77, versionId: 901, level: 'manager' }])
   assert.deepEqual(calls[2], ['detail', { shiftId: 77 }])
   act(() => renderer.unmount())
+})
+
+test('pending authorization actions require backend level, outstanding need and no prior approval', async () => {
+  const authorization = (level) => ({
+    level,
+    actor_employee_id: 717,
+    actor_name: 'Autorizador',
+    authorized_at: '2026-07-27 07:00:00',
+  })
+  const scenarios = [
+    {
+      detail: pendingDetail({ allowedLevels: ['manager'], needsDirectorAuth: true }),
+      visible: 'Autorizar gerencia', hidden: 'Autorizar dirección', waiting: false,
+    },
+    {
+      detail: pendingDetail({ allowedLevels: ['director'], needsDirectorAuth: true }),
+      visible: 'Autorizar dirección', hidden: 'Autorizar gerencia', waiting: false,
+    },
+    {
+      detail: pendingDetail({
+        allowedLevels: ['manager', 'director'],
+        needsDirectorAuth: true,
+        authorizations: [authorization('manager')],
+      }),
+      visible: 'Autorizar dirección', hidden: 'Autorizar gerencia', waiting: false,
+    },
+    {
+      detail: pendingDetail({
+        allowedLevels: ['manager'],
+        needsDirectorAuth: true,
+        authorizations: [authorization('manager')],
+      }),
+      visible: null, hidden: 'Autorizar dirección', waiting: true,
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    const renderer = await mount({
+      accessMode: 'authorize',
+      scopeReady: true,
+      authorizerShiftId: 77,
+      loadPendingDetail: async () => ({ ok: true, data: scenario.detail }),
+    })
+    if (scenario.visible) assert.equal(button(renderer, scenario.visible)?.type, 'button')
+    assert.equal(Boolean(button(renderer, scenario.hidden)), false)
+    if (scenario.waiting) assert.match(renderedText(renderer), /espera autorización de otro nivel/i)
+    act(() => renderer.unmount())
+  }
+})
+
+test('manager authorization reload keeps prior level and offers only actor-permitted remainder', async () => {
+  let reads = 0
+  const renderer = await mount({
+    accessMode: 'authorize',
+    scopeReady: true,
+    authorizerShiftId: 77,
+    loadPendingDetail: async () => {
+      reads += 1
+      return {
+        ok: true,
+        data: reads === 1
+          ? pendingDetail({ allowedLevels: ['manager', 'director'], needsDirectorAuth: true })
+          : pendingDetail({
+              allowedLevels: ['manager', 'director'],
+              needsDirectorAuth: true,
+              authorizations: [{
+                level: 'manager',
+                actor_employee_id: 717,
+                actor_name: 'Gerencia',
+                authorized_at: '2026-07-27 07:00:00',
+              }],
+            }),
+      }
+    },
+    authorizePending: async () => ({
+      status: 'completed',
+      data: { ok: true, data: { state: 'pending_auth' } },
+      key: 'manager-auth',
+    }),
+  })
+  await act(async () => {
+    button(renderer, 'Autorizar gerencia').props.onClick()
+    await flush()
+  })
+  assert.equal(reads, 2)
+  assert.equal(Boolean(button(renderer, 'Autorizar gerencia')), false)
+  assert.equal(button(renderer, 'Autorizar dirección')?.type, 'button')
+  act(() => renderer.unmount())
+})
+
+test('pending authorization rejects malformed level grants and authorization rows', async () => {
+  for (const detail of [
+    pendingDetail({ allowedLevels: ['manager', 'manager'] }),
+    pendingDetail({ allowedLevels: ['owner'] }),
+    pendingDetail({ authorizations: [{ level: 'manager' }] }),
+  ]) {
+    const renderer = await mount({
+      accessMode: 'authorize',
+      scopeReady: true,
+      authorizerShiftId: 77,
+      loadPendingDetail: async () => ({ ok: true, data: detail }),
+    })
+    assert.match(renderedText(renderer), /No se pudo consultar el turno activo/)
+    act(() => renderer.unmount())
+  }
 })
 
 test('authorizer-only without deep-link stays safe and validates a manually entered shift ID', async () => {
@@ -508,6 +621,171 @@ test('an unmounted first-open form ignores its pending preview completion', asyn
     pending.resolve({ ok: true, data: initialPreview() })
     await flush()
   })
+})
+
+test('opening in flight freezes the previewed fund and pending retry reuses the exact request and key', async () => {
+  const firstOpen = deferred()
+  const attempts = []
+  const frozenRequest = {
+    shiftType: 'night',
+    businessDate: '2026-07-27',
+    startAt: '2026-07-27 00:00:00',
+    openingFund: 500,
+    idempotencyKey: 'frozen-open-key',
+  }
+  const renderer = await mountFirstOpen({
+    onPreview: async () => ({ ok: true, data: initialPreview() }),
+    onOpen: async (request) => {
+      attempts.push(request)
+      return attempts.length === 1
+        ? firstOpen.promise
+        : { status: 'completed', data: { ok: true }, key: 'frozen-open-key' }
+    },
+  })
+  fillOpenDraft(renderer)
+  submitPreview(renderer)
+  await act(async () => { await flush() })
+
+  act(() => { void button(renderer, 'Confirmar apertura').props.onClick() })
+  const fund = renderer.root.findByProps({ name: 'openingFund' })
+  assert.equal(fund.props.disabled, true)
+  act(() => fund.props.onChange({ target: { value: '900' } }))
+  assert.equal(renderer.root.findByProps({ name: 'openingFund' }).props.value, '500')
+
+  await act(async () => {
+    firstOpen.resolve({ status: 'pending', request: frozenRequest, key: 'frozen-open-key' })
+    await flush()
+  })
+  assert.equal(renderer.root.findByProps({ name: 'openingFund' }).props.value, '500')
+  assert.equal(renderer.root.findByProps({ name: 'openingFund' }).props.disabled, true)
+  assert.match(renderedText(renderer), /misma solicitud y clave/i)
+  assert.equal(button(renderer, 'Confirmar apertura')?.props.disabled, true)
+
+  await act(async () => {
+    button(renderer, 'Reintentar misma apertura').props.onClick()
+    await flush()
+  })
+  assert.deepEqual(attempts, [
+    {
+      shiftType: 'night',
+      businessDate: '2026-07-27',
+      startAt: '2026-07-27 00:00:00',
+      openingFund: 500,
+    },
+    frozenRequest,
+  ])
+  act(() => renderer.unmount())
+})
+
+test('completed pending opening reloads active state exactly once and ignores completion after unmount', async () => {
+  let activeReads = 0
+  let openCalls = 0
+  const lateOpen = deferred()
+  const renderer = await mount({
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      activeReads += 1
+      return activeReads === 1
+        ? { ok: true, data: { active: false, config_state: 'inactive' } }
+        : { ok: true, data: validShift() }
+    },
+    previewInitial: async () => ({ ok: true, data: initialPreview() }),
+    openInitial: async (request) => {
+      openCalls += 1
+      return openCalls === 1
+        ? { status: 'pending', request: { ...request, idempotencyKey: 'same-open' } }
+        : { status: 'completed', data: { ok: true }, key: 'same-open' }
+    },
+  })
+  fillOpenDraft(renderer)
+  submitPreview(renderer)
+  await act(async () => { await flush() })
+  await act(async () => {
+    button(renderer, 'Confirmar apertura').props.onClick()
+    await flush()
+  })
+  assert.equal(activeReads, 1)
+  await act(async () => {
+    button(renderer, 'Reintentar misma apertura').props.onClick()
+    await flush()
+  })
+  assert.equal(activeReads, 2)
+  assert.match(renderedText(renderer), /Turno activo/)
+  act(() => renderer.unmount())
+
+  const unmounted = await mountFirstOpen({
+    onPreview: async () => ({ ok: true, data: initialPreview() }),
+    onOpen: () => lateOpen.promise,
+  })
+  fillOpenDraft(unmounted)
+  submitPreview(unmounted)
+  await act(async () => { await flush() })
+  act(() => { void button(unmounted, 'Confirmar apertura').props.onClick() })
+  act(() => unmounted.unmount())
+  await act(async () => {
+    lateOpen.resolve({ status: 'completed', data: { ok: true } })
+    await flush()
+  })
+})
+
+test('active manager refreshes manually and every 60s without flicker or overlapping late requests', async () => {
+  let intervalCallback = null
+  let intervalMs = null
+  let intervalCleared = false
+  const scheduleRefresh = (callback, milliseconds) => {
+    intervalCallback = callback
+    intervalMs = milliseconds
+    return 41
+  }
+  const cancelRefresh = (intervalId) => {
+    assert.equal(intervalId, 41)
+    intervalCleared = true
+    intervalCallback = null
+  }
+  const tickRefresh = () => act(() => intervalCallback?.())
+  const periodic = deferred()
+  let reads = 0
+  const refreshed = validShift()
+  refreshed.totals.sales_cash = 1234
+  refreshed.totals.sales_total = 1434
+  const renderer = await mount({
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      reads += 1
+      if (reads === 1) return { ok: true, data: validShift() }
+      return periodic.promise
+    },
+    scheduleRefresh,
+    cancelRefresh,
+  })
+  assert.equal(reads, 1)
+  assert.equal(intervalMs, 60_000)
+  assert.equal(button(renderer, 'Actualizar turno')?.type, 'button')
+
+  tickRefresh()
+  await act(async () => { await Promise.resolve() })
+  assert.equal(reads, 2)
+  assert.doesNotMatch(renderedText(renderer), /^Cargando|Consultando el corte/)
+  assert.equal(button(renderer, 'Actualizando…')?.props.disabled, true)
+
+  tickRefresh()
+  tickRefresh()
+  act(() => { void button(renderer, 'Actualizando…').props.onClick() })
+  await act(async () => { await Promise.resolve() })
+  assert.equal(reads, 2, 'poll y botón reutilizan el request en curso')
+
+  await act(async () => {
+    periodic.resolve({ ok: true, data: refreshed })
+    await flush()
+  })
+  assert.match(renderedText(renderer), /\$1,234\.00/)
+  assert.equal(button(renderer, 'Actualizar turno')?.type, 'button')
+  act(() => renderer.unmount())
+  assert.equal(intervalCleared, true)
+  tickRefresh()
+  assert.equal(reads, 2)
 })
 
 test('desktop and mobile render the same authoritative active source, day/night copy and overdue warning', async () => {

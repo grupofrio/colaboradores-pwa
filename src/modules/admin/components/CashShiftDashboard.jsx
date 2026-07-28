@@ -11,6 +11,16 @@ import CashShiftFirstOpenForm from './CashShiftFirstOpenForm.jsx'
 
 const defaultOpenInitial = (input) => mutateShiftWithRecovery('open', input)
 const defaultAuthorizePending = (input) => mutateShiftWithRecovery('authorize', input)
+const defaultScheduleRefresh = (callback, delay) => globalThis.setInterval(callback, delay)
+const defaultCancelRefresh = (intervalId) => globalThis.clearInterval(intervalId)
+const AUTHORIZATION_LEVELS = ['manager', 'director']
+const PENDING_DETAIL_FIELDS = [
+  'detail_kind', 'shift_id', 'version_id', 'version', 'state', 'scope', 'difference',
+  'needs_manager_auth', 'needs_director_auth', 'note', 'evidence_present',
+  'allowed_levels', 'authorizations',
+]
+const PENDING_SCOPE_FIELDS = ['company', 'warehouse', 'analytic']
+const AUTHORIZATION_FIELDS = ['level', 'actor_employee_id', 'actor_name', 'authorized_at']
 
 function unwrap(raw) {
   const envelope = raw?.result ?? raw
@@ -25,10 +35,65 @@ function positiveId(value) {
   return Number.isSafeInteger(parsed) ? parsed : null
 }
 
-function normalizePendingDetail(raw) {
-  const data = unwrap(raw)
+function exactRecord(value, fields, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${label} no es válido.`)
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value)
+  const keys = Object.keys(descriptors).sort()
   if (
-    !data || data.detail_kind !== 'pending_authorization'
+    keys.length !== fields.length
+    || fields.some((field) => !Object.prototype.hasOwnProperty.call(descriptors, field))
+    || fields.some((field) => !Object.prototype.hasOwnProperty.call(descriptors[field], 'value'))
+  ) throw new TypeError(`${label} no es válido.`)
+  return Object.fromEntries(fields.map((field) => [field, descriptors[field].value]))
+}
+
+function exactArray(value, label) {
+  if (!Array.isArray(value)) throw new TypeError(`${label} no es válido.`)
+  const descriptors = Object.getOwnPropertyDescriptors(value)
+  const allowedKeys = new Set(['length', ...value.map((_, index) => String(index))])
+  if (
+    Object.keys(descriptors).some((key) => !allowedKeys.has(key))
+    || value.some((_, index) => !Object.prototype.hasOwnProperty.call(descriptors[index], 'value'))
+  ) throw new TypeError(`${label} no es válido.`)
+  return value.map((_, index) => descriptors[index].value)
+}
+
+function exactLevels(value, label, { allowEmpty = false } = {}) {
+  const levels = exactArray(value, label)
+  const canonical = AUTHORIZATION_LEVELS.filter((level) => levels.includes(level))
+  if (
+    (!allowEmpty && levels.length === 0)
+    || canonical.length !== levels.length
+    || canonical.some((level, index) => level !== levels[index])
+  ) throw new TypeError(`${label} no es válido.`)
+  return levels
+}
+
+function normalizePendingDetail(raw) {
+  const data = exactRecord(unwrap(raw), PENDING_DETAIL_FIELDS, 'El detalle pendiente')
+  const scope = exactRecord(data.scope, PENDING_SCOPE_FIELDS, 'El alcance pendiente')
+  const allowedLevels = exactLevels(data.allowed_levels, 'Los niveles permitidos')
+  const authorizations = exactArray(data.authorizations, 'Las autorizaciones').map((rawRow) => {
+    const row = exactRecord(rawRow, AUTHORIZATION_FIELDS, 'La autorización')
+    if (
+      !AUTHORIZATION_LEVELS.includes(row.level)
+      || positiveId(row.actor_employee_id) === null
+      || typeof row.actor_name !== 'string'
+      || typeof row.authorized_at !== 'string' || !row.authorized_at
+    ) throw new TypeError('La autorización no es válida.')
+    return { level: row.level }
+  })
+  const authorizedLevels = exactLevels(
+    authorizations.map((row) => row.level).sort(
+      (left, right) => AUTHORIZATION_LEVELS.indexOf(left) - AUTHORIZATION_LEVELS.indexOf(right),
+    ),
+    'Los niveles autorizados',
+    { allowEmpty: true },
+  )
+  if (
+    data.detail_kind !== 'pending_authorization'
     || positiveId(data.shift_id) === null
     || positiveId(data.version_id) === null
     || !Number.isSafeInteger(data.version) || data.version < 1
@@ -37,24 +102,24 @@ function normalizePendingDetail(raw) {
     || typeof data.needs_manager_auth !== 'boolean'
     || typeof data.needs_director_auth !== 'boolean'
     || typeof data.evidence_present !== 'boolean'
-    || !Array.isArray(data.authorizations)
-    || !data.scope || typeof data.scope !== 'object'
   ) throw new TypeError('El detalle pendiente no es válido.')
   return {
     shiftId: data.shift_id,
     versionId: data.version_id,
     version: data.version,
     scope: {
-      company: String(data.scope.company || ''),
-      warehouse: String(data.scope.warehouse || ''),
-      analytic: String(data.scope.analytic || ''),
+      company: String(scope.company || ''),
+      warehouse: String(scope.warehouse || ''),
+      analytic: String(scope.analytic || ''),
     },
     difference: data.difference,
     needsManagerAuth: data.needs_manager_auth,
     needsDirectorAuth: data.needs_director_auth,
     note: String(data.note || ''),
     evidencePresent: data.evidence_present,
-    authorizations: data.authorizations.length,
+    allowedLevels,
+    authorizations,
+    authorizedLevels,
   }
 }
 
@@ -90,6 +155,11 @@ function PendingLookup({ value, onChange, onSubmit, error }) {
 }
 
 function PendingAuthorization({ detail, busy, error, pendingRequest, onAuthorize }) {
+  const availableLevels = AUTHORIZATION_LEVELS.filter((level) => (
+    detail.allowedLevels.includes(level)
+    && !detail.authorizedLevels.includes(level)
+    && (level === 'manager' ? detail.needsManagerAuth : detail.needsDirectorAuth)
+  ))
   return (
     <section className="cash-shift-card" aria-labelledby="pending-authorization-title">
       <p className="cash-shift-eyebrow">DETALLE MÍNIMO</p>
@@ -106,13 +176,18 @@ function PendingAuthorization({ detail, busy, error, pendingRequest, onAuthorize
       <div className="cash-shift-actions">
         {pendingRequest ? (
           <button className="cash-shift-primary" type="button" disabled={busy} onClick={() => onAuthorize(pendingRequest.level)}>Reintentar misma autorización</button>
-        ) : detail.needsManagerAuth ? (
+        ) : availableLevels.includes('manager') ? (
           <button className="cash-shift-primary" type="button" disabled={busy} onClick={() => onAuthorize('manager')}>Autorizar gerencia</button>
         ) : null}
-        {!pendingRequest && detail.needsDirectorAuth ? (
+        {!pendingRequest && availableLevels.includes('director') ? (
           <button className="cash-shift-primary" type="button" disabled={busy} onClick={() => onAuthorize('director')}>Autorizar dirección</button>
         ) : null}
       </div>
+      {!pendingRequest && availableLevels.length === 0 ? (
+        <p className="cash-shift-info" role="status">
+          Este corte espera autorización de otro nivel; no tienes una acción disponible.
+        </p>
+      ) : null}
       {error ? <p className="cash-shift-error" role="alert">{error}</p> : null}
     </section>
   )
@@ -128,6 +203,8 @@ export default function CashShiftDashboard({
   previewInitial = previewCashShift,
   openInitial = defaultOpenInitial,
   authorizePending = defaultAuthorizePending,
+  scheduleRefresh = defaultScheduleRefresh,
+  cancelRefresh = defaultCancelRefresh,
 }) {
   const [view, setView] = useState({ status: 'idle', kind: null, data: null })
   const [manualShiftId, setManualShiftId] = useState('')
@@ -136,7 +213,10 @@ export default function CashShiftDashboard({
   const [operationBusy, setOperationBusy] = useState(false)
   const [operationError, setOperationError] = useState('')
   const [pendingAuthorization, setPendingAuthorization] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState('')
   const requestGeneration = useRef(0)
+  const requestInFlight = useRef(null)
   const mounted = useRef(false)
 
   useEffect(() => {
@@ -144,6 +224,7 @@ export default function CashShiftDashboard({
     return () => {
       mounted.current = false
       requestGeneration.current += 1
+      requestInFlight.current = null
     }
   }, [])
 
@@ -155,41 +236,76 @@ export default function CashShiftDashboard({
     setOperationError('')
   }, [authorizerShiftId])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ preserveActive = false } = {}) => {
     if (!scopeReady || !['manage', 'authorize'].includes(accessMode)) return
     if (accessMode === 'authorize' && selectedShiftId === null) return
+    if (requestInFlight.current) return requestInFlight.current.promise
     const generation = ++requestGeneration.current
-    setView({ status: 'loading', kind: null, data: null })
-    try {
-      if (accessMode === 'authorize') {
-        const detail = normalizePendingDetail(await loadPendingDetail({ shiftId: selectedShiftId }))
-        if (mounted.current && generation === requestGeneration.current) {
-          setView({ status: 'ready', kind: 'authorization', data: detail })
-        }
-        return
-      }
-      const data = unwrap(await loadActive())
-      if (data?.active === false && data?.config_state === 'inactive') {
-        if (mounted.current && generation === requestGeneration.current) {
-          setView({ status: 'ready', kind: 'inactive', data: null })
-        }
-        return
-      }
-      const cashShift = normalizeCashShift(data)
-      if (mounted.current && generation === requestGeneration.current) {
-        setView({ status: 'ready', kind: 'active', data: cashShift })
-      }
-    } catch {
-      if (mounted.current && generation === requestGeneration.current) {
-        setView({ status: 'error', kind: null, data: null })
-      }
+    const marker = { generation, promise: null }
+    requestInFlight.current = marker
+    if (preserveActive) {
+      setRefreshing(true)
+      setRefreshError('')
+    } else {
+      setView({ status: 'loading', kind: null, data: null })
     }
+    marker.promise = (async () => {
+      try {
+        if (accessMode === 'authorize') {
+          const detail = normalizePendingDetail(await loadPendingDetail({ shiftId: selectedShiftId }))
+          if (mounted.current && generation === requestGeneration.current) {
+            setView({ status: 'ready', kind: 'authorization', data: detail })
+          }
+          return
+        }
+        const data = unwrap(await loadActive())
+        if (data?.active === false && data?.config_state === 'inactive') {
+          if (mounted.current && generation === requestGeneration.current) {
+            setView({ status: 'ready', kind: 'inactive', data: null })
+          }
+          return
+        }
+        const cashShift = normalizeCashShift(data)
+        if (mounted.current && generation === requestGeneration.current) {
+          setView({ status: 'ready', kind: 'active', data: cashShift })
+          setRefreshError('')
+        }
+      } catch {
+        if (mounted.current && generation === requestGeneration.current) {
+          if (preserveActive) {
+            setRefreshError('No se pudo actualizar el turno. Puedes reintentar manualmente.')
+          } else {
+            setView({ status: 'error', kind: null, data: null })
+          }
+        }
+      } finally {
+        if (requestInFlight.current === marker) requestInFlight.current = null
+        if (mounted.current && generation === requestGeneration.current) setRefreshing(false)
+      }
+    })()
+    return marker.promise
   }, [accessMode, loadActive, loadPendingDetail, scopeReady, selectedShiftId])
 
   useEffect(() => {
     void load()
-    return () => { requestGeneration.current += 1 }
+    return () => {
+      requestGeneration.current += 1
+      requestInFlight.current = null
+    }
   }, [load])
+
+  const refreshActive = useCallback(
+    () => load({ preserveActive: true }),
+    [load],
+  )
+
+  useEffect(() => {
+    if (accessMode !== 'manage' || !scopeReady || view.status !== 'ready' || view.kind !== 'active') {
+      return undefined
+    }
+    const intervalId = scheduleRefresh(() => { void refreshActive() }, 60_000)
+    return () => cancelRefresh(intervalId)
+  }, [accessMode, cancelRefresh, refreshActive, scheduleRefresh, scopeReady, view.kind, view.status])
 
   async function handleOpen(input) {
     const result = await openInitial(input)
@@ -281,5 +397,13 @@ export default function CashShiftDashboard({
   if (view.kind === 'inactive') {
     return <CashShiftFirstOpenForm onPreview={previewInitial} onOpen={handleOpen} />
   }
-  return <CashShiftActivePanel cashShift={view.data} layout={layout} />
+  return (
+    <CashShiftActivePanel
+      cashShift={view.data}
+      layout={layout}
+      refreshing={refreshing}
+      refreshError={refreshError}
+      onRefresh={refreshActive}
+    />
+  )
 }
