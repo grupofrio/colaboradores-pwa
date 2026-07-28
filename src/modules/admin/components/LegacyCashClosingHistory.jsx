@@ -113,8 +113,12 @@ export default function LegacyCashClosingHistory({
   const workflowRef = useRef({ identity: workflowIdentity, generation: 0 })
   const historyInFlight = useRef(null)
   const detailInFlight = useRef(null)
+  const historyGeneration = useRef(0)
+  const detailGeneration = useRef(0)
   if (workflowRef.current.identity !== workflowIdentity) {
     workflowRef.current = { identity: workflowIdentity, generation: workflowRef.current.generation + 1 }
+    historyGeneration.current += 1
+    detailGeneration.current += 1
     historyInFlight.current = null
     detailInFlight.current = null
   }
@@ -132,6 +136,8 @@ export default function LegacyCashClosingHistory({
     return () => {
       mounted.current = false
       workflowRef.current = { identity: workflowRef.current.identity, generation: workflowRef.current.generation + 1 }
+      historyGeneration.current += 1
+      detailGeneration.current += 1
       historyInFlight.current = null
       detailInFlight.current = null
     }
@@ -139,6 +145,10 @@ export default function LegacyCashClosingHistory({
 
   useEffect(() => {
     if (accessMode !== 'manage') return
+    historyGeneration.current += 1
+    detailGeneration.current += 1
+    historyInFlight.current = null
+    detailInFlight.current = null
     setDateFrom(previousDate(today, 30))
     setDateTo(today)
     setOffset(0)
@@ -157,7 +167,8 @@ export default function LegacyCashClosingHistory({
       return null
     }
     const workflow = captureWorkflow()
-    const key = `${dateFrom}|${dateTo}|${offset}|${workflow.identity}|${workflow.generation}`
+    const generation = historyGeneration.current
+    const key = `${dateFrom}|${dateTo}|${offset}|${workflow.identity}|${workflow.generation}|${generation}`
     if (historyInFlight.current?.key === key) return historyInFlight.current.promise
     const marker = { key, workflow, promise: null }
     historyInFlight.current = marker
@@ -171,12 +182,20 @@ export default function LegacyCashClosingHistory({
           limit: PAGE_SIZE,
           offset,
         })))
-        if (historyInFlight.current === marker && isCurrent(workflow)) {
+        if (
+          historyInFlight.current === marker
+          && generation === historyGeneration.current
+          && isCurrent(workflow)
+        ) {
           setView({ status: 'ready', rows: history.rows, total: history.total, error: '' })
         }
         return history
       } catch {
-        if (historyInFlight.current === marker && isCurrent(workflow)) {
+        if (
+          historyInFlight.current === marker
+          && generation === historyGeneration.current
+          && isCurrent(workflow)
+        ) {
           setView({ status: 'error', rows: [], total: 0, error: 'No se pudieron cargar los cierres diarios anteriores.' })
         }
         return null
@@ -194,9 +213,11 @@ export default function LegacyCashClosingHistory({
   const selectDetail = useCallback(async (id) => {
     if (accessMode !== 'manage' || positiveId(id) === null) return null
     const workflow = captureWorkflow()
-    const key = `${id}|${workflow.identity}|${workflow.generation}`
+    const key = `${dateFrom}|${dateTo}|${offset}|${id}|${workflow.identity}|${workflow.generation}`
     if (detailInFlight.current?.key === key) return detailInFlight.current.promise
-    const marker = { key, workflow, promise: null }
+    const generation = ++detailGeneration.current
+    detailInFlight.current = null
+    const marker = { key, generation, workflow, promise: null }
     detailInFlight.current = marker
     setDetail({ status: 'loading', data: null, error: '' })
     marker.promise = (async () => {
@@ -205,12 +226,20 @@ export default function LegacyCashClosingHistory({
         if (!value || typeof value !== 'object' || positiveId(value.closing_id) !== id) {
           throw new TypeError('El detalle diario anterior no es válido.')
         }
-        if (detailInFlight.current === marker && isCurrent(workflow)) {
+        if (
+          detailInFlight.current === marker
+          && generation === detailGeneration.current
+          && isCurrent(workflow)
+        ) {
           setDetail({ status: 'ready', data: value, error: '' })
         }
         return value
       } catch {
-        if (detailInFlight.current === marker && isCurrent(workflow)) {
+        if (
+          detailInFlight.current === marker
+          && generation === detailGeneration.current
+          && isCurrent(workflow)
+        ) {
           setDetail({ status: 'error', data: null, error: 'No se pudo cargar el cierre diario anterior.' })
         }
         return null
@@ -219,7 +248,41 @@ export default function LegacyCashClosingHistory({
       }
     })()
     return marker.promise
-  }, [accessMode, captureWorkflow, isCurrent, loadDetail])
+  }, [accessMode, captureWorkflow, dateFrom, dateTo, isCurrent, loadDetail, offset])
+
+  function invalidateForFilterChange() {
+    historyGeneration.current += 1
+    detailGeneration.current += 1
+    historyInFlight.current = null
+    detailInFlight.current = null
+    setDetail({ status: 'idle', data: null, error: '' })
+  }
+
+  function setValidatedFilters(nextFrom, nextTo, nextOffset = 0) {
+    invalidateForFilterChange()
+    setDateFrom(nextFrom)
+    setDateTo(nextTo)
+    setOffset(nextOffset)
+    try {
+      validateOperationalHistoryDate(nextFrom, now())
+      validateOperationalHistoryDate(nextTo, now())
+      if (nextFrom > nextTo) throw new TypeError('El rango de fechas no es válido.')
+      setView({ status: 'idle', rows: [], total: 0, error: '' })
+    } catch (error) {
+      setView({ status: 'validation', rows: [], total: 0, error: error.message })
+    }
+  }
+
+  function changeOffset(nextOffset) {
+    invalidateForFilterChange()
+    setOffset(nextOffset)
+    setView({ status: 'idle', rows: [], total: 0, error: '' })
+  }
+
+  function handleRetry() {
+    invalidateForFilterChange()
+    setRetry((value) => value + 1)
+  }
 
   if (accessMode !== 'manage') {
     return <section className="cash-shift-card" role="status"><h2>Cierres diarios anteriores no disponibles</h2><p>Solo la persona administradora de cortes puede consultar estos registros.</p></section>
@@ -232,15 +295,15 @@ export default function LegacyCashClosingHistory({
         <h2>Cierres diarios anteriores</h2>
         <p className="cash-shift-muted">Estos registros siguen usando fecha calendario y no se reinterpretan como turnos.</p>
         <div className="cash-shift-legacy-filters">
-          <label>Desde<input type="date" name="legacyDateFrom" max={today} value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setOffset(0) }} /></label>
-          <label>Hasta<input type="date" name="legacyDateTo" max={today} value={dateTo} onChange={(event) => { setDateTo(event.target.value); setOffset(0) }} /></label>
+          <label>Desde<input type="date" name="legacyDateFrom" max={today} value={dateFrom} onChange={(event) => setValidatedFilters(event.target.value, dateTo)} /></label>
+          <label>Hasta<input type="date" name="legacyDateTo" max={today} value={dateTo} onChange={(event) => setValidatedFilters(dateFrom, event.target.value)} /></label>
         </div>
       </section>
 
       {view.status === 'loading' || view.status === 'idle' ? <p className="cash-shift-info" role="status">Cargando cierres diarios anteriores…</p> : null}
       {view.status === 'validation' ? <p className="cash-shift-error" role="alert">{view.error}</p> : null}
       {view.status === 'error' ? (
-        <p className="cash-shift-error" role="alert">{view.error} <button className="cash-shift-secondary" type="button" onClick={() => setRetry((value) => value + 1)}>Reintentar</button></p>
+        <p className="cash-shift-error" role="alert">{view.error} <button className="cash-shift-secondary" type="button" onClick={handleRetry}>Reintentar</button></p>
       ) : null}
       {view.status === 'ready' ? (
         <section className="cash-shift-card">
@@ -256,8 +319,8 @@ export default function LegacyCashClosingHistory({
             </div>
           ) : <p className="cash-shift-muted">Sin cierres diarios anteriores en este rango.</p>}
           <div className="cash-shift-actions cash-shift-print-hide">
-            <button className="cash-shift-secondary" type="button" disabled={offset === 0} onClick={() => setOffset((value) => Math.max(0, value - PAGE_SIZE))}>Anterior</button>
-            <button className="cash-shift-secondary" type="button" disabled={offset + PAGE_SIZE >= view.total} onClick={() => setOffset((value) => value + PAGE_SIZE)}>Siguiente</button>
+            <button className="cash-shift-secondary" type="button" disabled={offset === 0} onClick={() => changeOffset(Math.max(0, offset - PAGE_SIZE))}>Anterior</button>
+            <button className="cash-shift-secondary" type="button" disabled={offset + PAGE_SIZE >= view.total} onClick={() => changeOffset(offset + PAGE_SIZE)}>Siguiente</button>
           </div>
         </section>
       ) : null}

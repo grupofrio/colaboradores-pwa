@@ -112,6 +112,11 @@
   .cash-shift-print-report .cash-shift-print-hide { display: none !important; }
   .cash-shift-print-report .cash-shift-period-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .cash-shift-print-report .cash-shift-period-grid div { border: 1px solid #ddd; background: transparent; }
+  .cash-shift-print-report dt, .cash-shift-print-report dd, .cash-shift-print-report p, .cash-shift-print-report span, .cash-shift-print-report strong, .cash-shift-print-report li { color: #111 !important; }
+  .cash-shift-print-report .cash-shift-muted { color: #111 !important; }
+  .cash-shift-print-report .cash-shift-info { color: #111 !important; background: #fff !important; border-color: #999 !important; }
+  .cash-shift-print-report .cash-shift-eyebrow { color: #111 !important; }
+  .cash-shift-print-report h1, .cash-shift-print-report h2, .cash-shift-print-report h3, .cash-shift-print-report h4, .cash-shift-print-report h5, .cash-shift-print-report h6 { color: #111 !important; }
   .cash-shift-print-report .cash-shift-report-table { table-layout: auto; font-size: 9pt; color: #000; }
   .cash-shift-print-report .cash-shift-report-table thead { display: table-header-group; }
   .cash-shift-print-report .cash-shift-report-table tr, .cash-shift-print-report .cash-shift-print-section { break-inside: avoid; page-break-inside: avoid; }

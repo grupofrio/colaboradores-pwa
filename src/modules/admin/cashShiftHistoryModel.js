@@ -111,6 +111,51 @@ function sortedIds(value) {
   return [...value].sort((left, right) => left - right)
 }
 
+function addSnapshotId(target, value, label) {
+  const id = integer(value, label, 1)
+  if (target.has(id)) throw new TypeError(`${label} está duplicado entre turnos.`)
+  target.add(id)
+}
+
+function persistedSnapshotIds(shifts) {
+  const ids = {
+    realizedOrderIds: new Set(),
+    paymentOrderIds: new Set(),
+    cancelledOrderIds: new Set(),
+    expenseIds: new Set(),
+    adjustmentIds: new Set(),
+    productSourceLineIds: new Set(),
+  }
+  for (const shift of shifts) {
+    if (shift.versionId === null) continue
+    shift.sales.forEach((row) => addSnapshotId(ids.realizedOrderIds, row.order_id, 'La venta histórica'))
+    shift.payments.rows.forEach((row) => addSnapshotId(ids.paymentOrderIds, row.order_id, 'El pago histórico'))
+    shift.cancellations.forEach((row) => addSnapshotId(ids.cancelledOrderIds, row.order_id, 'La cancelación histórica'))
+    shift.expenses.forEach((row) => addSnapshotId(ids.expenseIds, row.expense_id, 'El gasto histórico'))
+    shift.adjustments.forEach((row) => addSnapshotId(ids.adjustmentIds, row.id, 'El ajuste histórico'))
+    shift.products.forEach((product) => product.source_line_ids.forEach((lineId) => (
+      addSnapshotId(ids.productSourceLineIds, lineId, 'La línea histórica de producto')
+    )))
+  }
+  return Object.fromEntries(Object.entries(ids).map(([key, value]) => [key, sortedIds(value)]))
+}
+
+function assertExactSnapshotIds(snapshotIds, consolidated) {
+  const comparisons = [
+    ['realizedOrderIds', consolidated.realizedOrderIds],
+    ['paymentOrderIds', consolidated.paymentOrderIds],
+    ['cancelledOrderIds', consolidated.cancelledOrderIds],
+    ['expenseIds', consolidated.expenseIds],
+    ['adjustmentIds', consolidated.adjustmentIds],
+    ['productSourceLineIds', consolidated.productSourceLineIds],
+  ]
+  for (const [field, consolidatedIds] of comparisons) {
+    if (!sameIds(snapshotIds[field], sortedIds(consolidatedIds))) {
+      throw new TypeError('Los movimientos consolidados no coinciden con las fotografías versionadas.')
+    }
+  }
+}
+
 function normalizeConsolidatedProducts(value, sourceIds) {
   const productIds = new Set()
   const observedSources = []
@@ -310,6 +355,7 @@ export function normalizeCashShiftHistory(value, expectedBusinessDate) {
   ))) {
     throw new TypeError('El alcance consolidado no coincide con los turnos.')
   }
+  assertExactSnapshotIds(persistedSnapshotIds(shifts), consolidated)
   return {
     businessDate,
     shifts,

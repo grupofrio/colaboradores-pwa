@@ -148,7 +148,7 @@ function consolidated() {
       quantity: 4,
       amount_total: 300,
       weight_total_kg: 20,
-      source_line_ids: [4101, 4201],
+      source_line_ids: [41001, 42001],
     }],
     product_totals: { quantity: 4, amount_total: 300, weight_total_kg: 20, products_without_weight: 0 },
     realized_order_ids: [411, 412, 421, 422],
@@ -156,7 +156,7 @@ function consolidated() {
     cancelled_order_ids: [413, 423],
     expense_ids: [4102, 4202],
     adjustment_ids: [4104, 4204],
-    product_source_line_ids: [4101, 4201],
+    product_source_line_ids: [41001, 42001],
     shift_arqueos: [
       { shift: { id: 41, type: 'night', business_date: '2026-07-27', state: 'closed' }, version_id: 701, opening_fund: 100, expected_cash: 185, physical_cash: 200, difference: 15, denominations: [{ id: 4103, denomination: '100', count: 2, subtotal: 200 }] },
       { shift: { id: 42, type: 'day', business_date: '2026-07-27', state: 'closed' }, version_id: 702, opening_fund: 100, expected_cash: 185, physical_cash: 200, difference: 15, denominations: [{ id: 4203, denomination: '100', count: 2, subtotal: 200 }] },
@@ -177,6 +177,42 @@ function historyPayload() {
     ],
     consolidated: consolidated(),
   }
+}
+
+function openUnversionedShift() {
+  const shift = fullShift({ id: 43, type: 'night', versionId: false, versionNumber: 0 })
+  shift.closing_type = false
+  shift.responsible = { employee_id: false, employee_name: '', user_id: false, user_name: '' }
+  shift.closed_or_reclosed_at = false
+  shift.evidence = false
+  shift.shift.state = 'open'
+  shift.period.closed_at = false
+  shift.denominations = shift.denominations.map(({ denomination, count, subtotal }) => ({ denomination, count, subtotal }))
+  shift.adjustments = shift.adjustments.map(({ type, amount, concept }) => ({ type, amount, concept }))
+  shift.authorizations = []
+  shift.evidence_present = false
+  shift.printable = false
+  return shift
+}
+
+function emptyConsolidated() {
+  const value = consolidated()
+  value.payments = { cash: 0, card: 0, total: 0 }
+  value.sales_total = 0
+  value.expenses_total = 0
+  value.adjustment_income_total = 0
+  value.adjustment_expense_total = 0
+  value.products = []
+  value.product_totals = { quantity: 0, amount_total: 0, weight_total_kg: 0, products_without_weight: 0 }
+  value.realized_order_ids = []
+  value.payment_order_ids = []
+  value.cancelled_order_ids = []
+  value.expense_ids = []
+  value.adjustment_ids = []
+  value.product_source_line_ids = []
+  value.shift_arqueos = []
+  value.net_difference = 0
+  return value
 }
 
 function deferred() {
@@ -242,6 +278,50 @@ test('fails closed on duplicate or incoherent consolidated movement IDs', () => 
   const wrongScope = historyPayload()
   wrongScope.consolidated.warehouse_id = 999
   assert.throws(() => model.normalizeCashShiftHistory(wrongScope, '2026-07-27'), TypeError)
+})
+
+test('consolidated IDs are the exact union of persisted snapshots without comparing money', () => {
+  const families = [
+    ['realized_order_ids', 999001],
+    ['payment_order_ids', 999002],
+    ['cancelled_order_ids', 999003],
+    ['expense_ids', 999004],
+    ['adjustment_ids', 999005],
+    ['product_source_line_ids', 999006],
+  ]
+  for (const [field, extra] of families) {
+    const withExtra = historyPayload()
+    withExtra.consolidated[field].push(extra)
+    assert.throws(() => model.normalizeCashShiftHistory(withExtra, '2026-07-27'), TypeError, `${field} extra`)
+
+    const omitted = historyPayload()
+    omitted.consolidated[field].pop()
+    assert.throws(() => model.normalizeCashShiftHistory(omitted, '2026-07-27'), TypeError, `${field} omitted`)
+  }
+
+  const duplicateAcrossShifts = historyPayload()
+  duplicateAcrossShifts.shifts[0].sales[0].order_id = duplicateAcrossShifts.shifts[1].sales[0].order_id
+  duplicateAcrossShifts.shifts[0].payments.rows[0].order_id = duplicateAcrossShifts.shifts[1].payments.rows[0].order_id
+  assert.throws(() => model.normalizeCashShiftHistory(duplicateAcrossShifts, '2026-07-27'), TypeError)
+
+  const onlyOpen = {
+    business_date: '2026-07-27',
+    shifts: [openUnversionedShift()],
+    consolidated: emptyConsolidated(),
+  }
+  assert.equal(model.normalizeCashShiftHistory(onlyOpen, '2026-07-27').shifts.length, 1)
+
+  const reopened = historyPayload()
+  reopened.shifts[0].shift.state = 'reopened'
+  reopened.consolidated.shift_arqueos[1].shift.state = 'reopened'
+  assert.equal(model.normalizeCashShiftHistory(reopened, '2026-07-27').shifts[1].shift.state, 'reopened')
+
+  const serverMoney = historyPayload()
+  serverMoney.consolidated.sales_total = 9876.54
+  serverMoney.consolidated.payments.total = 1234.56
+  const normalized = model.normalizeCashShiftHistory(serverMoney, '2026-07-27')
+  assert.equal(normalized.consolidated.salesTotal, 9876.54)
+  assert.equal(normalized.consolidated.payments.total, 1234.56)
 })
 
 test('uses Mexico civil date and rejects invalid or future operational dates', () => {
@@ -319,6 +399,35 @@ test('history UI rejects future Mexico date without an API call and ignores stal
   assert.match(renderedText(renderer), /Noche 27/)
 })
 
+test('an invalid operational filter immediately invalidates old history success and failure', async () => {
+  vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
+  const { default: History } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftHistory.jsx')
+  for (const settle of ['resolve', 'reject']) {
+    const pending = deferred()
+    let renderer
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(History, {
+        accessMode: 'manage',
+        sessionIdentity: `filter-${settle}`,
+        loadHistory: async () => pending.promise,
+        now: () => Date.parse('2026-07-28T04:30:00Z'),
+      }))
+      await flush()
+    })
+    const date = renderer.root.findByProps({ name: 'cashShiftBusinessDate' })
+    await act(async () => date.props.onChange({ target: { value: '2026-07-28' } }))
+    assert.match(renderedText(renderer), /fecha operativa no puede ser futura/i)
+    await act(async () => {
+      if (settle === 'resolve') pending.resolve({ data: historyPayload() })
+      else pending.reject(new Error('old request'))
+      await flush()
+    })
+    assert.match(renderedText(renderer), /fecha operativa no puede ser futura/i)
+    assert.doesNotMatch(renderedText(renderer), /Noche 27|No se pudo cargar un historial operativo válido/i)
+    await act(async () => renderer.unmount())
+  }
+})
+
 test('history detail is single-flight and a version from session A cannot publish in session B', async () => {
   vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
   const { default: History } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftHistory.jsx')
@@ -360,6 +469,33 @@ test('history detail is single-flight and a version from session A cannot publis
     pendingDetail.resolve({ data: fullShift({ id: 41, type: 'night', versionId: 701 }) })
     await flush()
   })
+  assert.doesNotMatch(renderedText(renderer), /REPORTE DE CORTE POS/)
+})
+
+test('changing operational date immediately invalidates a pending exact-version detail', async () => {
+  vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
+  const { default: History } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftHistory.jsx')
+  const pendingDetail = deferred()
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(React.createElement(History, {
+      accessMode: 'manage',
+      sessionIdentity: 'detail-filter',
+      loadHistory: async () => ({ data: historyPayload() }),
+      loadDetail: async () => pendingDetail.promise,
+      now: () => Date.parse('2026-07-28T04:30:00Z'),
+    }))
+    await flush()
+  })
+  const detailButton = renderer.root.findAllByType('button').find((item) => /Ver detalle Noche 27/.test(textOf(item)))
+  await act(async () => { detailButton.props.onClick(); await flush() })
+  const date = renderer.root.findByProps({ name: 'cashShiftBusinessDate' })
+  await act(async () => date.props.onChange({ target: { value: '2026-07-28' } }))
+  await act(async () => {
+    pendingDetail.resolve({ data: fullShift({ id: 41, type: 'night', versionId: 701 }) })
+    await flush()
+  })
+  assert.match(renderedText(renderer), /fecha operativa no puede ser futura/i)
   assert.doesNotMatch(renderedText(renderer), /REPORTE DE CORTE POS/)
 })
 
@@ -433,6 +569,51 @@ test('legacy detail from session A is ignored after session B and requests stay 
   assert.doesNotMatch(renderedText(renderer), /CC\/9/)
 })
 
+test('legacy filter and pagination changes immediately invalidate old history and detail', async () => {
+  vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
+  const { default: Legacy } = await vite.ssrLoadModule('/src/modules/admin/components/LegacyCashClosingHistory.jsx')
+  const pendingHistory = deferred()
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(React.createElement(Legacy, {
+      accessMode: 'manage',
+      sessionIdentity: 'legacy-filter',
+      loadHistory: async () => pendingHistory.promise,
+      now: () => Date.parse('2026-07-28T04:30:00Z'),
+    }))
+    await flush()
+  })
+  const toDate = renderer.root.findByProps({ name: 'legacyDateTo' })
+  await act(async () => toDate.props.onChange({ target: { value: '2026-07-28' } }))
+  await act(async () => {
+    pendingHistory.resolve({ data: { total_count: 1, count: 1, limit: 25, offset: 0, closings: [{ closing_id: 9, name: 'CC/9', date: '2026-07-20', state: 'closed', difference: 0 }] } })
+    await flush()
+  })
+  assert.match(renderedText(renderer), /fecha operativa no puede ser futura/i)
+  assert.doesNotMatch(renderedText(renderer), /CC\/9/)
+
+  const pendingDetail = deferred()
+  await act(async () => {
+    renderer.update(React.createElement(Legacy, {
+      accessMode: 'manage',
+      sessionIdentity: 'legacy-detail-filter',
+      loadHistory: async () => ({ data: { total_count: 30, count: 1, limit: 25, offset: 0, closings: [{ closing_id: 10, name: 'CC/10', date: '2026-07-20', state: 'closed', difference: 0 }] } }),
+      loadDetail: async () => pendingDetail.promise,
+      now: () => Date.parse('2026-07-28T04:30:00Z'),
+    }))
+    await flush()
+  })
+  const row = renderer.root.findAllByType('button').find((item) => /CC\/10/.test(textOf(item)))
+  await act(async () => { row.props.onClick(); await flush() })
+  const next = renderer.root.findAllByType('button').find((item) => textOf(item) === 'Siguiente')
+  await act(async () => { next.props.onClick(); await flush() })
+  await act(async () => {
+    pendingDetail.resolve({ data: { closing_id: 10, name: 'CC/10', date: '2026-07-20', state: 'closed', denominations: [] } })
+    await flush()
+  })
+  assert.doesNotMatch(renderedText(renderer), /CIERRE DIARIO ANTERIOR · SOLO LECTURA/)
+})
+
 test('dashboard exposes three manage-only tabs and loads history and legacy only when selected', async () => {
   vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
   const { default: Dashboard } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftDashboard.jsx')
@@ -482,4 +663,9 @@ test('print stylesheet hides app navigation, tabs, controls and preserves report
   assert.match(css, /cash-shift-print-hide/)
   assert.match(css, /cash-shift-print-report/)
   assert.match(css, /break-inside:\s*avoid/)
+  assert.match(css, /\.cash-shift-print-report\s+dt[^}]*color:\s*#111/i)
+  assert.match(css, /\.cash-shift-print-report\s+\.cash-shift-muted[^}]*color:\s*#111/i)
+  assert.match(css, /\.cash-shift-print-report\s+\.cash-shift-info[^}]*color:\s*#111/i)
+  assert.match(css, /\.cash-shift-print-report\s+\.cash-shift-eyebrow[^}]*color:\s*#111/i)
+  assert.match(css, /\.cash-shift-print-report\s+h[1-6][^}]*color:\s*#111/i)
 })

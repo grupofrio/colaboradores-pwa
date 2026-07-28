@@ -146,9 +146,13 @@ export default function CashShiftHistory({
   const workflowRef = useRef({ identity: `${sessionIdentity}|${accessMode}`, generation: 0 })
   const historyInFlight = useRef(null)
   const detailInFlight = useRef(null)
+  const historyGeneration = useRef(0)
+  const detailGeneration = useRef(0)
   const workflowIdentity = `${sessionIdentity}|${accessMode}`
   if (workflowRef.current.identity !== workflowIdentity) {
     workflowRef.current = { identity: workflowIdentity, generation: workflowRef.current.generation + 1 }
+    historyGeneration.current += 1
+    detailGeneration.current += 1
     historyInFlight.current = null
     detailInFlight.current = null
   }
@@ -169,6 +173,8 @@ export default function CashShiftHistory({
         identity: workflowRef.current.identity,
         generation: workflowRef.current.generation + 1,
       }
+      historyGeneration.current += 1
+      detailGeneration.current += 1
       historyInFlight.current = null
       detailInFlight.current = null
     }
@@ -176,6 +182,10 @@ export default function CashShiftHistory({
 
   useEffect(() => {
     if (accessMode !== 'manage') return
+    historyGeneration.current += 1
+    detailGeneration.current += 1
+    historyInFlight.current = null
+    detailInFlight.current = null
     setBusinessDate(today)
     setView({ status: 'idle', data: null, error: '' })
     setDetailView({ status: 'idle', data: null, error: '' })
@@ -191,11 +201,13 @@ export default function CashShiftHistory({
       return null
     }
     const workflow = captureWorkflow()
+    const generation = historyGeneration.current
+    const fingerprint = `${validatedDate}|${workflow.identity}|${workflow.generation}|${generation}`
     const currentMarker = historyInFlight.current
-    if (currentMarker?.date === validatedDate && currentMarker?.identity === workflow.identity) {
+    if (currentMarker?.fingerprint === fingerprint) {
       return currentMarker.promise
     }
-    const marker = { date: validatedDate, identity: workflow.identity, workflow, promise: null }
+    const marker = { fingerprint, generation, workflow, promise: null }
     historyInFlight.current = marker
     setView({ status: 'loading', data: null, error: '' })
     setDetailView({ status: 'idle', data: null, error: '' })
@@ -204,12 +216,20 @@ export default function CashShiftHistory({
         const history = normalizeCashShiftHistory(unwrap(await loadHistory({
           businessDate: validatedDate,
         })), validatedDate)
-        if (historyInFlight.current === marker && isCurrent(workflow)) {
+        if (
+          historyInFlight.current === marker
+          && generation === historyGeneration.current
+          && isCurrent(workflow)
+        ) {
           setView({ status: 'ready', data: history, error: '' })
         }
         return history
       } catch {
-        if (historyInFlight.current === marker && isCurrent(workflow)) {
+        if (
+          historyInFlight.current === marker
+          && generation === historyGeneration.current
+          && isCurrent(workflow)
+        ) {
           setView({ status: 'error', data: null, error: 'No se pudo cargar un historial operativo válido.' })
         }
         return null
@@ -229,7 +249,9 @@ export default function CashShiftHistory({
     const workflow = captureWorkflow()
     const key = `${cashShift.shift.id}|${versionId}|${workflow.identity}|${workflow.generation}`
     if (detailInFlight.current?.key === key) return detailInFlight.current.promise
-    const marker = { key, workflow, promise: null }
+    const generation = ++detailGeneration.current
+    detailInFlight.current = null
+    const marker = { key, generation, workflow, promise: null }
     detailInFlight.current = marker
     setDetailView({ status: 'loading', data: null, error: '' })
     marker.promise = (async () => {
@@ -241,12 +263,20 @@ export default function CashShiftHistory({
           || detail.shift.businessDate !== businessDate
           || !detail.printable
         ) throw new TypeError('La fotografía solicitada no coincide.')
-        if (detailInFlight.current === marker && isCurrent(workflow)) {
+        if (
+          detailInFlight.current === marker
+          && generation === detailGeneration.current
+          && isCurrent(workflow)
+        ) {
           setDetailView({ status: 'ready', data: detail, error: '' })
         }
         return detail
       } catch {
-        if (detailInFlight.current === marker && isCurrent(workflow)) {
+        if (
+          detailInFlight.current === marker
+          && generation === detailGeneration.current
+          && isCurrent(workflow)
+        ) {
           setDetailView({ status: 'error', data: null, error: 'No se pudo cargar la versión exacta del corte.' })
         }
         return null
@@ -259,6 +289,10 @@ export default function CashShiftHistory({
 
   function handleDateChange(event) {
     const value = event.target.value
+    historyGeneration.current += 1
+    detailGeneration.current += 1
+    historyInFlight.current = null
+    detailInFlight.current = null
     setBusinessDate(value)
     setDetailView({ status: 'idle', data: null, error: '' })
     try {
@@ -267,6 +301,15 @@ export default function CashShiftHistory({
     } catch (error) {
       setView({ status: 'validation', data: null, error: error.message })
     }
+  }
+
+  function handleRetry() {
+    historyGeneration.current += 1
+    detailGeneration.current += 1
+    historyInFlight.current = null
+    detailInFlight.current = null
+    setDetailView({ status: 'idle', data: null, error: '' })
+    setRequestNonce((value) => value + 1)
   }
 
   if (accessMode !== 'manage') {
@@ -298,7 +341,7 @@ export default function CashShiftHistory({
       ) : null}
       {view.status === 'validation' ? <p className="cash-shift-error" role="alert">{view.error}</p> : null}
       {view.status === 'error' ? (
-        <HistoryState title="No se pudo cargar el historial" onRetry={() => setRequestNonce((value) => value + 1)}>{view.error}</HistoryState>
+        <HistoryState title="No se pudo cargar el historial" onRetry={handleRetry}>{view.error}</HistoryState>
       ) : null}
       {view.status === 'ready' && view.data.shifts.length === 0 ? (
         <HistoryState title="Sin cortes operativos">No hay fotografías de turno para esta fecha. El consolidado del servidor se conserva en cero.</HistoryState>
