@@ -1,8 +1,10 @@
 # Matriz autoritativa de ESCRITURAS — Gerente · Admin · Producción
 
-**ESTADO: DRAFT PARA REVISIÓN TÉCNICA — dos bloqueos pendientes**
-SHAs auditados: PWA `b47f329d` (`origin/main`) · Odoo `158d302a` (delta revisado por Sebastián).
-Rama Odoo vigente al cierre: **`244dbfd9`** (18 commits por delante de `158d302a`) — ver `GERENTE_ANEXO_RUNTIME.md` §1.
+**ESTADO: DRAFT — diseño técnico CERRADO documentalmente.** Pendientes trasladados a QA / preflight de 0A.
+**Inventario levantado contra:** PWA `674f6646` (`origin/main`) · Odoo **`0a1b80ba`** — *SHA de referencia del diseño*.
+⚠️ Punta Odoo al escribir: `7989492d` (**+70 commits sin auditar**). Las filas **A7–A13** (liquidaciones y caja)
+**deben re-auditarse** contra esa punta antes de convertirse en tickets — ver `GERENTE_ANEXO_RUNTIME.md` §1.3.
+**Este inventario es MANUAL.** Sprint 0A entrega un inventario **generado automáticamente** + control de drift en CI.
 Leyenda de evidencia: **[E]** estático · **[R]** runtime · **[I]** inferido · **[N]** no ejecutado.
 
 > Este documento **sustituye** las tablas de writes previas de `AUDITORIA_GERENTE_SUCURSAL.md` (§D/E) y
@@ -33,8 +35,10 @@ val = request.env["ir.config_parameter"].sudo().get_param(
 )
 ```
 
-**El default es `"1"` y ningún XML/CSV del repositorio lo apaga** (búsqueda ejecutada: 0 resultados en `--include=*.xml --include=*.csv`).
-Su valor real en producción **no es verificable desde el repositorio** — es un `ir.config_parameter`. **[E] + pendiente de verificación en prod.**
+**El default es `"1"` y ningún XML/CSV del repositorio lo apaga** (búsqueda ejecutada: 0 resultados).
+✅ **CONFIRMADO EN PRODUCCIÓN [R]:** el parámetro **no está configurado**, por lo que **está activo por default**.
+Ya no es una inferencia. Lo mismo para `allow_public_get_records_without_key`, `allow_public_employee_lookup` y
+`allow_public_route_lookup` — los cuatro activos. Ver `GERENTE_ANEXO_RUNTIME.md` §9.
 
 **AK-2 · La identidad del actor es un entero del cuerpo JSON.** `gf_pwa_admin/controllers/pwa_admin_api.py:368-374`
 y `gf_production_ops/controllers/gf_production_api.py:162-173` resuelven el empleado desde `data["employee_id"]`
@@ -147,7 +151,7 @@ Todo el frente vive en `gf_production_ops/controllers/gf_production_api.py` (57 
 | P23 | `ice/slot/harvest` | `:1771` | PAYLOAD | — | SÍ | sí | cadena larga (entry + log + posting) | planta | 🔴 | identidad por token |
 | P24 | `ice/slot/fill` | `:1759` | `operario_id` del payload | — | SÍ | sí | kwargs reflexivos vía `inspect.signature` | planta | 🟠 | despacho explícito, no reflexivo |
 | P25 | `ice/tank/incident` | `:1909` | **NINGUNA** | — | SÍ | sí | `tipo`, `descripcion` → **HTML interpolado sin escapar** en el chatter | planta | 🟠 XSS almacenado | escapar |
-| P26 | `bar-harvest-scrap` | `:1517` | `operator_id` del payload | — | **SÍ** (`location_id`, `location_dest_id`) + fallback hardcodeado | sí | `qty_bars`, `kg` | planta | 🔴 merma con ubicaciones elegidas por el cliente | ubicaciones derivadas |
+| P26 | `bar-harvest-scrap` | `:1517` | `operator_id` del payload | — | **parcial** — el **origen ya NO** es del cliente; el **destino SÍ** | sí | `qty_bars`, `kg`, **`location_dest_id`** | planta | 🟠 **endurecimiento PARCIAL** (ver N5) | destino derivado server-side de planta+sucursal+material+operación autorizada |
 | P27 | `pt/transformation/create` | `:2034` | PAYLOAD | `recipe.role_scope` sobre el empleado del payload; **rama legacy sin `recipe_code` ignora el rol** | SÍ; si no hay turno **lo autocrea** | sí | `outputs[]` libres + `auto_confirm` en la rama legacy | `/admin`, planta | 🔴 | retirar la rama legacy |
 | P28 | `pt/reception/create` · `confirm` | `:1352` | PAYLOAD | — | valida pertenencia entry↔turno↔almacén ✅ | sí | `received_qty` | planta | 🟠 **el mejor validado del conjunto** | identidad por token |
 | P29 | `production/scrap` · `downtime/start` · `downtime/end` · `incident/*` · `cycle/start` · `cycle/defrost-start` · `haccp/generate` · `pt/transformation/cancel` | `:1499 · :1470 · :1487 · :1615 · :1094 · :1106 · :1731 · :2137` | `_employee()` o NINGUNA | — | SÍ | sí | varios | planta | 🟠 | identidad por token |
@@ -160,6 +164,72 @@ Ambos leen `wh.gf_mp_dispatch_location_rolito_id` / `_pt_id`, y **esos campos no
 `AttributeError` → 500; `:3591` usa `getattr(...,False)` ⇒ **409 `DISPATCH_CONFIG_MISSING` permanente.**
 El revisor los listó entre los flujos a censar: quedan censados **y declarados no funcionales**. No los cuentes
 como capacidad existente ni como riesgo activo: son deuda rota.
+
+**N5 — `bar-harvest-scrap`: endurecimiento PARCIAL, no cierre [E].**
+El endpoint **ya no acepta efectivamente `location_id` como origen**: fuerza `Virtual Locations/Production` y
+solo admite origen de tipo `production` o `internal`.
+
+| Riesgo original | Estado |
+|---|---|
+| Origen arbitrario elegido por el cliente | ✅ **CORREGIDO** |
+| **Destino (`location_dest_id`) sustituible desde el navegador** | 🔴 **PERMANECE** |
+
+⇒ **Endurecimiento parcial.** Media puerta cerrada sigue siendo una puerta: un movimiento de merma cuyo destino
+lo elige el navegador puede depositar producto en una ubicación que el operador no debería alcanzar.
+**Requisito de cierre:** el destino debe derivarse server-side de **planta + sucursal + material + operación
+autorizada**. Entra a 0A con el origen ya resuelto, lo que reduce su tamaño.
+
+---
+
+---
+
+### Dominio ASISTENCIAS (`gf_hr_ops`) — superficie NUEVA del delta `158d302a → 0a1b80ba`
+
+**7 URLs únicas · 8 declaraciones de ruta** (`/pwa-hr/attendance` aparece dos veces: `GET` y `POST`).
+Todas: `type="http"`, **`auth="public"`**, `csrf=False`. Archivo: `gf_hr_ops/controllers/pwa_attendance.py`.
+
+**Lecturas (4):**
+
+| Ruta | Método |
+|---|---|
+| `/pwa-hr/attendance/capabilities` | GET |
+| `/pwa-hr/attendance` | GET |
+| `/pwa-hr/audit` | GET |
+| `/pwa-hr/attendance/export.xlsx` | GET |
+
+**Escrituras (4) — clasificadas 🟡 SEGURAS PERO TRANSITORIAS:**
+
+| # | Ruta | Método | Identidad | Rol | Scope | Estado | Sustituto |
+|---|---|---|---|---|---|---|---|
+| H1 | `/pwa-hr/attendance` | POST | **token de empleado** ✅ | allowlist específica de gerentes | frontera server-side validada ✅, con **códigos analíticos fijos** | 🟡 transitorio | resolvedor canónico (0B) |
+| H2 | `/pwa-hr/attendance/<id>` | PATCH | **token** ✅ | idem | idem | 🟡 transitorio | idem |
+| H3 | `/pwa-hr/faltas` | POST | **token** ✅ | idem | idem | 🟡 transitorio | idem |
+| H4 | `/pwa-hr/faltas/<id>/justify` | POST | **token** ✅ | idem | idem | 🟡 transitorio | idem |
+
+#### Por qué "seguras **pero** transitorias" — las dos mitades importan
+
+**Seguras, y de verdad:** son las **primeras** escrituras del dominio Admin/RR.HH. que exigen **token de empleado
+verificado server-side** y **validan una frontera server-side**. Comparadas con las 30 filas de `gf_pwa_admin`
+que resuelven identidad por `employee_id` del payload, son un salto real de calidad. No hay que "arreglarlas".
+
+**Transitorias, y por eso entran a 0B:**
+
+1. **Dependen de una allowlist específica de gerentes**, no del resolvedor canónico de roles. Es una lista
+   paralela que hay que mantener sincronizada a mano.
+2. **Usan códigos analíticos fijos**, no membresía ni `branch_config`. Funciona hoy porque el alcance es
+   conocido; no escala a N sucursales ni respeta la cadena de autoridad de §6.
+3. **`auth="public"` + `X-GF-Employee-Token` es un mecanismo de autenticación PARALELO.** Convive con
+   `auth="api_key"` (con su fallback) y con `guard_request` (fail-open por defecto). **Son tres mecanismos
+   distintos para el mismo problema.** El objetivo de 0B es que converjan a uno.
+
+⇒ **Migración en 0B:** resolvedor canónico de roles · membresía explícita · sucursal derivada del `branch_config` ·
+capacidades por acción. **No antes:** tocarlas ahora, mientras el resto del sistema sigue con identidad por
+payload, cambiaría lo que ya funciona sin reducir exposición.
+
+> **Nota de método:** estas cuatro filas se documentan a partir del delta revisado y de la declaración de
+> Sebastián sobre su comportamiento. Las **declaraciones de ruta** (`auth`, `csrf`, métodos, URLs) están
+> **verificadas estáticamente [E]** contra el árbol `0a1b80ba`. La **semántica interna** de la frontera y la
+> allowlist procede de la revisión, **no de una re-lectura línea a línea** [I].
 
 ---
 
@@ -192,14 +262,34 @@ doble candado y scope canónico (verificados por un checker AST de dominancia); 
 | O3 | `POST /api/employee-sign-in` | `employee_login.py:147` | barcode + PIN (con rate-limit) | — | — | sí | 🔴 | **raíz de AK-2**: devuelve la api-key compartida del usuario público a todo empleado sin `user_id` |
 | O4 | `POST /api/partner` | `controllers.py:1130` | api-key | — | ninguno | sí | 🟡 | probablemente muerto (usa `request.jsonrequest`, eliminado en Odoo 17+) |
 
-**N4 — El alcance real del ORM genérico no es verificable desde el repositorio [E + pendiente].**
+**N4 — El alcance real del ORM genérico: MEDIDO [R].**
 `_generic_api_policy()` (`controllers.py:289`) **fusiona** los builtins con el parámetro de BD
 `os_api.generic_model_policies`, y para booleanos hace `merged[key] = bool(configured.get(key)) or value`:
 **el parámetro de BD solo puede AMPLIAR, nunca restringir.** El alcance de escritura efectivo es un JSON en
-`ir.config_parameter` — sin control de versiones, sin CI, sin revisión. Confirmado en runtime [R] que
+`ir.config_parameter` — sin control de versiones, sin CI, sin revisión. ✅ **Ya medido: 54 modelos, 23 con
+escritura o funciones, 31 read-only, todos con `allow_sudo` — ver `GERENTE_ANEXO_RUNTIME.md` §10.**
+Confirmado también en runtime [R] que
 `gf.ops.branch_config` y `hr.employee` con campos amplios **sí** están restringidos hoy
 (`model_not_allowed` / `field_not_allowed`), lo que indica que la política productiva es estrecha.
-**Esto es una contención real y refuerza que el cutover es viable — pero debe medirse, no asumirse.**
+**Esa estrechez es LOCAL, no global:** el JSON productivo habilita 54 modelos. El cutover es viable, pero va
+modelo por modelo (paso 9 de la secuencia), no de golpe.
+
+---
+
+## Corrección de alcance en LECTURAS de Admin POS (commit `244dbfd9`) [E]
+
+> **No afecta la matriz de escrituras.** Se registra porque corrige el **diagnóstico de alcance** de tres lecturas.
+
+El commit `244dbfd9` (*restore admin catalog compatibility*) **no agregó rutas**. Modificó tres lecturas:
+`GET /pwa-admin/pos-products` · `GET /pwa-admin/customers` · `GET /pwa-admin/default-customer`.
+
+**Qué cambió:** para la política **Admin**, dejó de exigir **coincidencia analítica restringida** y pasó a
+resolver por **compañía / almacén**. En consecuencia, **el dominio de clientes queda a nivel compañía.**
+
+**Lectura correcta:** es una **relajación deliberada de alcance** para restaurar compatibilidad del catálogo
+Admin, no un defecto. Pero implica que **el alcance efectivo de esas tres lecturas es de compañía, no de
+sucursal** ⇒ **no sirven como base para una vista de Gerente con scope de sucursal** sin volver a acotarlas.
+Cualquier tile que se apoye en ellas heredaría alcance de compañía.
 
 ---
 
@@ -207,13 +297,15 @@ doble candado y scope canónico (verificados por un checker AST de dominancia); 
 
 | Métrica | Valor |
 |---|---|
-| Escrituras censadas | **~100** (27 `gf_pwa_admin` · ~38 producción · 31 `gf_saleops` · 4 `os_api`) |
-| Con identidad verificada server-side (TOKEN) | **13** — los 4 controllers V2 + `sale-create`/`sale-cancel` + `jr-confirm-handover` |
+| **Fecha / SHA del inventario** | **2026-07-28** · Odoo `0a1b80ba` · PWA `674f6646` · **levantado a mano** |
+| Escrituras censadas | **~104** (27 `gf_pwa_admin` · ~38 producción · 31 `gf_saleops` · 4 `os_api` · **4 asistencias**) |
+| Con identidad verificada server-side (TOKEN) | **17** — los 4 controllers V2 + `sale-create`/`sale-cancel` + `jr-confirm-handover` + **las 4 de asistencias** |
 | Con rol server-side sobre una identidad **no** forjable | **~11** |
 | Con scope tomado del payload del cliente | **la mayoría** de `gf_pwa_admin` y `gf_production_ops` |
 | Que un `gerente_sucursal` puede disparar hoy desde la interfaz | **18 funcionan · 1 rota** (`forecast-unlock`) |
 | Escrituras por ORM genérico con `sudo:1` desde el navegador | **19 rutas** `/pwa-prod/*` + `/pwa-sup/*` + gastos + forecast-unlock; **220 ocurrencias de `sudo: 1`** en `src/lib/api.js` |
 | Superficies muertas censadas | `dispatch-transfer`, `dispatch-config`, `/api/partner`, `forecast-unlock` |
+| Mecanismos de autenticación **distintos y coexistentes** | **3** — `auth="api_key"` (con fallback público) · `guard_request` (fail-open por default) · `auth="public"` + `X-GF-Employee-Token` |
 
 **No existe BFF.** `vercel.json` es una reescritura transparente a `grupofrio.odoo.com`; `src/lib/api.js`
 (9.760 líneas) **es** la lógica de backend ejecutándose en el navegador. Los nombres `/pwa-gerente/*` y
@@ -225,3 +317,61 @@ sin leer la respuesta del servidor.
 
 **Y el patrón correcto ya existe en el repositorio** — `supervisor_secure_writes.py` y
 `gf_route_compliance/controllers/pwa_route_suggestions.py:875`. La brecha es de **propagación, no de diseño.**
+
+
+---
+
+## ⚠️ Este inventario es MANUAL — entregable obligatorio de Sprint 0A
+
+La matriz se levantó **a mano**, leyendo código. Eso tiene dos consecuencias que hay que decir en voz alta:
+
+1. **El conteo es aproximado** (`~104`). No es un número auditado línea a línea: es un censo cuidadoso.
+2. **Se desactualiza sola.** Entre `158d302a` y hoy aparecieron **dos deltas** que añaden y modifican rutas.
+   Una matriz manual no sobrevive a ese ritmo.
+
+**Entregable de Sprint 0A:**
+
+| Entregable | Qué hace |
+|---|---|
+| **Inventario generado automáticamente** | Extrae de código todas las `@http.route` con métodos de escritura (POST/PUT/PATCH/DELETE), más `.create/.write/.unlink/action_*/button_validate`, y emite un artefacto versionado |
+| **Control de drift en CI** | Falla el build si aparece una ruta de escritura nueva **no registrada** o si cambia `auth`/`csrf`/rol de una existente |
+
+**Por qué es un entregable y no una mejora opcional:** todo el plan de 0A se dimensiona sobre este inventario.
+Si el inventario depende de que alguien vuelva a leer 100 endpoints a mano cada vez que la rama avanza, el plan
+se vuelve inauditable a las pocas semanas. **La matriz debe dejar de ser un documento y pasar a ser una salida
+del build.**
+
+---
+
+## 🔴 CONCLUSIÓN DE SEGURIDAD — prioridad inmediata de Sprint 0A
+
+Con los parámetros efectivos ya medidos [R], la conclusión deja de ser condicional. **Encadenado:**
+
+1. Una llave **ausente o incorrecta** puede ser **aceptada** por `allow_legacy_api_key_fallback`.
+2. La solicitud puede **resolverse con el usuario de fallback**.
+3. **`/get_records*` mantiene un fallback público independiente** (`allow_public_get_records_without_key`),
+   que no se cierra al cerrar el anterior.
+4. **`generic_model_policies` permite `sudo` sobre decenas de modelos** — los 54 configurados lo tienen.
+5. **23 modelos admiten writes o métodos genéricos**, incluidos `action_reset_to_draft` sobre forecast y
+   `button_confirm`/`button_cancel` sobre `purchase.order`.
+6. **`gf_salesops.require_employee_token` está apagado por default** ⇒ `guard_request` acepta identidad del payload.
+
+> **Cerrar únicamente `allow_legacy_api_key_fallback` NO resuelve la exposición.** Son rutas independientes que
+> se refuerzan entre sí. Un cierre parcial da una falsa sensación de contención — exactamente el patrón que esta
+> auditoría existe para evitar.
+
+**Calidad de la evidencia, dicha con precisión:**
+
+| | |
+|---|---|
+| **No se ejecutaron pruebas ofensivas** | Ninguna. Ni contra producción ni contra ningún entorno |
+| **El camino está confirmado por** | **código** (lectura estática de los defaults y de la fusión de políticas) **y configuración efectiva** (lectura sanitizada de producción) |
+| **Lo que NO se afirma** | Que exista una explotación demostrada. No se demostró; se documentó la cadena |
+
+Esta distinción no es un matiz defensivo: es la diferencia entre *"esto es explotable"* y *"esto está abierto
+por diseño y nadie ha comprobado que no lo sea"*. La segunda basta de sobra para priorizarlo.
+
+**Clasificación: PRIORIDAD INMEDIATA DE SPRINT 0A.** Antes que cualquier endurecimiento de rol o scope, porque
+mientras la puerta de autenticación siga abierta, endurecer lo de dentro no reduce exposición.
+
+*No se documentan instrucciones explotables, payloads, credenciales ni pruebas contra producción.*

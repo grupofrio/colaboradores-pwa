@@ -1,10 +1,10 @@
 # Gerente de Sucursal — capacidades reutilizables, diseño objetivo y plan
 
-> **ESTADO: DRAFT PARA REVISIÓN TÉCNICA — dos bloqueos pendientes.**
+> **ESTADO: DRAFT — diseño técnico CERRADO documentalmente.** Pendientes trasladados a QA / preflight de 0A.
 > Documento de auditoría. **No es una especificación aprobada ni autoriza implementación.**
 >
-> **Ramas auditadas (actualizado tras la revision de Sebastian):** frontend `origin/main` **`b47f329d`** ·
-> backend `GrupoVeniu/GrupoFrio` **`158d302a`** (delta revisado) · rama vigente al cierre **`244dbfd9`**.
+> **Ramas auditadas:** frontend `origin/main` **`674f6646`** · backend `GrupoVeniu/GrupoFrio` **`0a1b80ba`**
+> (SHA de referencia del diseño). Punta backend al escribir: `7989492d` — ver `GERENTE_ANEXO_RUNTIME.md` §1.3.
 >
 > **Clasificación de evidencia** — cada afirmación de estos documentos es una de:
 > **[E]** verificado estáticamente en código de la rama vigente ·
@@ -270,19 +270,58 @@ Depende de 0A: no se puede cortar el cliente antes de que exista el sustituto se
 
 ## CUTOVER de políticas genéricas — proceso SEPARADO, no un ticket de 0A
 
-> **No se recomienda retirar las políticas genéricas de inmediato.** La recomendación anterior ("kill switch,
-> 0 líneas, cierra 4 caminos de golpe") era **imprudente**: `os_api.generic_model_policies` gobierna
+> **No se recomienda retirar las políticas genéricas de inmediato.** La recomendación anterior —retirarlas de
+> golpe, sin coste, cerrando cuatro caminos a la vez— era **imprudente**: `os_api.generic_model_policies` gobierna
 > `/get_records_sorted` y `/api/create_update` **para toda la instancia**, no solo para el Gerente. Retirarlo sin
 > inventario de consumidores rompe superficies que nadie ha enumerado.
 
-El cutover es un proceso propio, con cuatro fases y su propia ventana:
+El cutover es un proceso propio, con **secuencia fija de 12 pasos**. El orden **no es negociable**: cada paso
+depende de que el anterior haya reducido consumidores, no de que se haya "decidido" cerrarlo.
 
-| Fase | Contenido | Criterio de avance |
+| # | Paso | Naturaleza |
 |---|---|---|
-| **1 · Preflight** | Leer el valor **real** del parámetro en producción (no está en el repo, no tiene CI). Instrumentar `/get_records_sorted` y `/api/create_update` para registrar modelo, campos, app y origen durante una ventana representativa (mínimo un ciclo mensual completo, para capturar cierres). | Log con cobertura suficiente y **ningún consumidor desconocido** apareciendo al final de la ventana |
-| **2 · Inventario de consumidores** | Cruzar el log con los callers conocidos: PWA colaboradores, PWA clientes/B2B, KoldField, n8n, integraciones. **Cada modelo y campo permitido debe tener dueño identificado.** | Inventario cerrado y revisado por Sebastián |
-| **3 · Migración** | Sustituir consumidor por consumidor por endpoints guardados. **Estrechar la política de forma incremental**, un modelo a la vez, verificando tras cada paso. | Cero tráfico genérico para el modelo retirado durante una ventana de observación |
-| **4 · Rollback** | Cada estrechamiento debe poder revertirse **sin deploy** (es un `ir.config_parameter`). Definir de antemano la señal de rollback (errores `model_not_allowed`/`field_not_allowed` en superficies vivas) y quién la vigila. | Procedimiento escrito y probado al menos una vez |
+| 1 | **Instrumentar tráfico y consumidores reales** | medición |
+| 2 | **Generar inventario autoritativo de rutas y políticas** (automático, con drift en CI) | medición |
+| 3 | **Crear endpoints dedicados y seguros** para las escrituras críticas | construcción |
+| 4 | **Migrar consumidores por dominio** | migración |
+| 5 | Activar **`gf_salesops.require_employee_token`** | corte |
+| 6 | Desactivar **`os_api.allow_legacy_api_key_fallback`** | corte |
+| 7 | Desactivar **`os_api.allow_public_get_records_without_key`** | corte |
+| 8 | Desactivar **`allow_public_employee_lookup`** y **`allow_public_route_lookup`** — *cuando sus consumidores estén migrados* | corte |
+| 9 | **Reducir `generic_model_policies` modelo por modelo y operación por operación** | corte incremental |
+| 10 | **Retirar el usuario de fallback** | corte |
+| 11 | **Retirar ORM genérico, `sudo` y compatibilidades legacy** | limpieza |
+| 12 | **Preflight, telemetría, rollback y ventana de observación en CADA corte** | transversal |
+
+**El paso 12 no es el último: es el envoltorio de los pasos 5–11.** Ningún corte se ejecuta sin las cuatro
+cosas, y ninguno se da por bueno sin que la ventana de observación pase limpia.
+
+### Por qué este orden y no otro
+
+- **Medir antes de construir (1–2):** sin inventario y tráfico reales, cualquier endpoint nuevo se diseña a ciegas.
+- **Construir antes de migrar (3):** no se puede migrar un consumidor a un sustituto que no existe.
+- **Migrar antes de cortar (4 → 5–8):** cerrar un fallback con consumidores vivos es una caída, no un endurecimiento.
+- **`require_employee_token` antes que los fallbacks públicos (5 antes de 6–8):** exigir identidad fuerte es
+  aditivo y reversible; cerrar la puerta de autenticación no lo es.
+- **Las políticas después de los fallbacks (9):** mientras la llave no autentique, estrechar políticas protege poco.
+- **El usuario de fallback al final (10):** es la red de seguridad. ⚠️ Y recordar que **estar inactivo no lo
+  neutraliza**: `ir_http.py` comprueba existencia, **no `active=True`**.
+
+### Forma del trabajo: PRs verticales, nunca uno monolítico
+
+> **No se plantea un cambio masivo ni un PR monolítico.**
+
+El trabajo se divide en **PRs verticales por endpoint / consumidor / dominio**, cada uno con:
+
+| Requisito | Por qué |
+|---|---|
+| **Pruebas** | que muerdan: mutación del guard debe romper el test |
+| **Rollback** | definido *antes* de mergear, no improvisado |
+| **Alcance de un solo dominio** | un PR que toca caja y producción no se puede revertir sin romper una de las dos |
+| **Telemetría** | para saber si el corte redujo exposición o solo movió el problema |
+
+Un PR monolítico de "seguridad" sobre ~104 escrituras sería irrevisable, irreversible y, en la práctica,
+imposible de desplegar sin ventana de caída. La verticalidad no es estilo: es lo que hace el rollback posible.
 
 **Dato que favorece el cutover:** en runtime se confirmó **[R]** que la política productiva **ya es estrecha** —
 `gf.ops.branch_config` responde `model_not_allowed` y `hr.employee` con campos amplios responde

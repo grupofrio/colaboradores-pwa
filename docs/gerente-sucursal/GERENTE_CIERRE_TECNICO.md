@@ -1,10 +1,10 @@
 # Gerente de Sucursal — cierre técnico (A–N)
 
-> **ESTADO: DRAFT PARA REVISIÓN TÉCNICA — dos bloqueos pendientes.**
+> **ESTADO: DRAFT — diseño técnico CERRADO documentalmente.** Pendientes trasladados a QA / preflight de 0A.
 > Documento de auditoría. **No es una especificación aprobada ni autoriza implementación.**
 >
-> **Ramas auditadas (actualizado tras la revision de Sebastian):** frontend `origin/main` **`b47f329d`** ·
-> backend `GrupoVeniu/GrupoFrio` **`158d302a`** (delta revisado) · rama vigente al cierre **`244dbfd9`**.
+> **Ramas auditadas:** frontend `origin/main` **`674f6646`** · backend `GrupoVeniu/GrupoFrio` **`0a1b80ba`**
+> (SHA de referencia del diseño). Punta backend al escribir: `7989492d` — ver `GERENTE_ANEXO_RUNTIME.md` §1.3.
 >
 > **Clasificación de evidencia** — cada afirmación de estos documentos es una de:
 > **[E]** verificado estáticamente en código de la rama vigente ·
@@ -15,17 +15,21 @@
 > **Identificadores:** sanitizados por alias. Personas `<E1>` · companias `<CO-EN>`/`<CO-PT>` ·
 > almacen `<WH-SUC>` · cuenta analitica `<AN-SUC>` · sucursal `<SUC-A>`. Ningun ID productivo en claro.
 **2026-07-26 · READ-ONLY** · amplía `AUDITORIA_GERENTE_SUCURSAL.md` y `GERENTE_DISENO_OBJETIVO_Y_PLAN.md` sin borrar evidencia.
-Ramas: FE `origin/main` (`b47f329d`) · BE `origin/GrupoFrio` (`158d302a`; vigente `244dbfd9`).
+Ramas: FE `origin/main` (`674f6646`) · BE `origin/GrupoFrio` (`0a1b80ba`; punta al escribir `7989492d`).
 
-> ## ⛔ VEREDICTO: **INCOMPLETO** — 2 bloqueos externos abiertos
+> ## ✅ VEREDICTO: **DISEÑO TÉCNICO CERRADO** — listo para convertirse en backlog
 > Ver `GERENTE_ANEXO_RUNTIME.md` para la evidencia runtime y `GERENTE_MATRIZ_ESCRITURAS.md` para el censo.
 > **Cumplido:** delta backend auditado · censo de ~100 escrituras · identidad y cardinalidad canonizadas ·
 > autoridad redefinida como cadena · M1–M7 en tabla única · producción/inventarios mapeados · iframe cerrado.
-> **Bloqueo 1 (externo, ABIERTO):** la **auditoría visual solo cubrió 1 de 4 viewports**. `resize_window`
-> reporta éxito pero el viewport real no cambia. Faltan **390×844, 768×1024 y 1366×768**.
-> **Bloqueo 2 (externo, ABIERTO):** planta, timezone y ubicaciones MP/PT/envases **no son obtenibles desde el
-> navegador** (`gf.ops.branch_config` → `model_not_allowed`); requieren odoo-shell o un endpoint guardado.
-> Ninguno se cierra hasta que **Yamil confirme "listo"**.
+> **18 decisiones arquitectónicas CERRADAS** (§10). Parámetros productivos medidos (`ANEXO` §9–§10).
+> Settlement decidido (§9). Sprint 0A con GOAL y backlog en `GERENTE_SPRINT_0A_GOAL_Y_BACKLOG.md`.
+>
+> **Trasladado a QA (no bloquea el diseño):** auditoría visual en 390×844 / 768×1024 / 1366×768 — **no ejecutada,
+> no se declara cerrada**. Pasa a QA previo a construcción / QA de Sprint 1.
+> **Trasladado a preflight de 0A:** valores operativos concretos de planta, timezone y ubicaciones MP/PT/envases
+> (la **arquitectura** está resuelta —modelo puente N:M, §10 #13—; lo que falta son **los valores**, que se
+> consultan por odoo-shell o endpoint guardado, no por el navegador).
+> **Re-auditoría obligatoria antes de escribir tickets:** filas A7–A13 contra la punta `7989492d`.
 >
 > ### Dictamen de Sebastián — incorporado en esta revisión
 > | # | Corrección recibida | Dónde se aplicó |
@@ -483,7 +487,7 @@ Más `MULTI_BRANCH` si el gerente pudiera tener más de una sucursal.
 - **Cookie de tercera parte**: la PWA se sirve desde `*.vercel.app` y BI desde `grupofrio.mx` ⇒ sitios distintos.
   Si el dashboard carga con datos hoy, la cookie de Metabase es `SameSite=None`. Y **el logout de la PWA no revoca
   el acceso a BI**: un empleado dado de baja sigue viendo el dashboard.
-- **Patrón de phishing por diseño**: sin sesión, el gerente ve un login de terceros **dentro** de la PWA corporativa.
+- ~~Patrón de phishing por diseño~~ — **AFIRMACIÓN RETIRADA.** Verificado en runtime: Metabase **rehúsa ser enmarcado**, el login de terceros **nunca se renderiza**. No hay patrón de phishing. Ver `ANEXO_RUNTIME` R5/R6.
 - **Contraste**: la otra superficie Metabase (`ScreenDashboardVentas`) sí pide token y degrada a un resumen nativo
   con datos reales. `/gerente/dashboard` es la excepción sin gobernanza. **Retirarla cuesta ≈ 0.**
 
@@ -518,31 +522,22 @@ de error explícito. Un parámetro que miente sobre el alcance debe fallar, no d
 ## Nota de método sobre esta tabla
 
 Las disposiciones de M2 y M4 se apoyan en el conteo de queries branch-aware vs company-only. Ese conteo procede
-de la auditoría estática previa **[E]** y **no fue re-verificado contra `244dbfd9`**. Antes de planificar el
+de la auditoría estática previa **[E]** y **no fue re-verificado contra `0a1b80ba`**. Antes de planificar el
 trabajo de M2, reconfirmar el reparto 7/3. La disposición cualitativa (M2 más barato que M4) es robusta; el
 número exacto de queries no.
 
 
-# L. Plan de sprints actualizado + orden de PRs
+# L. Plan de sprints — ⚠️ SECCIÓN ELIMINADA (obsoleta)
 
-**Cambio principal frente al plan anterior:** M1 y M2 pasan de "no disponible" a **habilitables**, y aparece un
-defecto nuevo (scope fantasma M6/M7) que hay que **cerrar o declarar** antes de prometer nada por sucursal.
-
-| Sprint | Contenido | Precondición |
-|---|---|---|
-| **0 — Contención + identidad** | Los 6 caminos de (D) por riesgo + kill switch de `generic_model_policies` + `require_employee_token` + decisión de rol/alias + **D1 identidad canónica** + `tz` en branch_config + cerrar `_require_company` + tapar el hueco de doble-scope | **Bloqueante de todo** |
-| **1 — Hoy · Operación · Alertas** | Reutiliza day-control/radar/route_stops (4 puntos de allowlist) + los ~7 retoques de copy | Sprint 0 |
-| **2 — Ventas · Inventarios · Producción** | `kpi/daily` (1 línea) · DTO de inventario con `uom_id`+`reserved`+merma · agregado de planta + `data_as_of` | Sprint 0; decisión de ubicaciones MP/envases |
-| **3 — M1/M2 por sucursal** | M1: quitar fail-closed + rol (barato). M2: habilitar `branch_ids` en producción y scopear las 3 queries `company` | Relajar el constraint mono-sucursal si aplica |
-| **4 — Caja · Rentabilidad** | **Primero cerrar el scope fantasma M6/M7.** Rentabilidad se presenta como **"No evaluable"** con lista de costos faltantes | Construir la dimensión de sucursal |
-
-**Orden de PRs:** (1) BE seguridad crítica `liquidaciones/validate` + `requisition-*` → (2) FE retiro de `sudo`/ORM y
-cableado a endpoints seguros → (3) config: kill switch + token obligatorio → (4) BE identidad canónica + `tz` →
-(5) BE alias de rol + matriz de no-escalada → (6) BE allowlists Supervisor + `hr_employee_supervisor_v2` →
-(7) FE shell Gerente (Hoy/Operación/Alertas) → (8) BE DTO inventario → (9) FE Inventarios → (10) BE agregado planta →
-(11) FE Producción → (12) M1 rol+multi-branch → (13) M2 corrida scoped → (14) M6/M7 dimensión o declaración.
-
----
+> El plan de sprints y el orden de PRs que vivían aquí quedan **obsoletos y retirados**. Dimensionaban el
+> trabajo sobre los caminos del módulo Gerente y proponían un corte inmediato de las políticas genéricas,
+> ambas cosas incorrectas.
+>
+> **Plan vigente:** `GERENTE_DISENO_OBJETIVO_Y_PLAN.md` §3 — Sprint 0 en **0A / 0B / 0C** con **cutover de 12
+> pasos** (`GERENTE_SPRINT_0A_GOAL_Y_BACKLOG.md` para el detalle ejecutable de 0A).
+>
+> **Referencias cruzadas:** cualquier mención a "Sprint 1/2/3/4" en documentos de este paquete apunta a este
+> plan retirado y debe leerse como histórica.
 
 # K. Decisiones que requiere Yamil
 
@@ -580,3 +575,97 @@ cableado a endpoints seguros → (3) config: kill switch + token obligatorio →
 5. **No probé ningún write** (prohibido y correcto): el riesgo de `forecast-unlock` queda **no refutado**, con la
    lectura confirmada abierta y el `ReferenceError` como única barrera accidental.
 6. **§6 (M1–M7 scope en el core) pendiente** de su agente; se anexará como entregable G.
+
+
+---
+
+# §9. SETTLEMENT DE MATERIALES — decisión de negocio CERRADA
+
+> Fijada por Yamil. Deja de ser una pregunta abierta de la auditoría y pasa a ser **requisito de 0A**.
+
+## Flujo canónico
+
+| Actor | Transición | Efectos de inventario |
+|---|---|---|
+| **Operador** | `draft → reported` | **NINGUNO.** Reportar no mueve stock |
+| **Gerente / admin autorizado** | `reported → validated` · `disputed → validated` | **Movimientos finales**, aquí y solo aquí |
+
+**Dos propiedades obligatorias de la validación:**
+- **Atómica** — validación y movimientos ocurren juntos o no ocurren. Sin estados intermedios observables.
+- **Idempotente** — reintentar no duplica movimientos. Hoy el módulo **no tiene un solo lock**.
+
+## Qué está mal hoy — y por qué el flag lo confirma
+
+`action_report()` (`gf_material_settlement.py:722`) deja el registro en **`validated`** y **genera movimientos**:
+la acción llamada *reportar* en realidad **reporta y valida**. El comentario del código indica que una segunda
+validación fue eliminada deliberadamente en su día.
+
+**`gf_production_ops.material_stock_enabled = 1` está ACTIVO en producción [R].** Eso cierra la duda: no es un
+comportamiento latente ni teórico — **hoy `report` puede producir movimientos de inventario reales.**
+
+## Decisión
+
+> **No debe conservarse una acción llamada `report` que en realidad reporte y valide.**
+
+El comportamiento híbrido entra **explícitamente en 0A**. No es refactor cosmético: es la diferencia entre que
+un operador registre lo que observó y que un operador **cierre el arqueo y mueva inventario** sin que nadie
+autorice. Separar las dos acciones restablece el control que el nombre ya promete.
+
+**Consecuencias registradas en el paquete:**
+- **Matriz** (fila P5): `materials/settlement/report` deja de describirse como "reportar" y se marca como
+  **reportar+validar**, riesgo 🔴, con la separación como sustituto.
+- **Backlog 0A**: ticket propio, con migración de datos si hay registros en estado inconsistente.
+
+---
+
+# §10. DECISIONES ARQUITECTÓNICAS — CERRADAS
+
+> **Cerradas** = no se re-discuten al construir. Cambiarlas exige una decisión explícita nueva, no una
+> interpretación durante la implementación.
+
+## Identidad y autoridad
+
+| # | Decisión | Estado |
+|---|---|---|
+| 1 | **Autoridad = cadena** `token → empleado → membresía server-side → gf.ops.branch_config` | ✅ CERRADA |
+| 2 | La config debe cumplir **`active = True` Y `state = 'active'`** (dos gates distintos, ambos exigidos) | ✅ CERRADA |
+| 3 | **La analítica es dato DERIVADO, no autoridad.** Se obtiene del `branch_config`, no al revés, y nunca del cliente | ✅ CERRADA |
+| 4 | **`gerente_sucursal` es el rol canónico** | ✅ CERRADA |
+| 5 | **`gerente_unidad` = alias temporal unidireccional**, por un único resolvedor central | ✅ CERRADA |
+| 6 | **`hr.job.x_job_key` = rol primario** | ✅ CERRADA |
+| 7 | **`pwa_extra_*` = roles adicionales, aditivos** | ✅ CERRADA |
+| 8 | **`x_gf_role_key` / `x_role_key` = compatibilidad observable**, no autoridad. Se leen si existen, se registran, y no se convierten en vía de concesión de rol | ✅ CERRADA |
+| 9 | **Grupos Odoo = segunda capa de capacidades**, por encima del rol PWA (no sustituto) | ✅ CERRADA |
+
+## Cardinalidad y sucursal
+
+| # | Decisión | Estado |
+|---|---|---|
+| 10 | **Diseño 1:N, operación inicial 1:1** | ✅ CERRADA |
+| 11 | **Membresía explícita** como única fuente de la relación empleado↔sucursal | ✅ CERRADA |
+| 12 | **`BranchSelector` server-authoritative**: el servidor calcula el conjunto; la elección del cliente es *sugerencia validada*. Con N=1 no se renderiza | ✅ CERRADA |
+
+## Planta y producción
+
+| # | Decisión | Estado |
+|---|---|---|
+| 13 | **Modelo puente N:M sucursal–planta.** Hoy **no existe ninguna relación**; se crea. N:M porque una planta puede servir a varias sucursales y una sucursal puede recibir de varias plantas | ✅ CERRADA |
+| 14 | **`dispatch-config` se CORRIGE** con planta canónica + `stock.location.gf_mp_dispatch_key` (el único marcador que sí existe) | ✅ CERRADA |
+| 15 | **`dispatch-transfer` legacy se RETIRA** (hoy está roto: campos inexistentes ⇒ 409 permanente) | ✅ CERRADA |
+
+## Superficies
+
+| # | Decisión | Estado |
+|---|---|---|
+| 16 | **`/gerente/dashboard` se RETIRA** (ruta + tarjeta). Sin fuga observada; simplemente no carga. Sustituto posterior: "Hoy" nativo | ✅ CERRADA |
+| 17 | **Clasificación M1–M7 final** (§7): M1 reusable · M2 corrida scoped · M3 DTO de señales · M4 nueva dimensión+DTO · M5 señales **no** conciliación · M6 unavailable **y rechaza `branch_ids`** · M7 unavailable hasta dimensión+COGS+trazabilidad | ✅ CERRADA |
+| 18 | **Reutilizar APIs y catálogos existentes** antes de crear nuevos: Supervisor V2 (day-control branch-wide), `inventory/summary`, `close-check`, catálogo `gf.production.material`, conciliaciones read-only | ✅ CERRADA |
+
+## Lo que estas 18 decisiones implican
+
+El diseño técnico **ya no tiene incógnitas de arquitectura**. Lo que queda es **trabajo de ingeniería medible**:
+propagar un patrón que ya existe en el repositorio, a una superficie cuyo tamaño ya está censado, en un orden
+de cutover ya definido.
+
+**Lo que sigue abierto no es diseño, es dato operativo:** cuánto tráfico real hay, qué consumidores existen, y
+qué políticas se usan de verdad. Eso se **mide** en el preflight de 0A. No se decide.
