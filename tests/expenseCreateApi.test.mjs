@@ -57,13 +57,13 @@ test.afterEach(() => {
 
 test('expense create omits account_id when the user did not select one explicitly', async () => {
   setSession()
-  const createUpdateCalls = []
+  const controllerCalls = []
 
   globalThis.fetch = async (url, options = {}) => {
     const payload = options.body ? JSON.parse(options.body) : null
-    if (url === '/odoo-api/api/create_update') {
-      createUpdateCalls.push(payload.params)
-      return createJsonResponse(200, { result: { id: 901 } })
+    if (url === '/odoo-api/pwa-admin/expense-create') {
+      controllerCalls.push({ params: payload.params, headers: options.headers })
+      return createJsonResponse(200, { result: { ok: true, data: { id: 901 } } })
     }
     return createJsonResponse(500, { error: `Unexpected ${url}` })
   }
@@ -78,21 +78,21 @@ test('expense create omits account_id when the user did not select one explicitl
     description: 'Carga de unidad',
   })
 
-  assert.equal(createUpdateCalls.length, 1)
-  assert.equal(createUpdateCalls[0].model, 'hr.expense')
-  assert.equal(createUpdateCalls[0].method, 'create')
-  assert.equal(Object.hasOwn(createUpdateCalls[0].dict, 'account_id'), false)
+  assert.equal(controllerCalls.length, 1)
+  assert.equal(Object.hasOwn(controllerCalls[0].params, 'account_id'), false)
+  assert.equal(Object.hasOwn(controllerCalls[0].params, 'employee_id'), false)
+  assert.equal(controllerCalls[0].headers.Authorization, 'Bearer token-test')
 })
 
 test('expense create omits invalid account_id values instead of falling back to a hardcoded account', async () => {
   setSession()
-  const createUpdateCalls = []
+  const controllerCalls = []
 
   globalThis.fetch = async (url, options = {}) => {
     const payload = options.body ? JSON.parse(options.body) : null
-    if (url === '/odoo-api/api/create_update') {
-      createUpdateCalls.push(payload.params)
-      return createJsonResponse(200, { result: { id: 902 } })
+    if (url === '/odoo-api/pwa-admin/expense-create') {
+      controllerCalls.push(payload.params)
+      return createJsonResponse(200, { result: { ok: true, data: { id: 902 } } })
     }
     return createJsonResponse(500, { error: `Unexpected ${url}` })
   }
@@ -108,19 +108,20 @@ test('expense create omits invalid account_id values instead of falling back to 
     account_id: 0,
   })
 
-  assert.equal(createUpdateCalls.length, 1)
-  assert.equal(Object.hasOwn(createUpdateCalls[0].dict, 'account_id'), false)
+  assert.equal(controllerCalls.length, 1)
+  assert.equal(Object.hasOwn(controllerCalls[0], 'account_id'), false)
+  assert.equal(Object.hasOwn(controllerCalls[0], 'employee_id'), false)
 })
 
 test('expense create omits positive legacy account_id values until an account selector exists', async () => {
   setSession()
-  const createUpdateCalls = []
+  const controllerCalls = []
 
   globalThis.fetch = async (url, options = {}) => {
     const payload = options.body ? JSON.parse(options.body) : null
-    if (url === '/odoo-api/api/create_update') {
-      createUpdateCalls.push(payload.params)
-      return createJsonResponse(200, { result: { id: 903 } })
+    if (url === '/odoo-api/pwa-admin/expense-create') {
+      controllerCalls.push(payload.params)
+      return createJsonResponse(200, { result: { ok: true, data: { id: 903 } } })
     }
     return createJsonResponse(500, { error: `Unexpected ${url}` })
   }
@@ -136,6 +137,7 @@ test('expense create omits positive legacy account_id values until an account se
     account_id: 445,
   })
 
-  assert.equal(createUpdateCalls.length, 1)
-  assert.equal(Object.hasOwn(createUpdateCalls[0].dict, 'account_id'), false)
+  assert.equal(controllerCalls.length, 1)
+  assert.equal(Object.hasOwn(controllerCalls[0], 'account_id'), false)
+  assert.equal(Object.hasOwn(controllerCalls[0], 'employee_id'), false)
 })

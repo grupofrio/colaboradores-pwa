@@ -12,6 +12,10 @@ import {
   normalizePosScope,
   readPosScopeOption,
 } from './posFlow.js'
+import {
+  normalizeAdjustments,
+  normalizeDenominations,
+} from './cashShiftModel.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -37,6 +41,70 @@ function readOwnIntent(source, propertyName, validator) {
     throw new TypeError('El alcance del POS no es válido.')
   }
   return { present: true, value: validator(descriptor.value) }
+}
+
+function cashShiftInput(value, label = 'Los datos del corte') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${label} no son válidos.`)
+  }
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(`${label} no son válidos.`)
+  }
+  const clean = Object.create(null)
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+    if (!descriptor.enumerable) continue
+    if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+      throw new TypeError(`${label} no son válidos.`)
+    }
+    clean[key] = descriptor.value
+  }
+  return clean
+}
+
+function cashShiftInteger(value, label, minimum = 0) {
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw new TypeError(`${label} no es válido.`)
+  }
+  return value
+}
+
+function cashShiftMoney(value, label) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new TypeError(`${label} no es válido.`)
+  }
+  return value
+}
+
+function cashShiftText(value, label, { optional = false } = {}) {
+  if (optional && (value === undefined || value === null || value === '')) return undefined
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`${label} no es válido.`)
+  }
+  return value.trim()
+}
+
+function cashShiftType(value) {
+  if (value !== 'night' && value !== 'day') {
+    throw new TypeError('El tipo de turno no es válido.')
+  }
+  return value
+}
+
+function cashShiftDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new TypeError('La fecha operativa no es válida.')
+  }
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    throw new TypeError('La fecha operativa no es válida.')
+  }
+  return value
 }
 
 // ── POS Mostrador ────────────────────────────────────────────────────────────
@@ -306,6 +374,161 @@ export function getAnalyticAccounts(companyId) {
 /** Feature flags del backend (leídos al boot por AdminProvider). */
 export function getCapabilities() {
   return api('GET', '/pwa-admin/capabilities')
+}
+
+// ── Cortes POS por turno ────────────────────────────────────────────────────
+
+/** Turno activo del alcance derivado exclusivamente del token del empleado. */
+export function getActiveCashShift() {
+  return api('GET', '/pwa-admin/cash-shifts/active')
+}
+
+/** Vista previa inicial o viva; nunca acepta compañía/almacén/analítica. */
+export function previewCashShift(input = {}) {
+  const value = cashShiftInput(input, 'Los datos de vista previa')
+  const mode = value.mode ?? 'active'
+  if (mode === 'initial') {
+    return api('GET', `/pwa-admin/cash-shifts/preview${toQuery({
+      mode,
+      shift_type: cashShiftType(value.shiftType),
+      business_date: cashShiftDate(value.businessDate),
+      start_at: cashShiftText(value.startAt, 'La hora inicial'),
+    })}`)
+  }
+  if (mode !== 'active') throw new TypeError('El modo de vista previa no es válido.')
+  return api('GET', `/pwa-admin/cash-shifts/preview${toQuery({
+    mode,
+    shift_id: value.shiftId === undefined
+      ? undefined
+      : cashShiftInteger(value.shiftId, 'El ID del turno', 1),
+  })}`)
+}
+
+export function openCashShift(input) {
+  const value = cashShiftInput(input)
+  return api('POST', '/pwa-admin/cash-shifts/open', {
+    shift_type: cashShiftType(value.shiftType),
+    business_date: cashShiftDate(value.businessDate),
+    start_at: cashShiftText(value.startAt, 'La hora inicial'),
+    opening_fund: cashShiftMoney(value.openingFund, 'El fondo inicial'),
+    idempotency_key: cashShiftText(value.idempotencyKey, 'La clave de idempotencia'),
+  })
+}
+
+function cashShiftClosePayload(input, { reclose }) {
+  const value = cashShiftInput(input)
+  const expectedVersion = cashShiftInteger(value.expectedVersion, 'La versión esperada')
+  if ((!reclose && expectedVersion !== 0) || (reclose && expectedVersion < 1)) {
+    throw new TypeError('La versión esperada no corresponde al tipo de cierre.')
+  }
+  const payload = {
+    shift_id: cashShiftInteger(value.shiftId, 'El ID del turno', 1),
+    expected_version: expectedVersion,
+    denominations: normalizeDenominations(value.denominations ?? []),
+    adjustments: normalizeAdjustments(value.adjustments ?? []),
+    notes: cashShiftText(value.notes, 'Las notas', { optional: true }),
+    evidence_token: cashShiftText(value.evidenceToken, 'La evidencia', { optional: true }),
+    idempotency_key: cashShiftText(value.idempotencyKey, 'La clave de idempotencia'),
+  }
+  if (!reclose) {
+    payload.next_opening_fund = cashShiftMoney(
+      value.nextOpeningFund,
+      'El fondo inicial del siguiente turno',
+    )
+  }
+  return payload
+}
+
+export function closeCashShift(input) {
+  return api('POST', '/pwa-admin/cash-shifts/close', cashShiftClosePayload(input, {
+    reclose: false,
+  }))
+}
+
+export function recloseCashShift(input) {
+  return api('POST', '/pwa-admin/cash-shifts/close', cashShiftClosePayload(input, {
+    reclose: true,
+  }))
+}
+
+export function getCashShiftHistory(input = {}) {
+  const value = cashShiftInput(input, 'Los filtros de historial')
+  return api('GET', `/pwa-admin/cash-shifts/history${toQuery({
+    business_date: value.businessDate === undefined
+      ? undefined
+      : cashShiftDate(value.businessDate),
+  })}`)
+}
+
+export function getCashShiftDetail(input) {
+  const value = cashShiftInput(input, 'Los datos del detalle')
+  return api('GET', `/pwa-admin/cash-shifts/detail${toQuery({
+    shift_id: cashShiftInteger(value.shiftId, 'El ID del turno', 1),
+    version_id: value.versionId === undefined
+      ? undefined
+      : cashShiftInteger(value.versionId, 'El ID de versión', 1),
+  })}`)
+}
+
+export function reopenCashShift(input) {
+  const value = cashShiftInput(input)
+  return api('POST', '/pwa-admin/cash-shifts/reopen', {
+    shift_id: cashShiftInteger(value.shiftId, 'El ID del turno', 1),
+    expected_version: cashShiftInteger(value.expectedVersion, 'La versión esperada', 1),
+    reason: cashShiftText(value.reason, 'La razón de reapertura'),
+    idempotency_key: cashShiftText(value.idempotencyKey, 'La clave de idempotencia'),
+  })
+}
+
+export function authorizeCashShift(input) {
+  const value = cashShiftInput(input)
+  if (value.level !== 'manager' && value.level !== 'director') {
+    throw new TypeError('El nivel de autorización no es válido.')
+  }
+  return api('POST', '/pwa-admin/cash-shifts/authorize', {
+    shift_id: cashShiftInteger(value.shiftId, 'El ID del turno', 1),
+    version_id: cashShiftInteger(value.versionId, 'El ID de versión', 1),
+    level: value.level,
+    idempotency_key: cashShiftText(value.idempotencyKey, 'La clave de idempotencia'),
+  })
+}
+
+export function getCashShiftOperationStatus(input) {
+  const value = cashShiftInput(input, 'La consulta de operación')
+  const operation = value.operation
+  if (!['open', 'close', 'reclose', 'reopen', 'authorize'].includes(operation)) {
+    throw new TypeError('La operación no es válida.')
+  }
+  return api('GET', `/pwa-admin/cash-shifts/operations/status${toQuery({
+    operation,
+    key: cashShiftText(value.idempotencyKey, 'La clave de idempotencia'),
+  })}`)
+}
+
+export function uploadCashShiftEvidence(input) {
+  const value = cashShiftInput(input, 'La evidencia')
+  if (value.purpose !== 'close' && value.purpose !== 'reclose') {
+    throw new TypeError('El propósito de evidencia no es válido.')
+  }
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(value.mimeType)) {
+    throw new TypeError('El MIME de evidencia no es válido.')
+  }
+  const expectedVersion = cashShiftInteger(value.expectedVersion, 'La versión esperada')
+  if (
+    (value.purpose === 'close' && expectedVersion !== 0)
+    || (value.purpose === 'reclose' && expectedVersion < 1)
+  ) {
+    throw new TypeError('La versión esperada no corresponde al propósito de evidencia.')
+  }
+  return api('POST', '/pwa/evidence/upload', {
+    context: 'cash_shift',
+    shift_id: cashShiftInteger(value.shiftId, 'El ID del turno', 1),
+    expected_version: expectedVersion,
+    purpose: value.purpose,
+    filename: cashShiftText(value.filename, 'El nombre del archivo'),
+    file_base64: cashShiftText(value.fileBase64, 'El archivo'),
+    mime_type: value.mimeType,
+  })
 }
 
 // ── Requisiciones ────────────────────────────────────────────────────────────

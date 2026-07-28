@@ -300,7 +300,11 @@ test('cached day role fails closed on 403 in mobile and desktop without strippin
     assert.doesNotMatch(renderedText(renderer), /SENSITIVE_REVOKED_ROLE_DETAIL/)
     assert.ok(calls.length >= 1)
     assert.ok(calls.every((call) => call.url.startsWith('/odoo-api/pwa-admin/')))
-    assert.ok(calls.every((call) => new URL(call.url, 'http://local').searchParams.get('pos_scope') === 'day'))
+    const posCalls = calls.filter((call) => !call.url.endsWith('/pwa-admin/capabilities'))
+    assert.ok(posCalls.length >= 1)
+    assert.ok(posCalls.every((call) => (
+      new URL(call.url, 'http://local').searchParams.get('pos_scope') === 'day'
+    )))
     assert.ok(calls.every((call) => !call.url.startsWith('/api-n8n/')))
 
     act(() => renderer.unmount())

@@ -2,13 +2,12 @@
 // Backend: `gf_pwa_admin` (Sebastián, rollout 2026-04-10).
 // Modo LIVE:
 //   · analytic_distribution (dict Odoo 18) — Opción A
-//   · warehouse_id + sucursal_code + employee_id estructurados
+//   · warehouse_id + sucursal_code estructurados; empleado derivado del token
 //   · Filtros server-side por company_id/warehouse_id en today-expenses
 //   · Validación cross-company en el backend; acá sólo seleccionamos cuentas
 //     que ya vienen filtradas por company_id de la razón social activa.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TOKENS } from '../../../tokens'
-import { useSession } from '../../../App'
 import { useAdmin } from '../AdminContext'
 import {
   createExpense,
@@ -40,8 +39,7 @@ function fileToPayload(file) {
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
 export default function AdminGastosForm() {
-  const { session } = useSession()
-  const { companyId, companyLabel, sucursal, warehouseId, employeeId, employeeName } = useAdmin()
+  const { companyId, companyLabel, sucursal, warehouseId } = useAdmin()
 
   const [expenses, setExpenses] = useState([])
   const [loading, setLoading] = useState(true)
@@ -181,7 +179,6 @@ export default function AdminGastosForm() {
         reference: reference.trim() || undefined,
         description: description.trim() || undefined,
         company_id: companyId,
-        employee_id: employeeId || undefined,
         warehouse_id: warehouseId || undefined,
         sucursal_code: sucursal || undefined,
         analytic_distribution: analyticDistribution,

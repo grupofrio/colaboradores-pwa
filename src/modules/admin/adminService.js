@@ -15,6 +15,10 @@ import {
   createCashClosing as apiCreateCashClosing,
   getCapabilities as apiGetCapabilities,
 } from './api'
+import {
+  buildSessionIdentity,
+  readSessionRaw,
+} from '../supervisor-ventas/v2/sessionScope.js'
 
 // ── Feature caps del backend ────────────────────────────────────────────────
 // Los defaults están en true porque `gf_pwa_admin` ya expone todos estos
@@ -89,11 +93,59 @@ export const BACKEND_CAPS = {
   requisitionApproval: false,
   // Monto > threshold requiere aprobación de gerente/director
   requisitionApprovalThreshold: 5000,
+  // Cortes por turno: siempre fail-closed hasta recibir capabilities autenticadas.
+  cashShiftRead: false,
+  cashShiftManage: false,
+  cashShiftAuthorize: false,
+  cashShiftPendingDetail: false,
+  cashShiftReopen: false,
+  cashShiftPrint: false,
+}
+
+const CASH_SHIFT_CAPABILITY_KEYS = Object.freeze([
+  'cashShiftRead',
+  'cashShiftManage',
+  'cashShiftAuthorize',
+  'cashShiftPendingDetail',
+  'cashShiftReopen',
+  'cashShiftPrint',
+])
+
+function resetCashShiftCapabilities() {
+  for (const key of CASH_SHIFT_CAPABILITY_KEYS) BACKEND_CAPS[key] = false
+}
+
+let capabilityRequestGeneration = 0
+
+function employeeToken(session) {
+  return String(session?.odoo_employee_token || session?.gf_employee_token || '')
+}
+
+function capabilitySessionSnapshot(session) {
+  const value = session && typeof session === 'object' ? session : readSessionRaw()
+  return {
+    sessionKey: buildSessionIdentity(value).sessionKey,
+    employeeToken: employeeToken(value),
+  }
+}
+
+function isCurrentCapabilityRequest(generation, snapshot) {
+  if (generation !== capabilityRequestGeneration) return false
+  const current = capabilitySessionSnapshot(readSessionRaw())
+  return current.sessionKey === snapshot.sessionKey
+    && current.employeeToken === snapshot.employeeToken
+}
+
+export function invalidateCashShiftCapabilities() {
+  capabilityRequestGeneration += 1
+  resetCashShiftCapabilities()
+  return BACKEND_CAPS
 }
 
 /** Aplica en runtime la respuesta de GET /pwa-admin/capabilities.
  *  Si el backend no conoce un flag, se mantiene el default local. */
 export function applyCapabilities(caps) {
+  resetCashShiftCapabilities()
   if (!caps || typeof caps !== 'object') return BACKEND_CAPS
   for (const key of Object.keys(BACKEND_CAPS)) {
     if (!Object.prototype.hasOwnProperty.call(caps, key)) continue
@@ -107,6 +159,8 @@ export function applyCapabilities(caps) {
       if (Number.isFinite(n)) BACKEND_CAPS[key] = n
     } else if (currentType === 'string') {
       BACKEND_CAPS[key] = String(incoming)
+    } else if (CASH_SHIFT_CAPABILITY_KEYS.includes(key)) {
+      BACKEND_CAPS[key] = incoming === true
     } else {
       BACKEND_CAPS[key] = Boolean(incoming)
     }
@@ -114,15 +168,23 @@ export function applyCapabilities(caps) {
   return BACKEND_CAPS
 }
 
-/** Boot-time fetch. Se llama desde AdminProvider una sola vez. */
-export async function bootCapabilities() {
+/** Lectura autenticada vinculada a una generación e identidad de sesión. */
+export async function bootCapabilities(session = null) {
+  const snapshot = capabilitySessionSnapshot(session)
+  const generation = ++capabilityRequestGeneration
+  // Cerrar permisos sensibles antes de esperar la respuesta remota; así una
+  // sesión nueva/stale nunca hereda temporalmente permisos del empleado previo.
+  resetCashShiftCapabilities()
+  if (!snapshot.employeeToken) return BACKEND_CAPS
   try {
     const res = await apiGetCapabilities()
+    if (!isCurrentCapabilityRequest(generation, snapshot)) return BACKEND_CAPS
     // El módulo devuelve { ok: true, data: {...} } o el dict plano
     const caps = res?.data || res
     return applyCapabilities(caps)
   } catch {
-    // Si falla, conservamos los defaults locales.
+    // Los permisos de cortes nunca sobreviven una lectura fallida o parcial.
+    if (isCurrentCapabilityRequest(generation, snapshot)) resetCashShiftCapabilities()
     return BACKEND_CAPS
   }
 }
@@ -270,6 +332,10 @@ function normalizeAnalyticDistribution(input) {
 export async function createExpense(payload) {
   const clean = { ...payload }
 
+  // La identidad del empleado se deriva del token autenticado en backend.
+  // Nunca se permite que un payload de UI seleccione a otro empleado.
+  delete clean.employee_id
+
   // Analítica — Opción A (analytic_distribution dict Odoo 18)
   const dist = normalizeAnalyticDistribution(clean.analytic_distribution)
   if (BACKEND_CAPS.expenseAnalytics && dist) {
@@ -281,9 +347,8 @@ export async function createExpense(payload) {
   delete clean.analytic_account_id
   delete clean.analytic_tag_ids
 
-  // Metadata estructurada (employee_id + warehouse_id + sucursal_code)
+  // Metadata estructurada de sucursal (la identidad no forma parte del payload).
   if (!BACKEND_CAPS.expenseStructuredMeta) {
-    delete clean.employee_id
     delete clean.warehouse_id
     delete clean.sucursal_code
   }
