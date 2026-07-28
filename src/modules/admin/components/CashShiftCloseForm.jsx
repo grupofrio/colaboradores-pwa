@@ -16,7 +16,21 @@ import CashShiftDenominations from './CashShiftDenominations.jsx'
 
 const EVIDENCE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const MAX_EVIDENCE_BYTES = 5 * 1024 * 1024
+const TERMINAL_PENDING_EVIDENCE_CODES = new Set([
+  'evidence_expired',
+  'evidence_not_found',
+  'evidence_not_committed',
+  'cash_shift_evidence_expired',
+  'cash_shift_evidence_not_found',
+  'cash_shift_evidence_not_committed',
+  'operation_not_committed',
+  'cash_shift_operation_not_committed',
+])
 const defaultNow = () => Date.now()
+
+function isTerminalPendingEvidenceError(error) {
+  return TERMINAL_PENDING_EVIDENCE_CODES.has(String(error?.code || '').trim().toLowerCase())
+}
 
 function ownDataValue(record, key) {
   if (!record || typeof record !== 'object' || Array.isArray(record)) {
@@ -464,10 +478,9 @@ export default function CashShiftCloseForm({
     if (mutationInFlight.current || completed || staleLocked) return
     setError('')
     staleRecoveryRef.current = false
-    if (evidence && evidence.expiresAtMs <= now()) {
+    if (!pendingRequest && evidence && evidence.expiresAtMs <= now()) {
       uploadGeneration.current += 1
       setEvidence(null)
-      setPendingRequest(null)
       formLockedRef.current = false
       setError('La evidencia expiró. Sube una fotografía nueva antes de cerrar.')
       return
@@ -510,6 +523,13 @@ export default function CashShiftCloseForm({
         setPreview(null)
         keepLocked = true
         await reloadAuthoritativeShift()
+      } else if (pendingRequest && isTerminalPendingEvidenceError(mutationError)) {
+        uploadGeneration.current += 1
+        setEvidence(null)
+        setPendingRequest(null)
+        setCompleted(null)
+        keepLocked = false
+        setError('La evidencia del corte pendiente expiró o ya no existe. Conservamos el arqueo; sube una fotografía nueva para crear otra operación.')
       } else {
         setError('No se pudo guardar el corte. Conservamos el arqueo y la evidencia para reintentar.')
       }

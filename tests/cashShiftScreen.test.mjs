@@ -1109,7 +1109,8 @@ test('close form refreshes authoritative preview and renders every audit section
   act(() => renderer.unmount())
 })
 
-test('close UI requires note and uploaded photo for any difference and freezes a pending retry', async () => {
+test('close UI replays a pending request exactly after evidence expiry and accepts completed recovery', async () => {
+  let nowMs = Date.UTC(2026, 6, 28, 0, 0, 0)
   const attempts = []
   const shift = cashShiftForClose()
   const pendingRequest = {
@@ -1124,6 +1125,7 @@ test('close UI requires note and uploaded photo for any difference and freezes a
   }
   const renderer = await mountClose({
     cashShift: shift,
+    now: () => nowMs,
     onPreview: async () => ({ ok: true, data: validShift() }),
     readEvidence: async () => 'iVBORw0KGgo=',
     onEvidence: async (request) => {
@@ -1135,12 +1137,12 @@ test('close UI requires note and uploaded photo for any difference and freezes a
         fileBase64: 'iVBORw0KGgo=',
         mimeType: 'image/png',
       })
-      return evidenceResult()
+      return evidenceResult({ expiresAt: '2026-07-28 00:01:00' })
     },
     onClose: async (operation, request) => {
       assert.equal(operation, 'close')
       attempts.push(structuredClone(request))
-      return attempts.length === 1
+      return attempts.length < 3
         ? { status: 'pending', request: pendingRequest, key: 'close-stable-key' }
         : { status: 'completed', data: { ok: true }, key: 'close-stable-key' }
     },
@@ -1164,6 +1166,13 @@ test('close UI requires note and uploaded photo for any difference and freezes a
 
   await act(async () => {
     button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick()
+    await flush()
+  })
+  assert.match(renderedText(renderer), /misma operación/i)
+  assert.equal(renderer.root.findByProps({ name: 'denomination-500' }).props.disabled, true)
+  nowMs = Date.UTC(2026, 6, 28, 0, 2, 0)
+  await act(async () => {
+    button(renderer, 'Reintentar mismo corte').props.onClick()
     await flush()
   })
   assert.match(renderedText(renderer), /misma operación/i)
@@ -1195,7 +1204,83 @@ test('close UI requires note and uploaded photo for any difference and freezes a
       nextOpeningFund: 300,
     },
     pendingRequest,
+    pendingRequest,
   ])
+  act(() => renderer.unmount())
+})
+
+test('a deterministic expired-evidence replay clears pending recovery but preserves the nonsensitive draft', async () => {
+  let evidenceCalls = 0
+  const attempts = []
+  const pendingRequest = {
+    shiftId: 41,
+    expectedVersion: 0,
+    denominations: [{ denomination: '500', count: 2 }],
+    adjustments: [],
+    notes: 'Arqueo pendiente',
+    evidenceToken: 'evidence-old',
+    nextOpeningFund: 300,
+    idempotencyKey: 'expired-close-key',
+  }
+  const renderer = await mountClose({
+    cashShift: cashShiftForClose(),
+    onPreview: async () => ({ ok: true, data: validShift() }),
+    readEvidence: async () => 'iVBORw0KGgo=',
+    onEvidence: async () => {
+      evidenceCalls += 1
+      return evidenceResult({
+        token: evidenceCalls === 1 ? 'evidence-old' : 'evidence-new',
+      })
+    },
+    onClose: async (_operation, request) => {
+      attempts.push(structuredClone(request))
+      if (attempts.length === 1) {
+        return { status: 'pending', request: pendingRequest, key: 'expired-close-key' }
+      }
+      if (attempts.length === 2) {
+        throw Object.assign(new Error('deterministic evidence rejection'), {
+          code: 'evidence_expired',
+        })
+      }
+      return { status: 'pending', request: { ...request, idempotencyKey: 'fresh-close-key' } }
+    },
+  })
+
+  act(() => renderer.root.findByProps({ name: 'denomination-500' }).props.onChange({ target: { value: '2' } }))
+  act(() => renderer.root.findByProps({ name: 'differenceNote' }).props.onChange({ target: { value: 'Arqueo pendiente' } }))
+  act(() => renderer.root.findByProps({ name: 'nextOpeningFund' }).props.onChange({ target: { value: '300' } }))
+  await act(async () => {
+    renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
+      target: { files: [{ name: 'old.png', type: 'image/png', size: 8 }], value: 'fake' },
+    })
+    await flush()
+  })
+  await act(async () => { button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick(); await flush() })
+  await act(async () => { button(renderer, 'Reintentar mismo corte').props.onClick(); await flush() })
+
+  assert.equal(attempts.length, 2)
+  assert.deepEqual(attempts[1], pendingRequest)
+  assert.equal(evidenceCalls, 1, 'el rechazo nunca sube evidencia automáticamente')
+  assert.equal(Boolean(button(renderer, 'Reintentar mismo corte')), false)
+  assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
+  assert.match(renderedText(renderer), /evidencia.*expiró.*sube.*nueva/i)
+  assert.equal(renderer.root.findByProps({ name: 'denomination-500' }).props.value, '2')
+  assert.equal(renderer.root.findByProps({ name: 'differenceNote' }).props.value, 'Arqueo pendiente')
+  assert.equal(renderer.root.findByProps({ name: 'nextOpeningFund' }).props.value, '300')
+  assert.equal(renderer.root.findByProps({ name: 'evidencePhoto' }).props.disabled, false)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.disabled, true)
+
+  await act(async () => {
+    renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
+      target: { files: [{ name: 'new.png', type: 'image/png', size: 8 }], value: 'fake' },
+    })
+    await flush()
+  })
+  await act(async () => { button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick(); await flush() })
+  assert.equal(evidenceCalls, 2)
+  assert.equal(attempts.length, 3)
+  assert.equal(attempts[2].evidenceToken, 'evidence-new')
+  assert.equal(Object.hasOwn(attempts[2], 'idempotencyKey'), false)
   act(() => renderer.unmount())
 })
 
