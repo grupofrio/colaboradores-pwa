@@ -239,6 +239,71 @@ test('capacidades de cash shift fallan cerradas incluso tras respuestas parciale
   assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftPendingDetail, false)
 })
 
+test('bootCapabilities consulta el controller Odoo autenticado y aplica cashShift server-authoritative', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, headers: options.headers })
+    return createJsonResponse(200, {
+      ok: true,
+      data: {
+        cashShiftRead: true,
+        cashShiftManage: true,
+        cashShiftAuthorize: false,
+        cashShiftPendingDetail: false,
+        cashShiftReopen: true,
+        cashShiftPrint: true,
+      },
+    })
+  }
+
+  const pending = adminServiceModule.bootCapabilities()
+  assert.equal(adminServiceModule.BACKEND_CAPS.cashShiftManage, false)
+  const caps = await pending
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, '/odoo-api/pwa-admin/capabilities')
+  assert.equal(calls[0].headers['Api-Key'], 'api-key')
+  assert.equal(calls[0].headers['X-GF-Employee-Token'], 'employee-token')
+  assert.equal(caps.cashShiftRead, true)
+  assert.equal(caps.cashShiftManage, true)
+  assert.equal(caps.cashShiftAuthorize, false)
+})
+
+test('bootCapabilities con token ausente o stale falla cerrado y nunca conserva permisos locales', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  for (const tokenCase of ['missing', 'stale']) {
+    globalThis.localStorage.setItem('gf_session', JSON.stringify({
+      session_token: 'session-token',
+      api_key: 'api-key',
+      ...(tokenCase === 'stale' ? { gf_employee_token: 'stale-token' } : {}),
+    }))
+    for (const key of [
+      'cashShiftRead', 'cashShiftManage', 'cashShiftAuthorize',
+      'cashShiftPendingDetail', 'cashShiftReopen', 'cashShiftPrint',
+    ]) adminServiceModule.BACKEND_CAPS[key] = true
+    const calls = []
+    globalThis.fetch = async (url, options = {}) => {
+      calls.push({ url, headers: options.headers })
+      return createJsonResponse(200, {
+        ok: false,
+        data: { code: 'employee_token_required' },
+      })
+    }
+
+    const caps = await adminServiceModule.bootCapabilities()
+    assert.equal(calls.length, 1, tokenCase)
+    assert.equal(calls[0].url, '/odoo-api/pwa-admin/capabilities')
+    if (tokenCase === 'missing') {
+      assert.equal(calls[0].headers['X-GF-Employee-Token'], undefined)
+    }
+    for (const key of [
+      'cashShiftRead', 'cashShiftManage', 'cashShiftAuthorize',
+      'cashShiftPendingDetail', 'cashShiftReopen', 'cashShiftPrint',
+    ]) assert.equal(caps[key], false, `${tokenCase}:${key}`)
+  }
+})
+
 function uncertain(message = 'network lost') {
   return Object.assign(new Error(message), { status: 0, code: 'network' })
 }
@@ -326,42 +391,103 @@ test('cada mutación recupera una respuesta perdida repitiendo el mismo body/key
   }
 })
 
-test('si dos respuestas se pierden consulta status y recupera su respuesta guardada', async () => {
+test('cada mutación con dos respuestas perdidas recupera la respuesta guardada por status', async () => {
   const { serviceModule } = await loadRuntime()
-  const requests = []
-  const statuses = []
-  const result = await serviceModule.mutateShiftWithRecovery('reclose', {
+  for (const operation of ['open', 'close', 'reclose', 'reopen', 'authorize']) {
+    const requests = []
+    const statuses = []
+    const key = `${operation}-double-lost`
+    const result = await serviceModule.mutateShiftWithRecovery(operation, {
+      shiftId: 41,
+      expectedVersion: operation === 'close' ? 0 : 2,
+      versionId: 701,
+      idempotencyKey: key,
+    }, {
+      mutate: async (_operation, request) => {
+        requests.push(structuredClone(request))
+        throw uncertain()
+      },
+      getOperationStatus: async (query) => {
+        statuses.push(query)
+        return {
+          ok: true,
+          data: {
+            operation, key, state: 'completed',
+            response: { ok: true, data: { shift_id: 41, version: 3 } },
+          },
+        }
+      },
+      createKey: () => 'unused',
+      requestRegistry: new Map(),
+    })
+
+    assert.equal(requests.length, 2)
+    assert.deepEqual(requests[0], requests[1])
+    assert.deepEqual(statuses, [{ operation, idempotencyKey: key }])
+    assert.deepEqual(result, {
+      status: 'completed',
+      data: { ok: true, data: { shift_id: 41, version: 3 } },
+      key,
+    })
+  }
+})
+
+test('si también se pierde status preserva pending con key, request y draft estables', async () => {
+  const { serviceModule } = await loadRuntime()
+  const draft = {
     shiftId: 41,
-    expectedVersion: 2,
+    expectedVersion: 0,
     denominations: [{ denomination: '500', count: 1 }],
-    idempotencyKey: 'reclose-lost',
-  }, {
-    mutate: async (_operation, request) => {
-      requests.push(structuredClone(request))
-      throw uncertain()
-    },
-    getOperationStatus: async (query) => {
-      statuses.push(query)
-      return {
-        ok: true,
-        data: {
-          operation: 'reclose', key: 'reclose-lost', state: 'completed',
-          response: { ok: true, data: { shift_id: 41, version: 3 } },
-        },
-      }
-    },
-    createKey: () => 'unused',
+    idempotencyKey: 'status-lost',
+  }
+  const result = await serviceModule.mutateShiftWithRecovery('close', draft, {
+    mutate: async () => { throw uncertain() },
+    getOperationStatus: async () => { throw uncertain('status lost') },
+    requestRegistry: new Map(),
+  })
+  assert.equal(result.status, 'pending')
+  assert.equal(result.key, 'status-lost')
+  assert.deepEqual(result.request, draft)
+  assert.deepEqual(result.draft, draft)
+  assert.equal(result.retryable, true)
+})
+
+test('status determinista solo acepta completed propio, processing u operation_not_found', async () => {
+  const { serviceModule } = await loadRuntime()
+  const base = {
+    shiftId: 41,
+    expectedVersion: 0,
+    idempotencyKey: 'status-contract',
+  }
+  const run = (statusResponse) => serviceModule.mutateShiftWithRecovery('close', base, {
+    mutate: async () => { throw uncertain() },
+    getOperationStatus: async () => statusResponse,
     requestRegistry: new Map(),
   })
 
-  assert.equal(requests.length, 2)
-  assert.deepEqual(requests[0], requests[1])
-  assert.deepEqual(statuses, [{ operation: 'reclose', idempotencyKey: 'reclose-lost' }])
-  assert.deepEqual(result, {
-    status: 'completed',
-    data: { ok: true, data: { shift_id: 41, version: 3 } },
-    key: 'reclose-lost',
-  })
+  for (const pendingResponse of [
+    { ok: false, data: { code: 'operation_not_found' } },
+    { ok: true, data: { operation: 'close', key: 'status-contract', state: 'processing' } },
+  ]) {
+    const result = await run(pendingResponse)
+    assert.equal(result.status, 'pending')
+    assert.equal(result.key, 'status-contract')
+  }
+
+  await assert.rejects(run({
+    ok: true,
+    data: {
+      operation: 'reclose', key: 'status-contract', state: 'completed',
+      response: { ok: true },
+    },
+  }), (error) => error?.code === 'cash_shift_status_mismatch')
+  await assert.rejects(run({
+    ok: false,
+    data: { code: 'forbidden' },
+  }), (error) => error?.code === 'forbidden')
+  await assert.rejects(run({ ok: true, data: { state: 'wat' } }), (error) => (
+    error?.code === 'cash_shift_status_invalid'
+  ))
 })
 
 test('status incompleto preserva borrador/key y nunca infiere recierre por turno activo', async () => {

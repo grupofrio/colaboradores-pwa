@@ -1654,33 +1654,10 @@ async function directAdmin(method, path, body) {
   }
 
   // ── Capabilities (feature flags leídos al boot) ─────────────────────────
-  // Con n8n fuera de línea, devolvemos el set canónico de flags habilitados
-  // para que bootCapabilities() no tenga que caer a defaults por error.
-  // Estos flags reflejan lo que Sebastián tiene instalado en producción
-  // (Sprint 3 + Sprint 4, audit 2026-04-10). Si algún flag cambia, ajustar aquí.
   if (cleanPath === '/pwa-admin/capabilities' && method === 'GET') {
-    return {
-      ok: true,
-      data: {
-        expenseAnalytics: true,
-        requisitionAnalytics: true,
-        expenseStructuredMeta: true,
-        serverSideCompanyFilter: true,
-        cashClosingRead: true,
-        cashClosingWrite: true,
-        liquidaciones: true,
-        materiaPrima: true,
-        productSearch: true,
-        requisitionDetail: true,
-        cashClosingHistory: true,
-        expenseAttachments: true,
-        saleCancel: true,
-        liquidacionesHistory: true,
-        mpKardex: true,
-        requisitionApproval: true,
-        requisitionApprovalThreshold: 5000,
-      },
-    }
+    // Las capacidades de seguridad dependen del empleado autenticado. No se
+    // permite una respuesta local porque podría elevar permisos cashShift.
+    return odooHttp('GET', '/pwa-admin/capabilities', {})
   }
 
   // ── Requisitions (purchase.order) ───────────────────────────────────────

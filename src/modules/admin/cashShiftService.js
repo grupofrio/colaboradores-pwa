@@ -64,6 +64,28 @@ function unwrapEnvelope(value) {
     : value
 }
 
+function operationError(code, envelope, message = 'La operación de corte fue rechazada por el servidor.') {
+  const error = new Error(message)
+  error.name = 'CashShiftOperationError'
+  error.code = String(code || 'cash_shift_rejected')
+  error.status = Number(envelope?.status_code || 0) || 400
+  error.details = envelope?.data && typeof envelope.data === 'object'
+    ? stableValue(envelope.data)
+    : {}
+  return error
+}
+
+function pendingOperation(key, request) {
+  return {
+    status: 'pending',
+    data: null,
+    key,
+    request: stableValue(request),
+    draft: stableValue(request),
+    retryable: true,
+  }
+}
+
 export function isUncertainCashShiftError(error) {
   const status = typeof error?.status === 'number' ? error.status : null
   const code = String(error?.code || '').toLowerCase()
@@ -76,14 +98,7 @@ function successfulMutationResponse(raw) {
   const envelope = unwrapEnvelope(raw)
   if (envelope?.ok === false) {
     const code = String(envelope?.data?.code || envelope?.code || 'cash_shift_rejected')
-    const error = new Error('La operación de corte fue rechazada por el servidor.')
-    error.name = 'CashShiftOperationError'
-    error.code = code
-    error.status = Number(envelope?.status_code || 0) || 400
-    error.details = envelope?.data && typeof envelope.data === 'object'
-      ? { ...envelope.data }
-      : {}
-    throw error
+    throw operationError(code, envelope)
   }
   return raw
 }
@@ -91,6 +106,11 @@ function successfulMutationResponse(raw) {
 export function recoverCommittedOperation(raw, operation, key, request) {
   const envelope = unwrapEnvelope(raw)
   const data = envelope?.data
+  if (envelope?.ok === false) {
+    const code = String(data?.code || envelope?.code || 'cash_shift_status_invalid')
+    if (code === 'operation_not_found') return pendingOperation(key, request)
+    throw operationError(code, envelope, 'No fue posible confirmar la operación de corte.')
+  }
   if (
     envelope?.ok === true
     && data?.state === 'completed'
@@ -100,13 +120,26 @@ export function recoverCommittedOperation(raw, operation, key, request) {
   ) {
     return { status: 'completed', data: data.response, key }
   }
-  return {
-    status: 'pending',
-    data: null,
-    key,
-    request,
-    retryable: true,
+  if (
+    envelope?.ok === true
+    && data?.state === 'processing'
+    && data?.operation === operation
+    && data?.key === key
+  ) {
+    return pendingOperation(key, request)
   }
+  if (envelope?.ok === true && ['completed', 'processing'].includes(data?.state)) {
+    throw operationError(
+      'cash_shift_status_mismatch',
+      envelope,
+      'El estado consultado no corresponde con la operación de corte.',
+    )
+  }
+  throw operationError(
+    'cash_shift_status_invalid',
+    envelope,
+    'El servidor devolvió un estado de operación no válido.',
+  )
 }
 
 async function defaultMutate(operation, request) {
@@ -157,6 +190,12 @@ export async function mutateShiftWithRecovery(operation, input, dependencies = {
   } catch (replayError) {
     if (!isUncertainCashShiftError(replayError)) throw replayError
   }
-  const result = await getOperationStatus({ operation, idempotencyKey: key })
+  let result
+  try {
+    result = await getOperationStatus({ operation, idempotencyKey: key })
+  } catch (statusError) {
+    if (isUncertainCashShiftError(statusError)) return pendingOperation(key, request)
+    throw statusError
+  }
   return recoverCommittedOperation(result, operation, key, request)
 }

@@ -1,6 +1,6 @@
 const OWN = Object.prototype.hasOwnProperty
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/
+const DATETIME_PATTERN = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-](\d{2}):?(\d{2}))?$/
 const SHIFT_TYPES = new Set(['night', 'day'])
 const SHIFT_STATES = new Set(['open', 'pending_auth', 'closed', 'reopened'])
 const ADJUSTMENT_TYPES = new Set(['income', 'expense'])
@@ -53,6 +53,18 @@ function exactBoolean(value, label) {
   return value
 }
 
+function exactString(value, label, { allowEmpty = true } = {}) {
+  if (typeof value !== 'string' || (!allowEmpty && !value.trim())) {
+    throw new TypeError(`${label} no es válido.`)
+  }
+  return value
+}
+
+function optionalId(value, label) {
+  if (value === false || value === null || value === undefined) return null
+  return exactInteger(value, label, 1)
+}
+
 function validDate(value, label = 'La fecha') {
   if (typeof value !== 'string' || !DATE_PATTERN.test(value)) {
     throw new TypeError(`${label} no es válida.`)
@@ -71,31 +83,93 @@ function validDate(value, label = 'La fecha') {
 
 function optionalDatetime(value, label) {
   if (value === false || value === null || value === undefined || value === '') return null
-  if (typeof value !== 'string' || !DATETIME_PATTERN.test(value)) {
+  if (typeof value !== 'string') {
     throw new TypeError(`${label} no es válida.`)
+  }
+  const match = value.match(DATETIME_PATTERN)
+  if (!match) throw new TypeError(`${label} no es válida.`)
+  validDate(match[1], label)
+  const hour = Number(match[2])
+  const minute = Number(match[3])
+  const second = Number(match[4] || 0)
+  if (hour > 23 || minute > 59 || second > 59) {
+    throw new TypeError(`${label} no es válida.`)
+  }
+  if (match[5] && match[5] !== 'Z') {
+    const offsetHour = Number(match[6])
+    const offsetMinute = Number(match[7])
+    if (offsetHour > 14 || offsetMinute > 59 || (offsetHour === 14 && offsetMinute !== 0)) {
+      throw new TypeError(`${label} no es válida.`)
+    }
   }
   return value
 }
 
-function list(value, label) {
+function safeArrayValues(value, label) {
   if (!Array.isArray(value)) throw new TypeError(`${label} no es válido.`)
-  return value
+  const descriptors = Object.getOwnPropertyDescriptors(value)
+  const rows = []
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = descriptors[String(index)]
+    if (!descriptor || !OWN.call(descriptor, 'value')) {
+      throw new TypeError(`${label} no es válido.`)
+    }
+    rows.push(descriptor.value)
+  }
+  for (const key of Object.keys(value)) {
+    if (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length) {
+      throw new TypeError(`${label} no es válido.`)
+    }
+  }
+  return rows
 }
 
-function optionalServerNumber(record, key, label, fallback = 0) {
-  const value = ownValue(record, key, label, { optional: true })
-  return value === undefined ? fallback : finiteNumber(value, label)
+function safeClone(value, label, seen = new Set()) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number') return finiteNumber(value, label)
+  if (!value || typeof value !== 'object') throw new TypeError(`${label} no es válido.`)
+  if (seen.has(value)) throw new TypeError(`${label} no es válido.`)
+  seen.add(value)
+  if (Array.isArray(value)) {
+    const cloned = safeArrayValues(value, label).map((item) => safeClone(item, label, seen))
+    seen.delete(value)
+    return cloned
+  }
+  const record = plainRecord(value, label)
+  const cloned = {}
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(record))) {
+    if (!descriptor.enumerable) continue
+    if (
+      key === '__proto__'
+      || key === 'prototype'
+      || key === 'constructor'
+      || !OWN.call(descriptor, 'value')
+    ) {
+      throw new TypeError(`${label} no es válido.`)
+    }
+    cloned[key] = safeClone(descriptor.value, `${label}.${key}`, seen)
+  }
+  seen.delete(value)
+  return cloned
+}
+
+function serverNumber(record, key, label) {
+  return finiteNumber(ownValue(record, key, label), label)
 }
 
 export function normalizeDenominations(value) {
-  return list(value, 'El arqueo').map((raw, index) => {
-    const line = plainRecord(raw, `La denominación ${index + 1}`)
+  const seen = new Set()
+  return safeArrayValues(value, 'El arqueo').map((raw, index) => {
+    const label = `La denominación ${index + 1}`
+    const line = plainRecord(safeClone(raw, label), label)
     const denomination = ownValue(line, 'denomination', 'La denominación')
     if (typeof denomination !== 'string' || !DENOMINATION_CENTS.has(denomination)) {
       throw new TypeError('La denominación no es válida.')
     }
     const count = exactInteger(ownValue(line, 'count', 'El conteo'), 'El conteo')
     if (count > 2_147_483_647) throw new TypeError('El conteo excede el máximo válido.')
+    if (seen.has(denomination)) throw new TypeError('La denominación está duplicada.')
+    seen.add(denomination)
     return { denomination, count }
   })
 }
@@ -111,8 +185,9 @@ export function calculatePhysicalTotal(value) {
 }
 
 export function normalizeAdjustments(value) {
-  return list(value, 'Los ajustes').map((raw, index) => {
-    const line = plainRecord(raw, `El ajuste ${index + 1}`)
+  return safeArrayValues(value, 'Los ajustes').map((raw, index) => {
+    const label = `El ajuste ${index + 1}`
+    const line = plainRecord(safeClone(raw, label), label)
     const type = ownValue(line, 'type', 'El tipo de ajuste')
     if (typeof type !== 'string' || !ADJUSTMENT_TYPES.has(type)) {
       throw new TypeError('El tipo de ajuste no es válido.')
@@ -128,7 +203,62 @@ export function normalizeAdjustments(value) {
 }
 
 export function normalizeCashShift(value) {
-  const root = plainRecord(value, 'El turno')
+  const root = plainRecord(safeClone(value, 'El turno'), 'El turno')
+  const folio = exactString(ownValue(root, 'folio', 'El folio'), 'El folio', {
+    allowEmpty: false,
+  })
+  const versionId = optionalId(ownValue(root, 'version_id', 'El ID de versión'), 'El ID de versión')
+  const versionNumber = exactInteger(
+    ownValue(root, 'version_number', 'El número de versión'),
+    'El número de versión',
+  )
+  const rawClosingType = ownValue(root, 'closing_type', 'El tipo de cierre')
+  if (rawClosingType !== false && rawClosingType !== 'close' && rawClosingType !== 'reclose') {
+    throw new TypeError('El tipo de cierre no es válido.')
+  }
+  const rawResponsible = plainRecord(
+    ownValue(root, 'responsible', 'El responsable'),
+    'El responsable',
+  )
+  const responsible = {
+    employeeId: optionalId(
+      ownValue(rawResponsible, 'employee_id', 'El empleado responsable'),
+      'El empleado responsable',
+    ),
+    employeeName: exactString(
+      ownValue(rawResponsible, 'employee_name', 'El nombre del responsable'),
+      'El nombre del responsable',
+    ),
+    userId: optionalId(
+      ownValue(rawResponsible, 'user_id', 'El usuario responsable'),
+      'El usuario responsable',
+    ),
+    userName: exactString(
+      ownValue(rawResponsible, 'user_name', 'El usuario responsable'),
+      'El usuario responsable',
+    ),
+  }
+  const closedOrReclosedAt = optionalDatetime(
+    ownValue(root, 'closed_or_reclosed_at', 'La fecha de cierre'),
+    'La fecha de cierre',
+  )
+  const rawEvidence = ownValue(root, 'evidence', 'La evidencia')
+  let evidence = null
+  if (rawEvidence !== false && rawEvidence !== null) {
+    const evidenceRecord = plainRecord(rawEvidence, 'La evidencia')
+    evidence = {
+      id: exactInteger(ownValue(evidenceRecord, 'id', 'El ID de evidencia'), 'El ID de evidencia', 1),
+      name: exactString(ownValue(evidenceRecord, 'name', 'El nombre de evidencia'), 'El nombre de evidencia'),
+      mimetype: exactString(ownValue(evidenceRecord, 'mimetype', 'El MIME de evidencia'), 'El MIME de evidencia', { allowEmpty: false }),
+      fileSize: exactInteger(ownValue(evidenceRecord, 'file_size', 'El tamaño de evidencia'), 'El tamaño de evidencia'),
+      digest: exactString(ownValue(evidenceRecord, 'digest', 'El digest de evidencia'), 'El digest de evidencia', { allowEmpty: false }),
+      reference: exactString(ownValue(evidenceRecord, 'reference', 'La referencia de evidencia'), 'La referencia de evidencia', { allowEmpty: false }),
+    }
+  }
+  const previousVersionId = optionalId(
+    ownValue(root, 'previous_version_id', 'La versión anterior'),
+    'La versión anterior',
+  )
   const rawShift = plainRecord(ownValue(root, 'shift', 'El turno'), 'El turno')
   const id = exactInteger(ownValue(rawShift, 'id', 'El ID del turno'), 'El ID del turno', 1)
   const type = ownValue(rawShift, 'type', 'El tipo de turno')
@@ -147,6 +277,7 @@ export function normalizeCashShift(value) {
     ownValue(rawShift, 'version', 'La versión', { optional: true }) ?? 0,
     'La versión',
   )
+  if (version !== versionNumber) throw new TypeError('La versión del turno no coincide.')
 
   const rawPeriod = plainRecord(ownValue(root, 'period', 'El periodo'), 'El periodo')
   const timezone = ownValue(rawPeriod, 'timezone', 'La zona horaria')
@@ -155,9 +286,37 @@ export function normalizeCashShift(value) {
   }
   const rawSchedule = plainRecord(ownValue(root, 'schedule', 'El horario'), 'El horario')
   const rawTotals = plainRecord(ownValue(root, 'totals', 'Los totales'), 'Los totales')
+  const rawScope = plainRecord(ownValue(root, 'scope', 'El alcance'), 'El alcance')
+  const scope = {
+    companyId: exactInteger(ownValue(rawScope, 'company_id', 'La compañía'), 'La compañía', 1),
+    companyName: exactString(ownValue(rawScope, 'company_name', 'La compañía'), 'La compañía'),
+    warehouseId: exactInteger(ownValue(rawScope, 'warehouse_id', 'El almacén'), 'El almacén', 1),
+    warehouseName: exactString(ownValue(rawScope, 'warehouse_name', 'El almacén'), 'El almacén'),
+    analyticAccountId: optionalId(
+      ownValue(rawScope, 'analytic_account_id', 'La cuenta analítica'),
+      'La cuenta analítica',
+    ),
+    analyticAccountName: exactString(
+      ownValue(rawScope, 'analytic_account_name', 'La cuenta analítica'),
+      'La cuenta analítica',
+    ),
+  }
+  const payments = safeClone(ownValue(root, 'payments', 'Los pagos'), 'Los pagos')
+  plainRecord(payments, 'Los pagos')
 
   return {
+    folio,
+    versionId,
+    versionNumber,
+    closingType: rawClosingType || null,
+    responsible,
+    closedOrReclosedAt,
+    evidence,
+    previousVersionId,
+    priorTotals: safeClone(ownValue(root, 'prior_totals', 'Los totales previos'), 'Los totales previos'),
+    reopenReason: exactString(ownValue(root, 'reopen_reason', 'La razón de reapertura'), 'La razón de reapertura'),
     shift: { id, type, businessDate, state, version },
+    scope,
     period: {
       openedAt: optionalDatetime(ownValue(rawPeriod, 'opened_at', 'La apertura'), 'La apertura'),
       closedAt: optionalDatetime(ownValue(rawPeriod, 'closed_at', 'El cierre'), 'El cierre'),
@@ -174,24 +333,29 @@ export function normalizeCashShift(value) {
       ),
     },
     totals: {
-      salesCash: optionalServerNumber(rawTotals, 'sales_cash', 'Ventas en efectivo'),
-      salesCard: optionalServerNumber(rawTotals, 'sales_card', 'Ventas con terminal'),
-      salesTotal: optionalServerNumber(rawTotals, 'sales_total', 'Ventas totales'),
-      expenses: optionalServerNumber(rawTotals, 'expenses', 'Gastos'),
-      expectedCash: optionalServerNumber(rawTotals, 'expected_cash', 'Efectivo esperado'),
+      salesCash: serverNumber(rawTotals, 'sales_cash', 'Ventas en efectivo'),
+      salesCard: serverNumber(rawTotals, 'sales_card', 'Ventas con terminal'),
+      salesTotal: serverNumber(rawTotals, 'sales_total', 'Ventas totales'),
+      expenses: serverNumber(rawTotals, 'expenses', 'Gastos'),
+      expectedCash: serverNumber(rawTotals, 'expected_cash', 'Efectivo esperado'),
     },
-    openingFund: optionalServerNumber(root, 'opening_fund', 'Fondo inicial'),
-    physicalCash: optionalServerNumber(root, 'physical_cash', 'Efectivo físico'),
-    difference: optionalServerNumber(root, 'difference', 'Diferencia'),
-    products: [...list(ownValue(root, 'products', 'Los productos'), 'Los productos')],
-    payments: { ...plainRecord(ownValue(root, 'payments', 'Los pagos'), 'Los pagos') },
-    sales: [...list(ownValue(root, 'sales', 'Las ventas'), 'Las ventas')],
-    cancellations: [...list(ownValue(root, 'cancellations', 'Las cancelaciones'), 'Las cancelaciones')],
-    expenses: [...list(ownValue(root, 'expenses', 'Los gastos'), 'Los gastos')],
+    openingFund: serverNumber(root, 'opening_fund', 'Fondo inicial'),
+    physicalCash: serverNumber(root, 'physical_cash', 'Efectivo físico'),
+    difference: serverNumber(root, 'difference', 'Diferencia'),
+    products: safeClone(ownValue(root, 'products', 'Los productos'), 'Los productos'),
+    productTotals: safeClone(ownValue(root, 'product_totals', 'Los totales de producto'), 'Los totales de producto'),
+    payments,
+    sales: safeClone(ownValue(root, 'sales', 'Las ventas'), 'Las ventas'),
+    cancellations: safeClone(ownValue(root, 'cancellations', 'Las cancelaciones'), 'Las cancelaciones'),
+    expenses: safeClone(ownValue(root, 'expenses', 'Los gastos'), 'Los gastos'),
     denominations: normalizeDenominations(ownValue(root, 'denominations', 'El arqueo')),
     adjustments: normalizeAdjustments(ownValue(root, 'adjustments', 'Los ajustes')),
-    authorizations: [...list(ownValue(root, 'authorizations', 'Las autorizaciones'), 'Las autorizaciones')],
-    printable: Boolean(ownValue(root, 'printable', 'El indicador de impresión', { optional: true })),
+    authorizations: safeClone(ownValue(root, 'authorizations', 'Las autorizaciones'), 'Las autorizaciones'),
+    differenceNote: exactString(ownValue(root, 'difference_note', 'La nota de diferencia'), 'La nota de diferencia'),
+    evidencePresent: exactBoolean(ownValue(root, 'evidence_present', 'La evidencia presente'), 'La evidencia presente'),
+    needsManagerAuth: exactBoolean(ownValue(root, 'needs_manager_auth', 'La autorización gerencial'), 'La autorización gerencial'),
+    needsDirectorAuth: exactBoolean(ownValue(root, 'needs_director_auth', 'La autorización de dirección'), 'La autorización de dirección'),
+    printable: exactBoolean(ownValue(root, 'printable', 'El indicador de impresión'), 'El indicador de impresión'),
   }
 }
 

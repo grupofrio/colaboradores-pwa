@@ -139,6 +139,9 @@ export function applyCapabilities(caps) {
 
 /** Boot-time fetch. Se llama desde AdminProvider una sola vez. */
 export async function bootCapabilities() {
+  // Cerrar permisos sensibles antes de esperar la respuesta remota; así una
+  // sesión nueva/stale nunca hereda temporalmente permisos del empleado previo.
+  resetCashShiftCapabilities()
   try {
     const res = await apiGetCapabilities()
     // El módulo devuelve { ok: true, data: {...} } o el dict plano
