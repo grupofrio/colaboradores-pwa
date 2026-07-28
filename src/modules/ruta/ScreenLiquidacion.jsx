@@ -18,7 +18,6 @@ import {
   getLiquidacionLocal,
   getKmData,
   saveCierreState,
-  getCierreState,
   closeRouteWithValidation,
   fmtMoney,
 } from './routeControlService'
@@ -52,10 +51,8 @@ export default function ScreenLiquidacion() {
     try {
       const p = await getMyRoutePlan(session?.employee_id)
       setPlan(p)
+      setConfirmed(Boolean(p?.liquidacion_done_at))
       if (p?.id) {
-        const cierreState = getCierreState(p.id, p)
-        if (cierreState.liquidacionDone) setConfirmed(true)
-
         // Try backend liquidation first
         const liq = await fetchLiquidacion(p.id)
         if (liq.source === 'backend' && liq.data) {

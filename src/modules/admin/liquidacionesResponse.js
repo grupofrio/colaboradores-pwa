@@ -42,6 +42,45 @@ export function normalizeLiquidationDetailResponse(response) {
   return envelope?.data ?? envelope ?? null
 }
 
+export function getLiquidationValidationOutcome(planId, response) {
+  const envelope = assertOkResponse(response)
+  if (envelope?.ok !== true) {
+    throw new Error('Respuesta inválida de validación de liquidación')
+  }
+  const data = envelope?.data ?? envelope ?? {}
+  const alreadyValidated = Boolean(data.already_validated)
+
+  return {
+    alreadyValidated,
+    message: alreadyValidated
+      ? `Liquidación del plan #${planId} ya estaba validada`
+      : `Liquidación del plan #${planId} validada`,
+  }
+}
+
+export const LIQUIDATION_PENDING_REFRESH_WARNING =
+  'La validación se completó, pero no se pudo actualizar la cola de pendientes.'
+
+export function getLiquidationValidationSuccessTransition(planId, response) {
+  return {
+    ...getLiquidationValidationOutcome(planId, response),
+    historySelectedId: planId,
+    view: 'history',
+  }
+}
+
+export function getLiquidationPlanId(plan) {
+  return plan?.plan_id ?? plan?.id ?? null
+}
+
+export function resolveLiquidationHistorySelection(rows, currentId, initialSelectedId) {
+  const includesId = (id) => id != null && rows.some((plan) => getLiquidationPlanId(plan) === id)
+
+  if (includesId(currentId)) return currentId
+  if (includesId(initialSelectedId)) return initialSelectedId
+  return null
+}
+
 export function getDefaultLiquidationHistoryDateRange(today = new Date()) {
   const currentDay = localIsoDate(today)
   return {

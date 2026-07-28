@@ -30,7 +30,7 @@ export async function autoCloseRouteAfterLiquidacion({
   }
 
   const liquidacionAt = now()
-  saveCierreState(plan.id, { liquidacionDone: true, liquidacionAt })
+  saveCierreState(plan.id, { liquidacionAt })
 
   const planState = String(plan.state || '').toLowerCase()
   if (CLOSED_ROUTE_STATES.has(planState)) {
