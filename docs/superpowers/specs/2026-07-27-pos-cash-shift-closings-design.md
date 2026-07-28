@@ -1,6 +1,6 @@
 # POS Cash Shift Closings Design
 
-**Fecha:** 2026-07-27  
+**Fecha:** 2026-07-27
 **Estado:** Diseño aprobado por el usuario
 
 ## Objetivo
