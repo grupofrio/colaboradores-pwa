@@ -15,6 +15,58 @@ import CashShiftAdjustments from './CashShiftAdjustments.jsx'
 import CashShiftDenominations from './CashShiftDenominations.jsx'
 
 const EVIDENCE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const MAX_EVIDENCE_BYTES = 5 * 1024 * 1024
+const defaultNow = () => Date.now()
+
+function ownDataValue(record, key) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    throw new TypeError('El comprobante de evidencia no es válido.')
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(record, key)
+  if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+    throw new TypeError('El comprobante de evidencia no es válido.')
+  }
+  return descriptor.value
+}
+
+function odooUtcTimestamp(value) {
+  if (typeof value !== 'string') throw new TypeError('La vigencia de evidencia no es válida.')
+  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(value)
+  if (!match) throw new TypeError('La vigencia de evidencia no es válida.')
+  const parts = match.slice(1).map(Number)
+  const timestamp = Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5])
+  const date = new Date(timestamp)
+  if (
+    date.getUTCFullYear() !== parts[0]
+    || date.getUTCMonth() !== parts[1] - 1
+    || date.getUTCDate() !== parts[2]
+    || date.getUTCHours() !== parts[3]
+    || date.getUTCMinutes() !== parts[4]
+    || date.getUTCSeconds() !== parts[5]
+  ) throw new TypeError('La vigencia de evidencia no es válida.')
+  return timestamp
+}
+
+function validateEvidenceReceipt(data, { binding, file, nowMs }) {
+  const token = ownDataValue(data, 'evidence_token')
+  const shiftId = ownDataValue(data, 'shift_id')
+  const expectedVersion = ownDataValue(data, 'expected_version')
+  const purpose = ownDataValue(data, 'purpose')
+  const mimetype = ownDataValue(data, 'mimetype')
+  const fileSize = ownDataValue(data, 'file_size')
+  const expiresAtMs = odooUtcTimestamp(ownDataValue(data, 'expires_at'))
+  if (
+    typeof token !== 'string' || !token.trim()
+    || shiftId !== binding.shiftId
+    || expectedVersion !== binding.expectedVersion
+    || purpose !== binding.purpose
+    || mimetype !== file.type
+    || fileSize !== file.size
+    || !Number.isFinite(nowMs)
+    || expiresAtMs <= nowMs
+  ) throw new TypeError('El comprobante de evidencia no corresponde al corte actual.')
+  return { token: token.trim(), expiresAtMs }
+}
 
 function money(value) {
   return new Intl.NumberFormat('es-MX', {
@@ -101,6 +153,7 @@ export default function CashShiftCloseForm({
   onCompleted = async () => {},
   onStale = async () => {},
   readEvidence = readEvidenceFile,
+  now = defaultNow,
   onCancel = null,
 }) {
   const binding = cashShiftEvidenceBinding(cashShift)
@@ -281,6 +334,14 @@ export default function CashShiftCloseForm({
       setError('La fotografía debe ser JPEG, PNG o WebP.')
       return
     }
+    if (!Number.isSafeInteger(file.size) || file.size <= 0) {
+      setError('La fotografía está vacía y no puede usarse como evidencia.')
+      return
+    }
+    if (file.size > MAX_EVIDENCE_BYTES) {
+      setError('La fotografía no puede exceder 5 MB.')
+      return
+    }
     const generation = uploadGeneration.current
     const workflow = captureWorkflow()
     const expectedBinding = binding.key
@@ -297,10 +358,18 @@ export default function CashShiftCloseForm({
         mimeType: file.type,
       })
       const data = unwrap(response)
-      const token = String(data?.evidence_token || '').trim()
-      if (!token) throw new TypeError('El servidor no confirmó la evidencia.')
+      const receipt = validateEvidenceReceipt(data, {
+        binding,
+        file,
+        nowMs: now(),
+      })
       if (workflowIsCurrent(workflow) && generation === uploadGeneration.current && expectedBinding === bindingRef.current) {
-        setEvidence({ token, filename: file.name, bindingKey: expectedBinding })
+        setEvidence({
+          token: receipt.token,
+          filename: file.name,
+          bindingKey: expectedBinding,
+          expiresAtMs: receipt.expiresAtMs,
+        })
       }
     } catch {
       if (workflowIsCurrent(workflow) && generation === uploadGeneration.current) {
@@ -395,6 +464,14 @@ export default function CashShiftCloseForm({
     if (mutationInFlight.current || completed || staleLocked) return
     setError('')
     staleRecoveryRef.current = false
+    if (evidence && evidence.expiresAtMs <= now()) {
+      uploadGeneration.current += 1
+      setEvidence(null)
+      setPendingRequest(null)
+      formLockedRef.current = false
+      setError('La evidencia expiró. Sube una fotografía nueva antes de cerrar.')
+      return
+    }
     const operation = pendingRequest
       ? { operation: binding.purpose, request: pendingRequest }
       : draftState.operation

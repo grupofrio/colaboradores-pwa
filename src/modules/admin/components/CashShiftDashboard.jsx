@@ -232,9 +232,13 @@ export default function CashShiftDashboard({
   const [showReopen, setShowReopen] = useState(false)
   const [recloseTarget, setRecloseTarget] = useState(null)
   const [lastOperation, setLastOperation] = useState(null)
+  const [transitionNotice, setTransitionNotice] = useState('')
+  const [recloseVerification, setRecloseVerification] = useState(null)
   const requestGeneration = useRef(0)
   const requestInFlight = useRef(null)
-  const authorizationInFlight = useRef(false)
+  const authorizationInFlight = useRef(null)
+  const recloseVerificationInFlight = useRef(null)
+  const recloseActiveShiftId = useRef(null)
   const mounted = useRef(false)
   const workflowIdentity = `${sessionIdentity}|${accessMode}|${scopeReady ? 'ready' : 'missing'}`
   const workflowRef = useRef({ identity: workflowIdentity, generation: 0 })
@@ -245,7 +249,9 @@ export default function CashShiftDashboard({
     }
     requestGeneration.current += 1
     requestInFlight.current = null
-    authorizationInFlight.current = false
+    authorizationInFlight.current = null
+    recloseVerificationInFlight.current = null
+    recloseActiveShiftId.current = null
   }
 
   const captureWorkflow = useCallback(() => {
@@ -268,7 +274,9 @@ export default function CashShiftDashboard({
       mounted.current = false
       requestGeneration.current += 1
       requestInFlight.current = null
-      authorizationInFlight.current = false
+      authorizationInFlight.current = null
+      recloseVerificationInFlight.current = null
+      recloseActiveShiftId.current = null
     }
   }, [])
 
@@ -278,12 +286,17 @@ export default function CashShiftDashboard({
     setLookupError('')
     setPendingAuthorization(null)
     setOperationError('')
+    setOperationBusy(false)
     setShowClose(false)
     setShowReopen(false)
     setRecloseTarget(null)
     setLastOperation(null)
+    setTransitionNotice('')
+    setRecloseVerification(null)
     setView({ status: 'idle', kind: null, data: null })
-    authorizationInFlight.current = false
+    authorizationInFlight.current = null
+    recloseVerificationInFlight.current = null
+    recloseActiveShiftId.current = null
   }, [authorizerShiftId, workflowIdentity])
 
   const load = useCallback(async ({ preserveActive = false } = {}) => {
@@ -370,7 +383,10 @@ export default function CashShiftDashboard({
 
   async function handleAuthorize(level) {
     if (view.kind !== 'authorization' || authorizationInFlight.current) return
-    authorizationInFlight.current = true
+    const workflow = captureWorkflow()
+    if (!workflowIsCurrent(workflow)) return
+    const marker = { workflow }
+    authorizationInFlight.current = marker
     setOperationBusy(true)
     setOperationError('')
     try {
@@ -380,26 +396,30 @@ export default function CashShiftDashboard({
         level,
       }
       const result = await authorizePending(request)
+      if (!workflowIsCurrent(workflow) || authorizationInFlight.current !== marker) return
       if (result?.status === 'completed') {
-        if (mounted.current) setPendingAuthorization(null)
+        setPendingAuthorization(null)
         const completed = unwrap(result.data)
         if (completed?.state === 'closed') {
-          if (mounted.current) {
-            requestGeneration.current += 1
-            setView({ status: 'ready', kind: 'authorization_complete', data: completed })
-          }
+          requestGeneration.current += 1
+          setView({ status: 'ready', kind: 'authorization_complete', data: completed })
         } else {
+          if (!workflowIsCurrent(workflow) || authorizationInFlight.current !== marker) return
           await load()
         }
-      } else if (mounted.current) {
+      } else {
         setPendingAuthorization(result?.request || request)
         setOperationError('La autorización quedó pendiente. Reintenta exactamente la misma operación.')
       }
     } catch {
-      if (mounted.current) setOperationError('No se pudo autorizar el corte. Verifica tu nivel e inténtalo de nuevo.')
+      if (workflowIsCurrent(workflow) && authorizationInFlight.current === marker) {
+        setOperationError('No se pudo autorizar el corte. Verifica tu nivel e inténtalo de nuevo.')
+      }
     } finally {
-      authorizationInFlight.current = false
-      if (mounted.current) setOperationBusy(false)
+      if (authorizationInFlight.current === marker) {
+        authorizationInFlight.current = null
+        if (workflowIsCurrent(workflow)) setOperationBusy(false)
+      }
     }
   }
 
@@ -420,7 +440,7 @@ export default function CashShiftDashboard({
     ) {
       throw new TypeError('La respuesta final del corte no es válida.')
     }
-    setLastOperation({
+    const completedOperation = {
       mode,
       shiftId,
       version,
@@ -429,13 +449,80 @@ export default function CashShiftDashboard({
       needsManagerAuth: detail.needsManagerAuth,
       needsDirectorAuth: detail.needsDirectorAuth,
       authorizationCount: detail.authorizations.length,
-    })
+    }
     if (mode === 'reclose') {
+      const expectedActiveShiftId = positiveId(recloseActiveShiftId.current)
       setRecloseTarget(null)
+      setLastOperation(null)
+      await verifyRecloseActive({ completedOperation, expectedActiveShiftId })
       return
     }
+    setLastOperation(completedOperation)
     setShowClose(false)
     await load()
+  }
+
+  async function handleCloseShift(operation, request) {
+    if (operation === 'reclose') {
+      const activeShiftId = view.kind === 'active' ? positiveId(view.data?.shift?.id) : null
+      if (activeShiftId === null) throw new TypeError('No se pudo fijar el turno activo antes del recierre.')
+      recloseActiveShiftId.current = activeShiftId
+    }
+    return closeShift(operation, request)
+  }
+
+  async function verifyRecloseActive(input = recloseVerification) {
+    if (!input || recloseVerificationInFlight.current) {
+      return recloseVerificationInFlight.current?.promise
+    }
+    const workflow = captureWorkflow()
+    if (!workflowIsCurrent(workflow, { manage: true })) return null
+    const marker = { workflow, promise: null }
+    recloseVerificationInFlight.current = marker
+    const verification = {
+      completedOperation: input.completedOperation,
+      expectedActiveShiftId: positiveId(input.expectedActiveShiftId),
+      observedActiveShiftId: positiveId(input.observedActiveShiftId),
+      status: 'checking',
+    }
+    setRecloseVerification(verification)
+    marker.promise = (async () => {
+      try {
+        const active = normalizeCashShift(unwrap(await loadActive()))
+        if (!workflowIsCurrent(workflow, { manage: true }) || recloseVerificationInFlight.current !== marker) return null
+        if (!['open', 'reopened'].includes(active.shift.state)) {
+          throw new TypeError('La lectura no confirmó un turno activo.')
+        }
+        const observedActiveShiftId = positiveId(active.shift.id)
+        setView({ status: 'ready', kind: 'active', data: active })
+        if (
+          verification.expectedActiveShiftId !== null
+          && observedActiveShiftId === verification.expectedActiveShiftId
+        ) {
+          setLastOperation({
+            ...verification.completedOperation,
+            verifiedActiveShiftId: observedActiveShiftId,
+          })
+          setRecloseVerification(null)
+          recloseActiveShiftId.current = null
+          return active
+        }
+        setRecloseVerification({
+          ...verification,
+          status: 'inconsistent',
+          observedActiveShiftId,
+        })
+        return null
+      } catch {
+        if (workflowIsCurrent(workflow, { manage: true }) && recloseVerificationInFlight.current === marker) {
+          setRecloseVerification({ ...verification, status: 'pending' })
+        }
+        return null
+      } finally {
+        if (recloseVerificationInFlight.current === marker) recloseVerificationInFlight.current = null
+      }
+    })()
+    return marker.promise
   }
 
   async function handleReopened(shiftId) {
@@ -445,6 +532,9 @@ export default function CashShiftDashboard({
     if (reopened.shift.state !== 'reopened' || reopened.shift.id !== shiftId) {
       throw new TypeError('El servidor no confirmó el turno reabierto.')
     }
+    const activeShiftId = view.kind === 'active' ? positiveId(view.data?.shift?.id) : null
+    if (activeShiftId === null) throw new TypeError('No se pudo fijar el turno activo antes del recierre.')
+    recloseActiveShiftId.current = activeShiftId
     setShowReopen(false)
     setRecloseTarget(reopened)
     return reopened
@@ -473,6 +563,11 @@ export default function CashShiftDashboard({
       }
       setView({ status: 'ready', kind: 'active', data: normalized })
       setRefreshError('')
+      if (normalized.shift.id !== shiftId) {
+        setShowClose(false)
+        setLastOperation(null)
+        setTransitionNotice('El turno cambió; el arqueo anterior se descartó y no se aplicó.')
+      }
     }
     return raw
   }
@@ -528,6 +623,22 @@ export default function CashShiftDashboard({
   if (view.kind === 'inactive') {
     return <CashShiftFirstOpenForm onPreview={previewInitial} onOpen={handleOpen} />
   }
+  if (recloseVerification) {
+    const checking = recloseVerification.status === 'checking'
+    const inconsistent = recloseVerification.status === 'inconsistent'
+    return (
+      <CashShiftState
+        title="Recierre confirmado"
+        action={checking ? null : <button className="cash-shift-primary" type="button" onClick={() => verifyRecloseActive()}>Verificar turno activo</button>}
+      >
+        {checking
+          ? 'El recierre quedó confirmado. Verificando de forma autoritativa el turno activo…'
+          : inconsistent
+            ? `El recierre está confirmado, pero el turno activo cambió de #${recloseVerification.expectedActiveShiftId || '—'} a #${recloseVerification.observedActiveShiftId || '—'}. La verificación permanece inconsistente.`
+            : 'El recierre está confirmado, pero la verificación del turno activo está pendiente. Reintenta únicamente la lectura.'}
+      </CashShiftState>
+    )
+  }
   if (recloseTarget) {
     return (
       <div className="cash-shift-stack">
@@ -535,13 +646,13 @@ export default function CashShiftDashboard({
         <CashShiftCloseForm
           cashShift={recloseTarget}
           onPreview={previewActive}
-          onClose={closeShift}
+          onClose={handleCloseShift}
           onEvidence={uploadEvidence}
           onCompleted={handleCloseCompleted}
           onStale={reloadStaleShift}
           sessionIdentity={workflowIdentity}
           readEvidence={readEvidence}
-          onCancel={() => setRecloseTarget(null)}
+          onCancel={() => { recloseActiveShiftId.current = null; setRecloseTarget(null) }}
         />
       </div>
     )
@@ -562,7 +673,7 @@ export default function CashShiftDashboard({
       <CashShiftCloseForm
         cashShift={view.data}
         onPreview={previewActive}
-        onClose={closeShift}
+        onClose={handleCloseShift}
         onEvidence={uploadEvidence}
         onCompleted={handleCloseCompleted}
         onStale={reloadStaleShift}
@@ -574,10 +685,11 @@ export default function CashShiftDashboard({
   }
   return (
     <div className="cash-shift-stack">
+      {transitionNotice ? <p className="cash-shift-warning" role="status">{transitionNotice}</p> : null}
       {lastOperation ? (
         <p className="cash-shift-info" role="status">
           {lastOperation.mode === 'reclose'
-            ? `Recierre guardado en versión ${lastOperation.version}; el turno sucesor #${lastOperation.nextShiftId} no cambió.`
+            ? `Recierre guardado en versión ${lastOperation.version}; turno activo #${lastOperation.verifiedActiveShiftId} verificado sin cambios.`
             : lastOperation.state === 'pending_auth'
               ? `Corte #${lastOperation.shiftId} guardado en autorización pendiente, versión ${lastOperation.version}. Requiere ${[
                 lastOperation.needsManagerAuth ? 'gerencia' : null,
@@ -592,7 +704,7 @@ export default function CashShiftDashboard({
         refreshing={refreshing}
         refreshError={refreshError}
         onRefresh={refreshActive}
-        onStartClose={() => setShowClose(true)}
+        onStartClose={() => { setTransitionNotice(''); setShowClose(true) }}
       />
       <section className="cash-shift-card cash-shift-reopen-launch">
         <h2>Corrección de un corte cerrado</h2>

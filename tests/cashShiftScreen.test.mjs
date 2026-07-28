@@ -471,6 +471,74 @@ test('a final authorization renders success without rereading a detail that is n
   act(() => renderer.unmount())
 })
 
+test('late completed, pending or failed authorization from session A cannot affect session B', async () => {
+  for (const lateKind of ['completed', 'pending', 'error']) {
+    const authorizationA = deferred()
+    const authorizationB = deferred()
+    const calls = []
+    const preservedB = {
+      shiftId: 77,
+      versionId: 901,
+      level: 'manager',
+      idempotencyKey: `session-b-${lateKind}`,
+    }
+    const props = {
+      accessMode: 'authorize',
+      scopeReady: true,
+      authorizerShiftId: 77,
+      loadPendingDetail: async () => ({ ok: true, data: pendingDetail() }),
+      authorizePending: async (request) => {
+        calls.push(structuredClone(request))
+        if (calls.length === 1) return authorizationA.promise
+        if (calls.length === 2) return authorizationB.promise
+        return { status: 'pending', request: preservedB, key: preservedB.idempotencyKey }
+      },
+    }
+    const renderer = await mount({ ...props, sessionIdentity: `session-a-${lateKind}` })
+    act(() => { void button(renderer, 'Autorizar gerencia').props.onClick() })
+    await act(async () => {
+      renderer.update(React.createElement((await loadRuntime()).default, {
+        ...props,
+        sessionIdentity: `session-b-${lateKind}`,
+      }))
+      await flush()
+    })
+    act(() => { void button(renderer, 'Autorizar gerencia').props.onClick() })
+
+    if (lateKind === 'completed') {
+      await act(async () => {
+        authorizationA.resolve({ status: 'completed', data: { ok: true, data: { state: 'closed' } } })
+        await flush()
+      })
+      assert.equal(button(renderer, 'Autorizar gerencia')?.props.disabled, true, 'A no libera la operación B en curso')
+      assert.doesNotMatch(renderedText(renderer), /Corte autorizado/)
+      authorizationB.resolve({ status: 'pending', request: preservedB, key: preservedB.idempotencyKey })
+    } else {
+      authorizationB.resolve({ status: 'pending', request: preservedB, key: preservedB.idempotencyKey })
+      await act(async () => { await flush() })
+      await act(async () => {
+        if (lateKind === 'pending') {
+          authorizationA.resolve({
+            status: 'pending',
+            request: { ...preservedB, idempotencyKey: 'session-a-key' },
+            key: 'session-a-key',
+          })
+        } else {
+          authorizationA.reject(new Error('late session A failure'))
+        }
+        await flush()
+      })
+    }
+    await act(async () => { await flush() })
+    assert.match(renderedText(renderer), /Reintentar misma autorización/)
+    assert.match(renderedText(renderer), /autorización quedó pendiente/i)
+    assert.doesNotMatch(renderedText(renderer), /No se pudo autorizar|Corte autorizado/)
+    await act(async () => { button(renderer, 'Reintentar misma autorización').props.onClick(); await flush() })
+    assert.deepEqual(calls[2], preservedB, 'la respuesta tardía de A no reemplaza el pending de B')
+    act(() => renderer.unmount())
+  }
+})
+
 test('inactive config validates the four-field initial form and previews the server half-open interval', async () => {
   const previews = []
   const opens = []
@@ -910,6 +978,30 @@ function closedResultDetail({ state = 'closed', version = 1, type = 'night' } = 
   return raw
 }
 
+function evidenceResult({
+  shiftId = 41,
+  expectedVersion = 0,
+  purpose = 'close',
+  mimetype = 'image/png',
+  fileSize = 8,
+  token = 'evidence-stable',
+  expiresAt = '2099-01-01 00:00:00',
+} = {}) {
+  return {
+    ok: true,
+    data: {
+      evidence_token: token,
+      filename: 'arqueo.png',
+      mimetype,
+      file_size: fileSize,
+      expires_at: expiresAt,
+      shift_id: shiftId,
+      expected_version: expectedVersion,
+      purpose,
+    },
+  }
+}
+
 test('close draft uses exact denomination math, validates adjustments and gates every nonzero difference', async () => {
   const shift = cashShiftForClose()
   assert.deepEqual(calculateCloseFeedback({
@@ -1043,7 +1135,7 @@ test('close UI requires note and uploaded photo for any difference and freezes a
         fileBase64: 'iVBORw0KGgo=',
         mimeType: 'image/png',
       })
-      return { ok: true, data: { evidence_token: 'evidence-stable' } }
+      return evidenceResult()
     },
     onClose: async (operation, request) => {
       assert.equal(operation, 'close')
@@ -1063,7 +1155,7 @@ test('close UI requires note and uploaded photo for any difference and freezes a
   assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.props.disabled, true)
   await act(async () => {
     renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
-      target: { files: [{ name: 'arqueo.png', type: 'image/png' }], value: 'fake' },
+      target: { files: [{ name: 'arqueo.png', type: 'image/png', size: 8 }], value: 'fake' },
     })
     await flush()
   })
@@ -1104,6 +1196,70 @@ test('close UI requires note and uploaded photo for any difference and freezes a
     },
     pendingRequest,
   ])
+  act(() => renderer.unmount())
+})
+
+test('close evidence rejects unsafe files, mismatched upload receipts and expired tokens', async () => {
+  let nowMs = Date.UTC(2026, 6, 28, 0, 0, 0)
+  let readCalls = 0
+  let evidenceCalls = 0
+  let closeCalls = 0
+  const receipts = [
+    { shiftId: 42 },
+    { expectedVersion: 1 },
+    { purpose: 'reclose' },
+    { mimetype: 'image/jpeg' },
+    { fileSize: 7 },
+    { expiresAt: '2026-07-27 23:59:59' },
+    { expiresAt: '2026-07-28 01:00:00', token: 'valid-evidence' },
+  ]
+  const renderer = await mountClose({
+    cashShift: cashShiftForClose(),
+    now: () => nowMs,
+    onPreview: async () => ({ ok: true, data: validShift() }),
+    readEvidence: async () => { readCalls += 1; return 'iVBORw0KGgo=' },
+    onEvidence: async () => evidenceResult(receipts[evidenceCalls++]),
+    onClose: async () => { closeCalls += 1; return { status: 'pending' } },
+  })
+  act(() => renderer.root.findByProps({ name: 'denomination-500' }).props.onChange({ target: { value: '2' } }))
+  act(() => renderer.root.findByProps({ name: 'differenceNote' }).props.onChange({ target: { value: 'Arqueo revisado' } }))
+  act(() => renderer.root.findByProps({ name: 'nextOpeningFund' }).props.onChange({ target: { value: '300' } }))
+
+  for (const file of [
+    { name: 'empty.png', type: 'image/png', size: 0 },
+    { name: 'large.png', type: 'image/png', size: 5 * 1024 * 1024 + 1 },
+  ]) {
+    await act(async () => {
+      renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({ target: { files: [file], value: 'fake' } })
+      await flush()
+    })
+  }
+  assert.equal(readCalls, 0)
+  assert.equal(evidenceCalls, 0)
+  assert.match(renderedText(renderer), /vacía|5 MB/i)
+
+  for (let index = 0; index < receipts.length; index += 1) {
+    await act(async () => {
+      renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
+        target: { files: [{ name: 'arqueo.png', type: 'image/png', size: 8 }], value: 'fake' },
+      })
+      await flush()
+    })
+    if (index < receipts.length - 1) {
+      assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
+      assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.props.disabled, true)
+    }
+  }
+  assert.equal(readCalls, receipts.length)
+  assert.equal(evidenceCalls, receipts.length)
+  assert.match(renderedText(renderer), /Fotografía lista/)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.props.disabled, false)
+
+  nowMs = Date.UTC(2026, 6, 28, 1, 0, 1)
+  await act(async () => { button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick(); await flush() })
+  assert.equal(closeCalls, 0)
+  assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
+  assert.match(renderedText(renderer), /expiró.*sube.*nueva/i)
   act(() => renderer.unmount())
 })
 
@@ -1226,7 +1382,7 @@ test('manager reopens by exact ID/reason, preserves pending request and enters r
   act(() => renderer.unmount())
 })
 
-test('pending then stale close clears the retry and stays blocked until an authoritative active reload succeeds', async () => {
+test('a stale normal close never retargets its draft when authoritative active changed shift', async () => {
   let activeReads = 0
   let closeAttempts = 0
   const evidenceBindings = []
@@ -1257,16 +1413,17 @@ test('pending then stale close clears the retry and stays blocked until an autho
     readEvidence: async () => 'iVBORw0KGgo=',
     uploadEvidence: async (request) => {
       evidenceBindings.push(`${request.shiftId}:${request.expectedVersion}`)
-      return { ok: true, data: { evidence_token: `evidence-${request.shiftId}-v${request.expectedVersion}` } }
+      return evidenceResult({
+        shiftId: request.shiftId,
+        expectedVersion: request.expectedVersion,
+        token: `evidence-${request.shiftId}-v${request.expectedVersion}`,
+      })
     },
     closeShift: async (_operation, request) => {
       closeAttempts += 1
       if (closeAttempts === 1) return { status: 'pending', request: preserved, key: 'pending-close-key' }
       if (closeAttempts === 2) throw Object.assign(new Error('stale'), { code: 'stale_version' })
-      assert.equal(request.shiftId, 42)
-      assert.equal(request.expectedVersion, 0)
-      assert.equal(request.evidenceToken, 'evidence-42-v0')
-      return { status: 'pending', request, key: 'new-close-key' }
+      throw new Error(`unexpected close for ${request.shiftId}`)
     },
   })
   act(() => button(renderer, 'Hacer corte').props.onClick())
@@ -1275,7 +1432,7 @@ test('pending then stale close clears the retry and stays blocked until an autho
   act(() => renderer.root.findByProps({ name: 'nextOpeningFund' }).props.onChange({ target: { value: '300' } }))
   await act(async () => {
     renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
-      target: { files: [{ name: 'arqueo.png', type: 'image/png' }], value: 'fake' },
+      target: { files: [{ name: 'arqueo.png', type: 'image/png', size: 8 }], value: 'fake' },
     })
     await flush()
   })
@@ -1302,20 +1459,66 @@ test('pending then stale close clears the retry and stays blocked until an autho
     await flush()
   })
   assert.equal(activeReads, 3)
-  assert.match(renderedText(renderer), /totales actualizados.*revisa.*fotograf/i)
+  assert.match(renderedText(renderer), /El turno cambió; el arqueo anterior se descartó y no se aplicó/i)
+  assert.match(renderedText(renderer), /Turno activo · Día 27/)
+  assert.equal(renderer.root.findAllByProps({ name: 'denomination-500' }).length, 0)
+  assert.equal(closeAttempts, 2)
+  assert.deepEqual(evidenceBindings, ['41:0'])
+
+  act(() => button(renderer, 'Hacer corte').props.onClick())
+  assert.equal(renderer.root.findByProps({ name: 'denomination-500' }).props.value, '0')
+  assert.equal(renderer.root.findByProps({ name: 'differenceNote' }).props.value, '')
+  assert.equal(renderer.root.findByProps({ name: 'nextOpeningFund' }).props.value, '')
   assert.equal(button(renderer, 'Cerrar Día 27 y abrir Noche 28')?.props.disabled, true)
+  assert.equal(closeAttempts, 2, 'el turno nuevo no recibe el submit del borrador descartado')
+  act(() => renderer.unmount())
+})
+
+test('a stale normal close for the same shift preserves draft but invalidates its evidence', async () => {
+  let activeReads = 0
+  const evidenceBindings = []
+  const closeRequests = []
+  const original = validShift()
+  const refreshed = validShift()
+  refreshed.totals.expected_cash = 1300
+  const renderer = await mount({
+    sessionIdentity: 'session-a|34|89|manage',
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      activeReads += 1
+      return { ok: true, data: activeReads === 1 ? original : refreshed }
+    },
+    previewActive: async () => ({ ok: true, data: activeReads > 1 ? refreshed : original }),
+    readEvidence: async () => 'iVBORw0KGgo=',
+    uploadEvidence: async (request) => {
+      evidenceBindings.push(request.shiftId)
+      return evidenceResult({ token: `evidence-${evidenceBindings.length}` })
+    },
+    closeShift: async (_operation, request) => {
+      closeRequests.push(structuredClone(request))
+      if (closeRequests.length === 1) throw Object.assign(new Error('stale'), { code: 'stale_version' })
+      return { status: 'pending', request, key: 'same-shift-retry' }
+    },
+  })
+  act(() => button(renderer, 'Hacer corte').props.onClick())
+  act(() => renderer.root.findByProps({ name: 'denomination-500' }).props.onChange({ target: { value: '2' } }))
+  act(() => renderer.root.findByProps({ name: 'differenceNote' }).props.onChange({ target: { value: 'Mismo turno revisado' } }))
+  act(() => renderer.root.findByProps({ name: 'nextOpeningFund' }).props.onChange({ target: { value: '300' } }))
   await act(async () => {
     renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
-      target: { files: [{ name: 'arqueo-nuevo.png', type: 'image/png' }], value: 'fake' },
+      target: { files: [{ name: 'old.png', type: 'image/png', size: 8 }], value: 'fake' },
     })
     await flush()
   })
-  assert.deepEqual(evidenceBindings, ['41:0', '42:0'], 'la evidencia del turno anterior nunca se reutiliza en el turno activo recargado')
-  await act(async () => {
-    button(renderer, 'Cerrar Día 27 y abrir Noche 28').props.onClick()
-    await flush()
-  })
-  assert.equal(closeAttempts, 3, 'recargar el turno nunca repite la mutación anterior')
+  await act(async () => { button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick(); await flush() })
+  assert.equal(renderer.root.findByProps({ name: 'denomination-500' }).props.value, '2')
+  assert.equal(renderer.root.findByProps({ name: 'differenceNote' }).props.value, 'Mismo turno revisado')
+  assert.equal(renderer.root.findByProps({ name: 'nextOpeningFund' }).props.value, '300')
+  assert.match(renderedText(renderer), /totales actualizados.*revisa.*fotograf/i)
+  assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27')?.props.disabled, true)
+  assert.deepEqual(evidenceBindings, [41])
   act(() => renderer.unmount())
 })
 
@@ -1347,7 +1550,11 @@ test('stale reclose consumes the refreshed detail/version and never reuses prior
     readEvidence: async () => 'iVBORw0KGgo=',
     uploadEvidence: async (request) => {
       evidenceBindings.push(request.expectedVersion)
-      return { ok: true, data: { evidence_token: `reclose-v${request.expectedVersion}` } }
+      return evidenceResult({
+        expectedVersion: request.expectedVersion,
+        purpose: 'reclose',
+        token: `reclose-v${request.expectedVersion}`,
+      })
     },
     closeShift: async (_operation, request) => {
       closeRequests.push(structuredClone(request))
@@ -1364,7 +1571,7 @@ test('stale reclose consumes the refreshed detail/version and never reuses prior
   act(() => renderer.root.findByProps({ name: 'differenceNote' }).props.onChange({ target: { value: 'Revisado' } }))
   await act(async () => {
     renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
-      target: { files: [{ name: 'old.png', type: 'image/png' }], value: 'fake' },
+      target: { files: [{ name: 'old.png', type: 'image/png', size: 8 }], value: 'fake' },
     })
     await flush()
   })
@@ -1373,7 +1580,7 @@ test('stale reclose consumes the refreshed detail/version and never reuses prior
   assert.doesNotMatch(renderedText(renderer), /Fotografía lista/)
   await act(async () => {
     renderer.root.findByProps({ name: 'evidencePhoto' }).props.onChange({
-      target: { files: [{ name: 'new.png', type: 'image/png' }], value: 'fake' },
+      target: { files: [{ name: 'new.png', type: 'image/png', size: 8 }], value: 'fake' },
     })
     await flush()
   })
@@ -1383,9 +1590,11 @@ test('stale reclose consumes the refreshed detail/version and never reuses prior
   act(() => renderer.unmount())
 })
 
-test('reclose completes at N+1, omits successor fund and never reloads or changes the active successor', async () => {
+test('reclose verifies the current active shift and never trusts historical result.next_shift_id', async () => {
   let activeReads = 0
   const closeCalls = []
+  const active = validShift({ type: 'day' })
+  active.shift.id = 88
   const closed = validShift()
   closed.shift.state = 'closed'
   closed.shift.version = 1
@@ -1399,7 +1608,7 @@ test('reclose completes at N+1, omits successor fund and never reloads or change
   const renderer = await mount({
     accessMode: 'manage',
     scopeReady: true,
-    loadActive: async () => { activeReads += 1; return { ok: true, data: validShift({ type: 'day' }) } },
+    loadActive: async () => { activeReads += 1; return { ok: true, data: active } },
     loadShiftDetail: async () => ({ ok: true, data: closed }),
     reopenShift: async () => ({ status: 'completed', data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } }, key: 'reopen-done' }),
     previewActive: async () => ({ ok: true, data: reopened }),
@@ -1424,9 +1633,66 @@ test('reclose completes at N+1, omits successor fund and never reloads or change
   assert.equal(closeCalls[0][0], 'reclose')
   assert.equal(closeCalls[0][1].expectedVersion, 1)
   assert.equal(Object.hasOwn(closeCalls[0][1], 'nextOpeningFund'), false)
-  assert.equal(activeReads, 1)
-  assert.match(renderedText(renderer), /versión 2.*sucesor #77 no cambió/i)
+  assert.equal(activeReads, 2)
+  assert.match(renderedText(renderer), /versión 2.*turno activo #88.*verificado/i)
+  assert.doesNotMatch(renderedText(renderer), /#77.*no cambió|sucesor #77/i)
   assert.match(renderedText(renderer), /Turno activo · Día 27/)
+  act(() => renderer.unmount())
+})
+
+test('confirmed reclose with lost or inconsistent active read stays read-only and never mutates twice', async () => {
+  let activeReads = 0
+  let closeCalls = 0
+  const activeBefore = validShift({ type: 'day' })
+  activeBefore.shift.id = 88
+  const activeChanged = validShift({ type: 'night' })
+  activeChanged.shift.id = 99
+  const closed = closedResultDetail()
+  const reopened = structuredClone(closed)
+  reopened.shift.state = 'reopened'
+  reopened.version_id = false
+  reopened.closing_type = false
+  reopened.printable = false
+  const renderer = await mount({
+    sessionIdentity: 'session-a|34|89|manage',
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      activeReads += 1
+      if (activeReads === 2) throw new Error('active read lost')
+      return { ok: true, data: activeReads === 1 ? activeBefore : activeChanged }
+    },
+    loadShiftDetail: async () => ({ ok: true, data: closed }),
+    reopenShift: async () => ({ status: 'completed', data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } } }),
+    previewActive: async () => ({ ok: true, data: reopened }),
+    closeShift: async () => {
+      closeCalls += 1
+      return {
+        status: 'completed',
+        data: { ok: true, data: { shift_id: 41, version_id: 902, version: 2, state: 'closed', next_shift_id: 77, detail: closedResultDetail({ version: 2 }) } },
+      }
+    },
+  })
+  act(() => button(renderer, 'Reabrir un corte').props.onClick())
+  act(() => renderer.root.findByProps({ name: 'reopenShiftId' }).props.onChange({ target: { value: '41' } }))
+  await act(async () => { button(renderer, 'Consultar corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'reopenReason' }).props.onChange({ target: { value: 'Corrección' } }))
+  await act(async () => { button(renderer, 'Reabrir corte').props.onClick(); await flush() })
+  act(() => renderer.root.findByProps({ name: 'denomination-1000' }).props.onChange({ target: { value: '1' } }))
+  act(() => renderer.root.findByProps({ name: 'denomination-200' }).props.onChange({ target: { value: '1' } }))
+  await act(async () => { button(renderer, 'Volver a cerrar Noche 27').props.onClick(); await flush() })
+  assert.equal(closeCalls, 1)
+  assert.match(renderedText(renderer), /recierre confirmado.*verificación del turno activo.*pendiente/i)
+  assert.equal(button(renderer, 'Verificar turno activo')?.type, 'button')
+  assert.equal(button(renderer, 'Volver a cerrar Noche 27'), undefined)
+  assert.doesNotMatch(renderedText(renderer), /#77.*no cambió|turno activo #88.*verificado/i)
+
+  await act(async () => { button(renderer, 'Verificar turno activo').props.onClick(); await flush() })
+  assert.equal(activeReads, 3)
+  assert.equal(closeCalls, 1, 'la recuperación solo relee; nunca repite el recierre confirmado')
+  assert.match(renderedText(renderer), /recierre confirmado.*turno activo cambió.*#88.*#99/i)
+  assert.equal(button(renderer, 'Verificar turno activo')?.type, 'button')
+  assert.doesNotMatch(renderedText(renderer), /#77.*no cambió|turno activo #88.*verificado/i)
   act(() => renderer.unmount())
 })
 
