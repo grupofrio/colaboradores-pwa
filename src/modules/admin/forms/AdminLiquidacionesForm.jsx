@@ -25,9 +25,10 @@ import {
 import { BACKEND_CAPS } from '../adminService'
 import RouteFormatViewer from '../components/RouteFormatViewer'
 import {
+  LIQUIDATION_PENDING_REFRESH_WARNING,
   getDefaultLiquidationHistoryDateRange,
   getLiquidationPlanId,
-  getLiquidationValidationOutcome,
+  getLiquidationValidationSuccessTransition,
   normalizeLiquidationDetailResponse,
   normalizeLiquidationListResponse,
   resolveLiquidationHistorySelection,
@@ -50,6 +51,7 @@ export default function AdminLiquidacionesForm() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [refreshWarning, setRefreshWarning] = useState('')
 
   const [selectedId, setSelectedId] = useState(null)
   const [detail, setDetail] = useState(null)
@@ -109,22 +111,26 @@ export default function AdminLiquidacionesForm() {
     setValidating(true)
     setError('')
     setSuccess('')
+    setRefreshWarning('')
     try {
-      const validation = getLiquidationValidationOutcome(
+      const validation = getLiquidationValidationSuccessTransition(
         validatedPlanId,
         await validateLiquidation(validatedPlanId),
       )
-      // Recargar pendientes y abrir el mismo reporte en Validadas.
-      const res = await getPendingLiquidations({ companyId, warehouseId })
-      const rows = normalizeLiquidationListResponse(res)
-      setList(rows)
-      setHistorySelectedId(validatedPlanId)
-      setView('history')
+      setConfirmOpen(false)
+      setSuccess(validation.message)
+      setHistorySelectedId(validation.historySelectedId)
       setSelectedId(null)
       setDetail(null)
-      setSuccess(validation.message)
-      setConfirmOpen(false)
+      setView(validation.view)
       setTimeout(() => setSuccess(''), 3500)
+
+      try {
+        const res = await getPendingLiquidations({ companyId, warehouseId })
+        setList(normalizeLiquidationListResponse(res))
+      } catch (_) {
+        setRefreshWarning(LIQUIDATION_PENDING_REFRESH_WARNING)
+      }
     } catch (e) {
       setError(e?.message || 'Error al validar liquidación')
     } finally {
@@ -215,6 +221,16 @@ export default function AdminLiquidacionesForm() {
           fontSize: 12, fontWeight: 600, color: TOKENS.colors.success,
         }}>
           {success}
+        </div>
+      )}
+
+      {refreshWarning && (
+        <div style={{
+          padding: '10px 14px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
+          background: TOKENS.colors.warningSoft, border: `1px solid ${TOKENS.colors.warning}40`,
+          fontSize: 12, fontWeight: 600, color: TOKENS.colors.warning,
+        }}>
+          {refreshWarning}
         </div>
       )}
 

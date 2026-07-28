@@ -4,7 +4,9 @@ import assert from 'node:assert/strict'
 import * as liquidaciones from '../src/modules/admin/liquidacionesResponse.js'
 
 const {
+  LIQUIDATION_PENDING_REFRESH_WARNING,
   getLiquidationValidationOutcome,
+  getLiquidationValidationSuccessTransition,
   normalizeLiquidationListResponse,
   resolveLiquidationHistorySelection,
 } = liquidaciones
@@ -101,4 +103,32 @@ test('liquidation history selection uses plan_id when the list exposes both iden
   assert.equal(resolveLiquidationHistorySelection(rows, 42, null), 42)
   assert.equal(resolveLiquidationHistorySelection(rows, null, 42), 42)
   assert.equal(resolveLiquidationHistorySelection(rows, 7, 42), 42)
+})
+
+test('successful validation stays committed to history when the pending refresh later fails', () => {
+  const normal = getLiquidationValidationSuccessTransition(42, {
+    ok: true,
+    data: { already_validated: false },
+  })
+  const alreadyValidated = getLiquidationValidationSuccessTransition(43, {
+    ok: true,
+    data: { already_validated: true },
+  })
+
+  assert.deepEqual(normal, {
+    alreadyValidated: false,
+    message: 'Liquidación del plan #42 validada',
+    historySelectedId: 42,
+    view: 'history',
+  })
+  assert.deepEqual(alreadyValidated, {
+    alreadyValidated: true,
+    message: 'Liquidación del plan #43 ya estaba validada',
+    historySelectedId: 43,
+    view: 'history',
+  })
+  assert.equal(
+    LIQUIDATION_PENDING_REFRESH_WARNING,
+    'La validación se completó, pero no se pudo actualizar la cola de pendientes.',
+  )
 })

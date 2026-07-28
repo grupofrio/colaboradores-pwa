@@ -58,6 +58,17 @@ export function getLiquidationValidationOutcome(planId, response) {
   }
 }
 
+export const LIQUIDATION_PENDING_REFRESH_WARNING =
+  'La validación se completó, pero no se pudo actualizar la cola de pendientes.'
+
+export function getLiquidationValidationSuccessTransition(planId, response) {
+  return {
+    ...getLiquidationValidationOutcome(planId, response),
+    historySelectedId: planId,
+    view: 'history',
+  }
+}
+
 export function getLiquidationPlanId(plan) {
   return plan?.plan_id ?? plan?.id ?? null
 }
