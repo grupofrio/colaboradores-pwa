@@ -284,7 +284,7 @@ haya ocurrido el 26.
 
 ##### Cerrar Noche o Día con arqueo
 
-1. Abrir el turno activo y pulsar **Preparar corte**. La pantalla trae de nuevo
+1. Abrir el turno activo y pulsar **Hacer corte**. La pantalla trae de nuevo
    la fotografía autoritativa del servidor.
 2. Revisar el desglose completo: tickets y ventas, productos y cantidades,
    efectivo, terminal, gastos, cancelaciones y ajustes.
