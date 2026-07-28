@@ -3,8 +3,8 @@
 > **ESTADO: DRAFT PARA REVISIÓN TÉCNICA — dos bloqueos pendientes.**
 > Documento de auditoría. **No es una especificación aprobada ni autoriza implementación.**
 >
-> **Ramas auditadas:** frontend `origin/main` `71e00e9fdfd2d7498e8983dd14eb7078c1c1534b` ·
-> backend `GrupoVeniu/GrupoFrio` `origin/GrupoFrio` `781aef65d0a1d0a041403a2cbea56ce6226a163a`.
+> **Ramas auditadas (actualizado tras la revision de Sebastian):** frontend `origin/main` **`b47f329d`** ·
+> backend `GrupoVeniu/GrupoFrio` **`158d302a`** (delta revisado) · rama vigente al cierre **`244dbfd9`**.
 >
 > **Clasificación de evidencia** — cada afirmación de estos documentos es una de:
 > **[E]** verificado estáticamente en código de la rama vigente ·
@@ -12,8 +12,8 @@
 > **[I]** inferido (razonamiento, no observación directa) ·
 > **[N]** no ejecutado / no obtenido.
 >
-> **Identificadores:** los IDs de persona están sanitizados (`<E1>`). Se conservan IDs de
-> configuración organizacional (company, warehouse, analytic) por ser necesarios técnicamente.
+> **Identificadores:** sanitizados por alias. Personas `<E1>` · companias `<CO-EN>`/`<CO-PT>` ·
+> almacen `<WH-SUC>` · cuenta analitica `<AN-SUC>` · sucursal `<SUC-A>`. Ningun ID productivo en claro.
 **Complemento de** `AUDITORIA_GERENTE_SUCURSAL.md` · 2026-07-26 · read-only
 
 ## Cambio de estado verificado hoy
@@ -186,40 +186,127 @@ Cada tile muestra su propio estado. Si un bloque no es evaluable, **lo dice**: n
 
 ---
 
-# R/V. Plan de sprints
+# R/V. §3 · SPRINT 0 — REESTRUCTURADO TRAS LA REVISIÓN
 
-## Sprint 0 — Contención + identidad (BLOQUEANTE, ~1 sprint)
-1. **Neutralizar los 4 críticos** del módulo Gerente: retirar `forecast-unlock` client-side y cablear el endpoint
-   seguro `/gf/salesops/forecast/unlock` (**ya existe**); cerrar `session.sucursal` vacío para que el
-   `CompanySelector` deje de ofrecer 3 empresas; eliminar `sudo` desde el navegador en las 4 rutas.
-2. **Decidir el vocabulario de rol**: `gerente_sucursal` (PWA) ↔ `gerente_unidad` (`gf_saleops`) hoy son
-   incompatibles. Sin esta decisión, nada de `gf_saleops` se puede reutilizar.
-3. **D1 · identidad de sucursal** server-side, con soporte multi-sucursal.
-4. Corregir `null→0`, la suma de UOM incompatibles y el "Todo opera con normalidad" sin datos.
-5. Cerrar `requisition-approve/reject` y `liquidaciones/validate` (hoy **sin verificación de rol** en servidor).
+> **El plan anterior de cuatro sprints (0·1·2·3) queda ELIMINADO.** Estaba dimensionado sobre los 8 caminos del
+> módulo Gerente; el censo posterior encontró **~100 escrituras** (`GERENTE_MATRIZ_ESCRITURAS.md`). Un plan que
+> subestima el trabajo en un orden de magnitud no es un plan conservador: es un plan equivocado.
+>
+> **Sprint 0 es ahora lo único planificado.** Los sprints de producto se replanifican **después** de 0, cuando
+> el tamaño real de 0A esté medido y no estimado. No publico un calendario de producto que no puedo sostener.
 
-**Aceptación:** ninguna llamada del rol usa ORM genérico ni `sudo`; el alcance no es seleccionable por el usuario;
-todo write pasa por endpoint con guard; los ceros falsos desaparecen.
-
-## Sprint 1 — Hoy · Operación · Alertas (~1–1.5 sprints)
-D2, D3, D7. Ampliar los 4 puntos de allowlist. Rutas, mapa, posición, cierres, pendientes. **Solo lectura.**
-**Aceptación:** las 6 superficies leen DTOs versionados con `data_as_of`; radar declarado "no es tiempo real";
-sin acciones de escritura todavía.
-
-## Sprint 2 — Ventas · Inventarios · Producción (~1.5–2 sprints)
-D4 (1 línea), D5 (`inventory/summary` + reserved + UOM + merma), D6 (agregado de planta + `data_as_of` +
-mapeo sucursal→planta). Corregir el BFF de PT.
-**Aceptación:** nunca se suman UOM incompatibles; "disponible" es disponible, no on-hand; producción se muestra
-con etiqueta de confianza y sin los indicadores prohibidos.
-
-## Sprint 3 — Caja · Rentabilidad · Planeación de mañana (~2 sprints, con dependencias externas)
-Requiere **construir la dimensión de sucursal en M6 y M7** (hoy `branch_dimension:false` en ambos).
-**Rentabilidad se presenta como "No evaluable"** con la lista de costos faltantes: M7 está en
-`L1_observable_revenue`, sin COGS ni margen, y con 0 tasas FX en la ventana.
-Planeación reutiliza M2 + `route_plan/*`, distinguiendo propuesta · borrador · publicada · ejecutable.
-**Nunca publicar automáticamente.**
+Sprint 0 se divide en **tres bloques secuenciales** más un **cutover independiente**.
 
 ---
+
+## 0A · Seguridad backend COMPLETA
+
+**Alcance:** las ~100 escrituras de la matriz, no solo las del Gerente. Es el bloque grande y el que manda.
+
+| Frente | Contenido | Nº aprox. |
+|---|---|---|
+| **Identidad** | Migrar a `X-GF-Employee-Token` obligatorio toda escritura que hoy resuelve el actor por `employee_id` del payload | ~60 |
+| **Rol** | Exigir rol server-side donde hoy no se exige ninguno (incluye `requisition-*`, `liquidaciones/validate`, `pt/transfer/orchestrate`) | ~40 |
+| **Scope** | Derivar sucursal/almacén/planta server-side; dejar de aceptar `company_id`/`warehouse_id`/`shift_id` del cliente como autoridad (§6) | ~50 |
+| **Integridad** | Cerrar `qty_received` reescribiendo `qty_issued`, `closed_at` del cliente, `bag_unit_cost` del cliente, `manager_approved` del cliente, `supervisor_employee_id` autodeclarado | 6 puntos |
+| **Superficies muertas** | Retirar `dispatch-transfer`, `dispatch-config`, `/api/partner` y la ruta/tarjeta del dashboard BI | 4 |
+| **Separación de funciones** | Que el Gerente no apruebe lo que él mismo captura (gastos, requisiciones) | 2 flujos |
+
+**Precondición innegociable:** resolver **AK-1** — `auth="api_key"` degrada a usuario público por defecto
+(`os_api.allow_legacy_api_key_fallback` = `"1"`). Mientras eso siga así, endurecer rol y scope es cosmético,
+porque la llave no autentica. **Primero se mide su valor real en producción; después se apaga con ventana de
+rollback.** Es el primer ticket de 0A, no un detalle de configuración.
+
+**El patrón a extender ya existe en el repositorio** — `supervisor_secure_writes.py` (token-only, doble flag,
+scope canónico, advisory lock, checker AST de dominancia) y `pwa_route_suggestions.py:875`. El delta
+`781aef65 → 158d302a` lo aplicó dos veces más (`sale-create`, `sale-cancel`) con `SELECT … FOR UPDATE` y
+revalidación post-lock. **0A es propagación, no invención.** Eso es lo que lo hace grande pero acotado.
+
+**Criterio de salida:** cero escrituras con identidad por payload · cero escrituras con scope del cliente ·
+checker AST extendido a `gf_pwa_admin` y `gf_production_ops` · tests que muerdan (mutación) en cada guard.
+
+---
+
+## 0B · Identidad / rol / cardinalidad / resolvedores
+
+Depende de 0A solo parcialmente; puede correr en paralelo en su mayor parte.
+
+1. **Canonizar `gerente_sucursal`** (§4). `gerente_unidad` pasa a alias resuelto por **un único resolvedor
+   central**, unidireccional, aditivo, sin tocar allowlists, apagable por `ir.config_parameter`, con la matriz
+   cartesiana de prueba (el diff debe ser exactamente las celdas de `gerente_sucursal`).
+2. **`is_gerente_sucursal` → compatibilidad derivada.** Deja de ser fuente; se conserva para no romper los 7
+   sitios que lo leen; se prohíbe en código nuevo.
+3. **Unificar los 3 resolvedores** de sucursal que hoy recorren el mismo camino (`branch_config_service`,
+   `guard`, `pwa_route_suggestions`) detrás de uno solo.
+4. **Cardinalidad (§5):** implementar **membresía explícita** y `BranchSelector` *server-authoritative*.
+   Diseño 1:N, operación 1:1. **Requiere la decisión de Yamil**, pero la recomendación es implementarla aunque
+   la respuesta sea "una sola sucursal".
+5. **Propagar el bloque `branch{}` en el login** — aditivo puro. El backend **ya emite**
+   `x_analytic_account_id` y la sesión lo descarta; llenarlo **elimina** un round-trip existente.
+6. **Nuevos códigos fail-closed:** `BRANCH_SCOPE_AMBIGUOUS`, `BRANCH_NOT_IN_SCOPE`, `BRANCH_REQUIRED`,
+   `TZ_UNRESOLVED`, `LOCATION_SCOPE_INCOMPLETE`.
+7. **Decidir el modelado de `branch_config` → planta** (§8): hoy **no existe** ninguna relación. Candidato
+   natural: colgarla de `gf.plant.config`.
+
+---
+
+## 0C · Corte frontend
+
+Depende de 0A: no se puede cortar el cliente antes de que exista el sustituto server-side.
+
+1. **Migrar los callers a los endpoints guardados.** Empezando por `forecast-unlock` → `/gf/salesops/forecast/unlock`.
+   ⚠️ **`forecast-unlock` no se "arregla": se sustituye.** Corregir el `ReferenceError` sin migrar primero
+   convierte un defecto latente en una vulnerabilidad activa.
+2. **Eliminar `sudo:1` del navegador.** Hoy hay **220 ocurrencias** en `src/lib/api.js` y `sudo:1` es el
+   **valor por defecto** de `readModel`/`readModelSorted`. Las 19 rutas `/pwa-prod/*` y `/pwa-sup/*` escriben
+   por ORM genérico desde el cliente.
+3. **Dejar de declarar éxito sin leer la respuesta** (4 pantallas). `odooJson`/`odooHttp` no lanzan ante
+   `{ok:false}` con HTTP 200. Patrón correcto ya implementado en `ScreenGastosAprobar.jsx:91`.
+4. **Retirar la ruta y la tarjeta del dashboard BI** (independiente; puede ir antes que todo lo demás).
+5. **Corregir la a11y de las pantallas de escritura**: `/gerente/gastos` tiene 4 de 4 inputs sin etiqueta
+   accesible y 4 controles bajo el mínimo táctil; ninguna pantalla del rol tiene `<h1>`.
+
+---
+
+## CUTOVER de políticas genéricas — proceso SEPARADO, no un ticket de 0A
+
+> **No se recomienda retirar las políticas genéricas de inmediato.** La recomendación anterior ("kill switch,
+> 0 líneas, cierra 4 caminos de golpe") era **imprudente**: `os_api.generic_model_policies` gobierna
+> `/get_records_sorted` y `/api/create_update` **para toda la instancia**, no solo para el Gerente. Retirarlo sin
+> inventario de consumidores rompe superficies que nadie ha enumerado.
+
+El cutover es un proceso propio, con cuatro fases y su propia ventana:
+
+| Fase | Contenido | Criterio de avance |
+|---|---|---|
+| **1 · Preflight** | Leer el valor **real** del parámetro en producción (no está en el repo, no tiene CI). Instrumentar `/get_records_sorted` y `/api/create_update` para registrar modelo, campos, app y origen durante una ventana representativa (mínimo un ciclo mensual completo, para capturar cierres). | Log con cobertura suficiente y **ningún consumidor desconocido** apareciendo al final de la ventana |
+| **2 · Inventario de consumidores** | Cruzar el log con los callers conocidos: PWA colaboradores, PWA clientes/B2B, KoldField, n8n, integraciones. **Cada modelo y campo permitido debe tener dueño identificado.** | Inventario cerrado y revisado por Sebastián |
+| **3 · Migración** | Sustituir consumidor por consumidor por endpoints guardados. **Estrechar la política de forma incremental**, un modelo a la vez, verificando tras cada paso. | Cero tráfico genérico para el modelo retirado durante una ventana de observación |
+| **4 · Rollback** | Cada estrechamiento debe poder revertirse **sin deploy** (es un `ir.config_parameter`). Definir de antemano la señal de rollback (errores `model_not_allowed`/`field_not_allowed` en superficies vivas) y quién la vigila. | Procedimiento escrito y probado al menos una vez |
+
+**Dato que favorece el cutover:** en runtime se confirmó **[R]** que la política productiva **ya es estrecha** —
+`gf.ops.branch_config` responde `model_not_allowed` y `hr.employee` con campos amplios responde
+`field_not_allowed`. Es una contención real y hace el cutover más viable de lo que parecía.
+
+**Dato que obliga a la prudencia:** `_generic_api_policy()` **fusiona** builtins con el parámetro de BD usando
+`merged[key] = bool(configured.get(key)) or value` ⇒ **el parámetro solo puede AMPLIAR, nunca restringir**.
+Estrechar exige tocar los builtins en código, no solo la configuración. Eso es un deploy, con su propia ventana.
+
+---
+
+## Orden y dependencias
+
+```
+  AK-1 (llave que no autentica)  ──►  0A  ──►  0C
+                                       │
+                       0B ─────────────┤  (paralelo en su mayor parte)
+                                       │
+        CUTOVER (preflight → inventario → migración → rollback)  ──► corre en paralelo, ventana propia
+```
+
+**Los sprints de producto (Hoy, Operación, Ventas, Inventarios, Caja, Rentabilidad) se replanifican al cerrar
+0A**, con el tamaño medido. No se publican fechas antes.
+
 
 # S. Criterios de aceptación transversales
 - Cero ORM genérico y cero `sudo` antes del scope en cualquier vista del rol.
@@ -236,14 +323,25 @@ Planeación reutiliza M2 + `route_plan/*`, distinguiendo propuesta · borrador �
 4. M6/M7 requieren dimensión de sucursal antes de Sprint 3.
 5. Mapeo sucursal→planta (hoy inexistente) antes de exponer producción.
 
-# U. Orden de PRs sugerido
-1. PR-A backend: guard/rol + identidad de sucursal (D1) + cierre de writes sin rol.
-2. PR-B frontend: retiro de `sudo`/ORM del módulo Gerente + cableado al endpoint seguro de unlock.
-3. PR-C backend: allowlists day-control/radar/route_stops + `supervisor_v2_status`.
-4. PR-D frontend: shell de Gerente + Hoy + Operación + Alertas.
-5. PR-E backend: D5 inventario (reserved + UOM + merma) · PR-F frontend Inventarios.
-6. PR-G backend: D6 producción + mapeo planta · PR-H frontend Producción.
-7. PR-I/J: caja y rentabilidad (tras dimensión de sucursal en M6/M7).
+# U. Orden de PRs — realineado con 0A/0B/0C
+
+> El orden anterior (PR-A…PR-J) mapeaba a los sprints eliminados y queda **SUPERADO**.
+> Solo se enumeran los PRs de Sprint 0. Los de producto se definen al cerrar 0A.
+
+| # | PR | Bloque | Depende de |
+|---|---|---|---|
+| 1 | **AK-1**: medir y cerrar el fallback de `auth="api_key"` | 0A | — (primero de todo) |
+| 2 | Backend: identidad por token en las escrituras de `gf_pwa_admin` | 0A | 1 |
+| 3 | Backend: identidad por token + rol en `gf_production_ops` | 0A | 1 |
+| 4 | Backend: scope server-side (dejar de aceptar IDs del cliente) | 0A | 2, 3 |
+| 5 | Backend: integridad (qty, timestamps, costos, `manager_approved`) + retiro de superficies muertas | 0A | 4 |
+| 6 | Backend: resolvedor central de rol + alias `gerente_unidad` + matriz de prueba | 0B | — (paralelo) |
+| 7 | Backend: membresía explícita + `branch{}` en login + códigos fail-closed | 0B | 6 · **decisión de Yamil (§5)** |
+| 8 | Frontend: migrar callers a endpoints guardados; `forecast-unlock` **se sustituye, no se arregla** | 0C | 2, 4 |
+| 9 | Frontend: eliminar `sudo:1` del navegador (220 ocurrencias) | 0C | 8 |
+| 10 | Frontend: dejar de declarar éxito sin leer respuesta (4 pantallas) + a11y de escritura | 0C | — (paralelo) |
+| 11 | **Retirar ruta y tarjeta del dashboard BI** | 0C | — **(independiente, puede ir primero)** |
+| — | **Cutover de políticas genéricas** | proceso propio | ventana propia, 4 fases |
 
 # W. Recomendación S/N
 

@@ -3,8 +3,8 @@
 > **ESTADO: DRAFT PARA REVISIÓN TÉCNICA — dos bloqueos pendientes.**
 > Documento de auditoría. **No es una especificación aprobada ni autoriza implementación.**
 >
-> **Ramas auditadas:** frontend `origin/main` `71e00e9fdfd2d7498e8983dd14eb7078c1c1534b` ·
-> backend `GrupoVeniu/GrupoFrio` `origin/GrupoFrio` `781aef65d0a1d0a041403a2cbea56ce6226a163a`.
+> **Ramas auditadas (actualizado tras la revision de Sebastian):** frontend `origin/main` **`b47f329d`** ·
+> backend `GrupoVeniu/GrupoFrio` **`158d302a`** (delta revisado) · rama vigente al cierre **`244dbfd9`**.
 >
 > **Clasificación de evidencia** — cada afirmación de estos documentos es una de:
 > **[E]** verificado estáticamente en código de la rama vigente ·
@@ -12,9 +12,112 @@
 > **[I]** inferido (razonamiento, no observación directa) ·
 > **[N]** no ejecutado / no obtenido.
 >
-> **Identificadores:** los IDs de persona están sanitizados (`<E1>`). Se conservan IDs de
-> configuración organizacional (company, warehouse, analytic) por ser necesarios técnicamente.
+> **Identificadores:** sanitizados por alias. Personas `<E1>` · companias `<CO-EN>`/`<CO-PT>` ·
+> almacen `<WH-SUC>` · cuenta analitica `<AN-SUC>` · sucursal `<SUC-A>`. Ningun ID productivo en claro.
 **Fecha:** 2026-07-26 · **Modo:** read-only (sin writes, sin merge, sin deploy, sin flags)
+
+## ⭐ REVISIÓN DE SEBASTIÁN — INCORPORADA (lee esto primero)
+
+**Estado: DRAFT PARA REVISIÓN TÉCNICA — dos bloqueos externos abiertos.** No es una especificación aprobada.
+No autoriza implementación. No hay código, ni cambios de datos, ni flags, ni despliegues en este paquete.
+
+### El paquete ahora son 5 documentos
+
+| Documento | Contenido |
+|---|---|
+| **`GERENTE_MATRIZ_ESCRITURAS.md`** ⬅ **nuevo** | **La matriz autoritativa**: ~100 escrituras (Gerente · Admin · Producción · SalesOps · ORM genérico) con identidad, rol, scope, payload confiado, sudo, riesgo, consumidores y sustituto |
+| `AUDITORIA_GERENTE_SUCURSAL.md` | Este documento: estado actual y riesgos |
+| `GERENTE_CIERRE_TECNICO.md` | §4 identidad · §5 cardinalidad · §6 autoridad · §7 tabla única M1–M7 · §8 inventario de Producción |
+| `GERENTE_DISENO_OBJETIVO_Y_PLAN.md` | §3 Sprint 0 reestructurado (0A/0B/0C) + cutover separado |
+| `GERENTE_ANEXO_RUNTIME.md` | §1 delta backend auditado · evidencia con sesión real · veredicto del dashboard |
+
+### Las 10 correcciones recibidas y dónde se aplicaron
+
+| # | Corrección | Aplicada en |
+|---|---|---|
+| 1 | Auditar el delta `781aef65 → 158d302a` y validar qué conclusiones sobreviven | `ANEXO_RUNTIME` §1 |
+| 2 | Censo exhaustivo de **todas** las escrituras, en **una sola** matriz | `MATRIZ_ESCRITURAS` |
+| 3 | Sprint 0 mal dimensionado → **0A/0B/0C** + cutover con preflight/rollback | `DISENO` §3 |
+| 4 | Canonizar `gerente_sucursal`; alias por **un solo** resolvedor; `x_gf_role_key` **no** es autoridad absoluta | `CIERRE` §4 |
+| 5 | Documentar cardinalidad 1:1 vs 1:N y elevar la decisión a Yamil | `CIERRE` §5 |
+| 6 | Autoridad = **cadena** token→employee→membresía→config; nunca IDs del cliente | `CIERRE` §6 |
+| 7 | Una sola tabla M1–M7, sin "pendientes" genéricos | `CIERRE` §7 |
+| 8 | Ampliar el inventario de Producción y declarar la relación que falta | `CIERRE` §8 |
+| 9 | Eliminar la clasificación de phishing del dashboard | `ANEXO_RUNTIME` R5/R6 |
+| 10 | Limpiar tablas superadas, IDs productivos y el plan viejo de 4 sprints | todo el paquete |
+
+### Los tres hallazgos que cambian el encuadre
+
+**1 · `auth="api_key"` no autentica por defecto.** `os_api.allow_legacy_api_key_fallback` tiene default `"1"`
+y ningún XML del repositorio lo apaga: sin cabecera **o con llave incorrecta**, la petición se resuelve como el
+usuario público. Mientras esto siga así, endurecer rol y scope es cosmético. **Es el primer ticket de 0A.**
+⚠️ Su valor real en producción **no es verificable desde el repositorio** — hay que medirlo.
+
+**2 · El tamaño real del problema es ~100 escrituras, no 8.** La auditoría anterior censó los caminos del
+módulo Gerente. El censo completo encontró ~100, de las cuales **solo 13 tienen identidad verificada
+server-side**. Por eso el plan de 4 sprints queda eliminado: subestimaba el trabajo en un orden de magnitud.
+
+**3 · El patrón correcto ya existe y el equipo ya lo aplica.** `supervisor_secure_writes.py` (token-only,
+doble flag, scope canónico, advisory lock, checker AST) y, en el propio delta revisado, `sale-create`/`sale-cancel`
+con `SELECT … FOR UPDATE` y revalidación post-lock. **La brecha es de propagación, no de diseño.**
+
+### Correcciones a afirmaciones mías anteriores
+
+| Afirmé antes | Realidad verificada |
+|---|---|
+| `forecast-unlock` es un **crítico activo** | **Crítico latente**: `directGerente` referencia `body` sin declararlo ⇒ `ReferenceError`, la escritura nunca llega al ORM. **Arreglarlo sin migrar primero lo convertiría en la vulnerabilidad** |
+| El iframe BI expone un **login de terceros** dentro de la PWA (patrón de phishing) | **Eliminado del paquete.** Metabase rehúsa ser enmarcado; el login nunca se renderiza. El dashboard simplemente **no carga**: es peso muerto |
+| Retirar las políticas genéricas es un **kill switch de 0 líneas** | **Imprudente.** Gobiernan toda la instancia. Requieren cutover con preflight, inventario de consumidores, migración incremental y rollback |
+| `x_gf_role_key` **tiene prioridad sobre todo** | Tiene la precedencia más alta **si existe**, pero **no está definido en el repositorio**. Es un riesgo de gobernanza, no la fuente de verdad |
+| Sprint 0 ≈ 8 caminos | ~100 escrituras |
+
+### Bloqueos externos — ABIERTOS, no se cierran en esta ronda
+
+| # | Bloqueo | Por qué sigue abierto |
+|---|---|---|
+| **1** | **Auditoría visual: 1 de 4 viewports.** Faltan **390×844, 768×1024, 1366×768** | `resize_window` reporta éxito pero el viewport real no cambia. Intentado en dos rondas. **No se extrapola** |
+| **2** | **Planta, timezone y ubicaciones MP/PT/envases** no obtenidos | `gf.ops.branch_config` → `model_not_allowed` desde el navegador. Requiere odoo-shell o un endpoint guardado |
+
+Ambos permanecen abiertos **hasta que Yamil confirme explícitamente "listo"**.
+
+### Pendientes runtime adicionales (declarados, no resueltos)
+
+- El delta revisado (`158d302a`) **ya no es la punta**: `origin/GrupoFrio` avanzó **18 commits más** hasta
+  `244dbfd9`. Ese segundo delta **no está auditado**.
+- El valor productivo de `os_api.allow_legacy_api_key_fallback` y de `os_api.generic_model_policies`
+  **no es verificable desde el repositorio**.
+- El reparto **7/3** de queries branch-aware vs company-only en M2 procede de la auditoría estática previa y
+  **no fue re-verificado** contra `244dbfd9`.
+- El worktree local usado en una ronda previa estaba en rama obsoleta: las citas de **constraint** deben
+  releerse contra `origin/GrupoFrio` antes de implementar (las de campo se verificaron idénticas).
+
+### Decisiones que requiere Yamil
+
+| # | Decisión | Recomendación |
+|---|---|---|
+| **1** | **Cardinalidad**: ¿algún `gerente_sucursal` debe cubrir más de una sucursal, hoy o en 12 meses? | **Implementar membresía explícita + `BranchSelector` server-authoritative aunque la respuesta sea "no"**: diseño 1:N, operación 1:1. Revertir después es caro |
+| **2** | ¿Se autoriza **medir y luego cerrar** `allow_legacy_api_key_fallback` en producción? | Sí — es la precondición de todo 0A |
+| **3** | ¿Se autoriza **retirar ya** la ruta y la tarjeta del dashboard BI? | Sí — coste ≈0, no depende de ningún bloqueo, hoy no entrega valor |
+| **4** | ¿Se acepta **no publicar fechas** de los sprints de producto hasta cerrar 0A? | Sí — el tamaño debe medirse, no estimarse |
+| **5** | ¿Se acepta `gerente_sucursal` como **rol canónico único** y `gerente_unidad` como alias temporal? | Sí — es la vía que el propio delta usa para `pos_diurno` |
+
+### Preguntas finales para Sebastián
+
+Las 10 preguntas originales siguen abiertas en el body del PR. La revisión añade estas cinco:
+
+1. **¿Cuál es el valor real de `os_api.allow_legacy_api_key_fallback` en producción?** Es la pregunta que más
+   cambia el plan: si está en `"1"`, el resto del endurecimiento es cosmético hasta cerrarlo.
+2. **¿Cuál es el contenido real de `os_api.generic_model_policies` en producción?** Sin él no se puede
+   dimensionar el cutover ni cerrar el inventario de consumidores.
+3. **`dispatch-transfer` y `dispatch-config` están rotos** (campos `gf_mp_dispatch_location_*` inexistentes).
+   ¿Se retiran, o hay una rama donde esos campos sí existen?
+4. **¿Dónde debe vivir la relación `branch_config` → planta?** Hoy no existe ninguna. El candidato natural es
+   `gf.plant.config`, hoy infrautilizado. Es una decisión de modelado que bloquea toda la superficie de Producción.
+5. **`materials/settlement/report` auto-valida** (`action_report()` deja el registro en `validated` y genera
+   movimientos). ¿Es intencional o es la separación reportar/validar que se perdió?
+
+---
+
 
 ## Resumen ejecutivo
 
@@ -91,7 +194,11 @@ Navegación directa a rutas de otros roles → **redirigidas a `/`** (el guard d
 
 ---
 
-## D/E. Matriz de endpoints y writes — módulo Gerente
+## D/E. Matriz de endpoints y writes — ⚠️ SUPERADA
+
+> **Esta tabla queda SUPERADA.** Cubría solo el módulo Gerente. La matriz autoritativa vigente es
+> **`GERENTE_MATRIZ_ESCRITURAS.md`**, con **~100 escrituras** censadas en Gerente, Admin y Producción, más
+> callers frontend/BFF. Lo de abajo se conserva como detalle del módulo Gerente, no como censo.
 
 Los 4 endpoints del rol viven **exclusivamente en el cliente** (`src/lib/api.js`, función `directGerente`,
 líneas 1579–1665 de `origin/main`). **No existe ningún controlador `/gf/...` de Gerente en el backend.**
@@ -165,7 +272,12 @@ abierta y sin ninguna barrera de rol/scope en el camino del cliente.
 
 ---
 
-## F. Reutilización KOLD OS M1–M7 (rama vigente `781aef65`)
+## F. Reutilización KOLD OS M1–M7 — ⚠️ SUPERADA
+
+> **Clasificación SUPERADA.** La disposición vigente es la **tabla única** de
+> `GERENTE_CIERRE_TECNICO.md` §7 (M1 reusable · M2 corrida scoped · M3 DTO de señales · M4 nueva dimensión ·
+> M5 señales no conciliación · M6 unavailable y rechaza `branch_ids` · M7 unavailable). Ningún módulo queda
+> declarado "pendiente" de forma genérica. Lo de abajo es el detalle de evidencia.
 
 **Hallazgo central: ninguno de los 7 módulos admite hoy a `gerente_sucursal` — los 7 responden 403.**
 El rol existe (`os_customer_zones/models/pwa_job_key.py:15`) pero no está en ninguna allowlist y **no proyecta a

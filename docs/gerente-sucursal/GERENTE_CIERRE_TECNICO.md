@@ -3,8 +3,8 @@
 > **ESTADO: DRAFT PARA REVISIÓN TÉCNICA — dos bloqueos pendientes.**
 > Documento de auditoría. **No es una especificación aprobada ni autoriza implementación.**
 >
-> **Ramas auditadas:** frontend `origin/main` `71e00e9fdfd2d7498e8983dd14eb7078c1c1534b` ·
-> backend `GrupoVeniu/GrupoFrio` `origin/GrupoFrio` `781aef65d0a1d0a041403a2cbea56ce6226a163a`.
+> **Ramas auditadas (actualizado tras la revision de Sebastian):** frontend `origin/main` **`b47f329d`** ·
+> backend `GrupoVeniu/GrupoFrio` **`158d302a`** (delta revisado) · rama vigente al cierre **`244dbfd9`**.
 >
 > **Clasificación de evidencia** — cada afirmación de estos documentos es una de:
 > **[E]** verificado estáticamente en código de la rama vigente ·
@@ -12,30 +12,45 @@
 > **[I]** inferido (razonamiento, no observación directa) ·
 > **[N]** no ejecutado / no obtenido.
 >
-> **Identificadores:** los IDs de persona están sanitizados (`<E1>`). Se conservan IDs de
-> configuración organizacional (company, warehouse, analytic) por ser necesarios técnicamente.
+> **Identificadores:** sanitizados por alias. Personas `<E1>` · companias `<CO-EN>`/`<CO-PT>` ·
+> almacen `<WH-SUC>` · cuenta analitica `<AN-SUC>` · sucursal `<SUC-A>`. Ningun ID productivo en claro.
 **2026-07-26 · READ-ONLY** · amplía `AUDITORIA_GERENTE_SUCURSAL.md` y `GERENTE_DISENO_OBJETIVO_Y_PLAN.md` sin borrar evidencia.
-Ramas: FE `origin/main` (`71e00e9`) · BE `origin/GrupoFrio` (`781aef65`).
+Ramas: FE `origin/main` (`b47f329d`) · BE `origin/GrupoFrio` (`158d302a`; vigente `244dbfd9`).
 
-> ## ⛔ VEREDICTO: **INCOMPLETO** — 1 bloqueo concreto
-> Ver `GERENTE_ANEXO_RUNTIME.md` para la evidencia runtime.
-> **Cumplido:** ramas vigentes verificadas (SHAs sin cambios) · Sprint 0 trazado · M1–M7 clasificados ·
-> producción/inventarios mapeados · iframe auditado en runtime · mapping live **parcialmente** cerrado.
-> **Bloqueo único:** la **auditoría visual solo cubrió 1 de 4 viewports**. `resize_window` reporta éxito pero el
-> viewport real no cambia (pedí 390×844, quedó en 1536). Falta 390×844, 768×1024 y 1366×768.
-> **Bloqueo secundario:** planta, timezone y ubicaciones MP/PT/envases **no son obtenibles desde el navegador**
-> (`gf.ops.branch_config` = `model_not_allowed`); requieren odoo-shell o un endpoint guardado.
+> ## ⛔ VEREDICTO: **INCOMPLETO** — 2 bloqueos externos abiertos
+> Ver `GERENTE_ANEXO_RUNTIME.md` para la evidencia runtime y `GERENTE_MATRIZ_ESCRITURAS.md` para el censo.
+> **Cumplido:** delta backend auditado · censo de ~100 escrituras · identidad y cardinalidad canonizadas ·
+> autoridad redefinida como cadena · M1–M7 en tabla única · producción/inventarios mapeados · iframe cerrado.
+> **Bloqueo 1 (externo, ABIERTO):** la **auditoría visual solo cubrió 1 de 4 viewports**. `resize_window`
+> reporta éxito pero el viewport real no cambia. Faltan **390×844, 768×1024 y 1366×768**.
+> **Bloqueo 2 (externo, ABIERTO):** planta, timezone y ubicaciones MP/PT/envases **no son obtenibles desde el
+> navegador** (`gf.ops.branch_config` → `model_not_allowed`); requieren odoo-shell o un endpoint guardado.
+> Ninguno se cierra hasta que **Yamil confirme "listo"**.
+>
+> ### Dictamen de Sebastián — incorporado en esta revisión
+> | # | Corrección recibida | Dónde se aplicó |
+> |---|---|---|
+> | 1 | Auditar el delta backend `781aef65 → 158d302a` y validar qué sobrevive | `ANEXO_RUNTIME` §1 |
+> | 2 | Censo exhaustivo de **todas** las escrituras (Gerente · Admin · Producción) en **una** matriz | `GERENTE_MATRIZ_ESCRITURAS.md` |
+> | 3 | Sprint 0 mal dimensionado: separar **0A/0B/0C** + cutover con preflight/rollback | `DISENO_OBJETIVO_Y_PLAN` §3 |
+> | 4 | Canonizar `gerente_sucursal`; alias por **un solo resolvedor**; `x_gf_role_key` **no** es autoridad absoluta | §4, aquí |
+> | 5 | Documentar cardinalidad 1:1 vs 1:N y pedir decisión de Yamil | §5, aquí |
+> | 6 | Autoridad = **cadena** token→employee→membresía→config, nunca IDs del cliente | §6, aquí |
+> | 7 | Una sola tabla M1–M7, sin "pendientes" genéricos | §7, aquí |
+> | 8 | Ampliar el inventario reusable de Producción y declarar la relación que falta | §8, aquí |
+> | 9 | Eliminar la clasificación de phishing del dashboard | `ANEXO_RUNTIME` R5/R6 |
+> | 10 | Limpiar tablas superadas, IDs productivos y el plan viejo | todo el paquete |
 >
 > ### Correcciones runtime a esta misma auditoría
-> - 🟢 **El empleado SÍ tiene `x_analytic_account_id`** (820, sucursal IGU) y su `branch_config` resuelve.
->   La autoridad canónica **no requiere crear datos**: solo propagarlos y consumirlos.
+> - 🟢 **El empleado SÍ tiene `x_analytic_account_id`** (`<AN-SUC>`, sucursal `<SUC-A>`) y su `branch_config`
+>   resuelve. La autoridad canónica **no requiere crear datos**: solo propagarlos y consumirlos correctamente.
 > - 🔴 **El desajuste de rol quedó PROBADO en vivo**: `alerts/today` → `FORBIDDEN` con la sesión real del Gerente,
 >   mientras `inventory/summary` (sin rol requerido) respondió OK.
 > - 🔴 **`inventory/summary` devuelve `ok` con TODO vacío** (sin `products`, sin locations, sin productos):
 >   los dos bugs de contrato, confirmados en vivo.
-> - 🟡 **Refuto mi propia afirmación** sobre el iframe: Metabase **rehúsa ser enmarcado**, así que el login de
->   terceros **nunca se renderiza** dentro de la PWA. No hay patrón de phishing. Pero `/gerente/dashboard`
->   **está roto**: no muestra nada. Es peso muerto verificado.
+> - 🟡 **Corrijo dos afirmaciones propias:** (a) el iframe BI **no** constituye un patrón de phishing —esa
+>   clasificación queda eliminada del paquete—; `/gerente/dashboard` simplemente **no carga** y es peso muerto
+>   verificado. (b) `forecast-unlock` **no es un crítico activo sino latente**: no ejecuta por un `ReferenceError`.
 
 ## Salvedad de método (declarada, no oculta)
 El worktree local `dev/GrupoFrio` está en una rama **obsoleta** (`feat/kold-os-m5-...`, −67,890 líneas vs `origin/GrupoFrio`).
@@ -46,11 +61,42 @@ de constraint del worktree debe releerse contra `origin/GrupoFrio` antes de impl
 
 ---
 
-# A. Autoridad canónica propuesta
+# A / §6. AUTORIDAD CANÓNICA — definición corregida tras la revisión
 
-**`gf.ops.branch_config`, identificada por `analytic_account_id`, resuelta 100 % server-side desde el token.**
+> **Corrección de la revisión.** La formulación anterior ("`gf.ops.branch_config` es la autoridad canónica")
+> era **incompleta**: nombraba el destino sin nombrar el camino. Un `branch_config` alcanzado por una vía
+> equivocada no es autoridad, es un dato bonito. La formulación vigente es la siguiente.
 
-Razones verificadas, no preferencias:
+## `gf.ops.branch_config` es autoridad canónica ÚNICAMENTE al final de esta cadena
+
+```
+  token  →  employee  →  membresía autorizada  →  config activa
+```
+
+| Paso | Qué significa | Fail-closed si… |
+|---|---|---|
+| 1 · **token** | identidad exclusivamente por `X-GF-Employee-Token` verificado server-side | no hay token, expiró, o el empleado/usuario está inactivo ⇒ `UNAUTHORIZED` |
+| 2 · **employee** | el empleado se deriva del token, **nunca** de un campo del payload | el token no resuelve a un empleado ⇒ `UNAUTHORIZED` |
+| 3 · **membresía autorizada** | la relación empleado↔sucursal se lee server-side y debe ser **explícita y única** | 0 membresías ⇒ `NO_BRANCH_SCOPE` · >1 sin elección válida ⇒ `BRANCH_REQUIRED` · analítica≠membresía ⇒ `BRANCH_SCOPE_AMBIGUOUS` |
+| 4 · **config activa** | `active = True` **y** `state = 'active'` **y** completa | inactiva/incompleta ⇒ `BRANCH_CONFIG_INCOMPLETE` |
+
+**Solo si los cuatro pasos pasan**, el `branch_config` resultante define el scope: company, par intercompany,
+ubicaciones, picking types, flags y umbrales.
+
+## Regla negativa — no negociable
+
+> **NUNCA se acepta como autoridad un `analytic_account_id`, `company_id`, `warehouse_id` ni `branch_id`
+> enviado por el cliente.**
+
+Esto aplica **aunque el valor sea correcto**. El cliente puede enviarlos como *sugerencia* (p. ej. para elegir
+entre las sucursales que el servidor ya determinó que le corresponden), y en ese caso el servidor **valida la
+sugerencia contra el conjunto que él mismo calculó** y falla si no pertenece. Nunca la usa como origen.
+
+Hoy esta regla se viola en la mayoría de la matriz de escrituras (`GERENTE_MATRIZ_ESCRITURAS.md`): `company_id`
+y `warehouse_id` del navegador son la autoridad efectiva de `gf_pwa_admin`, y `shift_id`/`warehouse_id` la de
+producción. **Ese es el contenido real del Sprint 0.**
+
+## Por qué `branch_config` es el destino correcto (evidencia, no preferencia)
 1. Es la **única** entidad con unicidad de negocio: `unique(analytic_account_id)` (`gf_ops_branch_config.py:277`).
    `hr.employee.warehouse_id` no tiene índice ni unicidad; `company_id` es 1→N sucursales por diseño
    (par PT/EN, `:77-89`); `plant_warehouse_id` **no tiene arista desde `hr.employee`**.
@@ -121,27 +167,156 @@ legítima) · `BRANCH_NOT_IN_SCOPE` (patrón ya existe en `pwa_route_suggestions
 
 `is_gerente_sucursal` **no viaja al login**; `pwa_extra_gerente_sucursal` sí. Solo 2 sitios aceptan ambos mundos.
 
-**Divergencias reales:** el gerente canónico es **rechazado por los 15 endpoints** `gerente_unidad`; el gerente
-"puro-nombre" pasa esos 15 pero **no ve ningún módulo en la PWA**; ve el botón de aprobar gastos y recibe error
-(menú por job key, backend por booleano); y `x_gf_role_key` es un **campo Studio no declarado en el repo** que
-**tiene prioridad sobre todo** y es invisible para login, FE y `gf_pwa_admin`.
+## §4 · CANONIZACIÓN DOCUMENTAL DE LA IDENTIDAD (corregido)
 
-**Alias temporal (diseño anti-escalada):** un solo punto (`_employee_role_keys`, tras el paso 3), tabla de un par
-`{gerente_sucursal → gerente_unidad}`, **unidireccional** (invertirlo daría POS/gastos/materiales a los
-"puro-nombre"), **aditivo** (`keys[0]` intacto), **sin tocar ninguna allowlist**, **excluyendo el override Studio**,
-bajo `ir.config_parameter` apagable sin deploy, y **registrado** para poder retirarlo.
+### Decisión documental
 
-**Prueba de fondo:** matriz cartesiana (roles canónicos + gerente legacy) × (15 endpoints) capturando el veredicto
-de `guard_request` con alias OFF y con ON; el diff debe ser **exactamente** las 15 celdas de `gerente_sucursal`.
-Eso demuestra "no abre puertas", en vez de sugerirlo.
+| Artefacto | Estatus canónico |
+|---|---|
+| **`gerente_sucursal`** | **ROL CANÓNICO.** Única denominación válida en documentación, contratos y código nuevo |
+| **`gerente_unidad`** | **ALIAS TEMPORAL**, resuelto por **un único resolvedor central**. No es un segundo rol: es un nombre heredado del mismo concepto |
+| **`is_gerente_sucursal`** | **COMPATIBILIDAD DERIVADA.** Deja de ser fuente y pasa a ser un booleano *derivado* del rol canónico. No debe consultarse en código nuevo |
 
-**Dato que puede cambiar la estrategia:** de los 15 endpoints, **solo 5 tienen caller en la PWA**. Si el censo
-confirma 0 tráfico en los otros 10 (incluido `forecast/unlock`), la conversación deja de ser "cómo aliasar 15"
-y pasa a ser "cuáles de estos 10 se retiran" — bastante más barato.
+### Precedencia real del rol (verificada en `guard.py:61-96`) — cuatro niveles, no uno
+
+```python
+for fname in ("x_gf_role_key", "x_role_key"):            # 1. overrides (campos Studio/BD)
+    if fname in emp._fields: ...
+primary = resolve_employee_pwa_job_key(emp)              # 2. hr.job.x_job_key  ← rol principal canónico
+keys.extend(resolve_employee_pwa_additional_job_keys(emp))  # 3. pwa_extra_*   ← roles adicionales, ADITIVOS
+if not keys:
+    legacy = self._legacy_job_name_role_key(emp)         # 4. fallback por NOMBRE de puesto
+```
+
+| # | Artefacto | ¿Existe en el repo? | Papel real |
+|---|---|---|---|
+| 1 | `x_gf_role_key`, `x_role_key` | **NO están definidos en el repositorio.** Se leen defensivamente solo si el registro los tiene en `_fields` (campos Studio/BD, no versionados) | **Override condicional de máxima precedencia.** ⚠️ **No son "la autoridad absoluta": pueden no existir en la instancia, y de hecho no existen en el código.** Son un riesgo de gobernanza (conceden rol sin pasar por revisión), no la fuente de verdad |
+| 2 | **`hr.job.x_job_key`** | **SÍ** (`models_hr.py:617-624`, espejo related en `hr.employee` `:374-380`) | **Rol principal canónico.** Es lo que viaja en la sesión |
+| 3 | **`pwa_extra_*`** → `PWA_ADDITIONAL_ROLE_SPECS` | **SÍ**, 14 pares (`pwa_job_key.py:4-19`) | **Roles adicionales, aditivos** (no reemplazan al principal; se descarta el duplicado). **Incluye `pwa_extra_gerente_sucursal`** (`models_hr.py:354`) |
+| 4 | **Fallback por nombre de puesto** | **SÍ** (`guard.py:35-59`) | Solo si no hubo nada arriba. *Substring match* case-insensitive sobre `job_id.name`. **`gerente_sucursal` NO está en ese mapa**; `"gerente de unidad"` sí |
+
+**El delta backend confirma que la vía 3 es la viva:** `158d302a` añadió `pos_diurno` exactamente así.
+
+### El acceso pasa si CUALQUIER rol efectivo está en la allowlist
+```python
+# guard.py:364
+if allowed_roles and not (set(role_keys) & set(allowed_roles)):
+    return {"ok": False, "code": "FORBIDDEN", ...}
+```
+⇒ El alias es viable **sin tocar ninguna allowlist**: basta con que el resolvedor central emita ambas claves.
+
+### Semántica REAL de `guard_request` (`guard.py:283-384`) — corregida
+
+**Lo que SÍ valida:** si hay token, obliga a que `meta.employee_id` coincida (`FORBIDDEN/employee_identity_mismatch`)
+y borra `employee_ref`/`wa_phone`; resuelve company y analítica; interseca rol contra la allowlist.
+Fail-closed en: sin rol + allowlist ⇒ `SERVER_MISCONFIG` · rol fuera ⇒ `FORBIDDEN` · company distinta ⇒ `FORBIDDEN`
+· >1 sucursal sin analítica explícita ⇒ `VALIDATION_ERROR`.
+
+**Lo que NO valida — fail-open estructural:**
+```python
+# guard.py:337
+require_token = self._param_bool("gf_salesops.require_employee_token", default=False)
+```
+**Sin token, la identidad sale del payload** (`_get_employee` busca por `meta.employee_id`/`employee_ref`/`wa_phone`,
+y `_envelope` promueve `data.employee_id → meta.employee_id`). Está documentado como "canal de servicio n8n".
+⇒ **`guard_request` NO es equivalente a `resolve_authenticated_supervisor`.** El primero es fail-open en identidad
+por defecto; el segundo es token-only fail-closed. **No los trates como intercambiables en el diseño.**
+
+### `is_gerente_sucursal`: por qué deja de ser fuente
+```python
+# os_customer_zones/models/models_hr.py:312
+is_gerente_sucursal = fields.Boolean(string="Es gerente de sucursal", default=False)
+```
+**Almacenado, sin compute, sin related, default `False`** — se marca a mano. Convive en paralelo con
+`pwa_extra_gerente_sucursal`, y **solo este último alimenta la autoridad canónica de rol**. Son dos campos
+distintos para el mismo concepto, y hoy `gf_pwa_admin` y producción leen **el que no manda** (6 sitios + 1).
+Por eso pasa a compatibilidad derivada: se conserva para no romper, deja de consultarse en código nuevo.
+
+### El alias, con un único resolvedor central (diseño anti-escalada)
+Un solo punto (`_employee_role_keys`, tras el paso 3), tabla de un par `{gerente_sucursal → gerente_unidad}`,
+**unidireccional** (invertirlo daría POS/gastos/materiales a los "puro-nombre"), **aditivo** (`keys[0]` intacto),
+**sin tocar ninguna allowlist**, **excluyendo los overrides Studio**, bajo `ir.config_parameter` apagable sin
+deploy, y **registrado** para poder retirarlo.
+
+**Prueba de fondo:** matriz cartesiana (roles canónicos + gerente legacy) × (endpoints con `gerente_unidad`)
+capturando el veredicto de `guard_request` con alias OFF y ON; el diff debe ser **exactamente** las celdas de
+`gerente_sucursal`. Eso demuestra "no abre puertas" en vez de sugerirlo.
+
+**Confirmado:** `gerente_sucursal` tiene **0 ocurrencias en todo `gf_saleops`**; `gerente_unidad` **no existe**
+en `PWA_ADDITIONAL_ROLE_SPECS` (solo se obtiene por `x_job_key`, por campo Studio, o accidentalmente por
+substring del nombre del puesto). **Son universos disjuntos.**
 
 ---
 
-# D. Sprint 0 — seguridad (ordenado por riesgo REAL)
+## §5 · CARDINALIDAD empleado ↔ sucursal — DECISIÓN REQUERIDA DE YAMIL
+
+### Estado real: la mono-sucursal es una invariante de *runtime*, no del *modelo de datos*
+
+**Existen 4 vías empleado↔sucursal, con cardinalidades distintas:**
+
+| Vía | Archivo:línea | Cardinalidad | ¿Unicidad? |
+|---|---|---|---|
+| `hr.employee.x_analytic_account_id` (M2O) | `model_hr_employee_analytic.py:7-12` | 1 → 1 | implícita; **nada valida que coincida con la membresía** |
+| `gf.ops.branch_config.employee_ids` (M2M) | `gf_ops_branch_config.py:56-63` | **N:M en el esquema** | constraint Python `_check_employee_scope_overlap` (`:336-351`) |
+| `hr.employee.warehouse_id` | `models_hr.py:76,105` | 1 → 1 | constraint contra la analítica del empleado |
+| `res.users.x_gf_allowed_analytic_account_ids` (M2M **computado**) | `res_users_saleops.py:8-26` | **1 → N** | **ninguna** — alimenta las record rules |
+
+**La constraint que lo impide cubre UNA sola de las cuatro vías**, y solo entre configs `active AND state='active'`;
+**no se dispara al editar el empleado**. Nada valida la coherencia entre `x_analytic_account_id` y `employee_ids`:
+un empleado puede tener analítica de A y membresía en B, y es un estado válido para el ORM.
+
+**Consecuencia por camino:** token-only ⇒ `MULTI_BRANCH` fail-closed (el empleado queda inutilizable, no escalado).
+`guard_request` ⇒ prefiere `x_analytic_account_id` e **ignora las membresías**; si no hay analítica y hay >1 config,
+**acepta la que el cliente envíe** ⇒ multi-sucursal efectivo por elección del cliente.
+`res.users.x_gf_allowed_...` ⇒ **acumula sin límite** ⇒ a nivel ORM el multi-sucursal ya está soportado.
+
+### Las dos alternativas
+
+| | **Opción 1:1** — un empleado, una sucursal | **Opción 1:N** — un empleado, varias sucursales |
+|---|---|---|
+| **Modelo** | Constraint dura sobre `hr.employee` + coherencia analítica↔membresía | Membresía explícita como entidad, con rol por sucursal |
+| **Coste inicial** | **Bajo** — formaliza lo que el runtime ya asume | **Medio** — nueva entidad + selector + propagación a DTOs |
+| **Riesgo** | Bloquea al gerente multi-sucursal el día que exista; migrar después obliga a tocar todos los DTOs | Mayor superficie desde el día 1 |
+| **Efecto sobre el gap actual** | No resuelve `res.users.x_gf_allowed_...`, que seguirá siendo 1→N | Lo alinea: una sola fuente para todos los caminos |
+| **Reversibilidad** | **Baja** — el scope entra en cada contrato como escalar | **Alta** — 1:1 es el caso particular de 1:N con N=1 |
+
+### 🟠 RECOMENDACIÓN — 1:N en el modelo, 1:1 en la operación inicial
+
+Diseñar **1:N desde el principio** y **operar 1:1** hasta que Yamil decida lo contrario. Dos piezas:
+
+**1 · Membresía explícita.** Una relación empleado↔sucursal declarada, con `active` y (a futuro) rol por sucursal,
+como **única** fuente de la relación. Las otras tres vías pasan a derivarse de ella o a validarse contra ella.
+Elimina de raíz el estado "analítica de A + membresía en B", que hoy es representable y produce `MULTI_BRANCH`
+o —peor— scope silenciosamente equivocado según el camino.
+
+**2 · `BranchSelector` *server-authoritative*.** El servidor devuelve el **conjunto** de sucursales del empleado.
+Con N=1 no se renderiza y el scope es implícito: **la operación de hoy no cambia en absoluto**. Con N>1 el usuario
+elige, la elección viaja como **sugerencia**, y el servidor la **valida contra el conjunto que él mismo calculó**
+(§6). Nunca la acepta como origen. Fail-closed: `BRANCH_REQUIRED` si hay N>1 y no se eligió — **fallar, no elegir
+la primera**.
+
+**Por qué esta forma y no la otra:** el coste de diseñar 1:N y operar 1:1 es **una capa de indirección**; el coste
+de asumir 1:1 y descubrir después que hay gerentes multi-sucursal es **rehacer todos los contratos**, porque el
+scope habrá entrado en cada DTO como escalar. La asimetría es grande y va en una sola dirección.
+
+> **DECISIÓN REQUERIDA DE YAMIL:** ¿algún `gerente_sucursal` debe cubrir **más de una** sucursal —hoy, o en el
+> horizonte de 12 meses (suplencias, vacaciones, corporativo, plazas pequeñas compartidas)? De la respuesta
+> depende si la membresía se implementa ahora o se difiere. **La recomendación es implementarla ahora aunque
+> la respuesta sea "no": el sobrecoste es bajo y la reversión es cara.**
+
+---
+
+# D. Sprint 0 — ⚠️ SECCIÓN SUPERADA
+
+> **Esta sección queda SUPERADA por la revisión.** El Sprint 0 vigente está en
+> `GERENTE_DISENO_OBJETIVO_Y_PLAN.md` §3, reestructurado en **0A (seguridad backend completa) · 0B
+> (identidad/rol/cardinalidad/resolvedores) · 0C (corte frontend)**, con el **cutover de políticas genéricas
+> separado** (preflight → migración → rollback → inventario de consumidores).
+>
+> **Por qué se supera:** la tabla de abajo ordenaba **8 caminos** del módulo Gerente. El censo posterior
+> encontró **~100 escrituras** (`GERENTE_MATRIZ_ESCRITURAS.md`). Un Sprint 0 dimensionado sobre 8 subestima
+> el trabajo en un orden de magnitud. Se conserva a continuación **solo como detalle de los caminos del
+> Gerente**, no como plan.
 
 **Corrección importante a mi propio informe anterior:** `/pwa-gerente/forecast-unlock` **está roto hoy**.
 `routeDirect` pasa 3 argumentos (`api.js:9660`) pero `directGerente` declara 2 (`:1578`) y luego lee `body`
@@ -205,6 +380,63 @@ el nombre del producto** con fallback 1.
 
 ---
 
+
+## §8 · INVENTARIO REUSABLE DE PRODUCCIÓN (añadido por la revisión)
+
+Todo verificado estáticamente **[E]** en `158d302a`. Este inventario es de **capacidades existentes**; no implica
+que sean seguras hoy (ver `GERENTE_MATRIZ_ESCRITURAS.md`, dominio Producción).
+
+| Artefacto | Modelo / campo exacto | Archivo:línea | Notas de reutilización |
+|---|---|---|---|
+| **Catálogo de material** | `gf.production.material` | `gf_production_material.py:14` | Capa de configuración sobre `product.product`, **no** un catálogo paralelo. Campos: `product_id`, `uom_id` (related store), `category`, `applies_to_rolito`, `applies_to_barras`, `tolerance_pct`, `tolerance_abs`, `source_location_id`, `tag_ids`, `company_id`. `unique(product_id, company_id)`. `evaluate_tolerance()` usa el límite **más restrictivo** |
+| **Tags** | `gf.production.material.tag` (catálogo) + `gf.production.material.issue.tag` (operativos) | `gf_material_tag.py:6` · `gf_material_issue_tag.py:11` | Deliberadamente separados. Reutilizables como taxonomía |
+| **Issues** | `gf.production.material.issue` | `gf_material_issue.py:18` | Estados `draft → confirmed → cancelled`. `shift_id`, `line_id`, `material_id`, `qty_issued`, `issued_by`, `received_by`, `stock_move_ids`, `settlement_id` (compute store) |
+| **Settlements** | `gf.production.material.settlement` | `gf_material_settlement.py:32` | **7 estados**: `draft, reported, validated, rejected, disputed, force_closed, abandoned`. `unique(shift_id, line_id, material_id)`. `qty_consumed = qty_issued − qty_remaining − qty_damaged`. ⚠️ `_ADMIN_ONLY_FIELDS` protegido en `write()` pero **saltable con `.sudo()`** |
+| **Conciliación de producción** | `/api/production/materials/reconcile` y `/api/production/pt/reconcile` | `gf_production_api.py:3390` · `:2463` | **Read-only y sin persistencia**: calculan incidencias en vuelo. Códigos de materiales: `settlement_pending_report/validation`, `settlement_disputed/rejected`, `tolerance_exceeded`. PT: `production_vs_accounted_mismatch`, `packed_vs_pt_received_mismatch`, `line_produced_vs_received_short/over`, `pt_received_without_line`, `pt_received_vs_inventory_mismatch`. **Reutilizables tal cual como señales de Gerente** |
+| **Dispatch-config** | *ninguna clase*; se arma en vuelo | `gf_production_api.py:3521` | Lee `stock.location.gf_mp_dispatch_key` (`Selection [rolito, pt]`, `stock_location_ext.py:8-12`) filtrado por `child_of` del almacén. ⚠️ **ROTO** — ver abajo |
+| **UOM** | `uom_id = related("product_id.uom_id", store=True)` | `gf_production_material.py:28-33` | ⚠️ **No hay conversión de UoM en ningún punto.** Todos los movimientos usan la UoM del producto. Única entrada de UoM del cliente: `product_uom_id` en `bar-harvest-scrap`, **aceptado sin validar compatibilidad de categoría** |
+| `source_location_id` | `Many2one stock.location` (domain internal) | `gf_production_material.py:61-66` | Override por material; **prevalece** sobre el del almacén. Consumido en 3 sitios |
+| `gf_mp_source_location_id` | `Many2one stock.location` en `stock.warehouse` | `stock_warehouse_ext.py:20-25` | "Ubicación origen MP (Bodega)". **Consumido en 7 sitios** — es el ancla real de MP |
+| `energy_tz` | `Selection` en `stock.warehouse`, default `America/Mexico_City` | `stock_warehouse_ext.py:10-14` | ⚠️ **Definido y NUNCA leído** (0 usos fuera de la definición). Los turnos usan un offset **hardcodeado** `-6h` y la tz del usuario técnico de la API key. **No lo tomes como fuente de zona horaria** |
+| `plant_warehouse_id` | `Many2one stock.warehouse`, **required** | `gf_production_shift.py:21` · `gf_production_line.py:24` | **Ancla de scope de planta.** `company_id` es related suyo. Variante `x_plant_warehouse_id` en 3 modelos más |
+| **Plant config** | **`gf.plant.config`** | `gf_plant_config/models/gf_plant_config.py:5` | `x_plant_warehouse_id` (required, restrict) + capacidades (barras/rolito/congelados), alberca, evaporadores, compresores, condensadores, nominales (`x_nominal_bars_day`, `x_nominal_rollito_kg_day`, `x_installed_kw_total`). ⚠️ **Solo descriptivo — ningún endpoint lo lee hoy.** Es el mejor candidato para colgar la relación que falta |
+| Extensión de equipos | `gf.production.machine` ← `kold_equipment_code` | `gf_production_machine_ext.py:20-49` | Mapeo canónico hacia KoldPlant |
+| Política de bolsas | `stock.warehouse.gf_bag_product_id`, `gf_bag_unit_cost`, `gf_auto_create_bag_debt` | `stock_warehouse_ext.py:28-41` | + `gf.bag.custody` (5 estados) y `gf.employee.bag.debt` |
+| Feature flags | `gf_production_ops.material_stock_enabled` (default `"0"`) | `gf_material_issue.py:133-136` | ⚠️ Con el flag apagado los issues/settlements **no** mueven inventario, **pero `dispatch-transfer`, `issue/validate-receipt`, `bar-harvest-scrap` y `traspaso-mp` crean movimientos ignorando el flag** |
+
+### ⚠️ `dispatch-config` y `dispatch-transfer` están ROTOS — no los cuentes como capacidad
+Ambos leen `wh.gf_mp_dispatch_location_rolito_id` / `_pt_id`. **Esos campos no existen en el repositorio**
+(`grep -rn "gf_mp_dispatch_location"` → solo las 2 líneas del controlador, ninguna definición).
+Resultado: `AttributeError`/500 en un caso, y **409 `DISPATCH_CONFIG_MISSING` permanente** en el otro.
+El único marcador de destino que **sí** existe es `stock.location.gf_mp_dispatch_key`.
+
+### 🔴 FALTA LA RELACIÓN CANÓNICA `branch_config` → `plant_warehouse` — declarado explícitamente
+
+**No existe ninguna relación, ni directa ni indirecta, entre `gf.ops.branch_config` y la planta.**
+
+Evidencia de búsqueda ejecutada:
+1. `grep -rn "plant_warehouse_id = fields"` → **5 definiciones**, todas en modelos de producción/planta,
+   **ninguna en un modelo de sucursal**.
+2. Lectura íntegra de `gf_ops_branch_config.py` (383 líneas) → **ningún campo** apunta a planta,
+   `gf.production.*` ni `plant_warehouse_id`. Su scope es **analítico + intercompany**, con ubicaciones de
+   **sucursal** (PT, entregas, merma, móviles). Cero `stock.warehouse` en el modelo base.
+3. `_inherit = "gf.ops.branch_config"` → **2 extensiones**, ambas de **rutas** (`route_warehouse_ids` = almacén
+   de *despacho de ruta*, no planta).
+4. Cruce archivo-a-archivo (≈35 archivos que mencionan `gf.ops.branch_config` **y** `warehouse`): **ningún**
+   hit referencia `plant_warehouse_id` ni `gf.production.*`.
+5. Camino inverso: `gf_production_ops` **no depende de `gf_saleops`** en su manifiesto, y tiene **0 ocurrencias**
+   de `branch_config`.
+
+**Implicación:** no existe ninguna autoridad server-side capaz de responder *"¿este empleado o esta sucursal
+puede tocar esta planta?"*. El único puente teórico —`plant_warehouse_id.lot_stock_id.x_analytic_account_id`
+→ `branch_config.analytic_account_id`— **no está implementado en ninguna parte**; `x_analytic_account_id` solo
+se lee para **distribución analítica de costos**, nunca para autorización.
+
+⇒ **Cualquier guardia de scope planta↔sucursal hay que construirla desde cero.** Es una dependencia dura para
+todo lo que el Gerente quiera ver o hacer sobre producción, y una **decisión de modelado pendiente** (el
+candidato natural es colgarla de `gf.plant.config`, que hoy está infrautilizado).
+
+
 # H. Supervisor reusable — confirmado
 
 **Los tres contratos son sólidos y su alcance ya es de sucursal, no de equipo.** Verificación exhaustiva:
@@ -233,7 +465,13 @@ Más `MULTI_BRANCH` si el gerente pudiera tener más de una sucursal.
 
 ---
 
-# I. Iframe BI — **AISLAR ya; RETIRAR si no se cierra G001**
+# I. Iframe BI — **RETIRAR AHORA** (ruta + tarjeta)
+
+> **Actualizado por la revision.** La clasificacion de phishing queda ELIMINADA (era una afirmacion mia
+> incorrecta: Metabase rehusa ser enmarcado y el login nunca se renderiza). Veredicto final en
+> `GERENTE_ANEXO_RUNTIME.md` R5/R6: **iframe roto / no carga, sin fuga observada**. Accion: retirar ruta y
+> tarjeta **ahora** (coste ~0, no depende de ningun bloqueo); sustituir **despues** por Hoy nativo con scope
+> de sucursal server-side. Lo de abajo se conserva como detalle tecnico del iframe.
 
 - **URL fija sin parámetros**: `src={import.meta.env.VITE_METABASE_URL}`. Sin query, sin `#params`, sin JWT.
   `session` se desestructura y **nunca se usa** — variable muerta. Ni siquiera lee la sucursal del gerente.
@@ -251,68 +489,39 @@ Más `MULTI_BRANCH` si el gerente pudiera tener más de una sucursal.
 
 ---
 
-# G. M1–M7 — ¿el CORE sabe calcular por sucursal?
+# G / §7. KOLD OS M1–M7 — TABLA ÚNICA DE DISPOSICIÓN
 
-Pregunta distinta a "¿el rol está permitido?". Respuesta: **el motor sabe calcular por sucursal en 2 de 7**.
+> **Esta tabla SUSTITUYE todas las clasificaciones M1–M7 anteriores de este paquete.** Las versiones previas
+> (semáforos, "candidatos baratos", listas de pendientes) quedan **SUPERADAS**. Ningún módulo queda declarado
+> genéricamente "pendiente": cada uno tiene una disposición definitiva y una condición de cambio explícita.
 
-| Módulo | ¿Core acepta scope? | ¿El SQL lleva la dimensión? | `branch_dimension` | Clase |
-|---|---|---|---|---|
-| **M1** `gf_tower_m1` | Sí (vivo, por request) | Sí — `branch_id in [...]`, **ya acepta lista** | no declara capability; dimensión **real** | **A** (tope: 1 sucursal) |
-| **M2** | Sí (auditor externo) | Sí — **7 queries** con `effective_branch_config_id = ANY(%s)` | `False` | **B** |
-| **M3** | No | Sí, **1 query** (`GROUP BY`, sin filtro) | `True` (1 sola regla) | **A** solo M3-A-07 |
-| **M4** | No | No (la columna existe y se cuenta, nunca se agrupa) | `False` | **D** (vía **C** viable) |
-| **M5** | No | No | `False` + `warehouse_dimension False` | **D** |
-| **M6** | **Acepta pero INERTE** | No | `False` | **D + defecto** |
-| **M7** | **Acepta pero INERTE** | No | `False` | **D + defecto** |
+| Módulo | **Disposición** | Qué significa exactamente | Condición para cambiar de estado |
+|---|---|---|---|
+| **M1** | **REUSABLE** | Único con **scope por sucursal real y fail-closed server-side**. Se consume tal cual, sin corrida nueva. | — (ya cumple) |
+| **M2** | **NUEVA CORRIDA SCOPED** | Requiere una corrida nueva con scope de sucursal. **7 de sus queries ya son branch-aware; 3 son company-only.** Esas 3 son el trabajo real, no el módulo entero. | Reescribir las **3 queries company-only** y ejecutar la corrida scoped |
+| **M3** | **DTO DE SEÑALES** | No se reutiliza el módulo: se expone un **DTO de señales** derivado, con scope de sucursal server-side. | — (es la forma objetivo, no un déficit) |
+| **M4** | **NUEVA DIMENSIÓN + DTO** | Requiere **añadir la dimensión de sucursal** y publicar un DTO propio. Mayor que M2: no basta con reescribir queries. | Implementar la dimensión y el DTO |
+| **M5** | **SEÑALES, NO CONCILIACIÓN FÍSICA** | Entrega **señales** de inventario. **No responde "¿cuadra?"** (`physical_reconciliation = false`). Debe consumirse y rotularse como señal, nunca como conciliación. | Que exista conciliación física real — **fuera del alcance de este plan** |
+| **M6** | **UNAVAILABLE · y debe RECHAZAR `branch_ids`** | No disponible para Gerente. **Además debe rechazar explícitamente `branch_ids`** en lugar de aceptarlo: hoy el parámetro **altera `scope_key` pero nunca llega al SQL** ⇒ produce un resultado company-wide **etiquetado** como si fuera de sucursal. Aceptarlo en silencio es peor que no soportarlo. | Implementar el scope real en SQL **y** que el rechazo deje de ser necesario |
+| **M7** | **UNAVAILABLE** hasta **dimensión + COGS + trazabilidad** | No disponible para Gerente. Requiere las **tres** cosas, no una: dimensión de sucursal, COGS, y trazabilidad del cálculo. | Las tres condiciones cumplidas y verificadas |
 
-## 🔴 Defecto nuevo: "scope fantasma" en M6 y M7
-`branch_ids` entra por config, se emite en el `scope` del reporte y **altera el `scope_key`** — pero es **imposible de
-enlazar al SQL**: `_parameter_value` lanza excepción si se pide (`kold_os_m6_audit_core.py:506-517`,
-`kold_os_m7_audit_core.py:757-766`) y ninguna query lo declara.
+## El defecto que obliga al rechazo explícito en M6 (y que afecta a M7)
 
-**Consecuencia:** fijar `KOLD_OS_M6_BRANCH_IDS=7` produce un `scope_key` **distinto** con métricas **idénticas** a la
-corrida global. El datastore las guardaría como scopes separados: dos "sucursales" con cifras globales cada una y un
-lifecycle que no cruza. **Ningún test cubre un valor no vacío.** Es peor que no tener el parámetro.
+**"Scope fantasma":** `branch_ids` **modifica `scope_key`** —es decir, cambia la identidad declarada de la
+corrida— **pero no participa en el SQL**. El resultado es company-wide y viaja etiquetado como si estuviera
+acotado a una sucursal.
 
-**Prueba de que los autores lo sabían:** el test de M7 enumera las dimensiones que deben cambiar el fingerprint y
-**excluye `branch_ids` deliberadamente** (`test_kold_os_m7_core.py:237-248`: 8 campos variables, 7 variantes).
+Esto es más grave que "no soportado": un consumidor que confíe en `scope_key` creerá que recibió datos de su
+sucursal. **Por eso la disposición no es "ignorar `branch_ids`" sino "rechazarlo"** — fail-closed, con un código
+de error explícito. Un parámetro que miente sobre el alcance debe fallar, no degradar en silencio.
 
-**Además, en M6 la ironía es exacta:** `branch_close_metrics` lee `gf_branch_daily_close` — la tabla **de cierre por
-sucursal** — y la colapsa entera por compañía. Cero `GROUP BY` en todo el manifiesto.
+## Nota de método sobre esta tabla
 
-## 🟢 M2 es la ganancia más barata del conjunto (capacidad real oculta)
-El motor **ya filtra por sucursal** en 7 queries, pero el consumidor declara `branch_dimension: False` y
-**producción rechaza cualquier `branch_ids` por una política de una línea**
-(`kold_tower_m2_audit_core.py:150-153`). Es política, no modelado.
-**Caveat honesto:** 3 queries siguen siendo `scope_policy="company"` (forecast, history, snapshot) ⇒ una corrida por
-sucursal devolvería números **globales** para esas tres bajo un `scope_key` que dice "sucursal X". Hay que
-scopearlas o marcarlas como no-atribuibles antes de exponerlas.
+Las disposiciones de M2 y M4 se apoyan en el conteo de queries branch-aware vs company-only. Ese conteo procede
+de la auditoría estática previa **[E]** y **no fue re-verificado contra `244dbfd9`**. Antes de planificar el
+trabajo de M2, reconfirmar el reparto 7/3. La disposición cualitativa (M2 más barato que M4) es robusta; el
+número exacto de queries no.
 
-## M1: qué falta exactamente para N sucursales
-El dominio **ya no requiere cambio** (`branch_id in [...]`, y las filas traen `branch_name`). Solo hay que quitar el
-fail-closed v1 (`gf_tower_m1_service.py:148-150`) y añadir el rol. **Pero el bloqueador real está aguas arriba:**
-`gf_ops_branch_config.py:337-351` prohíbe que un empleado esté activo en más de una sucursal — hoy **N sucursales
-ni siquiera es expresable en datos**.
-
-## M7 sin COGS / M5 sin conciliación física
-- **M7: el ingreso NO es scopeable hoy.** `invoice_revenue_by_currency` filtra por company y agrupa por moneda; no
-  hay columna de sucursal ni en la query ni en su `required_schema`. Scoparlo exige **modificar el manifiesto**
-  (cambio de core), no correr scoped. Y hay una **capability que sobre-promete**: `branch_cost_observable` se deriva
-  de "existe alguna línea de gasto contabilizada", mientras `branch_dimension: False` — el nombre promete una lectura
-  por sucursal que el módulo no puede producir.
-- **M5: `physical_reconciliation=False` es un veredicto de disponibilidad de dato, no de scope** — poner scope por
-  almacén **no lo desbloquea**. Lo que sí sería atribuible (la llave de join ya existe y está declarada en esquema):
-  refill por almacén de origen, cargas/pickings/movimientos por sucursal vía `gf_route_plan`, devoluciones y carga
-  suplementaria, y la señal cruda **siempre etiquetada como señal, nunca como cuadre**. Es **D y no B** porque exige
-  tocar el manifiesto sellado.
-
-## Discrepancias doc↔código a corregir
-1. **M6/M7 scope fantasma** (arriba): eliminar el parámetro, rechazarlo si viene no vacío, o implementar la dimensión.
-2. **M7 `branch_cost_observable`** afirma observabilidad de costo por sucursal sin dimensión de sucursal.
-3. **M3 doc sobredimensiona**: el contrato dice "reglas A" (plural); el código emite por sucursal **solo M3-A-07**.
-4. **M2 capacidad oculta**: el motor puede, el consumidor lo niega y producción lo bloquea.
-
----
 
 # L. Plan de sprints actualizado + orden de PRs
 
