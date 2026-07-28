@@ -71,6 +71,30 @@ export const DESKTOP_RAIL_WIDTH = 232
 export const DESKTOP_RAIL_WIDTH_COMPACT = 76
 export const MOBILE_NAV_HEIGHT = 64
 
+// Los cortes POS no heredan acceso de roles ni de flags cacheados en la sesión.
+// Solo una capacidad booleana propia, publicada por el backend autenticado,
+// habilita su navegación. Evitamos getters y propiedades heredadas para que un
+// objeto manipulado no convierta valores truthy en permisos.
+function ownCapabilityTrue(capabilities, key) {
+  if (!capabilities || typeof capabilities !== 'object' || Array.isArray(capabilities)) return false
+  const descriptor = Object.getOwnPropertyDescriptor(capabilities, key)
+  return Boolean(
+    descriptor
+    && Object.prototype.hasOwnProperty.call(descriptor, 'value')
+    && descriptor.value === true,
+  )
+}
+
+export function cashShiftAccessMode(capabilities = {}) {
+  if (ownCapabilityTrue(capabilities, 'cashShiftManage')) return 'manage'
+  if (ownCapabilityTrue(capabilities, 'cashShiftAuthorize')) return 'authorize'
+  return 'denied'
+}
+
+export function isCashShiftNavigationVisible(capabilities = {}) {
+  return cashShiftAccessMode(capabilities) !== 'denied'
+}
+
 // Ancho del rail según viewport (AppShell reserva exactamente este espacio).
 export function railWidthFor(width) {
   if (!Number.isFinite(width) || width < DESKTOP_MIN) return 0

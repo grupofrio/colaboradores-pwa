@@ -13,6 +13,8 @@ import { TOKENS, getTypo } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import { useSession } from '../../../App'
 import { getEffectiveJobKeys } from '../../../lib/roleContext'
+import { isCashShiftNavigationVisible } from '../../../lib/navModel.js'
+import { BACKEND_CAPS } from '../adminService.js'
 import CompanySelector from './CompanySelector'
 import ActivityFeed from './ActivityFeed'
 
@@ -34,7 +36,7 @@ export const NAV_ITEMS = [
   // Aprobar gastos: SOLO gerente/dirección (auxiliar_admin NO aprueba — ver guía §2d)
   { id: 'gastos-aprobar', label: 'Aprobar gastos', route: '/admin/gastos/aprobar',     roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
   { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'cierre',       label: 'Cierre del día',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'cierre',       label: 'Cortes de caja',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
   // ── Restringidos a gerente / dirección ──────────────────────────────────
   { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
   { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
@@ -47,14 +49,20 @@ export const NAV_ITEMS = [
 
 /** Filtra NAV_ITEMS por el rol actual. Export para tests y HubV2. */
 // eslint-disable-next-line react-refresh/only-export-components
-export function navItemsForRole(role) {
+export function navItemsForRole(role, capabilities = {}) {
   if (!role) return []
-  return NAV_ITEMS.filter(item => item.roles.includes(role))
+  return NAV_ITEMS.filter((item) => (
+    item.roles.includes(role)
+    && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
+  ))
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function navItemsForRoles(roles = []) {
-  return NAV_ITEMS.filter((item) => item.roles.some((role) => roles.includes(role)))
+export function navItemsForRoles(roles = [], capabilities = {}) {
+  return NAV_ITEMS.filter((item) => (
+    item.roles.some((role) => roles.includes(role))
+    && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
+  ))
 }
 
 export default function AdminShell({
@@ -68,7 +76,7 @@ export default function AdminShell({
   hideNavigation = false,
 }) {
   const navigate = useNavigate()
-  const { sucursal, employeeName } = useAdmin()
+  const { sucursal, employeeName, capsReady } = useAdmin()
   const { session } = useSession()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -80,8 +88,11 @@ export default function AdminShell({
 
   // Filtrar módulos según rol del usuario
   const visibleNavItems = useMemo(
-    () => navItemsForRoles(getEffectiveJobKeys(session)),
-    [session],
+    () => navItemsForRoles(
+      getEffectiveJobKeys(session),
+      capsReady ? BACKEND_CAPS : {},
+    ),
+    [capsReady, session],
   )
 
   useEffect(() => {
