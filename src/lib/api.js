@@ -2538,6 +2538,25 @@ async function directAdmin(method, path, body) {
     return odooHttp('GET', cleanPath, filters)
   }
 
+  if (cleanPath === '/pwa-admin/iguala-sales-tickets' && method === 'POST') {
+    return NO_DIRECT
+  }
+
+  // Cualquier otro /pwa-admin/* va DIRECTO a Odoo — n8n no participa en
+  // este flujo. Si el endpoint no existe en Odoo devolvera 404 con un
+  // mensaje claro, no el "webhook no registrado" de n8n.
+  if (cleanPath.startsWith('/pwa-admin/')) {
+    const queryStr = path.includes('?') ? path.split('?')[1] : ''
+    const queryObj = {}
+    if (queryStr) {
+      for (const [k, v] of new URLSearchParams(queryStr)) queryObj[k] = v
+    }
+    if (method === 'GET') {
+      return odooHttp('GET', cleanPath, queryObj)
+    }
+    return odooJson(cleanPath, body || {})
+  }
+
   return NO_DIRECT
 }
 

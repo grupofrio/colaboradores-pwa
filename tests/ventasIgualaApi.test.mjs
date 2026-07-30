@@ -85,12 +85,12 @@ test('routes Iguala sales-history GET to Odoo with only its allowlisted filters'
   assert.equal(calls[0].options.headers['X-GF-Employee-Token'], 'employee-token-test')
 })
 
-test('does not route Iguala sales-history POST requests directly to Odoo', async () => {
+test('does not route Iguala sales-tickets POST requests directly to Odoo', async () => {
   const calls = collectFetchCalls()
 
-  await api('POST', '/pwa-admin/iguala-sales-history', { ticket_id: 1 })
+  await api('POST', '/pwa-admin/iguala-sales-tickets', { order_ids: [1] })
 
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].url, '/api-n8n/pwa-admin/iguala-sales-history')
+  assert.equal(calls[0].url, '/api-n8n/pwa-admin/iguala-sales-tickets')
   assert.equal(calls[0].url.includes('/odoo-api'), false)
 })
