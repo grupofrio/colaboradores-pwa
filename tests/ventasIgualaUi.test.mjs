@@ -40,6 +40,35 @@ test('batch print styling hides history UI and exposes only its sibling wrapper 
   assert.match(siblingContract, /ventas-iguala-screen[\s\S]*<\/div><div className="gf-batch-ticket-print"/)
 })
 
+test('ScreenVentasIguala is a standalone CDMX sales history with selection and batch-print workflow', () => {
+  const screen = readSrc('modules/ventas-iguala/ScreenVentasIguala.jsx')
+
+  assert.match(screen, /import TicketDocument from ['"]\.\/TicketDocument['"]/)
+  assert.match(screen, /getIgualaSalesHistory/)
+  assert.match(screen, /getIgualaSalesTickets/)
+  assert.match(screen, /toggleOrderSelection/)
+  assert.match(screen, /togglePageSelection/)
+  assert.match(screen, /selectedAmount/)
+  assert.match(screen, /MAX_SELECTED_TICKETS/)
+  assert.match(screen, /America\/Mexico_City/)
+  assert.match(screen, /setTimeout\([^,]+,\s*300\)/)
+  assert.match(screen, /requestSeq\.current/)
+  assert.match(screen, /className="ventas-iguala-screen"/)
+  assert.match(screen, /className="gf-batch-ticket-print"/)
+  assert.match(screen, /Iguala/)
+  assert.match(screen, /Responsable/)
+  assert.match(screen, /Líneas/)
+  assert.match(screen, /Pago/)
+  assert.match(screen, /Reintentar/)
+  assert.match(screen, /window\.print\(\)/)
+  assert.match(screen, /disabled=\{[^}]*filtersUpdating[^}]*\}/)
+  assert.ok(!/AdminShell/.test(screen), 'screen does not mount an admin shell')
+  assert.ok(!/<\w*Provider\b/.test(screen), 'screen does not mount its own provider')
+
+  const siblingContract = '<><section className="ventas-iguala-screen"></section><div className="gf-batch-ticket-print"></div></>'
+  assert.match(siblingContract, /ventas-iguala-screen[\s\S]*<\/section><div className="gf-batch-ticket-print"/)
+})
+
 test('ScreenTicket delegates its body to TicketDocument while retaining its cancellation flow', () => {
   const screen = readSrc('modules/admin/ScreenTicket.jsx')
 
