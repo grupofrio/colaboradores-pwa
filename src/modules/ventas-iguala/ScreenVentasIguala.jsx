@@ -12,6 +12,7 @@ import {
   toggleOrderSelection,
   togglePageSelection,
 } from './salesHistoryState.js'
+import { logScreenError } from '../shared/logScreenError.js'
 
 const CDMX_TIME_ZONE = 'America/Mexico_City'
 
@@ -49,14 +50,36 @@ function paymentText(order) {
   return payment.label || payment.method || '—'
 }
 
-function lineText(order) {
+function OrderLines({ order }) {
   const lines = Array.isArray(order?.lines) ? order.lines : []
-  if (!lines.length) return 'Sin líneas disponibles'
-  return lines.map((line) => `${line.quantity} × ${line.product_name || 'Producto'}`).join(', ')
+  if (!lines.length) return <span>Sin líneas disponibles</span>
+  return (
+    <details className="vi-order-lines">
+      <summary>{lines.length} {lines.length === 1 ? 'línea' : 'líneas'}</summary>
+      <ul>{lines.map((line, index) => <li key={`${line.product_id || line.product_name || 'line'}-${index}`}>
+        <span><strong>Producto:</strong> {line.product_name || 'Producto'}</span>
+        <span><strong>Cantidad:</strong> {line.quantity}</span>
+        <span><strong>Precio unitario:</strong> {money(line.unit_price, order.currency)}</span>
+        <span><strong>Total:</strong> {money(line.line_total, order.currency)}</span>
+      </li>)}</ul>
+    </details>
+  )
 }
 
 function errorMessage(error, fallback) {
   return typeof error?.message === 'string' && error.message.trim() ? error.message.trim() : fallback
+}
+
+function getErrorState(error, fallback) {
+  const code = String(error?.code || '').trim().toLowerCase()
+  const status = Number(error?.status ?? error?.response?.status)
+  if (status === 401 || status === 403 || ['access_denied', 'forbidden', 'not_authorized', 'unauthorized'].includes(code)) {
+    return { title: 'Acceso denegado', message: 'No tienes permiso para consultar las ventas de Iguala.', retryable: false }
+  }
+  if (code === 'invalid_batch_ticket_contract') {
+    return { title: 'Datos no válidos', message: 'Los datos de los tickets no cumplen el contrato de impresión.', retryable: false }
+  }
+  return { title: 'No pudimos completar la operación', message: errorMessage(error, fallback), retryable: true }
 }
 
 export default function ScreenVentasIguala() {
@@ -68,18 +91,24 @@ export default function ScreenVentasIguala() {
   const [page, setPage] = useState(1)
   const [history, setHistory] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [errorState, setErrorState] = useState(null)
   const [retryKey, setRetryKey] = useState(0)
   const [selectedOrders, setSelectedOrders] = useState([])
   const [printableTickets, setPrintableTickets] = useState([])
   const [printing, setPrinting] = useState(false)
-  const [printError, setPrintError] = useState('')
+  const [printError, setPrintError] = useState(null)
   const requestSeq = useRef(0)
+  const appliedSearchRef = useRef('')
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setSearch(searchInput.trim())
-      setPage(1)
+      const nextSearch = searchInput.trim()
+      if (appliedSearchRef.current !== nextSearch) {
+        appliedSearchRef.current = nextSearch
+        setSelectedOrders([])
+        setSearch(nextSearch)
+        setPage(1)
+      }
     }, 300)
     return () => window.clearTimeout(timer)
   }, [searchInput])
@@ -90,15 +119,16 @@ export default function ScreenVentasIguala() {
 
     async function loadHistory() {
       setLoading(true)
-      setError('')
+      setErrorState(null)
       try {
         const nextHistory = await getIgualaSalesHistory({ dateFrom, dateTo, search, page })
         if (!active || currentRequest !== requestSeq.current) return
         setHistory(nextHistory)
       } catch (loadError) {
         if (!active || currentRequest !== requestSeq.current) return
+        logScreenError('ScreenVentasIguala', 'loadHistory', loadError)
         setHistory(null)
-        setError(errorMessage(loadError, 'No pudimos cargar las ventas de Iguala.'))
+        setErrorState(getErrorState(loadError, 'No pudimos cargar las ventas de Iguala.'))
       } finally {
         if (active && currentRequest === requestSeq.current) setLoading(false)
       }
@@ -120,7 +150,9 @@ export default function ScreenVentasIguala() {
   const selectionAtLimit = isSelectionAtLimit(selectedOrders)
   const canPrint = selectedOrders.length > 0 && !printing && !filtersUpdating
 
-  function changeDate(setter, nextValue) {
+  function changeDate(setter, nextValue, currentValue) {
+    if (nextValue === currentValue) return
+    setSelectedOrders([])
     setter(nextValue)
     setPage(1)
   }
@@ -136,13 +168,14 @@ export default function ScreenVentasIguala() {
   async function handlePrint() {
     if (!canPrint) return
     setPrinting(true)
-    setPrintError('')
+    setPrintError(null)
     try {
       const tickets = await getIgualaSalesTickets(selectedOrders.map(({ id }) => id))
       setPrintableTickets(tickets)
-      window.setTimeout(() => window.print(), 0)
+      window.requestAnimationFrame(() => window.print())
     } catch (nextPrintError) {
-      setPrintError(errorMessage(nextPrintError, 'No pudimos preparar los tickets seleccionados.'))
+      logScreenError('ScreenVentasIguala', 'prepareTickets', nextPrintError)
+      setPrintError(getErrorState(nextPrintError, 'No pudimos preparar los tickets seleccionados.'))
     } finally {
       setPrinting(false)
     }
@@ -161,7 +194,7 @@ export default function ScreenVentasIguala() {
           .vi-field { display: grid; gap: 5px; font-size: .86rem; font-weight: 600; color: #46546a; }
           .vi-field input { min-height: 40px; border: 1px solid #bfcbd9; border-radius: 9px; padding: 0 10px; font: inherit; color: #172033; background: #fff; }
           .vi-search { min-width: min(100%, 280px); flex: 1; }
-          .vi-selection { justify-content: space-between; flex-wrap: wrap; margin: 16px 0; padding: 12px 16px; border-radius: 12px; background: #172f50; color: #fff; }
+          .vi-selection { position: fixed; right: 0; bottom: 0; left: 0; z-index: 10; justify-content: space-between; flex-wrap: wrap; margin: 0; padding: 12px max(16px, calc((100vw - 1288px) / 2)); background: #172f50; color: #fff; box-shadow: 0 -3px 16px rgba(23, 47, 80, .22); }
           .vi-selection p { margin: 0; }
           .vi-total { font-weight: 800; }
           .vi-button { min-height: 40px; border: 0; border-radius: 9px; padding: 0 14px; background: #0877c9; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
@@ -173,6 +206,9 @@ export default function ScreenVentasIguala() {
           .vi-table th { background: #f7f9fb; color: #4b5a70; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
           .vi-table tr:last-child td { border-bottom: 0; }
           .vi-lines { max-width: 280px; color: #4b5a70; font-size: .8rem; }
+          .vi-order-lines summary { cursor: pointer; color: #075ea9; }
+          .vi-order-lines ul { display: grid; gap: 5px; margin: 8px 0 0; padding: 0; list-style: none; }
+          .vi-order-lines li { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
           .vi-cards { display: none; gap: 10px; }
           .vi-card { padding: 14px; border: 1px solid #dce3ec; border-radius: 12px; background: #fff; }
           .vi-card-head, .vi-card-row { display: flex; justify-content: space-between; gap: 12px; }
@@ -189,15 +225,15 @@ export default function ScreenVentasIguala() {
             <h1 id="ventas-iguala-title">Historial de ventas</h1>
             <p>Consulta e impresión de tickets de ventas de la sucursal.</p>
           </div>
-          <span className="vi-label">Iguala · {CDMX_TIME_ZONE}</span>
+          <span className="vi-label">Sucursal fija: Iguala · {CDMX_TIME_ZONE}</span>
         </header>
 
         <div className="vi-toolbar" aria-label="Filtros de historial">
           <label className="vi-field">Desde
-            <input aria-label="Fecha inicial" type="date" value={dateFrom} onChange={(event) => changeDate(setDateFrom, event.target.value)} />
+            <input aria-label="Fecha inicial" type="date" value={dateFrom} onChange={(event) => changeDate(setDateFrom, event.target.value, dateFrom)} />
           </label>
           <label className="vi-field">Hasta
-            <input aria-label="Fecha final" type="date" value={dateTo} onChange={(event) => changeDate(setDateTo, event.target.value)} />
+            <input aria-label="Fecha final" type="date" value={dateTo} onChange={(event) => changeDate(setDateTo, event.target.value, dateTo)} />
           </label>
           <label className="vi-field vi-search">Cliente o folio
             <input aria-label="Buscar cliente o folio" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Nombre del cliente o folio" />
@@ -208,21 +244,22 @@ export default function ScreenVentasIguala() {
           <p><strong>{selectedOrders.length}</strong> de {MAX_SELECTED_TICKETS} tickets seleccionados</p>
           <p className="vi-total">Total exacto: {money(selectedTotal)}</p>
           <button className="vi-button" type="button" disabled={!canPrint || filtersUpdating} onClick={handlePrint}>
-            {printing ? 'Preparando tickets…' : 'Imprimir seleccionados'}
+            {printing ? 'Preparando tickets…' : 'Imprimir tickets'}
           </button>
         </div>
         {filtersUpdating && !loading && <p aria-live="polite">Actualizando filtros…</p>}
-        {printError && <p className="vi-error" role="alert">{printError}</p>}
+        {printError && <p className="vi-error" role="alert"><strong>{printError.title}.</strong> {printError.message}</p>}
 
         {loading && <div className="vi-state" aria-live="polite">Cargando ventas de Iguala…</div>}
-        {!loading && error && (
+        {!loading && errorState && (
           <div className="vi-state" role="alert">
-            <p>{error}</p>
-            <button className="vi-button" type="button" onClick={() => setRetryKey((key) => key + 1)}>Reintentar</button>
+            <h2>{errorState.title}</h2>
+            <p>{errorState.message}</p>
+            {errorState.retryable && <button className="vi-button" type="button" onClick={() => setRetryKey((key) => key + 1)}>Reintentar</button>}
           </div>
         )}
-        {!loading && !error && orders.length === 0 && <div className="vi-state">No hay ventas para los filtros seleccionados.</div>}
-        {!loading && !error && orders.length > 0 && (
+        {!loading && !errorState && orders.length === 0 && <div className="vi-state">No se encontraron ventas para los filtros aplicados.</div>}
+        {!loading && !errorState && orders.length > 0 && (
           <>
             <div className="vi-table-wrap">
               <table className="vi-table">
@@ -237,7 +274,7 @@ export default function ScreenVentasIguala() {
                     <td><strong>{order.folio || `#${order.id}`}</strong><br /><small>{dateTime(order.ordered_at)}</small></td>
                     <td>{order.customer?.name || 'Público general'}</td>
                     <td>{order.responsible_employee?.name || '—'}</td>
-                    <td className="vi-lines">{lineText(order)}</td>
+                    <td className="vi-lines"><OrderLines order={order} /></td>
                     <td>{paymentText(order)}</td>
                     <td><strong>{money(order.amount_total, order.currency)}</strong></td>
                   </tr>
@@ -249,9 +286,10 @@ export default function ScreenVentasIguala() {
               return <article className="vi-card" key={order.id}>
                 <div className="vi-card-head"><label><input aria-label={`Seleccionar ${order.folio || order.id}`} type="checkbox" checked={checked} disabled={selectionAtLimit && !checked} onChange={() => toggleOrder(order)} /> {order.folio || `#${order.id}`}</label><strong>{money(order.amount_total, order.currency)}</strong></div>
                 <div className="vi-card-row"><span>Cliente</span><strong>{order.customer?.name || 'Público general'}</strong></div>
+                <div className="vi-card-row"><span>Fecha (CDMX)</span><strong>{dateTime(order.ordered_at)}</strong></div>
                 <div className="vi-card-row"><span>Responsable</span><strong>{order.responsible_employee?.name || '—'}</strong></div>
                 <div className="vi-card-row"><span>Pago</span><strong>{paymentText(order)}</strong></div>
-                <div className="vi-card-row"><span>Líneas</span><strong>{lineText(order)}</strong></div>
+                <div className="vi-card-row"><span>Líneas</span><OrderLines order={order} /></div>
               </article>
             })}</div>
             <nav className="vi-page" aria-label="Paginación">
