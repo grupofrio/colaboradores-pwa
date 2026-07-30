@@ -78,7 +78,7 @@ test('ScreenVentasIguala protects an applied filter change and fixes the batch a
   assert.match(screen, /\.vi-selection\s*\{[^}]*bottom:\s*0/, 'selection summary is fixed to the viewport bottom')
   assert.match(screen, /Sucursal fija: Iguala/)
   assert.match(screen, /Imprimir tickets/)
-  assert.match(screen, /No se encontraron ventas para los filtros aplicados\./)
+  assert.match(screen, /No hay ventas de Iguala con estos filtros\./)
 })
 
 test('ScreenVentasIguala exposes full sale details and explicit operational error states', () => {

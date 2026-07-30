@@ -258,7 +258,7 @@ export default function ScreenVentasIguala() {
             {errorState.retryable && <button className="vi-button" type="button" onClick={() => setRetryKey((key) => key + 1)}>Reintentar</button>}
           </div>
         )}
-        {!loading && !errorState && orders.length === 0 && <div className="vi-state">No se encontraron ventas para los filtros aplicados.</div>}
+        {!loading && !errorState && orders.length === 0 && <div className="vi-state">No hay ventas de Iguala con estos filtros.</div>}
         {!loading && !errorState && orders.length > 0 && (
           <>
             <div className="vi-table-wrap">
