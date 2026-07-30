@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 
-process.env.VITE_IGUALA_SALES_EMPLOYEE_IDS = '717'
+process.env.VITE_IGUALA_SALES_EMPLOYEE_IDS = '717,718'
 
 const {
   parseAllowedEmployeeIds,
@@ -21,6 +21,11 @@ const appSrc = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 
 const validSession = {
   employee_id: 717,
+  session_token: 'authenticated-session-token',
+}
+
+const sugeySession = {
+  employee_id: 718,
   session_token: 'authenticated-session-token',
 }
 
@@ -90,6 +95,15 @@ test('a configured session sees ventas_iguala through the session-aware nav mode
   assert.equal(typeof ACCESS_POLICY_RESOLVERS.iguala_sales, 'function')
   assert.ok(getVisibleModulesForSession(validSession).some((module) => module.id === 'ventas_iguala'))
   assert.equal(getModuleEntryDecisionForSession(VENTAS_IGUALA, validSession).type, 'direct')
+})
+
+test('Sugey has configured Igualas sales access and sees ventas_iguala directly', () => {
+  assert.deepEqual(
+    readConfiguredVentasIgualaAccessForSession(sugeySession),
+    { level: 'iguala_sales', reason: 'configured_employee' },
+  )
+  assert.ok(getVisibleModulesForSession(sugeySession).some((module) => module.id === 'ventas_iguala'))
+  assert.equal(getModuleEntryDecisionForSession(VENTAS_IGUALA, sugeySession).type, 'direct')
 })
 
 test('an unconfigured valid session does not see ventas_iguala', () => {
