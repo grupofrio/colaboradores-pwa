@@ -133,7 +133,6 @@ test('wrappers de mutación envían allowlists exactas y jamás scope ni totales
     denominations: [{ denomination: '500', count: 2, subtotal: 1000 }],
     adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20, total: 20 }],
     notes: 'Arqueo revisado',
-    evidenceToken: 'ev-close',
     nextOpeningFund: 300,
     idempotencyKey: 'close-key',
     ...forbidden,
@@ -142,7 +141,6 @@ test('wrappers de mutación envían allowlists exactas y jamás scope ni totales
   await apiModule.recloseCashShift({
     ...closeInput,
     expectedVersion: 1,
-    evidenceToken: 'ev-reclose',
     nextOpeningFund: 999,
     idempotencyKey: 'reclose-key',
   })
@@ -165,14 +163,14 @@ test('wrappers de mutación envían allowlists exactas y jamás scope ni totales
       shift_id: 41, expected_version: 0,
       denominations: [{ denomination: '500', count: 2 }],
       adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20 }],
-      notes: 'Arqueo revisado', evidence_token: 'ev-close', next_opening_fund: 300,
+      notes: 'Arqueo revisado', next_opening_fund: 300,
       idempotency_key: 'close-key',
     },
     {
       shift_id: 41, expected_version: 1,
       denominations: [{ denomination: '500', count: 2 }],
       adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20 }],
-      notes: 'Arqueo revisado', evidence_token: 'ev-reclose',
+      notes: 'Arqueo revisado',
       idempotency_key: 'reclose-key',
     },
     {
@@ -192,34 +190,7 @@ test('wrappers de mutación envían allowlists exactas y jamás scope ni totales
   ])
 })
 
-test('evidence cash_shift conserva contexto, turno, versión, propósito, archivo y MIME exactos', async () => {
-  const { apiModule } = await loadRuntime()
-  const calls = installSuccessApi()
-
-  await apiModule.uploadCashShiftEvidence({
-    shiftId: 41,
-    expectedVersion: 1,
-    purpose: 'reclose',
-    filename: 'arqueo.webp',
-    fileBase64: 'UklGRg==',
-    mimeType: 'image/webp',
-    attachmentId: 999,
-    companyId: 34,
-  })
-
-  assert.equal(calls[0].url, '/odoo-api/pwa/evidence/upload')
-  assert.deepEqual(calls[0].payload.params, {
-    context: 'cash_shift',
-    shift_id: 41,
-    expected_version: 1,
-    purpose: 'reclose',
-    filename: 'arqueo.webp',
-    file_base64: 'UklGRg==',
-    mime_type: 'image/webp',
-  })
-})
-
-test('close, reclose y evidence validan localmente la versión semántica exacta', async () => {
+test('close y reclose validan localmente la versión semántica exacta', async () => {
   const { apiModule } = await loadRuntime()
   const calls = installSuccessApi()
   const closeDraft = {
@@ -227,7 +198,6 @@ test('close, reclose y evidence validan localmente la versión semántica exacta
     denominations: [],
     adjustments: [],
     notes: '',
-    evidenceToken: '',
     nextOpeningFund: 300,
     idempotencyKey: 'semantic-version',
   }
@@ -239,31 +209,7 @@ test('close, reclose y evidence validan localmente la versión semántica exacta
     ...closeDraft,
     expectedVersion: 0,
   }), TypeError)
-  const evidence = {
-    shiftId: 41,
-    filename: 'arqueo.webp',
-    fileBase64: 'UklGRg==',
-    mimeType: 'image/webp',
-  }
-  await assert.rejects(async () => apiModule.uploadCashShiftEvidence({
-    ...evidence,
-    purpose: 'close',
-    expectedVersion: 1,
-  }), TypeError)
-  await assert.rejects(async () => apiModule.uploadCashShiftEvidence({
-    ...evidence,
-    purpose: 'reclose',
-    expectedVersion: 0,
-  }), TypeError)
   assert.equal(calls.length, 0)
-
-  await apiModule.uploadCashShiftEvidence({
-    ...evidence,
-    purpose: 'close',
-    expectedVersion: 0,
-  })
-  assert.equal(calls.length, 1)
-  assert.equal(calls[0].payload.params.expected_version, 0)
 })
 
 test('capacidades de cash shift fallan cerradas incluso tras respuestas parciales', async () => {

@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import React from 'react'
 import TestRenderer, { act } from 'react-test-renderer'
 import { createServer } from 'vite'
+import { normalizeCashShift } from '../src/modules/admin/cashShiftModel.js'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -383,7 +384,7 @@ test('allows only the authoritative active shift date when it is still civilly f
   )
 })
 
-test('print view includes exact snapshot audit fields and obeys printable gate', async () => {
+test('print view preserves historical evidence and prints new photo-free versions', async () => {
   vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
   const { default: PrintView } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftPrintView.jsx')
   const onPrintCalls = []
@@ -401,11 +402,35 @@ test('print view includes exact snapshot audit fields and obeys printable gate',
     'CT/POS/2026/00041', 'Angy', 'Fecha operativa', 'Noche', 'America/Tijuana',
     'Pagos', 'Productos', 'Gastos', 'Cancelaciones', 'Ventas y tickets', 'Ajustes',
     'Fondo inicial', 'Denominación', 'Físico', 'Esperado', 'Diferencia', 'Sobrante revisado',
-    'ir.attachment:541', 'sha256-41', 'Autorizaciones', 'Versión 1',
+    'Evidencia histórica del corte', 'ir.attachment:541', 'sha256-41', 'arqueo.jpg',
+    'Autorizaciones', 'Versión 1',
   ]) assert.match(text, new RegExp(expected))
   const printButton = renderer.root.findAllByType('button').find((item) => textOf(item) === 'Imprimir')
   await act(async () => printButton.props.onClick())
   assert.equal(onPrintCalls.length, 1)
+
+  const photoFreeRaw = fullShift({ id: 44, type: 'day', versionId: 704 })
+  photoFreeRaw.evidence = false
+  photoFreeRaw.evidence_present = false
+  photoFreeRaw.responsible = {
+    employee_id: 7,
+    employee_name: 'Angy por token de empleado',
+    user_id: false,
+    user_name: '',
+  }
+  const photoFreeShift = normalizeCashShift(photoFreeRaw)
+  assert.equal(photoFreeShift.printable, true)
+  await act(async () => renderer.update(React.createElement(PrintView, {
+    cashShift: photoFreeShift,
+    onPrint: () => onPrintCalls.push('photo-free'),
+  })))
+  const photoFreeText = renderedText(renderer)
+  assert.match(photoFreeText, /Responsable: Angy por token de empleado/)
+  assert.equal(
+    renderer.root.findAllByType('p').filter((item) => textOf(item) === 'Sin evidencia adjunta').length,
+    1,
+  )
+  assert.equal(renderer.root.findAllByType('button').some((item) => textOf(item) === 'Imprimir'), true)
 
   await act(async () => renderer.update(React.createElement(PrintView, {
     cashShift: { ...model.normalizeCashShiftHistory(historyPayload(), '2026-07-27').shifts[0], printable: false },

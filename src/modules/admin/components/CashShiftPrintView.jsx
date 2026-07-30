@@ -45,7 +45,7 @@ export default function CashShiftPrintView({ cashShift, onPrint = defaultPrint }
     return (
       <section className="cash-shift-card" role="status">
         <h2>Reporte no imprimible</h2>
-        <p>El backend no confirmó una fotografía cerrada y versionada para imprimir.</p>
+        <p>El backend no confirmó una versión cerrada e imprimible.</p>
       </section>
     )
   }
@@ -67,7 +67,7 @@ export default function CashShiftPrintView({ cashShift, onPrint = defaultPrint }
         <div><dt>Turno</dt><dd>{shiftLabel(cashShift.shift.type)}</dd></div>
         <div><dt>Periodo real</dt><dd>{cashShift.period.openedAt} → {cashShift.period.closedAt || 'Abierto'}</dd></div>
         <div><dt>Zona horaria</dt><dd>{cashShift.period.timezone}</dd></div>
-        <div><dt>Fotografía tomada</dt><dd>{cashShift.closedOrReclosedAt || 'Sin cierre'}</dd></div>
+        <div><dt>Cierre registrado</dt><dd>{cashShift.closedOrReclosedAt || 'Sin cierre'}</dd></div>
         <div><dt>Estado</dt><dd>{stateLabel(cashShift.shift.state)}</dd></div>
         <div><dt>Versión</dt><dd>Versión {cashShift.versionNumber}</dd></div>
       </dl>
@@ -137,8 +137,7 @@ export default function CashShiftPrintView({ cashShift, onPrint = defaultPrint }
       </section>
 
       <section className="cash-shift-print-section">
-        <h3>Evidencia</h3>
-        <p>Presencia confirmada por backend: {cashShift.evidencePresent ? 'Sí' : 'No'}.</p>
+        <h3>{cashShift.evidence ? 'Evidencia histórica del corte' : 'Evidencia del corte'}</h3>
         {cashShift.evidence ? (
           <dl className="cash-shift-period-grid cash-shift-print-summary">
             <div><dt>Presencia</dt><dd>Adjunta</dd></div>
@@ -146,7 +145,7 @@ export default function CashShiftPrintView({ cashShift, onPrint = defaultPrint }
             <div><dt>Digest</dt><dd>{cashShift.evidence.digest}</dd></div>
             <div><dt>Archivo</dt><dd>{cashShift.evidence.name}</dd></div>
           </dl>
-        ) : <p>Sin evidencia adjunta.</p>}
+        ) : <p>Sin evidencia adjunta</p>}
       </section>
 
       <AuditTable title="Autorizaciones" headers={['Nivel', 'Actor', 'Fecha']}>

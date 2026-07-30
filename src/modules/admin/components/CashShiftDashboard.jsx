@@ -4,11 +4,9 @@ import {
   getCashShiftDetail,
   getCashShiftHistory,
   previewCashShift,
-  uploadCashShiftEvidence,
 } from '../api.js'
 import { normalizeCashShift } from '../cashShiftModel.js'
 import { mutateShiftWithRecovery } from '../cashShiftService.js'
-import { readEvidenceFile } from '../cashShiftCloseModel.js'
 import CashShiftActivePanel from './CashShiftActivePanel.jsx'
 import CashShiftCloseForm from './CashShiftCloseForm.jsx'
 import CashShiftFirstOpenForm from './CashShiftFirstOpenForm.jsx'
@@ -245,7 +243,6 @@ export default function CashShiftDashboard({
   openInitial = defaultOpenInitial,
   authorizePending = defaultAuthorizePending,
   closeShift = defaultCloseShift,
-  uploadEvidence = uploadCashShiftEvidence,
   loadShiftDetail = getCashShiftDetail,
   loadHistory = getCashShiftHistory,
   loadHistoryDetail = getCashShiftDetail,
@@ -255,7 +252,6 @@ export default function CashShiftDashboard({
   historyNow,
   legacyNow,
   reopenShift = defaultReopenShift,
-  readEvidence = readEvidenceFile,
   scheduleRefresh = defaultScheduleRefresh,
   cancelRefresh = defaultCancelRefresh,
 }) {
@@ -731,11 +727,9 @@ export default function CashShiftDashboard({
           cashShift={recloseTarget}
           onPreview={previewActive}
           onClose={handleCloseShift}
-          onEvidence={uploadEvidence}
           onCompleted={handleCloseCompleted}
           onStale={reloadStaleShift}
           sessionIdentity={workflowIdentity}
-          readEvidence={readEvidence}
           onCancel={() => { recloseActiveShiftId.current = null; setRecloseTarget(null) }}
         />
       </div>
@@ -758,11 +752,9 @@ export default function CashShiftDashboard({
         cashShift={view.data}
         onPreview={previewActive}
         onClose={handleCloseShift}
-        onEvidence={uploadEvidence}
         onCompleted={handleCloseCompleted}
         onStale={reloadStaleShift}
         sessionIdentity={workflowIdentity}
-        readEvidence={readEvidence}
         onCancel={() => setShowClose(false)}
       />
     )
