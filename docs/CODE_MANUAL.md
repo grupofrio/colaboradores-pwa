@@ -532,15 +532,19 @@ La ruta `/admin/cierre` tiene dos dominios deliberadamente separados:
 
 El backend (`gf_pwa_admin`) aporta los modelos `gf.pos.cash.shift.config`,
 `gf.pos.cash.shift`, `gf.pos.cash.shift.version`, `denomination`, `adjustment`,
-`authorization`, `event`, `cancellation.audit`, `evidence` y `operation`. Ventas
-y gastos guardan `x_pwa_cash_shift_id` y `x_pwa_cash_recorded_at`; ventas además
-guardan el canal `admin|day|night|legacy_pwa`.
+`authorization`, `event`, `cancellation.audit`, `evidence` y `operation`. El
+modelo `evidence` se conserva para leer versiones históricas; un cierre móvil
+nuevo ya no crea ni exige evidencia. Ventas y gastos guardan
+`x_pwa_cash_shift_id` y `x_pwa_cash_recorded_at`; ventas además guardan el canal
+`admin|day|night|legacy_pwa`.
 
 Principios del contrato:
 
 - El alcance `company/warehouse/analytic` y el actor se derivan del empleado
   resuelto por el token opaco `X-GF-Employee-Token`. Los payloads de mutación no
   aceptan identidad, alcance ni listas de movimientos elegidas por el cliente.
+  Angy puede cerrar como empleada autorizada aunque no tenga un `res.users`
+  vinculado; el responsable persistido e impreso es el empleado del token.
 - `allow_manage_pos_cash_shifts` habilita administración. La autorización usa
   `allow_authorize_cash_closing` o dirección general. `/pwa-admin/capabilities`
   publica `cashShiftRead`, `cashShiftManage`, `cashShiftAuthorize`,
@@ -555,9 +559,11 @@ Principios del contrato:
   ventas, cancelaciones, productos, pagos, gastos, denominaciones, ajustes,
   totales y autorizaciones. Un recierre enlaza la versión anterior y no crea
   otro turno sucesor.
-- La evidencia se sube antes del cierre y produce un token de un solo uso ligado
-  a actor, alcance, turno, propósito y versión esperada. Backend valida MIME,
-  tamaño, expiración y digest SHA-256; la versión conserva el adjunto exacto.
+- Cierre y recierre móviles no solicitan foto ni `evidence_token`. Si la
+  diferencia es distinta de cero, la nota sigue siendo obligatoria. Las
+  versiones creadas antes de este cambio conservan su evidencia inmutable y la
+  impresión sigue mostrando referencia, digest y archivo; una versión nueva
+  imprime `Sin evidencia adjunta`.
 - Apertura, cierre, recierre, reapertura y autorización usan una clave
   idempotente más huella canónica. Una respuesta de red incierta se consulta en
   `/operations/status` con la **misma** clave y payload. Reusar la clave con otro
@@ -575,7 +581,9 @@ validan objetos simples, campos exactos, IDs únicos, números finitos y la uni�
 exacta de turno vivo, versión histórica y consolidado. Datos adicionales,
 getters heredados o shapes parciales se rechazan. El historial carga una fecha
 operativa México y después un detalle por `shift_id + version_id`; imprimir usa
-esa versión exacta, no el estado vivo.
+esa versión exacta, no el estado vivo. La normalización acepta tanto evidencia
+histórica como las nuevas versiones con `evidence=false` y
+`evidence_present=false`, sin condicionar `printable` a una foto.
 
 [`cashShiftService.js`](../src/modules/admin/cashShiftService.js) aísla claves y
 borradores por identidad de sesión, limita el registro sin expulsar operaciones
@@ -744,7 +752,7 @@ Los endpoints de cortes POS por turno no usan ese payload Legacy:
 | `/pwa-admin/cash-shifts/reopen` | POST | `cashShiftReopen` | Reabre con razón y conserva la cadena de versiones. |
 | `/pwa-admin/cash-shifts/authorize` | POST | `cashShiftAuthorize` | Registra el nivel permitido en una versión `pending_auth`. |
 | `/pwa-admin/cash-shifts/operations/status` | GET | actor de la operación | Recupera por operación + clave idempotente. |
-| `/pwa/evidence/upload` (`context=cash_shift`) | POST | `cashShiftManage` | Crea evidencia temporal de un solo uso ligada al turno/versión. |
+| `/pwa/evidence/upload` | POST | según el flujo | Continúa disponible para comprobantes de gastos y flujos Legacy; el cierre POS por turno nuevo no lo llama ni envía `evidence_token`. |
 
 `open`, `close`, `reopen` y `authorize` tienen allowlists exactas. Company,
 warehouse, analytic, employee y movement IDs enviados por cliente se rechazan.
@@ -1324,44 +1332,37 @@ npm test
 
 ### 12.4 Orden de rollout para cortes POS por turno
 
-La PWA no se libera antes del backend. En un clon de staging con snapshot nuevo,
-confirmar primero que `$PGDATABASE` sea la base prevista y subir los módulos en
-este orden exacto:
+La PWA no se libera antes del backend. Para la actualización que habilita cierre
+y recierre móvil sin foto, la sucursal ya tiene configuración activa: en un
+clon de staging con snapshot nuevo, confirmar primero que `$PGDATABASE` sea la
+base prevista y actualizar `gf_pwa_admin` a `18.0.2.2.1`:
 
 ```bash
 test -n "${PGDATABASE:?Run inside the intended Odoo.sh staging build}"
-odoo-bin -d "$PGDATABASE" -u os_api --stop-after-init --workers=0 --max-cron-threads=0
-odoo-bin -d "$PGDATABASE" -u os_customer_zones --stop-after-init --workers=0 --max-cron-threads=0
 odoo-bin -d "$PGDATABASE" -u gf_pwa_admin --stop-after-init --workers=0 --max-cron-threads=0
-GF_CASH_SHIFT_REQUIRE_INACTIVE=1 \
-  odoo-bin shell -d "$PGDATABASE" < tests/check_pos_cash_shift_rollout.py
-```
-
-Ese primer checker es el **preflight estricto**: el flag exacto
-`GF_CASH_SHIFT_REQUIRE_INACTIVE=1` hace fallar la validación si cualquier
-configuración no está `inactive`, conserva `active_shift_id` o ya tiene un turno
-abierto. Antes de la primera apertura, POS, gastos y cierre Legacy también deben
-continuar funcionando. Asignar el permiso al perfil administrador configurado
-—nunca por nombre/ID hardcodeado—, obtener un token fresco y comprobar
-capacidades. Tomar otro respaldo justo antes de activar y conciliar la vista
-previa inicial.
-
-Después de confirmar la primera apertura, ejecutar el checker otra vez en
-**modo normal post-activación**, ahora sin el flag estricto:
-
-```bash
 odoo-bin shell -d "$PGDATABASE" < tests/check_pos_cash_shift_rollout.py
 ```
 
-El modo normal acepta configuraciones activas únicamente cuando cada una tiene
+El checker se ejecuta en **modo normal post-activación**, sin
+`GF_CASH_SHIFT_REQUIRE_INACTIVE`, porque la configuración ya está activa. Este
+modo acepta configuraciones activas únicamente cuando cada una tiene
 exactamente un turno abierto coherente con `active_shift_id` y su alcance. No
-usar `GF_CASH_SHIFT_REQUIRE_INACTIVE=1` después de activar, porque ese modo está
-diseñado para demostrar que la apertura todavía no ocurrió.
+cerrar, reabrir ni modificar manualmente turnos o movimientos para hacer pasar
+el checker. Si upgrade, checker y compatibilidad están verdes, desplegar la PWA,
+cerrar sesión, recargar la aplicación instalada y volver a iniciar sesión con
+el token de empleado para renovar capacidades.
 
-Antes de activar, el rollback es volver a los SHA anteriores y ejecutar las
-migraciones correspondientes. Después de activar, no se restaura ni baja la
-base a ciegas: ya puede haber ventas/gastos enlazados. Ocultar temporalmente la
-PWA si hace falta, conservar vínculos e invariantes y corregir hacia adelante.
+En la aceptación, Angy debe poder cerrar y recerrar capturando denominaciones y
+nota obligatoria cuando exista diferencia, sin adjuntar foto. También debe
+imprimir una versión nueva con `Sin evidencia adjunta` y una versión histórica
+con su referencia, digest y nombre de archivo intactos. Las fotografías de
+comprobantes de gastos y las reglas del cierre diario Legacy están fuera de este
+cambio.
+
+La configuración ya está activa. Si falla el upgrade o checker, no liberar la
+PWA y no restaurar ni bajar la base a ciegas: ya puede haber ventas/gastos
+enlazados. Ocultar temporalmente la PWA si hace falta, conservar vínculos e
+invariantes y corregir hacia adelante.
 El runbook ejecutable vive en el repositorio backend en
 `docs/validation/2026-07-27-pos-cash-shift-rollout.md`.
 
@@ -1636,6 +1637,7 @@ Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_s
 
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
+| 2026-07-29 | Codex (cierre móvil sin foto) | §6.6 preserva evidencia histórica, permite cierre/recierre nuevo sin foto y documenta al responsable por token de empleado sin exigir `res.users`. §7.4 separa comprobantes de gastos/Legacy. §12.4 actualiza el rollout backend-first para `gf_pwa_admin` 18.0.2.2.1 con checker normal y renovación de sesión PWA. |
 | 2026-07-28 | Codex (cortes POS por turno) | §6.6 documenta alcance autoritativo, periodos manuales, snapshots, evidencia, idempotencia, concurrencia e invariantes. §7.4 agrega endpoints/capacidades Noche-Día y separa Legacy. §12.4 fija el orden de upgrade backend-first y rollback antes/después de activación. El manual por rol añade la operación completa de Angy. |
 | 2026-04-27 | Claude (auto-generado, review por Yamil) | Generación inicial. Cubre 18 secciones, 162+ endpoints, 9 roles operativos + 7 fuera de scope, 5 diagramas Mermaid embebidos. Branch: `docs/code-manual-initial`. Necesita review humano antes de considerarse fuente única de verdad. |
 | 2026-04-27 | Claude (verificación P1 + ajustes scope) | Reescritura de §8 a 11 roles operativos (9 primarios + 2 secundarios `auxiliar_produccion` y `auxiliar_ruta`). §8.12 reducida a 5 roles fuera de scope. Matriz Mermaid §4.4 actualizada con 2 nuevos nodos. §12 actualizada con dominio real `colaboradores-pwa.vercel.app`. §7.7 anota que `gf.inventory.posting` vive en `gf_production_ops` y que tiene 56.2% records en error en producción al momento de la auditoría. |

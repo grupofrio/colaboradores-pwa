@@ -131,9 +131,10 @@ requiere autorización gerencial o de dirección.
 **Ruta:** `/admin/cierre`.
 **Pasos:**
 1. Abrir la solicitud pendiente desde **Cortes de caja**.
-2. Revisar el turno y versión, diferencia, nota, presencia de evidencia y el
-   nivel solicitado. La vista de autorización muestra solo el detalle mínimo
-   permitido.
+2. Revisar el turno y versión, diferencia, nota y nivel solicitado. Si se trata
+   de una versión histórica que ya tenía evidencia, esa referencia permanece
+   visible; los cierres nuevos no requieren foto. La vista de autorización
+   muestra solo el detalle mínimo permitido.
 3. Si está justificada, autorizar con el nivel que la pantalla permite.
 4. Si no está justificada, no autorizar: dejar la versión pendiente, pedir a
    Angy que verifique el conteo y escalar el caso. No intentar un segundo cierre
@@ -254,7 +255,14 @@ tener su configuración de turnos preparada y su empleado debe tener el permiso
 al nombre escrito en el sistema. Después de asignarlo, Angy debe cerrar sesión y
 volver a entrar para recibir capacidades nuevas con un token fresco. Héctor, el
 POS diurno y cualquier auxiliar sin ese permiso no pueden ver ni administrar
-los cortes.
+los cortes. El backend identifica a Angy por su token de empleado y no exige que
+su ficha esté vinculada a un usuario `res.users`; el responsable del corte es el
+empleado autenticado.
+
+Después de liberar una nueva versión de backend/PWA, Angy debe cerrar sesión,
+recargar la aplicación instalada y volver a iniciar sesión antes de probar el
+cierre. Esto renueva el token y evita conservar capacidades o recursos de la
+versión anterior.
 
 ##### Primera apertura manual
 
@@ -285,7 +293,7 @@ haya ocurrido el 26.
 ##### Cerrar Noche o Día con arqueo
 
 1. Abrir el turno activo y pulsar **Hacer corte**. La pantalla trae de nuevo
-   la fotografía autoritativa del servidor.
+   el resumen autoritativo del servidor.
 2. Revisar el desglose completo: tickets y ventas, productos y cantidades,
    efectivo, terminal, gastos, cancelaciones y ajustes.
 3. Confirmar la conciliación: las ventas en efectivo aumentan el efectivo
@@ -296,8 +304,8 @@ haya ocurrido el 26.
    gasto ya registrado, agregar un ajuste con tipo, monto y concepto. No uses un
    ajuste para ocultar una diferencia.
 5. Revisar **esperado**, **efectivo físico** y **diferencia**. Toda diferencia,
-   sin importar el monto, exige una nota clara y fotografía del arqueo. La foto
-   debe corresponder a ese turno y a esa versión del corte.
+   sin importar el monto, exige una nota clara. El cierre móvil nuevo no pide ni
+   permite adjuntar una foto del arqueo.
 6. En un cierre normal, capturar el **fondo del turno siguiente**. Ese campo no
    aparece en un recierre. Confirmar una sola vez.
 7. Si no requiere autorización, el sistema guarda una versión inmutable del
@@ -307,9 +315,8 @@ haya ocurrido el 26.
 Si aparece `pending_auth`, el corte espera autorización de gerente o dirección
 según el nivel indicado. El turno sucesor ya fue abierto una sola vez como parte
 del cierre; no repitas el cierre ni abras otro turno manualmente. La persona
-autorizadora debe revisar la diferencia, nota, presencia de evidencia y los
-importes mínimos mostrados. Autorizar completa la revisión de la misma versión,
-sin crear otro sucesor.
+autorizadora debe revisar la diferencia, nota y los importes mínimos mostrados.
+Autorizar completa la revisión de la misma versión, sin crear otro sucesor.
 
 ##### Respuesta incierta, reapertura y recierre
 
@@ -322,9 +329,10 @@ sin crear otro sucesor.
   cancelan directamente. Para corregirlo, abre **Historial**, selecciona la
   versión y pulsa **Reabrir**; la razón es obligatoria.
 - Ya reabierto, realiza la corrección permitida —por ejemplo cancelar una venta
-  con su motivo auditado—, vuelve a contar, captura de nuevo nota y evidencia y
-  usa **Volver a cerrar**. El recierre genera una versión nueva ligada a la
-  anterior y **no crea otro turno sucesor ni pide un nuevo fondo siguiente**.
+  con su motivo auditado—, vuelve a contar, captura de nuevo la nota si existe
+  diferencia y usa **Volver a cerrar**. El recierre tampoco solicita foto;
+  genera una versión nueva ligada a la anterior y **no crea otro turno sucesor
+  ni pide un nuevo fondo siguiente**.
 - Si sales del formulario después de reabrir, el turno histórico permanece
   `reopened`; vuelve a entrar y termina el recierre. El botón **Cancelar** solo
   descarta el borrador local, no revierte una reapertura ya confirmada.
@@ -336,11 +344,17 @@ tarjeta muestra Noche/Día y permite abrir una versión exacta. **Consolidado**
 suma ambos turnos de la fecha sin duplicar fondos, arqueos ni versiones
 anteriores. Desde el detalle se puede imprimir el corte con folio, periodo,
 responsable, ventas, productos, pagos, gastos, cancelaciones, ajustes,
-denominaciones, diferencia, evidencia y autorizaciones.
+denominaciones, diferencia y autorizaciones. Las versiones históricas que ya
+tenían evidencia conservan y muestran su referencia, digest y archivo al
+imprimir. Una versión nueva sin foto sigue siendo imprimible y muestra
+**Sin evidencia adjunta**.
 
 Los cierres diarios anteriores aparecen en una sección **Legacy** separada. Son
 históricos de solo lectura después de activar los cortes por turno; no deben
-mezclarse con Noche/Día ni usarse para registrar un cierre nuevo.
+mezclarse con Noche/Día ni usarse para registrar un cierre nuevo. Sus reglas y
+comprobantes no cambiaron con esta liberación. Tampoco cambió la foto de recibo
+que se solicita al registrar un gasto: solo se eliminó la foto del cierre y
+recierre POS por turno.
 
 **Resultado esperado:** turno en `closed` con versión imprimible, o
 `pending_auth` hasta completar la autorización; el siguiente turno solo se crea
@@ -371,14 +385,15 @@ aparece fuera del alcance. No sigas operando el corte hasta reconciliarlo.
 ### 5.6 Errores comunes
 
 - "Folio obligatorio cuando es tarjeta": faltó capturar referencia del terminal.
-- "Falta nota o evidencia": cualquier diferencia del corte por turno exige
-  explicación y foto del arqueo.
+- "Falta nota": cualquier diferencia del corte por turno exige explicación;
+  no intentes adjuntar una foto para resolverla.
 
 ### 5.7 Pendientes conocidos
 
 - Liquidaciones y Materia Prima son **desktop-only** (no funcionan bien en celular).
 - G018 continúa referido al cierre diario **Legacy**; los cortes POS por turno
-  validan nota, evidencia y autorizaciones en backend.
+  validan nota y autorizaciones en backend. La evidencia solo se conserva en
+  versiones históricas que ya la tenían.
 
 ---
 
