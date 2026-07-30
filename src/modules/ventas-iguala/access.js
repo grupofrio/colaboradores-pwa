@@ -9,7 +9,8 @@ export function parseAllowedEmployeeIds(raw = '') {
 
 export function readVentasIgualaAccess(session, allowedEmployeeIds = []) {
   if (!isValidAuthenticatedSession(session)) return { level: 'none', reason: 'invalid_session' }
-  return allowedEmployeeIds.includes(Number(session.employee_id))
+  const configuredIds = Array.isArray(allowedEmployeeIds) ? allowedEmployeeIds : []
+  return configuredIds.includes(Number(session.employee_id))
     ? { level: 'iguala_sales', reason: 'configured_employee' }
     : { level: 'none', reason: 'not_authorized' }
 }
