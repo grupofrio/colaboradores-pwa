@@ -2529,6 +2529,19 @@ async function directAdmin(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-admin/iguala-sales-history' && method === 'GET') {
+    const filters = {}
+    for (const key of ['date_from', 'date_to', 'search', 'page', 'page_size']) {
+      const value = query.get(key)
+      if (value) filters[key] = value
+    }
+    return odooHttp('GET', cleanPath, filters)
+  }
+
+  if (cleanPath === '/pwa-admin/iguala-sales-tickets' && method === 'POST') {
+    return NO_DIRECT
+  }
+
   // Cualquier otro /pwa-admin/* va DIRECTO a Odoo — n8n no participa en
   // este flujo. Si el endpoint no existe en Odoo devolvera 404 con un
   // mensaje claro, no el "webhook no registrado" de n8n.

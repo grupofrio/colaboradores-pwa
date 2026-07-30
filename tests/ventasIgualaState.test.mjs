@@ -222,9 +222,9 @@ test('getIgualaSalesTickets posts only the requested order IDs', async () => {
 
   assert.deepEqual(tickets.map((ticket) => ticket.order_id), [7, 9])
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].url, '/odoo-api/pwa-admin/iguala-sales-tickets')
+  assert.equal(calls[0].url, '/api-n8n/pwa-admin/iguala-sales-tickets')
   assert.equal(calls[0].options.method, 'POST')
-  assert.deepEqual(JSON.parse(calls[0].options.body).params, { order_ids: [7, 9] })
+  assert.deepEqual(JSON.parse(calls[0].options.body), { order_ids: [7, 9] })
 })
 
 test('normalizeSalesTickets keeps requested positive IDs in request order and fails atomically on missing or duplicate tickets', () => {

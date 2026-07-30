@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { build } from 'vite'
 
-process.env.VITE_IGUALA_SALES_EMPLOYEE_IDS = '717'
+process.env.VITE_IGUALA_SALES_EMPLOYEE_IDS = '717,718'
 
 const {
   parseAllowedEmployeeIds,
@@ -21,6 +25,11 @@ const appSrc = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 
 const validSession = {
   employee_id: 717,
+  session_token: 'authenticated-session-token',
+}
+
+const sugeySession = {
+  employee_id: 718,
   session_token: 'authenticated-session-token',
 }
 
@@ -90,6 +99,64 @@ test('a configured session sees ventas_iguala through the session-aware nav mode
   assert.equal(typeof ACCESS_POLICY_RESOLVERS.iguala_sales, 'function')
   assert.ok(getVisibleModulesForSession(validSession).some((module) => module.id === 'ventas_iguala'))
   assert.equal(getModuleEntryDecisionForSession(VENTAS_IGUALA, validSession).type, 'direct')
+})
+
+test('Sugey has configured Igualas sales access and sees ventas_iguala directly', () => {
+  assert.deepEqual(
+    readConfiguredVentasIgualaAccessForSession(sugeySession),
+    { level: 'iguala_sales', reason: 'configured_employee' },
+  )
+  assert.ok(getVisibleModulesForSession(sugeySession).some((module) => module.id === 'ventas_iguala'))
+  assert.equal(getModuleEntryDecisionForSession(VENTAS_IGUALA, sugeySession).type, 'direct')
+})
+
+test('Vite build embeds both configured Igualas sales IDs and still denies 900', async () => {
+  const outDir = mkdtempSync(path.join(tmpdir(), 'ventas-iguala-access-build-'))
+  const entry = fileURLToPath(new URL('../src/modules/ventas-iguala/access.js', import.meta.url))
+
+  try {
+    await build({
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [{
+        enforce: 'pre',
+        name: 'stub-ventas-iguala-session-reader',
+        resolveId(id) {
+          return id === '../../lib/api.js' ? '\0ventas-iguala-test-api' : null
+        },
+        load(id) {
+          return id === '\0ventas-iguala-test-api'
+            ? 'export function getSession() { return null }'
+            : null
+        },
+      }],
+      build: {
+        emptyOutDir: true,
+        lib: {
+          entry,
+          fileName: 'ventas-iguala-access',
+          formats: ['es'],
+        },
+        minify: false,
+        outDir,
+      },
+    })
+
+    const bundlePath = path.join(outDir, 'ventas-iguala-access.js')
+    assert.match(readFileSync(bundlePath, 'utf8'), /717,718/)
+
+    const builtAccess = await import(`${pathToFileURL(bundlePath).href}?build=${Date.now()}`)
+    assert.deepEqual(
+      builtAccess.readConfiguredVentasIgualaAccessForSession(sugeySession),
+      { level: 'iguala_sales', reason: 'configured_employee' },
+    )
+    assert.deepEqual(
+      builtAccess.readConfiguredVentasIgualaAccessForSession({ ...sugeySession, employee_id: 900 }),
+      { level: 'none', reason: 'not_authorized' },
+    )
+  } finally {
+    rmSync(outDir, { force: true, recursive: true })
+  }
 })
 
 test('an unconfigured valid session does not see ventas_iguala', () => {
