@@ -14,62 +14,74 @@ function toQuery(filters = {}) {
 }
 
 function safeNumber(value) {
-  const number = Number(value)
-  return Number.isFinite(number) ? number : 0
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
 function positiveId(value) {
-  const id = Number(value)
-  return Number.isSafeInteger(id) && id > 0 ? id : 0
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 0
 }
 
 function text(value) {
-  return typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  return typeof value === 'string' ? value.trim() : ''
 }
 
 function normalizeRelation(value) {
-  if (Array.isArray(value)) {
-    return { id: positiveId(value[0]), name: text(value[1]) }
-  }
   if (value && typeof value === 'object') {
     return {
       id: positiveId(value.id),
       name: text(value.name ?? value.display_name),
     }
   }
-  return { id: 0, name: text(value) }
+  return { id: 0, name: '' }
 }
 
 function normalizePayment(payment) {
   const source = payment && typeof payment === 'object' && !Array.isArray(payment) ? payment : {}
-  const breakdown = Array.isArray(source.breakdown) ? source.breakdown : []
+  const breakdown = Array.isArray(source.breakdown)
+    ? source.breakdown.filter((item) => (
+      item
+      && typeof item === 'object'
+      && !Array.isArray(item)
+      && typeof item.method === 'string'
+      && typeof item.label === 'string'
+      && typeof item.amount === 'number'
+      && Number.isFinite(item.amount)
+    ))
+    : []
   return {
     method: text(source.method),
     label: text(source.label),
     amount: safeNumber(source.amount),
-    breakdown: breakdown.map((item) => {
-      const part = item && typeof item === 'object' && !Array.isArray(item) ? item : {}
-      return {
-        method: text(part.method),
-        label: text(part.label),
-        amount: safeNumber(part.amount),
-      }
-    }),
+    breakdown: breakdown.map((item) => ({
+      method: text(item.method),
+      label: text(item.label),
+      amount: item.amount,
+    })),
   }
 }
 
 function normalizeLines(lines) {
   if (!Array.isArray(lines)) return []
-  return lines.map((item) => {
-    const line = item && typeof item === 'object' && !Array.isArray(item) ? item : {}
-    return {
-      product_id: positiveId(line.product_id),
+  return lines
+    .filter((line) => (
+      line
+      && typeof line === 'object'
+      && !Array.isArray(line)
+      && positiveId(line.product_id)
+      && typeof line.quantity === 'number'
+      && Number.isFinite(line.quantity)
+      && typeof line.unit_price === 'number'
+      && Number.isFinite(line.unit_price)
+      && typeof line.line_total === 'number'
+      && Number.isFinite(line.line_total)
+    ))
+    .map((line) => ({
+      product_id: line.product_id,
       product_name: text(line.product_name ?? line.name),
-      quantity: safeNumber(line.quantity),
-      unit_price: safeNumber(line.unit_price),
-      line_total: safeNumber(line.line_total),
-    }
-  })
+      quantity: line.quantity,
+      unit_price: line.unit_price,
+      line_total: line.line_total,
+    }))
 }
 
 function normalizeOrder(order, id = positiveId(order?.id)) {
@@ -148,6 +160,7 @@ export function normalizeSalesTickets(payload, requestedIds) {
   for (const ticket of tickets) {
     const source = ticket && typeof ticket === 'object' && !Array.isArray(ticket) ? ticket : {}
     const orderId = positiveId(source.order_id)
+    if (!orderId) throw invalidTicketContract()
     if (!requested.has(orderId)) continue
     if (byId.has(orderId)) throw invalidTicketContract()
     byId.set(orderId, source)
