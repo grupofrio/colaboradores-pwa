@@ -77,9 +77,14 @@ obligatoria. Los flags `needs_manager_auth` y `needs_director_auth` y el flujo
 
 El backend dejará de exigir evidencia para una diferencia. Durante la transición
 seguirá aceptando opcionalmente un `evidence_token` válido enviado por una PWA
-anterior: si llega, se validará, consumirá y conservará con las reglas actuales.
-Así el despliegue backend-first no rompe clientes almacenados en caché. La PWA
-nueva omitirá `evidence_token` y no llamará al upload de evidencia del corte.
+anterior. `null`, `""` y cadenas compuestas únicamente por espacios se
+normalizarán como ausencia de evidencia; cualquier otro valor se validará,
+consumirá y conservará con las reglas actuales. Los tokens expirados,
+consumidos, alterados o ligados a otro empleado, turno, versión o propósito
+continuarán rechazándose de forma atómica, sin crear versión, sucesor ni
+operación idempotente. Así el despliegue backend-first no rompe clientes
+almacenados en caché. La PWA nueva omitirá `evidence_token` y no llamará al
+upload de evidencia del corte.
 
 Los modelos y endpoints de evidencia no se eliminan porque sostienen datos
 históricos y compatibilidad de despliegue. Las nuevas versiones normalmente
@@ -102,7 +107,10 @@ y referencia. No se alterará ni eliminará ningún adjunto existente.
 El upgrade de `gf_pwa_admin` actualizará la columna para aceptar `NULL`; los
 registros existentes conservarán su usuario. Se incrementará la versión del
 módulo y el checker fijará esa nueva versión para impedir que código y esquema
-queden desalineados.
+queden desalineados. El checker comprobará tanto que
+`ir.model.fields.required=False` como que
+`information_schema.columns.is_nullable='YES'`; una prueba de upgrade verificará
+además que el usuario de las versiones históricas permanezca intacto.
 
 El contrato de cierre conservará temporalmente `evidence_token` como campo
 opcional de compatibilidad. La ausencia de ese campo será la ruta normal.
@@ -119,7 +127,12 @@ Backend Odoo:
 - una diferencia con nota y sin foto puede cerrarse;
 - una diferencia sin nota continúa fallando antes de crear snapshots;
 - autorizaciones, idempotencia, concurrencia, sucesor e inmutabilidad no cambian;
-- un token de evidencia opcional antiguo todavía se valida y consume.
+- `null`, `""` y espacios en `evidence_token` se aceptan como ausencia;
+- un token de evidencia opcional antiguo todavía se valida y consume;
+- tokens expirados, consumidos, alterados o ajenos se rechazan sin efectos
+  parciales;
+- el checker confirma que el campo ORM es opcional y la columna acepta `NULL`;
+- el upgrade conserva el usuario de versiones históricas existentes.
 
 PWA:
 
