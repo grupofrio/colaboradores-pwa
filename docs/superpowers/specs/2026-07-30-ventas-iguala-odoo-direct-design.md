@@ -16,6 +16,9 @@ Angélica Jaimes Domínguez (`hr.employee` 717) y Aida Sugey Landa Jaimes
 - Usar `odooHttp`, que conserva `Api-Key` y `X-GF-Employee-Token`; no llamar a
   n8n ni inferir alcance desde el cliente.
 - Crear el parámetro Odoo `gf_pwa_admin.iguala_sales_employee_ids=717,718`.
+- Actualizar en Vercel `VITE_IGUALA_SALES_EMPLOYEE_IDS=717,718`. Esta variable
+  sólo habilita la visibilidad de la pantalla; Odoo sigue siendo la autoridad
+  que concede o niega los datos.
 
 ## Fuera de alcance
 
@@ -39,6 +42,7 @@ Angélica Jaimes Domínguez (`hr.employee` 717) y Aida Sugey Landa Jaimes
 
 - Prueba unitaria que cubra la ruta directa y confirme que preserva los filtros
   permitidos.
+- Prueba de acceso que permita el módulo a ambos IDs configurados.
 - Ejecutar la suite Node de Ventas Iguala y la suite completa.
 - Tras desplegar, revisar en Fetch/XHR que la URL sea
   `/odoo-api/pwa-admin/iguala-sales-history` y que el JSON tenga `orders`.
