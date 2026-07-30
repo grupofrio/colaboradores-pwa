@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   parseAllowedEmployeeIds,
+  readConfiguredVentasIgualaAccess,
   readVentasIgualaAccess,
 } from '../src/modules/ventas-iguala/access.js'
 
@@ -43,5 +44,13 @@ test('readVentasIgualaAccess fails closed with an empty configuration', () => {
   assert.deepEqual(
     readVentasIgualaAccess(validSession),
     { level: 'none', reason: 'not_authorized' },
+  )
+})
+
+test('readConfiguredVentasIgualaAccess is a zero-argument fail-closed wrapper', () => {
+  assert.equal(readConfiguredVentasIgualaAccess.length, 0)
+  assert.deepEqual(
+    readConfiguredVentasIgualaAccess(),
+    { level: 'none', reason: 'invalid_session' },
   )
 })

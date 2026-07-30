@@ -1,4 +1,5 @@
 import { isValidAuthenticatedSession } from '../../lib/session.js'
+import { getSession } from '../../lib/api.js'
 
 export function parseAllowedEmployeeIds(raw = '') {
   return [...new Set(String(raw).split(',')
@@ -17,6 +18,6 @@ const configuredEmployeeIds = parseAllowedEmployeeIds(
   import.meta.env?.VITE_IGUALA_SALES_EMPLOYEE_IDS,
 )
 
-export function readConfiguredVentasIgualaAccess(session) {
-  return readVentasIgualaAccess(session, configuredEmployeeIds)
+export function readConfiguredVentasIgualaAccess() {
+  return readVentasIgualaAccess(getSession(), configuredEmployeeIds)
 }
