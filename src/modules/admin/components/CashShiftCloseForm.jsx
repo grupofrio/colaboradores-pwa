@@ -7,66 +7,11 @@ import {
 import {
   buildCashShiftCloseOperation,
   calculateCloseFeedback,
-  cashShiftEvidenceBinding,
+  cashShiftCloseBinding,
   hasCashDifference,
-  readEvidenceFile,
 } from '../cashShiftCloseModel.js'
 import CashShiftAdjustments from './CashShiftAdjustments.jsx'
 import CashShiftDenominations from './CashShiftDenominations.jsx'
-
-const EVIDENCE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
-const MAX_EVIDENCE_BYTES = 5 * 1024 * 1024
-const defaultNow = () => Date.now()
-
-function ownDataValue(record, key) {
-  if (!record || typeof record !== 'object' || Array.isArray(record)) {
-    throw new TypeError('El comprobante de evidencia no es válido.')
-  }
-  const descriptor = Object.getOwnPropertyDescriptor(record, key)
-  if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
-    throw new TypeError('El comprobante de evidencia no es válido.')
-  }
-  return descriptor.value
-}
-
-function odooUtcTimestamp(value) {
-  if (typeof value !== 'string') throw new TypeError('La vigencia de evidencia no es válida.')
-  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(value)
-  if (!match) throw new TypeError('La vigencia de evidencia no es válida.')
-  const parts = match.slice(1).map(Number)
-  const timestamp = Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5])
-  const date = new Date(timestamp)
-  if (
-    date.getUTCFullYear() !== parts[0]
-    || date.getUTCMonth() !== parts[1] - 1
-    || date.getUTCDate() !== parts[2]
-    || date.getUTCHours() !== parts[3]
-    || date.getUTCMinutes() !== parts[4]
-    || date.getUTCSeconds() !== parts[5]
-  ) throw new TypeError('La vigencia de evidencia no es válida.')
-  return timestamp
-}
-
-function validateEvidenceReceipt(data, { binding, file, nowMs }) {
-  const token = ownDataValue(data, 'evidence_token')
-  const shiftId = ownDataValue(data, 'shift_id')
-  const expectedVersion = ownDataValue(data, 'expected_version')
-  const purpose = ownDataValue(data, 'purpose')
-  const mimetype = ownDataValue(data, 'mimetype')
-  const fileSize = ownDataValue(data, 'file_size')
-  const expiresAtMs = odooUtcTimestamp(ownDataValue(data, 'expires_at'))
-  if (
-    typeof token !== 'string' || !token.trim()
-    || shiftId !== binding.shiftId
-    || expectedVersion !== binding.expectedVersion
-    || purpose !== binding.purpose
-    || mimetype !== file.type
-    || fileSize !== file.size
-    || !Number.isFinite(nowMs)
-    || expiresAtMs <= nowMs
-  ) throw new TypeError('El comprobante de evidencia no corresponde al corte actual.')
-  return { token: token.trim(), expiresAtMs }
-}
 
 function money(value) {
   return new Intl.NumberFormat('es-MX', {
@@ -149,22 +94,17 @@ export default function CashShiftCloseForm({
   sessionIdentity = 'cash-shift-session',
   onPreview,
   onClose,
-  onEvidence,
   onCompleted = async () => {},
   onStale = async () => {},
-  readEvidence = readEvidenceFile,
-  now = defaultNow,
   onCancel = null,
 }) {
-  const binding = cashShiftEvidenceBinding(cashShift)
+  const binding = cashShiftCloseBinding(cashShift)
   const [preview, setPreview] = useState(null)
   const [previewBusy, setPreviewBusy] = useState(true)
   const [counts, setCounts] = useState(initialCounts)
   const [adjustments, setAdjustments] = useState([])
   const [notes, setNotes] = useState('')
   const [nextOpeningFund, setNextOpeningFund] = useState('')
-  const [evidence, setEvidence] = useState(null)
-  const [uploadBusy, setUploadBusy] = useState(false)
   const [mutationBusy, setMutationBusy] = useState(false)
   const [pendingRequest, setPendingRequest] = useState(null)
   const [completed, setCompleted] = useState(null)
@@ -172,7 +112,6 @@ export default function CashShiftCloseForm({
   const [error, setError] = useState('')
   const mounted = useRef(false)
   const previewGeneration = useRef(0)
-  const uploadGeneration = useRef(0)
   const staleReloadGeneration = useRef(0)
   const mutationInFlight = useRef(null)
   const staleReloadInFlight = useRef(null)
@@ -188,7 +127,6 @@ export default function CashShiftCloseForm({
       generation: workflowRef.current.generation + 1,
     }
     previewGeneration.current += 1
-    uploadGeneration.current += 1
     staleReloadGeneration.current += 1
     mutationInFlight.current = null
     staleReloadInFlight.current = null
@@ -212,7 +150,6 @@ export default function CashShiftCloseForm({
     return () => {
       mounted.current = false
       previewGeneration.current += 1
-      uploadGeneration.current += 1
       staleReloadGeneration.current += 1
       mutationInFlight.current = null
       staleReloadInFlight.current = null
@@ -222,7 +159,6 @@ export default function CashShiftCloseForm({
 
   useEffect(() => {
     previewGeneration.current += 1
-    uploadGeneration.current += 1
     staleReloadGeneration.current += 1
     mutationInFlight.current = null
     staleReloadInFlight.current = null
@@ -233,8 +169,6 @@ export default function CashShiftCloseForm({
     setAdjustments([])
     setNotes('')
     setNextOpeningFund('')
-    setEvidence(null)
-    setUploadBusy(false)
     setMutationBusy(false)
     setPendingRequest(null)
     setCompleted(null)
@@ -250,7 +184,7 @@ export default function CashShiftCloseForm({
     try {
       const response = await onPreview({ mode: 'active', shiftId: binding.shiftId })
       const normalized = normalizeCashShift(unwrap(response))
-      if (cashShiftEvidenceBinding(normalized).key !== binding.key) {
+      if (cashShiftCloseBinding(normalized).key !== binding.key) {
         throw Object.assign(new TypeError('La vista previa corresponde a otra versión.'), {
           code: 'stale_preview',
         })
@@ -262,9 +196,7 @@ export default function CashShiftCloseForm({
     } catch (previewError) {
       if (workflowIsCurrent(workflow) && generation === previewGeneration.current) {
         if (previewError?.code === 'stale_preview') {
-          uploadGeneration.current += 1
-          setEvidence(null)
-          setError('El turno cambió de modo o versión. Conservamos el arqueo; vuelve a subir la fotografía después de actualizar el turno.')
+          setError('El turno cambió de modo o versión. Conservamos el arqueo para revisarlo después de actualizar el turno.')
         } else {
           setError('No se pudo actualizar la vista previa autoritativa. Reintenta antes de cortar.')
         }
@@ -280,14 +212,12 @@ export default function CashShiftCloseForm({
     if (bindingRef.current !== binding.key) {
       bindingChanged = true
       bindingRef.current = binding.key
-      uploadGeneration.current += 1
-      setEvidence(null)
       setPendingRequest(null)
       setCompleted(null)
       if (!authoritativeReload) {
         setStaleStatus(null)
         formLockedRef.current = false
-        setError('La versión o el modo cambió. Vuelve a subir la fotografía para continuar.')
+        setError('La versión o el modo cambió. Revisa el arqueo antes de continuar.')
       }
       if (authoritativeReload) staleRecoveryRef.current = false
     }
@@ -323,63 +253,6 @@ export default function CashShiftCloseForm({
     setAdjustments((current) => current.filter((row) => row.id !== id))
   }
 
-  async function uploadPhoto(event) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    uploadGeneration.current += 1
-    setEvidence(null)
-    setError('')
-    if (!file) return
-    if (!EVIDENCE_MIMES.has(file.type)) {
-      setError('La fotografía debe ser JPEG, PNG o WebP.')
-      return
-    }
-    if (!Number.isSafeInteger(file.size) || file.size <= 0) {
-      setError('La fotografía está vacía y no puede usarse como evidencia.')
-      return
-    }
-    if (file.size > MAX_EVIDENCE_BYTES) {
-      setError('La fotografía no puede exceder 5 MB.')
-      return
-    }
-    const generation = uploadGeneration.current
-    const workflow = captureWorkflow()
-    const expectedBinding = binding.key
-    setUploadBusy(true)
-    try {
-      const fileBase64 = await readEvidence(file)
-      if (!workflowIsCurrent(workflow) || generation !== uploadGeneration.current || expectedBinding !== bindingRef.current) return
-      const response = await onEvidence({
-        shiftId: binding.shiftId,
-        expectedVersion: binding.expectedVersion,
-        purpose: binding.purpose,
-        filename: file.name,
-        fileBase64,
-        mimeType: file.type,
-      })
-      const data = unwrap(response)
-      const receipt = validateEvidenceReceipt(data, {
-        binding,
-        file,
-        nowMs: now(),
-      })
-      if (workflowIsCurrent(workflow) && generation === uploadGeneration.current && expectedBinding === bindingRef.current) {
-        setEvidence({
-          token: receipt.token,
-          filename: file.name,
-          bindingKey: expectedBinding,
-          expiresAtMs: receipt.expiresAtMs,
-        })
-      }
-    } catch {
-      if (workflowIsCurrent(workflow) && generation === uploadGeneration.current) {
-        setError('No se pudo subir la fotografía. Selecciónala de nuevo para reintentar.')
-      }
-    } finally {
-      if (workflowIsCurrent(workflow) && generation === uploadGeneration.current) setUploadBusy(false)
-    }
-  }
-
   const draftState = useMemo(() => {
     if (!preview) return { operation: null, error: null }
     try {
@@ -389,7 +262,6 @@ export default function CashShiftCloseForm({
           denominations: denominationLines(counts),
           adjustments: rawAdjustments(adjustments),
           notes,
-          evidenceToken: evidence?.bindingKey === binding.key ? evidence.token : '',
           nextOpeningFund,
         }),
         error: null,
@@ -407,7 +279,7 @@ export default function CashShiftCloseForm({
       }
       return { operation: null, feedback, error: draftError.message }
     }
-  }, [adjustments, binding.key, counts, evidence, nextOpeningFund, notes, preview])
+  }, [adjustments, counts, nextOpeningFund, notes, preview])
   const feedback = draftState.operation?.feedback || draftState.feedback
   const staleLocked = ['reloading', 'stale_requires_reload'].includes(staleStatus)
   const locked = mutationBusy || Boolean(pendingRequest) || Boolean(completed) || staleLocked
@@ -430,7 +302,7 @@ export default function CashShiftCloseForm({
           expectedVersion: binding.expectedVersion,
         })))
         if (!workflowIsCurrent(workflow) || generation !== staleReloadGeneration.current) return null
-        const refreshedBinding = cashShiftEvidenceBinding(normalized)
+        const refreshedBinding = cashShiftCloseBinding(normalized)
         if (
           (binding.purpose === 'reclose' && (normalized.shift.state !== 'reopened' || normalized.shift.id !== binding.shiftId))
           || (binding.purpose === 'close' && !['open', 'reopened'].includes(normalized.shift.state))
@@ -440,9 +312,8 @@ export default function CashShiftCloseForm({
         setPreview(normalized)
         setPendingRequest(null)
         setCompleted(null)
-        setEvidence(null)
         setStaleStatus('review_required')
-        setError('Los totales actualizados cambiaron respecto al borrador. Revisa el arqueo conservado y vuelve a subir la fotografía antes de cerrar.')
+        setError('Los totales actualizados cambiaron respecto al borrador. Revisa el arqueo conservado antes de cerrar.')
         formLockedRef.current = false
         return normalized
       } catch (reloadError) {
@@ -464,13 +335,6 @@ export default function CashShiftCloseForm({
     if (mutationInFlight.current || completed || staleLocked) return
     setError('')
     staleRecoveryRef.current = false
-    if (!pendingRequest && evidence && evidence.expiresAtMs <= now()) {
-      uploadGeneration.current += 1
-      setEvidence(null)
-      formLockedRef.current = false
-      setError('La evidencia expiró. Sube una fotografía nueva antes de cerrar.')
-      return
-    }
     const operation = pendingRequest
       ? { operation: binding.purpose, request: pendingRequest }
       : draftState.operation
@@ -502,22 +366,18 @@ export default function CashShiftCloseForm({
       if (!workflowIsCurrent(workflow) || mutationInFlight.current !== marker) return
       if (mutationError?.code === 'stale_version') {
         staleRecoveryRef.current = true
-        uploadGeneration.current += 1
-        setEvidence(null)
         setPendingRequest(null)
         setCompleted(null)
         setPreview(null)
         keepLocked = true
         await reloadAuthoritativeShift()
       } else if (pendingRequest) {
-        uploadGeneration.current += 1
-        setEvidence(null)
         setPendingRequest(null)
         setCompleted(null)
         keepLocked = false
-        setError('El intento pendiente fue rechazado. Conservamos el arqueo; sube una fotografía nueva antes de crear otra operación.')
+        setError('El intento pendiente fue rechazado. Conservamos el arqueo para crear una operación nueva.')
       } else {
-        setError('No se pudo guardar el corte. Conservamos el arqueo y la evidencia para reintentar.')
+        setError('No se pudo guardar el corte. Conservamos el arqueo para reintentar.')
       }
     } finally {
       if (mutationInFlight.current === marker) mutationInFlight.current = null
@@ -559,7 +419,7 @@ export default function CashShiftCloseForm({
         ) : null}
         {feedback && hasCashDifference(feedback.difference) ? (
           <p className="cash-shift-warning" role="status">
-            Toda diferencia, sin importar el umbral de autorización, requiere nota y fotografía. El servidor decidirá si corresponde gerencia o dirección.
+            Toda diferencia, sin importar el umbral de autorización, requiere nota. El servidor decidirá si corresponde gerencia o dirección.
           </p>
         ) : null}
         <div className="cash-shift-form cash-shift-close-fields">
@@ -567,9 +427,6 @@ export default function CashShiftCloseForm({
             <textarea name="differenceNote" disabled={locked} value={notes} onChange={(event) => {
               if (!formLockedRef.current) setNotes(event.target.value)
             }} />
-          </label>
-          <label>Fotografía del arqueo
-            <input name="evidencePhoto" type="file" accept="image/jpeg,image/png,image/webp" disabled={locked || uploadBusy} onChange={uploadPhoto} />
           </label>
           {binding.purpose === 'close' ? (
             <label>Fondo inicial del siguiente turno
@@ -579,8 +436,6 @@ export default function CashShiftCloseForm({
             </label>
           ) : null}
         </div>
-        {uploadBusy ? <p role="status">Subiendo fotografía…</p> : null}
-        {evidence ? <p className="cash-shift-info" role="status">Fotografía lista: {evidence.filename}</p> : null}
         {draftState.error && !error ? <p className="cash-shift-muted">{draftState.error}</p> : null}
         {error ? <p className="cash-shift-error" role="alert">{error}</p> : null}
         {completed ? (
@@ -591,7 +446,7 @@ export default function CashShiftCloseForm({
           </p>
         ) : null}
         {staleStatus === 'review_required' ? (
-          <p className="cash-shift-warning" role="status">Los totales actualizados ya son autoritativos. Revisa el borrador y sube una fotografía nueva; la evidencia anterior quedó invalidada.</p>
+          <p className="cash-shift-warning" role="status">Los totales actualizados ya son autoritativos. Revisa el arqueo conservado antes de cerrar.</p>
         ) : null}
         <div className="cash-shift-actions">
           {['reloading', 'stale_requires_reload'].includes(staleStatus) ? (
@@ -599,7 +454,7 @@ export default function CashShiftCloseForm({
           ) : pendingRequest ? (
             <button className="cash-shift-primary" type="button" disabled={mutationBusy} onClick={submit}>Reintentar mismo corte</button>
           ) : !completed ? (
-            <button className="cash-shift-primary" type="button" disabled={previewBusy || uploadBusy || mutationBusy || !draftState.operation} onClick={submit}>{fallbackLabel}</button>
+            <button className="cash-shift-primary" type="button" disabled={previewBusy || mutationBusy || !draftState.operation} onClick={submit}>{fallbackLabel}</button>
           ) : null}
         </div>
       </div>

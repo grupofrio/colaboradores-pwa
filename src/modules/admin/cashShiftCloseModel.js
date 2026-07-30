@@ -41,7 +41,7 @@ export function calculateCloseFeedback({ serverExpectedCash, denominations, adju
   }
 }
 
-export function cashShiftEvidenceBinding(cashShift) {
+export function cashShiftCloseBinding(cashShift) {
   const state = cashShift?.shift?.state
   if (state !== 'open' && state !== 'reopened') {
     throw new TypeError('El turno no está disponible para cierre.')
@@ -67,7 +67,7 @@ export function buildCashShiftCloseOperation({
   notes,
   nextOpeningFund,
 }) {
-  const binding = cashShiftEvidenceBinding(cashShift)
+  const binding = cashShiftCloseBinding(cashShift)
   const normalizedDenominations = normalizeDenominations(denominations)
   const normalizedAdjustments = normalizeAdjustments(adjustments)
   const feedback = calculateCloseFeedback({
@@ -99,21 +99,4 @@ export function buildCashShiftCloseOperation({
       ? `Volver a cerrar ${shiftName} ${day}`
       : nextTransitionLabel(cashShift.shift),
   }
-}
-
-export function readEvidenceFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new TypeError('No se pudo leer la fotografía.'))
-    reader.onload = () => {
-      const value = String(reader.result || '')
-      const comma = value.indexOf(',')
-      if (comma < 0 || !value.slice(comma + 1)) {
-        reject(new TypeError('La fotografía no es válida.'))
-        return
-      }
-      resolve(value.slice(comma + 1))
-    }
-    reader.readAsDataURL(file)
-  })
 }
