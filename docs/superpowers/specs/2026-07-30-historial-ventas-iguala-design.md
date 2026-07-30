@@ -73,6 +73,12 @@ ampliar ese alcance: deben ser compatibles con la configuración fija o la
 solicitud se rechaza. Un token inválido, actor no autorizado o intento de salir
 del alcance devuelve acceso denegado y ningún dato parcial.
 
+La fuente analítica de una venta será únicamente
+`sale.order.analytic_account_id`, igual que la columna de cuenta analítica
+usada en la lista de ventas de Odoo. Una distribución analítica de líneas no
+modifica el alcance de esta primera entrega. Si el pedido no tiene esa cuenta
+analítica, no aparece en el historial.
+
 ### PWA: visibilidad de producto
 
 La navegación y la ruta se muestran a las sesiones de Angélica y Sugey con una
@@ -105,26 +111,29 @@ Así no se pierden ni duplican ventas alrededor de medianoche.
 
 ```json
 {
-  "timezone": "America/Mexico_City",
-  "scope_label": "Iguala",
-  "filters": { "date_from": "2026-07-29", "date_to": "2026-07-30", "search": "S25375" },
-  "pagination": { "page": 1, "page_size": 50, "total": 1 },
-  "orders": [
-    {
-      "id": 25375,
-      "folio": "S25375",
-      "ordered_at": "2026-07-30T07:57:27-06:00",
-      "customer": { "id": 10, "name": "VENTA PUBLICO IGUALA NOCHE" },
-      "responsible_employee": { "id": 717, "name": "Angélica Jaimes" },
-      "payment": { "method": "cash", "label": "Efectivo", "amount": 320.0 },
-      "currency": "MXN",
-      "amount_total": 320.0,
-      "state": "sale",
-      "lines": [
-        { "product_id": 100, "product_name": "Producto", "quantity": 2, "unit_price": 160.0, "line_total": 320.0 }
-      ]
-    }
-  ]
+  "ok": true,
+  "data": {
+    "timezone": "America/Mexico_City",
+    "scope_label": "Iguala",
+    "filters": { "date_from": "2026-07-29", "date_to": "2026-07-30", "search": "S25375" },
+    "pagination": { "page": 1, "page_size": 50, "total": 1 },
+    "orders": [
+      {
+        "id": 25375,
+        "folio": "S25375",
+        "ordered_at": "2026-07-30T07:57:27-06:00",
+        "customer": { "id": 10, "name": "VENTA PUBLICO IGUALA NOCHE" },
+        "responsible_employee": { "id": 717, "name": "Angélica Jaimes" },
+        "payment": { "method": "cash", "label": "Efectivo", "amount": 320.0, "breakdown": [] },
+        "currency": "MXN",
+        "amount_total": 320.0,
+        "state": "sale",
+        "lines": [
+          { "product_id": 100, "product_name": "Producto", "quantity": 2, "unit_price": 160.0, "line_total": 320.0 }
+        ]
+      }
+    ]
+  }
 }
 ```
 
@@ -136,8 +145,11 @@ Reglas del contrato:
 - `responsible_employee` es el vendedor que registró la orden;
 - `payment.method` conserva la clave de Odoo y `payment.label` es lo que verá
   la usuaria, por ejemplo `Efectivo` o `Crédito`;
-- un pago mixto devuelve `payment.breakdown`, el rótulo `Pago mixto` y conserva
-  el total de la venta en `amount_total`;
+- `payment.breakdown` siempre es un arreglo; para pago simple es `[]` y para
+  pago mixto contiene `{ method, label, amount }` por componente. Si
+  `method: "mixed"`, `label` es `Pago mixto` y la suma de
+  `breakdown[].amount`, redondeada a dos decimales, es igual a
+  `payment.amount` y a `amount_total`;
 - `lines` sólo incluye líneas vendibles, con cantidad, precio e importe final;
 - los importes son números MXN calculados autoritativamente en Odoo;
 - el orden es descendente por fecha/hora y después por ID.
@@ -167,7 +179,7 @@ La respuesta exitosa usa el mismo sobre que la lista:
         "currency": "MXN",
         "subtotal": 320.0,
         "amount_total": 320.0,
-        "payment": { "method": "cash", "label": "Efectivo", "amount": 320.0 },
+        "payment": { "method": "cash", "label": "Efectivo", "amount": 320.0, "breakdown": [] },
         "lines": [
           { "product_name": "Producto", "quantity": 2, "unit_price": 160.0, "line_total": 320.0 }
         ]
@@ -220,10 +232,12 @@ Las líneas se resumen en cada fila y se expanden para ver producto, cantidad,
 precio e importe. Cada tarjeta móvil presenta los mismos datos y una casilla
 visible.
 
-La selección se conserva mientras los resultados pertenecen al mismo filtro;
-al cambiar rango o búsqueda se limpia para no sumar pedidos que ya no están a
-la vista. El checkbox de cabecera selecciona/deselecciona los elementos de la
-página cargada. El ID de orden es único y no puede contarse dos veces.
+La selección se conserva entre páginas mientras los resultados pertenecen al
+mismo filtro, con un máximo total de 100 órdenes. Al cambiar rango o búsqueda
+se limpia para no sumar pedidos que ya no están a la vista. El checkbox de
+cabecera selecciona/deselecciona los elementos de la página cargada, hasta el
+cupo restante; al llegar al límite la interfaz lo comunica y no permite añadir
+más. El ID de orden es único y no puede contarse dos veces.
 
 ### Barra de selección
 
