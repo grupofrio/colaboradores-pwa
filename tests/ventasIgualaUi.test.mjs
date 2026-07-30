@@ -69,6 +69,37 @@ test('ScreenVentasIguala is a standalone CDMX sales history with selection and b
   assert.match(siblingContract, /ventas-iguala-screen[\s\S]*<\/section><div className="gf-batch-ticket-print"/)
 })
 
+test('ScreenVentasIguala protects an applied filter change and fixes the batch action bar', () => {
+  const screen = readSrc('modules/ventas-iguala/ScreenVentasIguala.jsx')
+
+  assert.match(screen, /setSelectedOrders\(\[\]\)/, 'applied dates and debounced search clear cross-page snapshots')
+  assert.match(screen, /appliedSearchRef\.current\s*!==\s*nextSearch/, 'search only clears after its debounce is applied')
+  assert.match(screen, /\.vi-selection\s*\{[^}]*position:\s*fixed/, 'selection summary remains available while scanning pages')
+  assert.match(screen, /\.vi-selection\s*\{[^}]*bottom:\s*0/, 'selection summary is fixed to the viewport bottom')
+  assert.match(screen, /Sucursal fija: Iguala/)
+  assert.match(screen, /Imprimir tickets/)
+  assert.match(screen, /No se encontraron ventas para los filtros aplicados\./)
+})
+
+test('ScreenVentasIguala exposes full sale details and explicit operational error states', () => {
+  const screen = readSrc('modules/ventas-iguala/ScreenVentasIguala.jsx')
+
+  assert.match(screen, /<details className="vi-order-lines">/)
+  assert.match(screen, /product_name/)
+  assert.match(screen, /unit_price/)
+  assert.match(screen, /line_total/)
+  assert.match(screen, /Precio unitario/)
+  assert.match(screen, /Cantidad/)
+  assert.match(screen, /Fecha \(CDMX\)/)
+  assert.match(screen, /Acceso denegado/)
+  assert.match(screen, /Datos no válidos/)
+  assert.match(screen, /invalid_batch_ticket_contract/)
+  assert.match(screen, /logScreenError\('ScreenVentasIguala', 'loadHistory'/)
+  assert.match(screen, /logScreenError\('ScreenVentasIguala', 'prepareTickets'/)
+  assert.match(screen, /requestAnimationFrame\(\(\) => window\.print\(\)\)/)
+  assert.match(screen, /const tickets = await getIgualaSalesTickets[\s\S]*setPrintableTickets\(tickets\)[\s\S]*requestAnimationFrame\(\(\) => window\.print\(\)\)/)
+})
+
 test('ScreenTicket delegates its body to TicketDocument while retaining its cancellation flow', () => {
   const screen = readSrc('modules/admin/ScreenTicket.jsx')
 
