@@ -81,8 +81,11 @@ analítica, no aparece en el historial.
 
 ### PWA: visibilidad de producto
 
-La navegación y la ruta se muestran a las sesiones de Angélica y Sugey con una
-allowlist de IDs de empleado configurable por entorno. Es sólo una mejora de
+`Ventas Iguala` será un módulo independiente del módulo `Administración`.
+La navegación, la tarjeta de inicio y la ruta se muestran a las sesiones de
+Angélica y Sugey con una allowlist de IDs de empleado configurable por entorno.
+Su ruta no depende de que tengan un rol de `admin_sucursal`; un guard propio
+falla cerrado para cualquier otra sesión. Esta política local sólo mejora la
 experiencia: Odoo sigue siendo la autoridad. La interfaz muestra `Sucursal
 fija: Iguala` y no incluye selector de sucursal.
 
@@ -203,9 +206,10 @@ para acceso denegado, `400` para filtros, límites o payload inválidos y
 
 ### Entrada y filtros
 
-Se añade `Historial de ventas` a la navegación de Administración y una ruta
-protegida, por ejemplo `/admin/ventas`. En escritorio usa `AdminShell`; en
-móvil usa tarjetas para conservar toda la información sin una tabla angosta.
+Se añade `Ventas Iguala` al registro global de módulos y una ruta protegida
+`/ventas-iguala`. En escritorio y móvil usa el shell global de la PWA y una
+cabecera propia; en móvil presenta tarjetas para conservar toda la información
+sin una tabla angosta. No se añade a `AdminShell` ni a la ruta `/admin`.
 
 La cabecera tendrá:
 
@@ -268,10 +272,13 @@ selección mientras siga la misma navegación.
 
 ## Unidades de implementación
 
-- `salesHistoryAccess.js`: allowlist local y guard de navegación;
-- `salesHistoryApi.js`: consultas, filtros y normalización de contratos;
-- `salesHistoryState.js`: búsqueda, selección sin duplicados y total acumulado;
-- `ScreenSalesHistory.jsx`: filtros, lista, estados e impresión;
+- `src/modules/ventas-iguala/access.js`: allowlist local y decisión de acceso;
+- `src/modules/ventas-iguala/salesHistoryApi.js`: consultas, filtros y
+  normalización de contratos;
+- `src/modules/ventas-iguala/salesHistoryState.js`: búsqueda, selección sin
+  duplicados y total acumulado;
+- `src/modules/ventas-iguala/ScreenVentasIguala.jsx`: filtros, lista,
+  estados e impresión;
 - componente reutilizable de ticket: extrae el cuerpo de `ScreenTicket` para
   imprimir uno o varios tickets con formato consistente.
 
