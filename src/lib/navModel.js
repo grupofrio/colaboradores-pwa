@@ -18,6 +18,7 @@ import {
 import { isValidAuthenticatedSession } from './session.js'
 import { readAuthoritativeTowerStatus } from '../modules/torre/e1/loadTowerStatus.js'
 import { readM2Access } from '../modules/planeacion/m2/access.js'
+import { readConfiguredVentasIgualaAccessForSession } from '../modules/ventas-iguala/access.js'
 
 // Anclas fijas (no son módulos del registry). Siempre presentes con sesión:
 // todos pueden ir a su Inicio y a su perfil.
@@ -112,6 +113,7 @@ export function isModuleVisibleForSession(module, session) {
   if (!isValidAuthenticatedSession(session)) return false
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
   if (module.accessPolicy === 'm2') return readM2Access(session).level === 'global'
+  if (module.accessPolicy === 'iguala_sales') return readConfiguredVentasIgualaAccessForSession(session).level === 'iguala_sales'
   if (module.accessPolicy) return false // política desconocida => fail-closed
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
 }
@@ -145,6 +147,11 @@ export function getModuleEntryDecisionForSession(module, session) {
   }
   if (module?.accessPolicy === 'm2') {
     return readM2Access(session).level === 'global'
+      ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
+      : { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  if (module?.accessPolicy === 'iguala_sales') {
+    return readConfiguredVentasIgualaAccessForSession(session).level === 'iguala_sales'
       ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
       : { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }

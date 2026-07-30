@@ -13,6 +13,7 @@ import { isValidAuthenticatedSession } from './lib/session'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
+import { readConfiguredVentasIgualaAccessForSession } from './modules/ventas-iguala/access'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -30,6 +31,7 @@ const ScreenKoldTowerE1 = lazy(() => import('./modules/torre/e1/ScreenKoldTowerE
 const ScreenM1Backlog = lazy(() => import('./modules/torre/m1/ScreenM1Backlog'))
 // KOLD OS · M2 — Planeación y readiness (observatorio read-only, gate propio M2PlaneacionRoute)
 const ScreenPlaneacionM2 = lazy(() => import('./modules/planeacion/ScreenPlaneacionM2'))
+const ScreenVentasIguala = lazy(() => import('./modules/ventas-iguala/ScreenVentasIguala'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -232,6 +234,13 @@ function M2PlaneacionRoute({ children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   if (readM2Access(session).level !== 'global') return <Navigate to="/" replace />
+  return children
+}
+
+function VentasIgualaRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readConfiguredVentasIgualaAccessForSession(session).level !== 'iguala_sales') return <Navigate to="/" replace />
   return children
 }
 
@@ -617,6 +626,10 @@ export default function App() {
 
             {/* ── KOLD OS · M2 — Planeación y readiness (read-only) ────── */}
             <Route path="/planeacion" element={<M2PlaneacionRoute><ScreenPlaneacionM2Mount /></M2PlaneacionRoute>} />
+
+            <Route path="/ventas-iguala" element={
+              <VentasIgualaRoute><ScreenVentasIguala /></VentasIgualaRoute>
+            } />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />

@@ -16,9 +16,13 @@ export function readVentasIgualaAccess(session, allowedEmployeeIds = []) {
 }
 
 const configuredEmployeeIds = parseAllowedEmployeeIds(
-  import.meta.env?.VITE_IGUALA_SALES_EMPLOYEE_IDS,
+  import.meta.env?.VITE_IGUALA_SALES_EMPLOYEE_IDS ?? globalThis.process?.env?.VITE_IGUALA_SALES_EMPLOYEE_IDS,
 )
 
+export function readConfiguredVentasIgualaAccessForSession(session) {
+  return readVentasIgualaAccess(session, configuredEmployeeIds)
+}
+
 export function readConfiguredVentasIgualaAccess() {
-  return readVentasIgualaAccess(getSession(), configuredEmployeeIds)
+  return readConfiguredVentasIgualaAccessForSession(getSession())
 }
