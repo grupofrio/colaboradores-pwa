@@ -333,6 +333,22 @@ export const MODULES = [
     showInNav:  true,
   },
 
+  // ── Ventas Iguala — acceso UX configurado por employee_id ────────────────
+  // Odoo sigue siendo la autoridad de seguridad; accessPolicy solo gobierna
+  // qué superficie cliente se ofrece a los colaboradores configurados.
+  {
+    id:     'ventas_iguala',
+    label:  'Ventas Iguala',
+    shortLabel: 'Ventas',
+    route:  '/ventas-iguala',
+    tone:   'blueSoft',
+    roles:  ['*'],
+    accessPolicy: 'iguala_sales',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 14,
+  },
+
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',

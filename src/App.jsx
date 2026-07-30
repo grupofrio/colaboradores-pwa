@@ -50,6 +50,7 @@ const ScreenCajaConciliacionM6 = lazy(() => import('./modules/caja-conciliacion/
 // KOLD OS · M7 — Rentabilidad y costos (observatorio read-only, gate propio M7RentabilidadRoute)
 const ScreenRentabilidadCostosM7 = lazy(() => import('./modules/rentabilidad-costos/ScreenRentabilidadCostosM7'))
 const ScreenAsistencias = lazy(() => import('./modules/asistencias/ScreenAsistencias'))
+const ScreenVentasIguala = lazy(() => import('./modules/ventas-iguala/ScreenVentasIguala'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -316,6 +317,16 @@ function AttendanceRoute({ children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   const module = getModuleById('asistencias')
+  if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
+  return children
+}
+
+// La política registrada `iguala_sales` controla tarjeta, navegación, clic y
+// URL. Este gate conserva esa misma autoridad y Odoo revalida cada petición.
+function VentasIgualaRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  const module = getModuleById('ventas_iguala')
   if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
   return children
 }
@@ -834,6 +845,10 @@ export default function App() {
 
             {/* ── Asistencias de Iguala — allowlist exacta por employee_id ── */}
             <Route path="/asistencias" element={<AttendanceRoute><ScreenAsistencias /></AttendanceRoute>} />
+
+            <Route path="/ventas-iguala" element={
+              <VentasIgualaRoute><ScreenVentasIguala /></VentasIgualaRoute>
+            } />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />
