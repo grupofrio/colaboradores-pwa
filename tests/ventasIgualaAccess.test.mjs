@@ -47,6 +47,15 @@ test('readVentasIgualaAccess fails closed with an empty configuration', () => {
   )
 })
 
+test('readVentasIgualaAccess treats malformed allowlists as empty', () => {
+  for (const allowedEmployeeIds of [null, {}]) {
+    assert.deepEqual(
+      readVentasIgualaAccess(validSession, allowedEmployeeIds),
+      { level: 'none', reason: 'not_authorized' },
+    )
+  }
+})
+
 test('readConfiguredVentasIgualaAccess is a zero-argument fail-closed wrapper', () => {
   assert.equal(readConfiguredVentasIgualaAccess.length, 0)
   assert.deepEqual(
