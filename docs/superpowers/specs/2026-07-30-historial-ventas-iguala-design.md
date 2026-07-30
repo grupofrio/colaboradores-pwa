@@ -56,12 +56,22 @@ verifica que pertenezca a una allowlist configurable de responsables de
 historial de ventas de Iguala, sembrada con Angélica y Sugey. La configuración
 usa IDs de empleado, nunca nombre, rol ni valores del navegador.
 
-La misma política fija los almacenes y/o cuentas analíticas de Iguala que sean
-propiedad de esa sucursal. Los filtros de empresa, almacén, analítica o actor
-recibidos desde el cliente no pueden ampliar ese alcance: deben ser compatibles
-con la configuración fija o la solicitud se rechaza. Un token inválido, actor
-no autorizado o intento de salir del alcance devuelve acceso denegado y ningún
-dato parcial.
+La misma política usa una configuración única
+`gf_pwa_admin.iguala_sales_scope`, que contiene los IDs de los almacenes de
+Iguala, las cuentas analíticas de código `IGU` y `IGU34`, y los canales POS
+de mostrador permitidos. Una orden pertenece al historial únicamente si cumple
+simultáneamente:
+
+1. `warehouse_id` pertenece a los almacenes configurados;
+2. su cuenta analítica es una de las dos cuentas configuradas; y
+3. pertenece a un canal POS de mostrador configurado.
+
+La instalación productiva debe tener estos tres grupos configurados antes de
+habilitar el endpoint; si falta uno, el servicio falla cerrado. Los filtros de
+empresa, almacén, analítica o actor recibidos desde el cliente no pueden
+ampliar ese alcance: deben ser compatibles con la configuración fija o la
+solicitud se rechaza. Un token inválido, actor no autorizado o intento de salir
+del alcance devuelve acceso denegado y ningún dato parcial.
 
 ### PWA: visibilidad de producto
 
@@ -76,14 +86,15 @@ fija: Iguala` y no incluye selector de sucursal.
 
 | Parámetro | Requerido | Regla |
 | --- | --- | --- |
-| `date_from` | no | Fecha local `YYYY-MM-DD`; por defecto, hoy CDMX. |
-| `date_to` | no | Fecha local `YYYY-MM-DD`; por defecto, `date_from`. |
+| `date_from` | no | Fecha local `YYYY-MM-DD`; si se omite junto con `date_to`, se usa hoy CDMX. |
+| `date_to` | no | Fecha local `YYYY-MM-DD`; si sólo llega uno de los dos extremos, ese día se usa para ambos. |
 | `search` | no | Busca por cliente o folio, sin distinguir mayúsculas ni acentos. |
 | `page` | no | Entero positivo; por defecto 1. |
-| `page_size` | no | Entero con límite aplicado por el servidor. |
+| `page_size` | no | Entero de 1 a 100; por defecto 50. |
 
-El servidor valida extremos, rechaza fechas futuras y limita el rango máximo.
-Filtra `date_order` en `America/Mexico_City` con un intervalo semiabierto:
+El servidor valida extremos, rechaza fechas futuras y limita el rango a 31
+días calendario, inclusive. Filtra `date_order` en
+`America/Mexico_City` con un intervalo semiabierto:
 
 ```text
 [00:00 de date_from CDMX convertido a UTC,
@@ -135,13 +146,46 @@ Reglas del contrato:
 
 La PWA envía exclusivamente los IDs marcados a
 `POST /pwa-admin/iguala-sales-tickets` con
-`{ "order_ids": [25375, 25374] }`. Odoo revalida identidad y alcance para
-cada ID; no devuelve resultados parciales si alguno queda fuera de Iguala o
-dejó de ser visible.
+`{ "order_ids": [25375, 25374] }`. El arreglo debe tener entre 1 y 100 IDs
+distintos. Odoo revalida identidad y alcance para cada ID; no devuelve
+resultados parciales si alguno queda fuera de Iguala o dejó de ser visible.
 
-La respuesta contiene los campos del ticket actual por orden. La PWA renderiza
-un ticket de 80 mm por venta, con salto de página entre tickets, y abre una
-sola acción de impresión. El orden impreso respeta el orden de selección.
+La respuesta exitosa usa el mismo sobre que la lista:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "timezone": "America/Mexico_City",
+    "tickets": [
+      {
+        "order_id": 25375,
+        "folio": "S25375",
+        "ordered_at": "2026-07-30T07:57:27-06:00",
+        "customer": { "name": "VENTA PUBLICO IGUALA NOCHE" },
+        "responsible_employee": { "name": "Angélica Jaimes" },
+        "currency": "MXN",
+        "subtotal": 320.0,
+        "amount_total": 320.0,
+        "payment": { "method": "cash", "label": "Efectivo", "amount": 320.0 },
+        "lines": [
+          { "product_name": "Producto", "quantity": 2, "unit_price": 160.0, "line_total": 320.0 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`tickets` se devuelve exactamente en el mismo orden de `order_ids`, y cada
+elemento se correlaciona con su petición mediante `order_id`. La PWA
+renderiza un ticket de 80 mm por venta, con salto de página entre tickets, y
+abre una sola acción de impresión.
+
+Las respuestas de error de ambos endpoints usan
+`{ "ok": false, "error": { "code": "...", "message": "..." } }`: `403`
+para acceso denegado, `400` para filtros, límites o payload inválidos y
+`409` cuando una impresión incluye una orden ya no visible dentro del alcance.
 
 ## Experiencia PWA
 
@@ -250,4 +294,3 @@ Se ejecutarán las pruebas enfocadas, `npm test`, `npm run lint` y
 `npm run build`. También habrá revisión manual en escritorio, móvil e
 impresión de más de un ticket, y comprobación de que una sesión ajena no vea
 la entrada ni obtenga datos de Odoo.
-
