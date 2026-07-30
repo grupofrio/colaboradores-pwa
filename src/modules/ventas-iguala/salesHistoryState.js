@@ -1,13 +1,11 @@
 import { MAX_SELECTED_TICKETS } from './salesHistoryApi.js'
 
 function positiveId(value) {
-  const id = Number(value)
-  return Number.isSafeInteger(id) && id > 0 ? id : 0
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 0
 }
 
 function finiteAmount(value) {
-  const amount = Number(value)
-  return Number.isFinite(amount) ? amount : 0
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
 function snapshot(order) {

@@ -107,10 +107,48 @@ test('normalizeSalesHistory accepts direct and wrapped envelopes with safe optio
     assert.deepEqual(result.orders[0].lines, [])
     assert.deepEqual(result.orders[0].payment.breakdown, [
       { method: 'cash', label: 'Efectivo', amount: 200 },
-      { method: 'card', label: 'Tarjeta', amount: 0 },
     ])
     assert.equal(result.orders[0].payment.amount, 0)
   }
+})
+
+test('normalizeSalesHistory rejects coercible IDs and money while discarding malformed optional entries', () => {
+  const result = normalizeSalesHistory({ orders: [
+    historyOrder({ id: true }),
+    historyOrder({ id: '25376' }),
+    historyOrder({ id: [25377] }),
+    historyOrder({
+      id: 25378,
+      amount_total: true,
+      payment: {
+        method: 'mixed',
+        label: 'Pago mixto',
+        amount: '320',
+        breakdown: [
+          { method: 'cash', label: 'Efectivo', amount: 200 },
+          null,
+          ['card', 'Tarjeta', 120],
+          { method: 'card', label: 'Tarjeta', amount: '120' },
+        ],
+      },
+      lines: [
+        { product_id: 100, product_name: 'Producto', quantity: 2, unit_price: 160, line_total: 320 },
+        null,
+        ['linea'],
+        { product_id: 101, product_name: 'Inválida', quantity: true, unit_price: 10, line_total: 10 },
+      ],
+    }),
+  ] })
+
+  assert.deepEqual(result.orders.map((order) => order.id), [25378])
+  assert.equal(result.orders[0].amount_total, 0)
+  assert.equal(result.orders[0].payment.amount, 0)
+  assert.deepEqual(result.orders[0].payment.breakdown, [
+    { method: 'cash', label: 'Efectivo', amount: 200 },
+  ])
+  assert.deepEqual(result.orders[0].lines, [
+    { product_id: 100, product_name: 'Producto', quantity: 2, unit_price: 160, line_total: 320 },
+  ])
 })
 
 test('selection stores unique order snapshots and preserves their numeric total across page changes', () => {
@@ -139,6 +177,17 @@ test('selection caps at one hundred display-order snapshots', () => {
   assert.equal(isSelectionAtLimit(selected), true)
   assert.deepEqual(toggleOrderSelection(selected, historyOrder({ id: 101, amount_total: 1 })), selected)
   assert.deepEqual(togglePageSelection(selected, [historyOrder({ id: 101, amount_total: 1 })], true), selected)
+})
+
+test('selection ignores coercible non-number IDs and amounts', () => {
+  const selected = togglePageSelection([], [
+    historyOrder({ id: true, amount_total: 1 }),
+    historyOrder({ id: '7', amount_total: 2 }),
+    historyOrder({ id: [8], amount_total: 3 }),
+    historyOrder({ id: 9, amount_total: '4' }),
+  ], true)
+
+  assert.deepEqual(selected, [{ id: 9, amount_total: 0 }])
 })
 
 test('getIgualaSalesTickets rejects oversized, duplicate, and invalid IDs before an API call', async () => {
@@ -197,6 +246,15 @@ test('normalizeSalesTickets keeps requested positive IDs in request order and fa
   ]) {
     assert.throws(
       () => normalizeSalesTickets(payload, [7, 9]),
+      (error) => error?.code === 'invalid_batch_ticket_contract',
+    )
+  }
+})
+
+test('normalizeSalesTickets fails atomically when ticket IDs are coercible non-number values', () => {
+  for (const orderId of [true, '7', [7]]) {
+    assert.throws(
+      () => normalizeSalesTickets({ tickets: [historyOrder({ order_id: orderId, id: undefined })] }, [7]),
       (error) => error?.code === 'invalid_batch_ticket_contract',
     )
   }
