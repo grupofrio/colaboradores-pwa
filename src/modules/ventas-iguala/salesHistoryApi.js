@@ -60,14 +60,14 @@ function normalizePayment(payment) {
   }
 }
 
-function normalizeLines(lines) {
+function normalizeLines(lines, { requireProductId = true } = {}) {
   if (!Array.isArray(lines)) return []
   return lines
     .filter((line) => (
       line
       && typeof line === 'object'
       && !Array.isArray(line)
-      && positiveId(line.product_id)
+      && (requireProductId ? positiveId(line.product_id) : text(line.product_name ?? line.name))
       && typeof line.quantity === 'number'
       && Number.isFinite(line.quantity)
       && typeof line.unit_price === 'number'
@@ -76,7 +76,7 @@ function normalizeLines(lines) {
       && Number.isFinite(line.line_total)
     ))
     .map((line) => ({
-      product_id: line.product_id,
+      product_id: positiveId(line.product_id),
       product_name: text(line.product_name ?? line.name),
       quantity: line.quantity,
       unit_price: line.unit_price,
@@ -84,7 +84,7 @@ function normalizeLines(lines) {
     }))
 }
 
-function normalizeOrder(order, id = positiveId(order?.id)) {
+function normalizeOrder(order, id = positiveId(order?.id), lineOptions) {
   const source = order && typeof order === 'object' && !Array.isArray(order) ? order : {}
   return {
     id,
@@ -96,7 +96,7 @@ function normalizeOrder(order, id = positiveId(order?.id)) {
     currency: text(source.currency),
     amount_total: safeNumber(source.amount_total),
     state: text(source.state),
-    lines: normalizeLines(source.lines),
+    lines: normalizeLines(source.lines, lineOptions),
   }
 }
 
@@ -169,7 +169,7 @@ export function normalizeSalesTickets(payload, requestedIds) {
   if (byId.size !== ids.length) throw invalidTicketContract()
 
   return ids.map((orderId) => {
-    const normalized = normalizeOrder(byId.get(orderId), orderId)
+    const normalized = normalizeOrder(byId.get(orderId), orderId, { requireProductId: false })
     return {
       order_id: orderId,
       folio: normalized.folio,
