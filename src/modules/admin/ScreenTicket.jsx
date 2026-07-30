@@ -5,6 +5,7 @@ import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
 import { computePosSummary } from './posPricing'
+import TicketDocument from '../ventas-iguala/TicketDocument'
 
 export default function ScreenTicket() {
   const { session } = useSession()
@@ -70,14 +71,8 @@ export default function ScreenTicket() {
     orderState !== 'cancel' &&
     orderState !== 'done'
 
-  const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-
   const lines = order?.lines || order?.order_lines || []
   const { subtotal, total } = computePosSummary(lines)
-
-  const now = order?.date_order ? new Date(order.date_order) : new Date()
-  const dateStr = now.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' })
-  const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
   const folio = order?.name || `S${String(orderId).padStart(5, '0')}`
 
   // Mapping completo de métodos de pago (alineado con gf_pwa_admin.sale-create
@@ -105,6 +100,35 @@ export default function ScreenTicket() {
     return PAYMENT_METHOD_LABELS[key] || raw
   }
 
+  const ticket = order && {
+    folio,
+    ordered_at: order.date_order,
+    warehouse_name: session?.warehouse_name,
+    customer: {
+      name: order.partner_name || order.customer_name || order.customer?.name || 'Público general',
+    },
+    lines: lines.map((line) => {
+      const quantity = Number(line?.qty || line?.product_uom_qty || 0)
+      const unitPrice = Number(line?.price_unit || 0)
+      return {
+        product_id: line?.product_id,
+        product_name: line?.product_name || line?.name || 'Producto',
+        quantity,
+        unit_price: unitPrice,
+        line_total: quantity * unitPrice,
+      }
+    }),
+    subtotal,
+    amount_total: total,
+    currency: 'MXN',
+    payment: {
+      method: order.payment_method,
+      label: paymentMethodLabel(order.payment_method),
+      amount: total,
+      breakdown: Array.isArray(order.payment_breakdown) ? order.payment_breakdown : [],
+    },
+  }
+
   return (
     <div style={{
       minHeight: '100dvh',
@@ -117,22 +141,12 @@ export default function ScreenTicket() {
         button { border: none; background: none; cursor: pointer; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @media print {
-          body * { visibility: hidden !important; }
-          #ticket-card, #ticket-card * { visibility: visible !important; }
-          #ticket-card {
-            position: absolute !important; left: 0 !important; top: 0 !important;
-            width: 80mm !important; max-width: 80mm !important;
-            background: white !important; color: black !important;
-            box-shadow: none !important; border: none !important;
-            border-radius: 0 !important; padding: 4mm !important;
-            margin: 0 !important;
-          }
-          #ticket-card * { color: black !important; background: transparent !important; }
-          #ticket-actions { display: none !important; }
+          .gf-single-ticket-content > * { display: none !important; }
+          .gf-single-ticket-content > .gf-ticket-document { display: block !important; }
         }
       `}</style>
 
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
+      <div className="gf-single-ticket-content" style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
           <button onClick={() => navigate('/admin/pos')} style={{
@@ -179,83 +193,7 @@ export default function ScreenTicket() {
               </div>
             )}
 
-            {/* Ticket Card */}
-            <div id="ticket-card" style={{
-              background: '#ffffff', borderRadius: TOKENS.radius.xl, padding: '24px 20px',
-              color: '#1a1a1a', marginBottom: 16,
-            }}>
-              {/* Logo + Header */}
-              <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                <img src="/icons/logo-grupo-frio.svg" alt="Grupo Frio" style={{ height: 40, marginBottom: 6 }} />
-                <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>GRUPO FRIO</p>
-                <p style={{ fontSize: 11, color: '#666', margin: '2px 0 0' }}>{session?.warehouse_name || 'Sucursal'}</p>
-              </div>
-
-              {/* Date / Folio */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: '#888' }}>Fecha: {dateStr}</span>
-                <span style={{ fontSize: 11, color: '#888' }}>Hora: {timeStr}</span>
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>Folio: {folio}</span>
-              </div>
-
-              {/* Separator */}
-              <div style={{ borderTop: '1px dashed #ccc', marginBottom: 12 }} />
-
-              {/* Product Lines */}
-              {lines.map((l, i) => {
-                const qty = l.qty || l.product_uom_qty || 0
-                const price = l.price_unit || 0
-                return (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, color: '#333', flex: 1 }}>{qty} x {l.product_name || l.name || 'Producto'}</span>
-                    <span style={{ fontSize: 11, color: '#333', minWidth: 50, textAlign: 'right' }}>{fmt(price)}</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#1a1a1a', minWidth: 60, textAlign: 'right' }}>{fmt(qty * price)}</span>
-                  </div>
-                )
-              })}
-
-              {/* Separator */}
-              <div style={{ borderTop: '1px dashed #ccc', margin: '12px 0' }} />
-
-              {/* Totals */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: '#666' }}>Subtotal</span>
-                <span style={{ fontSize: 12, color: '#333' }}>{fmt(subtotal)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingTop: 6, borderTop: '1px solid #ddd' }}>
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a' }}>TOTAL</span>
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a' }}>{fmt(total)}</span>
-              </div>
-
-              {/* Payment method */}
-              <div style={{ textAlign: 'center', marginBottom: 12 }}>
-                <span style={{ fontSize: 11, color: '#888' }}>Metodo de pago: {paymentMethodLabel(order?.payment_method)}</span>
-              </div>
-
-              {/* Separator */}
-              <div style={{ borderTop: '1px dashed #ccc', margin: '8px 0 12px' }} />
-
-              {/* QR Placeholder */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
-                <div style={{
-                  width: 100, height: 100, border: '2px solid #1a1a1a', borderRadius: 8,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
-                }}>
-                  <span style={{ fontSize: 9, color: '#888', marginBottom: 2 }}>TICKET</span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a' }}>{folio}</span>
-                </div>
-              </div>
-
-              {/* Footer messages */}
-              <p style={{ fontSize: 10, color: '#666', textAlign: 'center', margin: '0 0 4px', lineHeight: '1.4' }}>
-                Presente este ticket en almacen para recoger su producto
-              </p>
-              <p style={{ fontSize: 11, fontWeight: 600, color: '#333', textAlign: 'center', margin: 0 }}>
-                Gracias por su compra
-              </p>
-            </div>
+            <TicketDocument ticket={ticket} />
 
             {/* Action Buttons */}
             <div id="ticket-actions" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 30 }}>
