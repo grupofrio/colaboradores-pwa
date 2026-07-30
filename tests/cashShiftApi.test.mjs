@@ -165,14 +165,14 @@ test('wrappers de mutación envían allowlists exactas y jamás scope ni totales
       shift_id: 41, expected_version: 0,
       denominations: [{ denomination: '500', count: 2 }],
       adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20 }],
-      notes: 'Arqueo revisado', evidence_token: 'ev-close', next_opening_fund: 300,
+      notes: 'Arqueo revisado', next_opening_fund: 300,
       idempotency_key: 'close-key',
     },
     {
       shift_id: 41, expected_version: 1,
       denominations: [{ denomination: '500', count: 2 }],
       adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20 }],
-      notes: 'Arqueo revisado', evidence_token: 'ev-reclose',
+      notes: 'Arqueo revisado',
       idempotency_key: 'reclose-key',
     },
     {
@@ -227,7 +227,6 @@ test('close, reclose y evidence validan localmente la versión semántica exacta
     denominations: [],
     adjustments: [],
     notes: '',
-    evidenceToken: '',
     nextOpeningFund: 300,
     idempotencyKey: 'semantic-version',
   }

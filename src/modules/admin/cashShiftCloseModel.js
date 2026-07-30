@@ -65,7 +65,6 @@ export function buildCashShiftCloseOperation({
   denominations,
   adjustments,
   notes,
-  evidenceToken,
   nextOpeningFund,
 }) {
   const binding = cashShiftEvidenceBinding(cashShift)
@@ -77,9 +76,8 @@ export function buildCashShiftCloseOperation({
     adjustments: normalizedAdjustments,
   })
   const normalizedNotes = String(notes || '').trim()
-  const normalizedEvidence = String(evidenceToken || '').trim()
-  if (hasCashDifference(feedback.difference) && (!normalizedNotes || !normalizedEvidence)) {
-    throw new TypeError('Toda diferencia requiere nota y fotografía válida.')
+  if (hasCashDifference(feedback.difference) && !normalizedNotes) {
+    throw new TypeError('Toda diferencia requiere nota.')
   }
   const request = {
     shiftId: binding.shiftId,
@@ -87,7 +85,6 @@ export function buildCashShiftCloseOperation({
     denominations: normalizedDenominations,
     adjustments: normalizedAdjustments,
     notes: normalizedNotes,
-    evidenceToken: normalizedEvidence,
   }
   if (binding.purpose === 'close') {
     request.nextOpeningFund = moneyValue(nextOpeningFund, 'El fondo inicial del siguiente turno')

@@ -1040,22 +1040,13 @@ test('close draft uses exact denomination math, validates adjustments and gates 
     nextOpeningFund: 300,
   }
   assert.throws(
-    () => buildCashShiftCloseOperation({ ...base, notes: '', evidenceToken: '' }),
-    /nota.*fotograf/i,
-  )
-  assert.throws(
-    () => buildCashShiftCloseOperation({ ...base, notes: 'Revisado', evidenceToken: '' }),
-    /fotograf/i,
-  )
-  assert.throws(
-    () => buildCashShiftCloseOperation({ ...base, notes: '', evidenceToken: 'ev-1' }),
-    /nota/i,
+    () => buildCashShiftCloseOperation({ ...base, notes: '' }),
+    { message: 'Toda diferencia requiere nota.' },
   )
   assert.throws(
     () => buildCashShiftCloseOperation({
       ...base,
       notes: 'Revisado',
-      evidenceToken: 'ev-1',
       adjustments: [{ type: 'income', concept: ' ', amount: 10 }],
     }),
     /concepto/i,
@@ -1064,7 +1055,6 @@ test('close draft uses exact denomination math, validates adjustments and gates 
   const operation = buildCashShiftCloseOperation({
     ...base,
     notes: '  Arqueo revisado  ',
-    evidenceToken: 'ev-1',
   })
   assert.equal(operation.operation, 'close')
   assert.equal(operation.label, 'Cerrar Noche 27 y abrir Día 27')
@@ -1074,7 +1064,6 @@ test('close draft uses exact denomination math, validates adjustments and gates 
     denominations: [{ denomination: '500', count: 2 }],
     adjustments: [],
     notes: 'Arqueo revisado',
-    evidenceToken: 'ev-1',
     nextOpeningFund: 300,
   })
 })
@@ -1092,7 +1081,6 @@ test('reclose binds evidence to the current version and omits next opening fund 
     denominations: [{ denomination: '500', count: 2 }, { denomination: '200', count: 1 }],
     adjustments: [],
     notes: '',
-    evidenceToken: '',
     nextOpeningFund: 999,
   })
   assert.equal(operation.operation, 'reclose')

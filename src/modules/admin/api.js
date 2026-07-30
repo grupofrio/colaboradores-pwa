@@ -427,7 +427,6 @@ function cashShiftClosePayload(input, { reclose }) {
     denominations: normalizeDenominations(value.denominations ?? []),
     adjustments: normalizeAdjustments(value.adjustments ?? []),
     notes: cashShiftText(value.notes, 'Las notas', { optional: true }),
-    evidence_token: cashShiftText(value.evidenceToken, 'La evidencia', { optional: true }),
     idempotency_key: cashShiftText(value.idempotencyKey, 'La clave de idempotencia'),
   }
   if (!reclose) {
