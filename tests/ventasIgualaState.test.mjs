@@ -251,6 +251,24 @@ test('normalizeSalesTickets keeps requested positive IDs in request order and fa
   }
 })
 
+test('normalizeSalesTickets preserves printable batch lines without product IDs', () => {
+  const tickets = normalizeSalesTickets({
+    tickets: [
+      historyOrder({
+        order_id: 7,
+        id: undefined,
+        lines: [
+          { product_name: 'Bolsa de hielo', quantity: 2, unit_price: 160, line_total: 320 },
+        ],
+      }),
+    ],
+  }, [7])
+
+  assert.deepEqual(tickets[0].lines, [
+    { product_id: 0, product_name: 'Bolsa de hielo', quantity: 2, unit_price: 160, line_total: 320 },
+  ])
+})
+
 test('normalizeSalesTickets fails atomically when ticket IDs are coercible non-number values', () => {
   for (const orderId of [true, '7', [7]]) {
     assert.throws(
