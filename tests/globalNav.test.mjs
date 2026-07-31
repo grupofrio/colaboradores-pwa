@@ -13,15 +13,18 @@ const ids = (arr) => arr.map((m) => m.id)
 const s = (role) => ({ employee_id: 100, session_token: 'h.p.s', role })
 
 // ── Fuente canónica única + orden por prioridad ─────────────────────────────
-test('supervisor_ventas (Aida): Equipo es prioritario y va directo; universales a Más', () => {
+test('supervisor_ventas (Aida): Equipo y Brief prioritarios y directos; universales a Más', () => {
   const session = s('supervisor_ventas')
   const nav = getNavModules(session)
   assert.equal(nav[0].id, 'supervisor_ventas', 'Equipo primero por navPriority 10')
+  assert.equal(nav[1].id, 'brief_dia', 'Brief del día enseguida (navPriority 16, sin Torre en esta sesión)')
   assert.ok(ids(nav).includes('kpis') && ids(nav).includes('encuestas') && ids(nav).includes('logros'))
 
+  // Con 5 módulos y 3 ranuras, la barra muestra 2 directos + "Más": el brief
+  // entra a la barra y KPIs baja a "Más" (decisión de producto, no accidente).
   const m = buildMobileNav(session, '/')
-  assert.deepEqual(ids(m.primary), ['supervisor_ventas', 'kpis'])
-  assert.deepEqual(ids(m.overflow), ['encuestas', 'logros'])
+  assert.deepEqual(ids(m.primary), ['supervisor_ventas', 'brief_dia'])
+  assert.deepEqual(ids(m.overflow), ['kpis', 'encuestas', 'logros'])
   assert.equal(m.hasMore, true)
   // No ve módulos de gestión que no le corresponden
   assert.ok(!ids(nav).includes('admin_sucursal'))
