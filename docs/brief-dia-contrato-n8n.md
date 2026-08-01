@@ -1,7 +1,25 @@
-# Mi Brief del día — contrato PWA ⇄ n8n
+# Briefs embebidos — contrato PWA ⇄ n8n
 
 Estado: **Fase B (PWA) construida.** Fase A (candado en n8n) la implementa el
 equipo de n8n. Este documento es lo que la PWA **ya manda hoy** en esta rama.
+
+Todas las variantes comparten **el mismo componente, el mismo mecanismo de auth y
+el mismo aislamiento**. Lo único que cambia por variante está en
+`src/modules/brief/briefCatalog.js`.
+
+## 0. Variantes
+
+| brief | endpoint | pestaña (UI) | allowlist del DATO (n8n) | fecha |
+|---|---|---|---|---|
+| Ventas — "Mi Brief del día" | `/api-n8n/brief-aida` | `supervisor_ventas` (Aida, emp 718) | `supervisor_ventas` + `direccion_general` | no |
+| Producción — "Mi Brief de planta" | `/api-n8n/brief-produccion` | `supervisor_produccion` (Miguel Ángel Morales, emp 577) | `supervisor_produccion` + `direccion_general` | `?d=YYYY-MM-DD` |
+
+`direccion_general` **puede pedir el dato pero no ve la pestaña** en ninguna de las
+dos: es acceso de revisión para dirección durante el piloto. Deliberado — la UI es
+comodidad, el candado es el backend.
+
+**Agregar un brief nuevo** (gerencia, etc.) = una entrada en `briefCatalog.js`, una
+en `registry.js` y una `<Route>`. Cero componentes nuevos.
 
 ---
 
@@ -13,11 +31,28 @@ X-GF-Employee-Token: <token>
 Accept: text/html
 ```
 
+```http
+GET /api-n8n/brief-produccion?d=2026-07-29
+X-GF-Employee-Token: <token>
+Accept: text/html
+```
+
 - `/api-n8n/*` es un rewrite de Vercel hacia `https://n8n.grupofrio.mx/webhook/*`
   (ver `vercel.json`). En dev, el proxy de `vite.config.js` hace lo mismo.
-  Desde el navegador el destino real es `https://n8n.grupofrio.mx/webhook/brief-aida`.
 - `cache: 'no-store'`, `credentials: 'omit'`. **Sin cookies.**
-- **No lleva body, ni query params, ni `Authorization`.**
+- **No lleva body ni `Authorization`.**
+- El **único** query param es la fecha, y solo donde la variante la declara.
+
+### La fecha (`?d=`) es presentación, nunca autorización
+
+`?d=YYYY-MM-DD` dice **qué día mirar**, no **qué puede ver quien pregunta**. El
+alcance lo sigue decidiendo el endpoint a partir del empleado dueño del token. Si el
+parámetro falta, el endpoint aplica su default ("ayer").
+
+La PWA valida el formato contra un calendario real antes de armar la URL: `2026-02-31`,
+`2026-7-9`, `ayer` o cualquier intento de inyección se **omiten** en vez de viajar
+(`isValidBriefDate` + `buildBriefUrl`, con test de basura). Aun así, el endpoint debe
+validar por su cuenta: el cliente no es autoridad de nada.
 
 ### El token
 
@@ -58,10 +93,11 @@ Por eso el endpoint debe derivar **todo** del empleado dueño del token:
 
 - **rol** → `hr.job.x_job_key` vía `resolve_employee_pwa_job_key`
   (`os_customer_zones/models/pwa_job_key.py`).
-- **sucursal** → `gf.ops.branch_config` con `employee_ids in [emp.id]`
-  (mismo patrón que `gf_saleops/services/guard.py`, que además impone que la
-  identidad del token gana siempre sobre cualquier `employee_id` del payload).
-  Esto es lo que reemplaza el `BR=29` hardcodeado del nodo `Generar Datos`.
+- **alcance** → depende del rol (ver §4). Para `supervisor_ventas`,
+  `gf.ops.branch_config` con `employee_ids in [emp.id]` — mismo patrón que
+  `gf_saleops/services/guard.py`, que además impone que la identidad del token gana
+  siempre sobre cualquier `employee_id` del payload. Esto reemplaza el `BR=29`
+  hardcodeado del nodo `Generar Datos`. Para producción, el alcance es Planta Iguala.
 
 ## 2. Las respuestas que la PWA sabe manejar
 
@@ -85,11 +121,25 @@ aplican al documento embebido. El aislamiento lo pone la PWA con
 
 ## 3. Allowlist acordada
 
-| | Ve la pestaña en la PWA | Puede pedir el dato |
+**`/api-n8n/brief-aida`** (ventas):
+
+| | Ve la pestaña | Puede pedir el dato |
 |---|---|---|
 | `supervisor_ventas` (Aida, emp **718**) | ✅ | ✅ |
-| `direccion_general` (Yamil, emp **1**) | ❌ a propósito | ✅ para revisión del piloto |
+| `direccion_general` (Yamil, emp **1**) | ❌ a propósito | ✅ revisión del piloto |
 | cualquier otro | ❌ | ❌ → **403** |
+
+**`/api-n8n/brief-produccion`** (planta):
+
+| | Ve la pestaña | Puede pedir el dato |
+|---|---|---|
+| `supervisor_produccion` (Miguel Ángel Morales, emp **577**) | ✅ | ✅ |
+| `direccion_general` (Yamil, emp **1**) | ❌ a propósito | ✅ revisión del piloto |
+| cualquier otro | ❌ | ❌ → **403** |
+
+Cruzado también: `supervisor_ventas` **no** debe poder pedir `brief-produccion`, ni
+al revés. Verificado del lado de la PWA (la ruta cruzada redirige a `/` y la tarjeta
+no aparece); del lado del dato lo tiene que imponer el candado.
 
 ### ⚠️ Cómo entra Yamil — hay una trampa
 
@@ -129,27 +179,47 @@ Consecuencia para el nodo de scope: la identidad sale SIEMPRE del token, pero la
 Esto no cambia nada en la PWA: el cliente no manda ni sucursal ni rol, así que toda
 esta lógica vive del lado del endpoint.
 
-## 5. Cerrar la liga pública
+## 5. Cerrar las ligas públicas
 
-Al poner el candado, `GET https://n8n.grupofrio.mx/webhook/brief-aida` sin header
-debe pasar de `200` a `401`. Hoy responde **200 con 32,339 bytes de HTML a
-cualquiera** (medido el 2026-07-31), leyendo Odoo con credenciales admin
-(`$env.ODOO_USER/ODOO_PASSWORD`) y alcance fijo a la sucursal 29.
+**Las dos** son públicas hoy. Al poner el candado, un `GET` sin header debe pasar de
+`200` a `401`:
 
-**Sincronización acordada:** el candado y el cierre de la liga pública caen **junto
-con el merge de este PR**, no antes — así el acceso de revisión de dirección no se
-corta mientras tanto.
+| endpoint | hoy (medido) |
+|---|---|
+| `webhook/brief-aida` | 200 · 32,339 bytes de HTML a cualquiera (2026-07-31) |
+| `webhook/brief-produccion` | 200 · HTML a cualquiera (2026-07-31) |
+
+Ambas leen Odoo con credenciales admin (`$env.ODOO_USER/ODOO_PASSWORD`).
+
+**Sincronización acordada:** candado y cierre caen **junto con el merge del PR
+correspondiente**, no antes — así el acceso de revisión de dirección no se corta
+mientras tanto.
 
 ## 6. Qué falta para cerrar Fase C
 
-Requiere el candado puesto (Fase A); hoy el endpoint es público, así que el 403 aún
-no existe y no hay nada que probar:
+Requiere el candado puesto (Fase A); hoy los endpoints son públicos, así que el 403
+aún no existe y no hay nada que probar:
 
-- [ ] `jefe_ruta` con token válido → el endpoint responde **403**.
-- [ ] Yamil con login real de dirección → **200** (scope 29 por default de piloto).
-- [ ] `curl` sin header → **401**.
+- [ ] `jefe_ruta` con token válido → **403** en las dos rutas.
+- [ ] `supervisor_ventas` → 200 en `brief-aida`, **403** en `brief-produccion`.
+- [ ] `supervisor_produccion` → 200 en `brief-produccion`, **403** en `brief-aida`.
+- [ ] Yamil con login real de dirección → **200** en ambas.
+- [ ] `curl` sin header → **401** en ambas.
 
-Lo verificado hasta ahora (runtime, no aserción): Aida entra con 0000/0000, la
-petición sale a `/api-n8n/brief-aida`, responde 200 y el brief se pinta dentro del
-iframe aislado (31,956 caracteres); `iframe.contentDocument` es `null` desde la
-app, o sea el brief no alcanza el `localStorage` de la PWA.
+### Lo verificado del lado de la PWA (runtime, no aserción)
+
+Con la sesión real de Aida (emp 718, token de empleado de 43 caracteres):
+
+| | ventas | producción |
+|---|---|---|
+| petición | `/api-n8n/brief-aida` → 200 | `/api-n8n/brief-produccion` → 200 |
+| HTML montado | 31,957 caracteres | 9,504 caracteres |
+| `?d=2026-07-29` | n/a | → 200, contenido distinto (13,467 caracteres) |
+| `sandbox` | `allow-scripts` | `allow-scripts` |
+| `iframe.contentDocument` desde la app | `null` | `null` |
+| ruta cruzada | — | con rol `supervisor_ventas`, `/brief-produccion` redirige a `/` |
+
+La variante de producción se ejercitó con el token real de Aida y el rol cambiado a
+`supervisor_produccion` en la sesión local: alcanza para probar el embed, el
+parámetro de fecha y el aislamiento. **No prueba el candado** — eso solo se puede
+verificar con Fase A puesta y la sesión real de Miguel.

@@ -1,9 +1,9 @@
-// ─── Brief del día — cliente HTTP (Fase B) ───────────────────────────────────
-// CONTRATO con n8n (workflow W_BRIEF_AIDA, id FBgvKJZVUyq7yA66):
+// ─── Briefs — cliente HTTP compartido por todas las variantes ────────────────
+// CONTRATO con n8n (ver docs/brief-dia-contrato-n8n.md):
 //
-//   GET /api-n8n/brief-aida
+//   GET /api-n8n/<endpoint>[?<dateParam>=YYYY-MM-DD]
 //   Header: X-GF-Employee-Token: <session.odoo_employee_token>
-//   200 text/html  → documento autocontenido (dark dashboard, ~32KB)
+//   200 text/html  → documento autocontenido
 //   401            → token ausente / vencido / revocado
 //   403            → token válido pero el rol del empleado no está autorizado
 //
@@ -13,14 +13,18 @@
 // auto-declaración, no una credencial. La ÚNICA prueba de identidad que la PWA
 // posee es el gf_employee_token, que Odoo emitió en el sign-in y que el endpoint
 // valida contra gf.employee.mobile.session. De ese empleado —y solo de él— el
-// backend deriva rol y sucursal.
+// backend deriva rol y alcance.
+//
+// El ÚNICO dato que el cliente aporta es la fecha a consultar, y va como
+// parámetro de presentación (qué día mirar), NUNCA de autorización: el endpoint
+// decide qué puede ver ese empleado, no la URL.
 //
 // Módulo PURO (sin React) para poder testearse con node:test.
 
-export const BRIEF_PATH = '/api-n8n/brief-aida'
+import { briefSupportsDate } from './briefCatalog.js'
 
-// Techo defensivo: el brief pesa ~32KB. Si algún día llega algo de otro orden de
-// magnitud, no lo montamos en memoria — preferimos declarar el fallo.
+// Techo defensivo: los briefs pesan ~13–32KB. Si algún día llega algo de otro
+// orden de magnitud, no lo montamos en memoria — preferimos declarar el fallo.
 export const MAX_BRIEF_BYTES = 2 * 1024 * 1024
 
 // Estados posibles del resultado. Cada uno tiene su propia salida en la UI: no
@@ -52,17 +56,45 @@ export function isBypassSession(session) {
   return Boolean(session) && typeof session === 'object' && session._bypass === true
 }
 
+/**
+ * ¿`value` es una fecha calendario real en formato YYYY-MM-DD?
+ * Estricto a propósito: '2026-02-31' y '2026-7-9' se rechazan. Lo que no pasa
+ * por aquí NUNCA llega a la URL.
+ */
+export function isValidBriefDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [y, m, d] = value.split('-').map(Number)
+  if (m < 1 || m > 12 || d < 1) return false
+  const date = new Date(Date.UTC(y, m - 1, d))
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d
+}
+
+/**
+ * URL final del brief. La fecha se agrega SOLO si la variante la admite y el
+ * valor es una fecha real; en cualquier otro caso se omite y el endpoint
+ * aplica su default ("ayer"). Nunca se concatena entrada cruda.
+ */
+export function buildBriefUrl(brief, date) {
+  const endpoint = String(brief?.endpoint || '')
+  if (!endpoint) return ''
+  if (!briefSupportsDate(brief) || !isValidBriefDate(date)) return endpoint
+  return `${endpoint}?${encodeURIComponent(brief.dateParam)}=${encodeURIComponent(date)}`
+}
+
 function fail(state, reason, status = 0) {
   return { state, html: '', reason, status }
 }
 
 /**
- * Pide el brief al endpoint autenticado.
+ * Pide un brief al endpoint autenticado.
  *
  * No lanza: devuelve SIEMPRE { state, html, reason, status } para que la
  * pantalla decida qué mostrar. Un throw aquí terminaría como pantalla en blanco.
  */
-export async function fetchBriefHtml({ session, fetchImpl, signal } = {}) {
+export async function fetchBriefHtml({ session, brief, date = '', fetchImpl, signal } = {}) {
+  const url = buildBriefUrl(brief, date)
+  if (!url) return fail(BRIEF_STATE.UNAVAILABLE, 'unknown_brief')
+
   // El bypass admin se revisa ANTES que el token: esas sesiones se fabrican en
   // el cliente (buildMockSession) y nunca tuvieron gf_employee_token, así que
   // reportarlas como "sesión vencida" mandaría a re-loguearse a alguien que ya
@@ -77,7 +109,7 @@ export async function fetchBriefHtml({ session, fetchImpl, signal } = {}) {
 
   let res
   try {
-    res = await doFetch(BRIEF_PATH, {
+    res = await doFetch(url, {
       method: 'GET',
       headers: {
         'X-GF-Employee-Token': token,
@@ -114,7 +146,7 @@ export async function fetchBriefHtml({ session, fetchImpl, signal } = {}) {
   if (typeof html !== 'string' || html.trim() === '') {
     return fail(BRIEF_STATE.UNAVAILABLE, 'empty_body', status)
   }
-  if (html.length > MAX_BRIEF_BYTES) {
+  if (new TextEncoder().encode(html).byteLength > MAX_BRIEF_BYTES) {
     return fail(BRIEF_STATE.UNAVAILABLE, 'too_large', status)
   }
 
