@@ -32,6 +32,14 @@ const C = TOKENS.colors
 
 // Copy por estado: qué pasó y qué puede hacer quien lo lee. Sin jerga, sin
 // stack traces, sin "Unexpected token".
+//
+// 401 y 403 se mantienen SEPARADOS a propósito. Los dos son un "no" del backend,
+// pero se resuelven distinto: el 401 se arregla volviendo a entrar; el 403 no se
+// arregla con nada que la persona pueda hacer. Decirle "no tienes acceso" a quien
+// solo se le venció la sesión la manda a pedir permisos que ya tiene.
+//
+// NINGUNO de los dos ofrece reintentar: el botón de reintento existe solo para
+// UNAVAILABLE (red/5xx). Un 401/403 no se reintenta en bucle.
 const STATE_COPY = {
   [BRIEF_STATE.BYPASS]: {
     title: 'Entra con tu PIN para ver el brief',
@@ -49,8 +57,8 @@ const STATE_COPY = {
     tone: 'warning',
   },
   [BRIEF_STATE.FORBIDDEN]: {
-    title: 'Este brief no es para tu puesto',
-    detail: 'Tu acceso es válido, pero este brief está reservado a otros puestos.',
+    title: 'No tienes acceso a este brief',
+    detail: 'Tu sesión es válida, pero este brief está reservado a otros puestos. Si crees que sí te corresponde, repórtalo.',
     tone: 'warning',
   },
   [BRIEF_STATE.UNAVAILABLE]: {

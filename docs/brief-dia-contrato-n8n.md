@@ -13,10 +13,15 @@ el mismo aislamiento**. Lo único que cambia por variante está en
 |---|---|---|---|---|
 | Ventas — "Mi Brief del día" | `/api-n8n/brief-aida` | `supervisor_ventas` (Aida, emp 718) | `supervisor_ventas` + `direccion_general` | no |
 | Producción — "Mi Brief de planta" | `/api-n8n/brief-produccion` | `supervisor_produccion` (Miguel Ángel Morales, emp 577) | `supervisor_produccion` + `direccion_general` | `?d=YYYY-MM-DD` |
+| Gerencia — "Brief de gerencia" | `/api-n8n/brief-gerencia` | `gerente_sucursal` | `gerente_sucursal` + `direccion_general` | no |
 
 `direccion_general` **puede pedir el dato pero no ve la pestaña** en ninguna de las
-dos: es acceso de revisión para dirección durante el piloto. Deliberado — la UI es
+tres: es acceso de revisión para dirección durante el piloto. Deliberado — la UI es
 comodidad, el candado es el backend.
+
+⚠️ **Pendiente del lado de n8n para la variante de gerencia:** cómo se resuelve el
+alcance de `gerente_sucursal` sigue **sin definir** (§4). No sale de
+`branch_config.employee_ids` — ese campo solo lista al supervisor de ventas asignado.
 
 **Agregar un brief nuevo** (gerencia, etc.) = una entrada en `briefCatalog.js`, una
 en `registry.js` y una `<Route>`. Cero componentes nuevos.
@@ -104,8 +109,8 @@ Por eso el endpoint debe derivar **todo** del empleado dueño del token:
 | Respuesta | Qué hace la PWA |
 |---|---|
 | `200` + `Content-Type: text/html` | Monta el HTML |
-| `401` | "Tu sesión venció" → volver a entrar |
-| `403` | "Este brief no es para tu puesto" |
+| `401` | "Tu sesión venció" → volver a entrar. **Una petición, sin reintento** |
+| `403` | "No tienes acceso a este brief". **Una petición, sin reintento** |
 | otro status / red caída | "No pudimos cargar tu brief" + Reintentar |
 | `200` con `Content-Type` que no sea `text/html` | Se trata como fallo (`bad_content_type`) |
 | `200` con cuerpo vacío o > 2 MB | Se trata como fallo |
@@ -113,6 +118,12 @@ Por eso el endpoint debe derivar **todo** del empleado dueño del token:
 **Acordado:** el candado responde **status real 401/403 con cuerpo no-HTML**, nunca
 un `200` con envelope JSON. Empata con la verificación de `Content-Type` de la PWA:
 un error disfrazado de 200 se rechaza en vez de montarse.
+
+**401 y 403 no se colapsan en un solo mensaje** aunque los dos sean un "no": el 401
+se arregla volviendo a entrar, el 403 no se arregla con nada que la persona pueda
+hacer. Decirle "no tienes acceso" a quien solo se le venció la sesión la manda a
+pedir permisos que ya tiene. El botón de reintentar existe **solo** para fallos de
+red/5xx; ningún rechazo de autorización se reintenta.
 
 El `Content-Security-Policy: sandbox …` que n8n ya manda hoy en la respuesta no
 estorba: el HTML se monta por `srcdoc`, así que las cabeceras de la respuesta no
@@ -137,9 +148,17 @@ aplican al documento embebido. El aislamiento lo pone la PWA con
 | `direccion_general` (Yamil, emp **1**) | ❌ a propósito | ✅ revisión del piloto |
 | cualquier otro | ❌ | ❌ → **403** |
 
-Cruzado también: `supervisor_ventas` **no** debe poder pedir `brief-produccion`, ni
-al revés. Verificado del lado de la PWA (la ruta cruzada redirige a `/` y la tarjeta
-no aparece); del lado del dato lo tiene que imponer el candado.
+**`/api-n8n/brief-gerencia`** (gerencia):
+
+| | Ve la pestaña | Puede pedir el dato |
+|---|---|---|
+| `gerente_sucursal` | ✅ | ✅ |
+| `direccion_general` (Yamil, emp **1**) | ❌ a propósito | ✅ revisión del piloto |
+| cualquier otro | ❌ | ❌ → **403** |
+
+Cruzado también: ningún rol debe poder pedir el brief de otro. Verificado del lado de
+la PWA (la ruta cruzada redirige a `/` y la tarjeta no aparece); del lado del dato lo
+tiene que imponer el candado.
 
 ### ⚠️ Cómo entra Yamil — hay una trampa
 
@@ -188,6 +207,7 @@ esta lógica vive del lado del endpoint.
 |---|---|
 | `webhook/brief-aida` | 200 · 32,339 bytes de HTML a cualquiera (2026-07-31) |
 | `webhook/brief-produccion` | 200 · HTML a cualquiera (2026-07-31) |
+| `webhook/brief-gerencia` | 200 · 23,255 bytes de HTML a cualquiera (2026-07-31) |
 
 Ambas leen Odoo con credenciales admin (`$env.ODOO_USER/ODOO_PASSWORD`).
 
@@ -210,14 +230,19 @@ aún no existe y no hay nada que probar:
 
 Con la sesión real de Aida (emp 718, token de empleado de 43 caracteres):
 
-| | ventas | producción |
-|---|---|---|
-| petición | `/api-n8n/brief-aida` → 200 | `/api-n8n/brief-produccion` → 200 |
-| HTML montado | 31,957 caracteres | 9,504 caracteres |
-| `?d=2026-07-29` | n/a | → 200, contenido distinto (13,467 caracteres) |
-| `sandbox` | `allow-scripts` | `allow-scripts` |
-| `iframe.contentDocument` desde la app | `null` | `null` |
-| ruta cruzada | — | con rol `supervisor_ventas`, `/brief-produccion` redirige a `/` |
+| | ventas | producción | gerencia |
+|---|---|---|---|
+| petición | `brief-aida` → 200 | `brief-produccion` → 200 | `brief-gerencia` → 200 |
+| HTML montado | 31,957 car. | 9,504 car. | 23,255 car. |
+| `?d=2026-07-29` | n/a | → 200, contenido distinto (13,467 car.) | n/a |
+| `sandbox` | `allow-scripts` | `allow-scripts` | `allow-scripts` |
+| `contentDocument` desde la app | `null` | `null` | `null` |
+| ruta cruzada | — | con rol `supervisor_ventas` redirige a `/` | con rol `jefe_ruta` redirige a `/` |
+
+**403 forzado en gerencia** (interceptando el fetch): sale "No tienes acceso a este
+brief", sin iframe y **sin ningún botón** — y el contador se quedó en 2 peticiones a
+los 15 segundos (las 2 son el doble-efecto de StrictMode en dev, una de ellas
+abortada). No hay bucle de reintento.
 
 La variante de producción se ejercitó con el token real de Aida y el rol cambiado a
 `supervisor_produccion` en la sesión local: alcanza para probar el embed, el
