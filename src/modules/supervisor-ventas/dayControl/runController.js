@@ -9,6 +9,17 @@
 //   4. Si falla y no hay demo ⇒ estado 'error' con mensaje honesto.
 // PURO: recibe los fetchers/loader por inyección ⇒ testeable sin red ni React.
 // NUNCA inventa datos: la ausencia se propaga como null y la vista la nombra.
+//
+// FORMA DE LA RESPUESTA (bug 2026-08-01): `getDayControl()` resuelve por
+// `routeDirect` al endpoint Odoo v2, y `odooJson` devuelve el ENVELOPE de
+// servicio `{status:'ok', code, user_message, data:{ok:true, contract, summary,
+// routes,...}}`. El payload del contrato vive en `.data`, no en la raíz. Antes
+// se pasaba el envelope entero a la vista: como `envelope.ok` es `undefined`
+// (no `false`), `isUsablePayload` lo daba por bueno, el estado quedaba en LIVE
+// y la pantalla pintaba ceros y "Fecha operativa no disponible" — sin error
+// visible. Por eso se normaliza con el normalizador ÚNICO de V2, que reconoce
+// las dos formas reales (envelope y payload crudo).
+import { normalizeSupervisorV2Response, PHASE } from '../v2/normalizeResponse.js'
 
 export const RUN_STATUS = Object.freeze({
   LOADING: 'loading',
@@ -25,6 +36,19 @@ export const RUN_SOURCE = Object.freeze({
 /** ¿El payload es una respuesta de contrato utilizable? (ok !== false y objeto). */
 export function isUsablePayload(payload) {
   return !!payload && typeof payload === 'object' && payload.ok !== false
+}
+
+/**
+ * Devuelve el PAYLOAD DEL CONTRATO a partir de lo que resolvió el cliente HTTP,
+ * venga como envelope de servicio o como payload crudo. Cualquier otra cosa
+ * (error de negocio, forma inesperada, null) ⇒ null, que el llamador trata como
+ * "no utilizable". Nunca devuelve el envelope: la vista lee `summary`/`routes`
+ * en la raíz.
+ */
+export function unwrapContractPayload(raw) {
+  const norm = normalizeSupervisorV2Response(raw)
+  if (norm.phase !== PHASE.OK) return null
+  return isUsablePayload(norm.data) ? norm.data : null
 }
 
 function messageFromError(err) {
@@ -53,8 +77,8 @@ export async function runOperationsHome({
     typeof fetchRadar === 'function' ? fetchRadar() : Promise.reject(new Error('fetchRadar no disponible')),
   ])
 
-  const dayControl = dcRes.status === 'fulfilled' ? dcRes.value : null
-  const radar = radarRes.status === 'fulfilled' ? radarRes.value : null
+  const dayControl = dcRes.status === 'fulfilled' ? unwrapContractPayload(dcRes.value) : null
+  const radar = radarRes.status === 'fulfilled' ? unwrapContractPayload(radarRes.value) : null
 
   // LIVE: basta con que day-control (la fuente primaria) sea utilizable.
   if (isUsablePayload(dayControl)) {
