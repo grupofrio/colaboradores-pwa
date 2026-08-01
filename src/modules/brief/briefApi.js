@@ -146,7 +146,7 @@ export async function fetchBriefHtml({ session, brief, date = '', fetchImpl, sig
   if (typeof html !== 'string' || html.trim() === '') {
     return fail(BRIEF_STATE.UNAVAILABLE, 'empty_body', status)
   }
-  if (html.length > MAX_BRIEF_BYTES) {
+  if (new TextEncoder().encode(html).byteLength > MAX_BRIEF_BYTES) {
     return fail(BRIEF_STATE.UNAVAILABLE, 'too_large', status)
   }
 

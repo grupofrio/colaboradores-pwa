@@ -177,6 +177,21 @@ test('200 con cuerpo vacío o desmedido no se monta', async () => {
   assert.equal(enorme.reason, 'too_large')
 })
 
+test('un cuerpo multibyte mayor a 2 MiB no se monta aunque tenga menos caracteres', async () => {
+  const multibyte = '€'.repeat(Math.floor(MAX_BRIEF_BYTES / 2) + 1)
+  assert.ok(multibyte.length < MAX_BRIEF_BYTES)
+  assert.ok(new TextEncoder().encode(multibyte).byteLength > MAX_BRIEF_BYTES)
+
+  const result = await fetchBriefHtml({
+    session: SESSION,
+    brief: VENTAS,
+    fetchImpl: async () => okResponse(multibyte),
+  })
+
+  assert.equal(result.state, BRIEF_STATE.UNAVAILABLE)
+  assert.equal(result.reason, 'too_large')
+})
+
 test('la red caída no lanza: devuelve estado, nunca revienta la pantalla', async () => {
   const result = await fetchBriefHtml({
     session: SESSION, brief: PRODUCCION,
