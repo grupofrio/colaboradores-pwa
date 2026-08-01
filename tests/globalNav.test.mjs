@@ -31,11 +31,13 @@ test('supervisor_ventas (Aida): Equipo y Brief prioritarios y directos; universa
   assert.ok(!ids(nav).includes('gerente'))
 })
 
-test('gerente_sucursal (Angélica): Admin Sucursal + Gerente directos; KPIs/Encuestas/Premios a Más', () => {
+test('gerente_sucursal (Angélica): Admin Sucursal + Gerente directos; Brief y universales a Más', () => {
   const session = s('gerente_sucursal')
   const m = buildMobileNav(session, '/')
+  // El Brief de gerencia (navPriority 16) entra DESPUÉS de Admin(10) y
+  // Gerente(12): no les quita su lugar en la barra.
   assert.deepEqual(ids(m.primary), ['admin_sucursal', 'gerente'])
-  assert.deepEqual(ids(m.overflow), ['kpis', 'encuestas', 'logros'])
+  assert.deepEqual(ids(m.overflow), ['brief_gerencia', 'kpis', 'encuestas', 'logros'])
   assert.equal(m.hasMore, true)
   assert.ok(!ids(getNavModules(session)).includes('supervisor_ventas'), 'no ve Equipo')
 })

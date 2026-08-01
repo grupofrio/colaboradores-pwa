@@ -15,6 +15,7 @@ const JSON_HEADERS = { get: (k) => (String(k).toLowerCase() === 'content-type' ?
 
 const VENTAS = getBriefById('ventas')
 const PRODUCCION = getBriefById('produccion')
+const GERENCIA = getBriefById('gerencia')
 
 const SESSION = { employee_id: 718, session_token: 'h.p.s', role: 'supervisor_ventas', odoo_employee_token: 'tok-real-abc' }
 
@@ -62,9 +63,11 @@ test('NO manda el session_token (JWT alg:none) ni identidad en la URL ni en el b
 
 // ── El parámetro de fecha (solo producción) ──────────────────────────────────
 
-test('producción acepta ?d=YYYY-MM-DD; ventas no acepta fecha', () => {
+test('solo producción acepta ?d=YYYY-MM-DD; ventas y gerencia no', () => {
   assert.equal(briefSupportsDate(PRODUCCION), true)
   assert.equal(briefSupportsDate(VENTAS), false)
+  assert.equal(briefSupportsDate(GERENCIA), false)
+  assert.equal(buildBriefUrl(GERENCIA, '2026-07-29'), '/api-n8n/brief-gerencia', 'gerencia ignora la fecha')
 
   assert.equal(buildBriefUrl(PRODUCCION, '2026-07-29'), '/api-n8n/brief-produccion?d=2026-07-29')
   assert.equal(buildBriefUrl(PRODUCCION, ''), '/api-n8n/brief-produccion', 'sin fecha ⇒ default del endpoint ("ayer")')
@@ -151,6 +154,28 @@ test('401 → unauthorized · 403 → forbidden (no se colapsan en un error gen�
   assert.equal(r403.state, BRIEF_STATE.FORBIDDEN)
   assert.equal(r401.html, '')
   assert.equal(r403.html, '')
+})
+
+test('un 401/403 se pide UNA vez: sin reintento en bucle', async () => {
+  for (const status of [401, 403]) {
+    let calls = 0
+    const fetchImpl = async () => { calls += 1; return { ok: false, status, headers: JSON_HEADERS, text: async () => '' } }
+
+    await fetchBriefHtml({ session: SESSION, brief: GERENCIA, fetchImpl })
+
+    assert.equal(calls, 1, `${status}: una sola petición`)
+  }
+})
+
+test('la denegación no ofrece reintentar; el fallo de red sí', () => {
+  const src = readFileSync(new URL('../src/modules/brief/BriefEmbedScreen.jsx', import.meta.url), 'utf8')
+
+  assert.ok(src.includes("title: 'No tienes acceso a este brief'"), 'copy de denegación explícita para 403')
+  // El botón de reintento se ata SOLO a UNAVAILABLE (red/5xx). Si alguien lo
+  // amarra a un estado de denegación, esto truena.
+  const retryBindings = [...src.matchAll(/status === BRIEF_STATE\.(\w+) \? '?Reintentar'?/g)].map((m) => m[1])
+  const retryHandlers = [...src.matchAll(/status === BRIEF_STATE\.(\w+) \? reload/g)].map((m) => m[1])
+  assert.deepEqual([...new Set([...retryBindings, ...retryHandlers])], ['UNAVAILABLE'])
 })
 
 test('200 con JSON (error disfrazado de n8n) NO se monta como brief', async () => {
@@ -258,10 +283,13 @@ test('cada brief lo ve SOLO su rol', () => {
   }
 })
 
-test('Aida y Miguel ven su brief en la barra sin perder su superficie operativa', () => {
-  const aida = getNavModules({ employee_id: 718, session_token: 'h.p.s', role: 'supervisor_ventas' })
-  assert.deepEqual(aida.slice(0, 2).map((m) => m.id), ['supervisor_ventas', 'brief_dia'])
+test('cada quien ve su brief sin perder su superficie operativa', () => {
+  const nav = (role, employee_id) => getNavModules({ employee_id, session_token: 'h.p.s', role }).map((m) => m.id)
 
-  const miguel = getNavModules({ employee_id: 577, session_token: 'h.p.s', role: 'supervisor_produccion' })
-  assert.deepEqual(miguel.slice(0, 2).map((m) => m.id), ['supervision_produccion', 'brief_produccion'])
+  assert.deepEqual(nav('supervisor_ventas', 718).slice(0, 2), ['supervisor_ventas', 'brief_dia'])
+  assert.deepEqual(nav('supervisor_produccion', 577).slice(0, 2), ['supervision_produccion', 'brief_produccion'])
+
+  // Gerencia: Admin(10) y Gerente(12) conservan la barra; el brief entra después.
+  const gerente = nav('gerente_sucursal', 699)
+  assert.deepEqual(gerente.slice(0, 3), ['admin_sucursal', 'gerente', 'brief_gerencia'])
 })
