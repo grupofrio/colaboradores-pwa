@@ -135,6 +135,26 @@ export const MODULES = [
     icon:   'equipo',
     navPriority: 10,
   },
+  // Brief del día — dashboard operativo de rutas y ventas servido por n8n.
+  // `roles` aquí decide SOLO la pestaña. El dato lo gatea el endpoint, que
+  // valida el gf_employee_token contra gf.employee.mobile.session y autoriza
+  // supervisor_ventas + direccion_general. Que dirección NO vea la tarjeta y
+  // sí pueda pedir el dato es deliberado: la UI es comodidad, el candado es el
+  // backend. Ver src/modules/brief/briefApi.js.
+  {
+    id:     'brief_dia',
+    label:  'Mi Brief del día',
+    shortLabel: 'Brief',
+    route:  '/brief',
+    tone:   'blue',
+    roles:  ['supervisor_ventas'],
+    status: 'live',
+    icon:   'kpis',
+    // 16 (no 11) a propósito: entra DESPUÉS de Torre operativa (15) para no
+    // desplazarla de la barra móvil de quien tiene tower_status. Agregar una
+    // superficie no debe degradar una existente.
+    navPriority: 16,
+  },
 
   // ── Asistencias de Iguala — allowlist exacta por employee_id ────────────
   // `roles` es solo metadata de contexto. La política attendance_manager es
