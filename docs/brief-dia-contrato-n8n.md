@@ -74,9 +74,9 @@ Por eso el endpoint debe derivar **todo** del empleado dueño del token:
 | `200` con `Content-Type` que no sea `text/html` | Se trata como fallo (`bad_content_type`) |
 | `200` con cuerpo vacío o > 2 MB | Se trata como fallo |
 
-**Importante:** un error devuelto como `200` con JSON —que es el default de varias
-rutas de n8n— la PWA lo rechaza en vez de montarlo. Si el candado niega el acceso,
-usar **status 401/403 de verdad**, no un envelope con 200.
+**Acordado:** el candado responde **status real 401/403 con cuerpo no-HTML**, nunca
+un `200` con envelope JSON. Empata con la verificación de `Content-Type` de la PWA:
+un error disfrazado de 200 se rechaza en vez de montarse.
 
 El `Content-Security-Policy: sandbox …` que n8n ya manda hoy en la respuesta no
 estorba: el HTML se monta por `srcdoc`, así que las cabeceras de la respuesta no
@@ -93,34 +93,41 @@ aplican al documento embebido. El aislamiento lo pone la PWA con
 
 ### ⚠️ Cómo entra Yamil — hay una trampa
 
-El rol de Yamil es `direccion_general`, empleado **id 1** (según la lista
-`ADMIN_EMPLOYEES` de `ScreenLogin.jsx`, generada desde `hr.employee` el 2026-04-02).
+Yamil es `direccion_general`, empleado **id 1**, y su acceso real está **confirmado
+activo**: entra con su PIN y barcode.
 
-Pero **debe entrar con su PIN y barcode reales**, no por el bypass admin. El bypass
-(`buildMockSession`) fabrica la sesión enteramente en el cliente: no llama a Odoo,
-así que **no tiene `gf_employee_token`**. Con esa sesión la PWA ni siquiera intenta
-la petición y muestra "Entra con tu PIN para ver el brief".
+Ese es el único camino: **no sirve el acceso rápido / bypass admin**. El bypass
+(`buildMockSession`) fabrica la sesión enteramente en el cliente, no llama a Odoo y
+por lo tanto **no tiene `gf_employee_token`**. Con esa sesión la PWA ni siquiera
+intenta la petición: muestra "Entra con tu PIN para ver el brief".
 
-Queda pendiente de confirmar de su lado: que el empleado 1 tenga
-`x_job_key = direccion_general` vigente y credenciales de PIN/barcode activas.
-
-## 4. Paso 0 pendiente — la sucursal de Aida
-
-**No pude verificarlo desde aquí: esta máquina no tiene credenciales de Odoo**
-(no hay `.env`; `scripts/odoo_audit.py` exige `ODOO_URL/ODOO_DB/ODOO_USER/ODOO_PASSWORD`).
-El lado de n8n sí las tiene. La consulta exacta:
+## 4. Paso 0 — RESUELTO (verificado por el equipo de n8n, 2026-07-31)
 
 ```python
-# ¿Aida (718) está en el branch_config 29?
-search_read('gf.ops.branch_config',
-            [[('employee_ids', 'in', [718])]],
-            ['id', 'display_name', 'analytic_account_id', 'company_id'])
+search_read('gf.ops.branch_config', [[('employee_ids', 'in', [718])]], ...)
+# → branch_config 29 · [IGU34] Iguala Glaciem · analytic 931
 ```
 
-- **Si devuelve el 29** → derivar la sucursal del empleado, como se acordó.
-- **Si devuelve vacío** → NO dejarlo salir vacío ni volver a hardcodear 29: usar el
-  fallback (`hr.employee` → almacén/cuenta analítica) y avisar para resolverlo en
-  Odoo con Sebas.
+Aida (emp 718, `supervisor_ventas`, job 152) **sí** resuelve a la sucursal 29. Para
+ella se deriva la sucursal del empleado, sin fallback.
+
+### El scope NO se deriva igual para todos los roles
+
+Hallazgo del mismo chequeo: **`branch_config(29).employee_ids == [718]` y nada más.**
+Ese campo es "el supervisor de ventas asignado", **no un roster de la sucursal**. Ni
+la gerente, ni supervisión de producción, ni Yamil (emp 1) aparecen ahí.
+
+Consecuencia para el nodo de scope: la identidad sale SIEMPRE del token, pero la
+**rama que resuelve el alcance depende del rol**:
+
+| rol | cómo se resuelve el scope |
+|---|---|
+| `supervisor_ventas` | `gf.ops.branch_config.employee_ids` (el camino de arriba) |
+| `direccion_general` | **NO usar `employee_ids`: devolvería vacío.** Todas las sucursales, o sucursal explícita — para el piloto, default a 29 / Iguala |
+| `gerente_sucursal` | sin definir; se resolverá al conectarla (probablemente por empresa/departamento del `hr.employee`, no por `employee_ids`) |
+
+Esto no cambia nada en la PWA: el cliente no manda ni sucursal ni rol, así que toda
+esta lógica vive del lado del endpoint.
 
 ## 5. Cerrar la liga pública
 
@@ -129,11 +136,17 @@ debe pasar de `200` a `401`. Hoy responde **200 con 32,339 bytes de HTML a
 cualquiera** (medido el 2026-07-31), leyendo Odoo con credenciales admin
 (`$env.ODOO_USER/ODOO_PASSWORD`) y alcance fijo a la sucursal 29.
 
+**Sincronización acordada:** el candado y el cierre de la liga pública caen **junto
+con el merge de este PR**, no antes — así el acceso de revisión de dirección no se
+corta mientras tanto.
+
 ## 6. Qué falta para cerrar Fase C
 
-- [ ] `jefe_ruta` con token válido → el endpoint responde **403** (hoy no se puede
-      probar: el endpoint es público, así que el 403 aún no existe).
-- [ ] Yamil con login real de dirección → **200**.
+Requiere el candado puesto (Fase A); hoy el endpoint es público, así que el 403 aún
+no existe y no hay nada que probar:
+
+- [ ] `jefe_ruta` con token válido → el endpoint responde **403**.
+- [ ] Yamil con login real de dirección → **200** (scope 29 por default de piloto).
 - [ ] `curl` sin header → **401**.
 
 Lo verificado hasta ahora (runtime, no aserción): Aida entra con 0000/0000, la
