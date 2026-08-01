@@ -1,7 +1,11 @@
-// ─── Mi Brief del día — superficie embebida (Fase B) ─────────────────────────
+// ─── BriefEmbedScreen — pantalla REUTILIZABLE de briefs embebidos ────────────
+// Una sola pantalla para todas las variantes (ventas, producción, y las que
+// vengan). Lo que cambia por variante vive en briefCatalog.js; aquí no hay nada
+// específico de un rol ni de un endpoint.
+//
 // El brief NO se re-estiliza ni se re-implementa: n8n devuelve un documento HTML
-// completo y autocontenido (dark dashboard, CSS y JS inline, sin dependencias
-// externas) y aquí solo se monta.
+// completo y autocontenido (CSS y JS inline, sin dependencias externas) y aquí
+// solo se monta.
 //
 // POR QUÉ srcDoc Y NO <iframe src>:
 //   1. Un `src` es una navegación del navegador: NO puede llevar el header
@@ -15,13 +19,14 @@
 // su JS (lo necesita para pintarse) pero queda en un origen opaco: no puede leer
 // el localStorage de la PWA, ni su sesión, ni tocar el DOM de la app.
 // NO agregar allow-same-origin: junto con allow-scripts anula el sandbox.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSession } from '../../App'
 import { TOKENS } from '../../tokens'
 import { Loader } from '../../components/Loader'
 import StateScreen from '../../components/kold/StateScreen'
 import { logScreenError } from '../shared/logScreenError'
-import { fetchBriefHtml, BRIEF_STATE } from './briefApi'
+import { fetchBriefHtml, isValidBriefDate, BRIEF_STATE } from './briefApi'
+import { getBriefById, briefSupportsDate } from './briefCatalog'
 
 const C = TOKENS.colors
 
@@ -45,7 +50,7 @@ const STATE_COPY = {
   },
   [BRIEF_STATE.FORBIDDEN]: {
     title: 'Este brief no es para tu puesto',
-    detail: 'Tu acceso es válido, pero el brief está reservado a supervisión de ventas y dirección.',
+    detail: 'Tu acceso es válido, pero este brief está reservado a otros puestos.',
     tone: 'warning',
   },
   [BRIEF_STATE.UNAVAILABLE]: {
@@ -55,20 +60,32 @@ const STATE_COPY = {
   },
 }
 
-export default function ScreenBriefDia() {
+// Hoy en la zona del dispositivo, como YYYY-MM-DD. Solo se usa como tope del
+// selector: la semántica del día la decide el endpoint, no el cliente.
+function localToday() {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+export default function BriefEmbedScreen({ briefId }) {
   const { session } = useSession()
+  const brief = getBriefById(briefId)
+  const withDate = briefSupportsDate(brief)
+
   const [status, setStatus] = useState('loading') // loading | ok | <BRIEF_STATE>
   const [html, setHtml] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
-  const abortRef = useRef(null)
+  // '' = sin parámetro ⇒ el endpoint aplica su default ("ayer").
+  const [date, setDate] = useState('')
+  const [appliedDate, setAppliedDate] = useState('')
 
   useEffect(() => {
     let alive = true
     const controller = typeof AbortController === 'function' ? new AbortController() : null
-    abortRef.current = controller
     setStatus('loading')
 
-    fetchBriefHtml({ session, signal: controller?.signal })
+    fetchBriefHtml({ session, brief, date: appliedDate, signal: controller?.signal })
       .then((result) => {
         if (!alive) return
         if (result.state === BRIEF_STATE.OK) {
@@ -79,22 +96,44 @@ export default function ScreenBriefDia() {
         setHtml('')
         setStatus(result.state)
         // La razón técnica va a la consola, nunca a la cara del usuario.
-        logScreenError('ScreenBriefDia', 'fetchBriefHtml', `${result.state}/${result.reason}/${result.status}`)
+        logScreenError('BriefEmbedScreen', `fetch:${briefId}`, `${result.state}/${result.reason}/${result.status}`)
       })
       .catch((err) => {
         if (!alive) return
         setHtml('')
         setStatus(BRIEF_STATE.UNAVAILABLE)
-        logScreenError('ScreenBriefDia', 'fetchBriefHtml', err)
+        logScreenError('BriefEmbedScreen', `fetch:${briefId}`, err)
       })
 
     return () => {
       alive = false
       controller?.abort()
     }
-  }, [session, reloadKey])
+  }, [session, brief, briefId, appliedDate, reloadKey])
 
   const reload = useCallback(() => setReloadKey((n) => n + 1), [])
+
+  const onDateChange = useCallback((event) => {
+    const value = event?.target?.value || ''
+    setDate(value)
+    // Solo se consulta con una fecha real; vaciar el campo vuelve al default.
+    if (value === '' || isValidBriefDate(value)) setAppliedDate(value)
+  }, [])
+
+  if (!brief) {
+    return (
+      <div style={{ padding: '16px 14px 24px' }}>
+        <StateScreen
+          testid="brief-state"
+          title={STATE_COPY[BRIEF_STATE.UNAVAILABLE].title}
+          detail={STATE_COPY[BRIEF_STATE.UNAVAILABLE].detail}
+          tone="error"
+        />
+      </div>
+    )
+  }
+
+  const copy = STATE_COPY[status] || STATE_COPY[BRIEF_STATE.UNAVAILABLE]
 
   return (
     <div style={{ padding: '16px 14px 24px', maxWidth: 1180, margin: '0 auto' }}>
@@ -104,33 +143,53 @@ export default function ScreenBriefDia() {
       }}>
         <div>
           <h1 style={{ fontSize: 19, fontWeight: 800, color: C.text, margin: 0 }}>
-            Mi Brief del día
+            {brief.title}
           </h1>
           <div style={{ fontSize: 12, color: C.textLow, marginTop: 3 }}>
-            Rutas y ventas de tu sucursal
+            {brief.subtitle}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={reload}
-          data-testid="brief-reload"
-          style={{
-            cursor: 'pointer', fontSize: 12.5, fontWeight: 700, padding: '8px 16px',
-            borderRadius: TOKENS.radius.pill, background: 'transparent',
-            color: C.blue3, border: `1px solid ${C.borderBlue}`,
-          }}
-        >
-          Actualizar
-        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {withDate && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.textMuted }}>
+              Día
+              <input
+                type="date"
+                value={date}
+                max={localToday()}
+                onChange={onDateChange}
+                data-testid="brief-date"
+                style={{
+                  fontSize: 12.5, padding: '6px 10px', borderRadius: TOKENS.radius.sm,
+                  background: C.surface, color: C.text, border: `1px solid ${C.border}`,
+                  colorScheme: 'dark',
+                }}
+              />
+            </label>
+          )}
+          <button
+            type="button"
+            onClick={reload}
+            data-testid="brief-reload"
+            style={{
+              cursor: 'pointer', fontSize: 12.5, fontWeight: 700, padding: '8px 16px',
+              borderRadius: TOKENS.radius.pill, background: 'transparent',
+              color: C.blue3, border: `1px solid ${C.borderBlue}`,
+            }}
+          >
+            Actualizar
+          </button>
+        </div>
       </header>
 
       {status === 'loading' && <Loader label="Preparando tu brief…" />}
 
       {status === 'ok' && (
         <iframe
-          key={reloadKey}
+          key={`${briefId}:${appliedDate}:${reloadKey}`}
           data-testid="brief-frame"
-          title="Brief del día"
+          title={brief.title}
           srcDoc={html}
           sandbox="allow-scripts"
           style={{
@@ -144,9 +203,9 @@ export default function ScreenBriefDia() {
       {status !== 'loading' && status !== 'ok' && (
         <StateScreen
           testid="brief-state"
-          title={(STATE_COPY[status] || STATE_COPY[BRIEF_STATE.UNAVAILABLE]).title}
-          detail={(STATE_COPY[status] || STATE_COPY[BRIEF_STATE.UNAVAILABLE]).detail}
-          tone={(STATE_COPY[status] || STATE_COPY[BRIEF_STATE.UNAVAILABLE]).tone}
+          title={copy.title}
+          detail={copy.detail}
+          tone={copy.tone}
           actionLabel={status === BRIEF_STATE.UNAVAILABLE ? 'Reintentar' : null}
           onAction={status === BRIEF_STATE.UNAVAILABLE ? reload : null}
         />

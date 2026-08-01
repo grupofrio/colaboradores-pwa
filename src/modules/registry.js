@@ -78,6 +78,23 @@ export const MODULES = [
     icon:   'supervision',
     navPriority: 10,
   },
+  // Brief de PLANTA — misma mecánica que el brief de ventas (mismo componente,
+  // mismo candado en el endpoint), otra variante del catálogo. Allowlist del
+  // DATO en n8n: supervisor_produccion + direccion_general; la pestaña, solo
+  // supervisor_produccion. Ver src/modules/brief/briefCatalog.js.
+  {
+    id:     'brief_produccion',
+    label:  'Mi Brief de planta',
+    shortLabel: 'Brief',
+    route:  '/brief-produccion',
+    tone:   'blue',
+    roles:  ['supervisor_produccion'],
+    status: 'live',
+    icon:   'kpis',
+    // Mismo 16 que el brief de ventas: entra después de las superficies
+    // operativas del rol y no las desplaza de la barra móvil.
+    navPriority: 16,
+  },
   {
     id:     'almacen_pt',
     label:  'Almacén PT',
@@ -135,12 +152,12 @@ export const MODULES = [
     icon:   'equipo',
     navPriority: 10,
   },
-  // Brief del día — dashboard operativo de rutas y ventas servido por n8n.
+  // Brief de VENTAS — dashboard operativo de rutas y ventas servido por n8n.
   // `roles` aquí decide SOLO la pestaña. El dato lo gatea el endpoint, que
   // valida el gf_employee_token contra gf.employee.mobile.session y autoriza
   // supervisor_ventas + direccion_general. Que dirección NO vea la tarjeta y
   // sí pueda pedir el dato es deliberado: la UI es comodidad, el candado es el
-  // backend. Ver src/modules/brief/briefApi.js.
+  // backend. Ver src/modules/brief/briefCatalog.js.
   {
     id:     'brief_dia',
     label:  'Mi Brief del día',

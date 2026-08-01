@@ -175,8 +175,9 @@ const ScreenDashboardGerente = lazy(() => import('./modules/gerente/ScreenDashbo
 const ScreenAlertasGerente   = lazy(() => import('./modules/gerente/ScreenAlertasGerente'))
 const ScreenForecastUnlock   = lazy(() => import('./modules/gerente/ScreenForecastUnlock'))
 const ScreenGastosGerente    = lazy(() => import('./modules/gerente/ScreenGastos'))
-// Brief del día (supervisión de ventas) — HTML servido por n8n, embebido aislado
-const ScreenBriefDia         = lazy(() => import('./modules/brief/ScreenBriefDia'))
+// Briefs (ventas, producción, …) — HTML servido por n8n, embebido aislado.
+// UNA sola pantalla para todas las variantes; lo que cambia vive en briefCatalog.
+const BriefEmbedScreen       = lazy(() => import('./modules/brief/BriefEmbedScreen'))
 
 // ─── Contexto de sesión ──────────────────────────────────────────────────────
 // NOTA: Mover SessionContext + useSession a un archivo aparte para satisfacer
@@ -859,12 +860,14 @@ export default function App() {
             <Route path="/gerente/gastos" element={<ModuleRoleRoute moduleId="gerente"><ScreenGastosGerente /></ModuleRoleRoute>} />
             <Route path="/gerente/forecast" element={<ModuleRoleRoute moduleId="gerente"><ScreenForecastUnlock /></ModuleRoleRoute>} />
 
-            {/* ── Mi Brief del día (supervisión de ventas) ───────────────────
-                La pestaña la gatea el registry (solo supervisor_ventas); el DATO
-                lo gatea el endpoint de n8n con el gf_employee_token. Este guard
-                no es la única defensa: si alguien llega a la ruta a mano, el
-                fetch sigue exigiendo credencial válida y rol autorizado. */}
-            <Route path="/brief" element={<ModuleRoleRoute moduleId="brief_dia"><ScreenBriefDia /></ModuleRoleRoute>} />
+            {/* ── Briefs embebidos (una pantalla, N variantes) ───────────────
+                La pestaña la gatea el registry (un rol por variante); el DATO lo
+                gatea el endpoint de n8n con el gf_employee_token. Este guard no
+                es la única defensa: si alguien llega a la ruta a mano, el fetch
+                sigue exigiendo credencial válida y rol autorizado.
+                Agregar un brief = entrada en briefCatalog + registry + esta lista. */}
+            <Route path="/brief" element={<ModuleRoleRoute moduleId="brief_dia"><BriefEmbedScreen briefId="ventas" /></ModuleRoleRoute>} />
+            <Route path="/brief-produccion" element={<ModuleRoleRoute moduleId="brief_produccion"><BriefEmbedScreen briefId="produccion" /></ModuleRoleRoute>} />
 
             {/* ── Torres de Control — Validación de Requisiciones ────────── */}
             <Route path="/torres" element={<ModuleRoleRoute moduleId="torre_control"><ScreenTorreRequisiciones /></ModuleRoleRoute>} />
