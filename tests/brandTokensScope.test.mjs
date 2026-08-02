@@ -114,6 +114,16 @@ test('los tokens de chip conservan pixel a pixel el valor oscuro original', asyn
   assert.equal(TOKENS.colors.chipInfoFg, '#2B8FE0')
 })
 
+test('el aro del loader sale del tema activo y conserva contraste en claro', async () => {
+  const src = readFileSync(path.join(SRC, 'components/Loader.jsx'), 'utf8')
+  const { TOKENS } = await import('../src/tokens.js')
+  const { BRAND_TOKENS } = await import('../src/theme/brandTokens.js')
+
+  assert.match(src, /border: `2px solid \$\{TOKENS\.colors\.spinnerTrack\}`/)
+  assert.equal(TOKENS.colors.spinnerTrack, 'rgba(255,255,255,0.12)')
+  assert.notEqual(BRAND_TOKENS.colors.spinnerTrack, TOKENS.colors.spinnerTrack)
+})
+
 test('los círculos de cumplimiento se pintan con tokens, no con literales', () => {
   const src = readFileSync(path.join(SRC, 'modules/supervisor-ventas/ScreenScoreSemanal.jsx'), 'utf8')
 

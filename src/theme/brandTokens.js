@@ -43,6 +43,8 @@ export const BRAND_TOKENS = {
     chipInfoFg:    '#005A8D',
     // Degradado institucional para el botón primario sobre claro.
     ctaGradient:   'linear-gradient(90deg,#005A8D,#0077BB)',
+    // Riel del spinner visible sobre el fondo claro institucional.
+    spinnerTrack:  '#C9EBF8',
     // Elementos del sheet móvil «Más»: superficies claras, legibles y con
     // contraste respecto de la página institucional.
     moreSheetBg:     'rgba(255,255,255,0.98)',

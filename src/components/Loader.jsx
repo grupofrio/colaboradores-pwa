@@ -13,7 +13,7 @@ export function Loader({ label, size = 32, center = true, tokens = DARK_TOKENS }
   const spinner = (
     <div style={{
       width: size, height: size,
-      border: '2px solid rgba(255,255,255,0.12)',
+      border: `2px solid ${TOKENS.colors.spinnerTrack}`,
       borderTop: `2px solid ${TOKENS.colors.blue2}`,
       borderRadius: '50%',
       animation: 'gfSpin 0.8s linear infinite',

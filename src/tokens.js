@@ -20,6 +20,8 @@ export const TOKENS = {
     // Degradado del botón primario (ErrorState). Valor EXACTO que estaba
     // hardcodeado: al tokenizarlo, el tema oscuro no cambia.
     ctaGradient:   'linear-gradient(90deg,#15499B,#2B8FE0)',
+    // Riel del spinner (Loader): valor exacto previo para el tema oscuro.
+    spinnerTrack:  'rgba(255,255,255,0.12)',
     // Elementos del sheet móvil «Más». Conservan los literales previos para
     // que los roles oscuros no cambien al tematizar la variante clara.
     moreSheetBg:     'rgba(6,12,22,0.98)',
