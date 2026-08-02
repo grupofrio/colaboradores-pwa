@@ -19,11 +19,6 @@ export default defineConfig(({ command, mode }) => {
   // el modo que sea, resuelve a los stubs de producción. Un entorno de CI mal
   // configurado ya no puede filtrar datos sintéticos al bundle.
   const useDemoFixtures = command === 'serve' || mode === 'test'
-
-  // Instrumentación temporal (2026-08-02): el preview de Vercel filtra fixtures
-  // al bundle y en local no se reproduce. Esto imprime en el log del build QUÉ
-  // resolvió realmente, para dejar de suponer. Quitar cuando esté cerrado.
-  console.log(`[gf-build] command=${command} mode=${mode} useDemoFixtures=${useDemoFixtures} NODE_ENV=${process.env.NODE_ENV || '(vacío)'}`)
   const demoFixtureLoader = fileURLToPath(new URL(
     useDemoFixtures
       ? './src/modules/ventas/m4/demoFixtureLoader.dev.js'
