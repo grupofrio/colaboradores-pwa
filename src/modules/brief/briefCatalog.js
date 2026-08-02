@@ -45,6 +45,17 @@ export const BRIEFS = Object.freeze([
     // Acepta ?d=YYYY-MM-DD para revisar días pasados; sin él trae "ayer".
     dateParam: 'd',
   }),
+  Object.freeze({
+    id: 'gerencia',
+    moduleId: 'brief_gerencia',
+    route: '/brief-gerencia',
+    endpoint: '/api-n8n/brief-gerencia',
+    title: 'Brief de gerencia',
+    subtitle: 'El día de tu sucursal',
+    viewerRoles: ['gerente_sucursal', 'direccion_general'],
+    // Sin selector de día: esta variante siempre trae el default del endpoint.
+    dateParam: '',
+  }),
 ])
 
 /** Lookup por id. Fail-closed: null si no existe (la pantalla lo trata como fallo). */

@@ -868,6 +868,7 @@ export default function App() {
                 Agregar un brief = entrada en briefCatalog + registry + esta lista. */}
             <Route path="/brief" element={<ModuleRoleRoute moduleId="brief_dia"><BriefEmbedScreen briefId="ventas" /></ModuleRoleRoute>} />
             <Route path="/brief-produccion" element={<ModuleRoleRoute moduleId="brief_produccion"><BriefEmbedScreen briefId="produccion" /></ModuleRoleRoute>} />
+            <Route path="/brief-gerencia" element={<ModuleRoleRoute moduleId="brief_gerencia"><BriefEmbedScreen briefId="gerencia" /></ModuleRoleRoute>} />
 
             {/* ── Torres de Control — Validación de Requisiciones ────────── */}
             <Route path="/torres" element={<ModuleRoleRoute moduleId="torre_control"><ScreenTorreRequisiciones /></ModuleRoleRoute>} />

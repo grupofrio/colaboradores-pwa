@@ -413,6 +413,25 @@ export const MODULES = [
     navPriority: 12,
   },
 
+  // Brief de GERENCIA — tercera variante del mismo catálogo (mismo componente,
+  // mismo candado en el endpoint). `roles` debe coincidir con
+  // briefCatalog.viewerRoles (hay test). direccion_general ve la entrada porque
+  // dirección revisa el piloto; el candado del endpoint autoriza el dato.
+  // Ver src/modules/brief/briefCatalog.js.
+  {
+    id:     'brief_gerencia',
+    label:  'Brief de gerencia',
+    shortLabel: 'Brief',
+    route:  '/brief-gerencia',
+    tone:   'blue',
+    roles:  ['gerente_sucursal', 'direccion_general'],
+    status: 'live',
+    icon:   'kpis',
+    // Mismo 16 que las otras variantes: entra después de las superficies
+    // operativas del rol (Admin 10, Gerente 12) sin desplazarlas de la barra.
+    navPriority: 16,
+  },
+
   // ── KOLD Tower M1 — superficie de supervisión (read-only) ────────────────
   // towerGated: la visibilidad NO se decide por x_job_key sino por el rol
   // AUTORITATIVO tower_status (session.employee.tower_status), vía
