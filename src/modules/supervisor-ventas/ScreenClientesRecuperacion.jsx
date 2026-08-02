@@ -9,7 +9,11 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+// Tema CLARO (rebranding tanda 3): misma forma que TOKENS, paleta institucional.
+// Estas pantallas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { useToast } from '../../components/Toast'
 import { Loader, EmptyState, ErrorState } from '../../components/Loader'
 import { getInactiveCustomers, getRecoveryCustomers } from '../admin/api'
@@ -92,7 +96,7 @@ export default function ScreenClientesRecuperacion() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -123,13 +127,13 @@ export default function ScreenClientesRecuperacion() {
         </div>
 
         {!companyId ? (
-          <ErrorState title="Sin empresa seleccionada" message="Elige una razón social antes de continuar" />
+          <ErrorState tokens={TOKENS} title="Sin empresa seleccionada" message="Elige una razón social antes de continuar" />
         ) : loading ? (
-          <Loader label="Cargando clientes…" />
+          <Loader tokens={TOKENS} label="Cargando clientes…" />
         ) : error ? (
-          <ErrorState message={error} onRetry={load} />
+          <ErrorState tokens={TOKENS} message={error} onRetry={load} />
         ) : items.length === 0 ? (
-          <EmptyState
+          <EmptyState tokens={TOKENS}
             icon={tab === 'inactive' ? '🗓️' : '🔄'}
             title={tab === 'inactive' ? 'Sin clientes inactivos' : 'Sin clientes en recuperación'}
             subtitle={tab === 'inactive'

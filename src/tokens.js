@@ -12,6 +12,14 @@ export const TOKENS = {
     surface:       'rgba(255,255,255,0.05)',
     surfaceSoft:   'rgba(255,255,255,0.03)',
     surfaceStrong: 'rgba(255,255,255,0.07)',
+    // Chips de estado (StatusBadge). Valores EXACTOS que estaban hardcodeados
+    // ahí: al tokenizarlos, el tema oscuro no cambia un solo píxel.
+    chipNeutralBg: 'rgba(255,255,255,0.06)',
+    chipInfoBg:    'rgba(43,143,224,0.12)',
+    chipInfoFg:    '#2B8FE0',
+    // Degradado del botón primario (ErrorState). Valor EXACTO que estaba
+    // hardcodeado: al tokenizarlo, el tema oscuro no cambia.
+    ctaGradient:   'linear-gradient(90deg,#15499B,#2B8FE0)',
     // Elementos del sheet móvil «Más». Conservan los literales previos para
     // que los roles oscuros no cambien al tematizar la variante clara.
     moreSheetBg:     'rgba(6,12,22,0.98)',

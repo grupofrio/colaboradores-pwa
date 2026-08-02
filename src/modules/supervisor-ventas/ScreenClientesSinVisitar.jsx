@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+// Tema CLARO (rebranding tanda 3): misma forma que TOKENS, paleta institucional.
+// Estas pantallas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { ScreenShell, EmptyState } from '../entregas/components'
 import { getDayOverview, getRouteStops } from './supvService'
 import { isStopUnvisited } from './stopVisitState.js'
@@ -102,7 +106,7 @@ export default function ScreenClientesSinVisitar() {
   // Loading state
   if (loading) {
     return (
-      <ScreenShell title="Clientes sin visitar" backTo="/equipo">
+      <ScreenShell tokens={TOKENS} title="Clientes sin visitar" backTo="/equipo">
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center',
           justifyContent: 'center', padding: '80px 24px', gap: 16,
@@ -124,8 +128,8 @@ export default function ScreenClientesSinVisitar() {
   // Error state
   if (error) {
     return (
-      <ScreenShell title="Clientes sin visitar" backTo="/equipo">
-        <EmptyState icon="!" title="Error" subtitle={error} typo={typo} />
+      <ScreenShell tokens={TOKENS} title="Clientes sin visitar" backTo="/equipo">
+        <EmptyState tokens={TOKENS} icon="!" title="Error" subtitle={error} typo={typo} />
       </ScreenShell>
     )
   }
@@ -133,7 +137,7 @@ export default function ScreenClientesSinVisitar() {
   // All visited
   if (totalUnvisited === 0) {
     return (
-      <ScreenShell title="Clientes sin visitar" backTo="/equipo">
+      <ScreenShell tokens={TOKENS} title="Clientes sin visitar" backTo="/equipo">
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center',
           justifyContent: 'center', padding: '60px 24px', textAlign: 'center',
@@ -153,7 +157,7 @@ export default function ScreenClientesSinVisitar() {
   const summaryColor = totalUnvisited > 10 ? TOKENS.colors.error : TOKENS.colors.warning
 
   return (
-    <ScreenShell title="Clientes sin visitar" backTo="/equipo">
+    <ScreenShell tokens={TOKENS} title="Clientes sin visitar" backTo="/equipo">
       {/* Summary header */}
       <div style={{
         background: TOKENS.glass.panel,

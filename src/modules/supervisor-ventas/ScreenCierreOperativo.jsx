@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+// Tema CLARO (rebranding tanda 3): misma forma que TOKENS, paleta institucional.
+// Estas pantallas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { ScreenShell, StatusBadge, EmptyState } from '../entregas/components'
 import { getDayOverview, getComplianceColor, fmtMoney, fmtTime, getLiquidationStatus } from './supvService'
 
@@ -48,7 +52,7 @@ export default function ScreenCierreOperativo() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="23 4 23 10 17 10" />
         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
       </svg>
@@ -57,11 +61,11 @@ export default function ScreenCierreOperativo() {
 
   if (loading) {
     return (
-      <ScreenShell title="Cierre del Dia" backTo="/equipo" rightAction={refreshBtn}>
+      <ScreenShell tokens={TOKENS} title="Cierre del Dia" backTo="/equipo" rightAction={refreshBtn}>
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
           <div style={{
             width: 32, height: 32,
-            border: '2px solid rgba(255,255,255,0.12)',
+            border: `2px solid ${TOKENS.colors.border}`,
             borderTop: `2px solid ${TOKENS.colors.blue2}`,
             borderRadius: '50%',
             animation: 'entregasShellSpin 0.8s linear infinite',
@@ -73,7 +77,7 @@ export default function ScreenCierreOperativo() {
 
   if (error) {
     return (
-      <ScreenShell title="Cierre del Dia" backTo="/equipo" rightAction={refreshBtn}>
+      <ScreenShell tokens={TOKENS} title="Cierre del Dia" backTo="/equipo" rightAction={refreshBtn}>
         <div style={{ margin: '12px 0', padding: 12, borderRadius: 10, background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.2)' }}>
           <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{error}</p>
         </div>
@@ -83,8 +87,8 @@ export default function ScreenCierreOperativo() {
 
   if (!data) {
     return (
-      <ScreenShell title="Cierre del Dia" backTo="/equipo" rightAction={refreshBtn}>
-        <EmptyState icon="📋" title="Sin datos" subtitle="No hay informacion disponible" typo={typo} />
+      <ScreenShell tokens={TOKENS} title="Cierre del Dia" backTo="/equipo" rightAction={refreshBtn}>
+        <EmptyState tokens={TOKENS} icon="📋" title="Sin datos" subtitle="No hay informacion disponible" typo={typo} />
       </ScreenShell>
     )
   }
@@ -100,7 +104,7 @@ export default function ScreenCierreOperativo() {
   const allDone = pendingClose.length === 0 && closedNotLiq.length === 0
 
   return (
-    <ScreenShell title="Cierre del Dia" backTo="/equipo" rightAction={refreshBtn}>
+    <ScreenShell tokens={TOKENS} title="Cierre del Dia" backTo="/equipo" rightAction={refreshBtn}>
 
       {/* ── Summary strip ──────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 4 }}>
@@ -179,7 +183,7 @@ export default function ScreenCierreOperativo() {
               <span key={v.id} style={{
                 ...typo.caption, color: TOKENS.colors.textMuted,
                 padding: '4px 10px', borderRadius: TOKENS.radius.pill,
-                background: 'rgba(255,255,255,0.06)',
+                background: TOKENS.colors.chipNeutralBg,
                 border: `1px solid ${TOKENS.colors.border}`,
               }}>
                 {v.name}
@@ -267,7 +271,7 @@ function CloseRow({ v, typo }) {
         <p style={{ fontSize: 15, fontWeight: 700, color: compColor, margin: 0 }}>
           {v.compliance}%
         </p>
-        <StatusBadge
+        <StatusBadge tokens={TOKENS}
           status={v.is_liquidated ? 'done' : v.is_closed ? 'pending' : 'in_progress'}
           label={liqStatus.label}
         />

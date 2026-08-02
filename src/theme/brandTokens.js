@@ -36,6 +36,13 @@ export const BRAND_TOKENS = {
     surface:       '#FFFFFF',
     surfaceSoft:   '#F7FCFF',
     surfaceStrong: '#E0F3FC',
+    // Chips de estado sobre claro. `chipInfoFg` usa el azul profundo (#005A8D):
+    // el cian #00B8D4 sobre un fondo pálido no llega a AA como texto.
+    chipNeutralBg: '#E0F3FC',
+    chipInfoBg:    'rgba(0,119,187,0.10)',
+    chipInfoFg:    '#005A8D',
+    // Degradado institucional para el botón primario sobre claro.
+    ctaGradient:   'linear-gradient(90deg,#005A8D,#0077BB)',
     // Elementos del sheet móvil «Más»: superficies claras, legibles y con
     // contraste respecto de la página institucional.
     moreSheetBg:     'rgba(255,255,255,0.98)',

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+// Tema CLARO (rebranding tanda 3): misma forma que TOKENS, paleta institucional.
+// Estas pantallas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { ScreenShell, StatusBadge, EmptyState } from '../entregas/components'
 import {
   getDayOverview, getRouteStops, getComplianceColor, getStatusColor,
@@ -71,11 +75,11 @@ export default function ScreenDetalleVendedor() {
   /* ── Loading ─────────────────────────────────────────────────────────────── */
   if (loading) {
     return (
-      <ScreenShell title="Cargando..." backTo="/equipo">
+      <ScreenShell tokens={TOKENS} title="Cargando..." backTo="/equipo">
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
           <div style={{
             width: 32, height: 32,
-            border: '2px solid rgba(255,255,255,0.12)',
+            border: `2px solid ${TOKENS.colors.border}`,
             borderTop: `2px solid ${TOKENS.colors.blue2}`,
             borderRadius: '50%',
             animation: 'entregasShellSpin 0.8s linear infinite',
@@ -87,7 +91,7 @@ export default function ScreenDetalleVendedor() {
 
   if (error) {
     return (
-      <ScreenShell title="Error" backTo="/equipo">
+      <ScreenShell tokens={TOKENS} title="Error" backTo="/equipo">
         <div style={{ margin: '12px 0', padding: 12, borderRadius: 10, background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.2)' }}>
           <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{error}</p>
         </div>
@@ -97,8 +101,8 @@ export default function ScreenDetalleVendedor() {
 
   if (!vendor) {
     return (
-      <ScreenShell title="Vendedor" backTo="/equipo">
-        <EmptyState icon="👤" title="Vendedor no encontrado" subtitle="No se encontro informacion de este vendedor" typo={typo} />
+      <ScreenShell tokens={TOKENS} title="Vendedor" backTo="/equipo">
+        <EmptyState tokens={TOKENS} icon="👤" title="Vendedor no encontrado" subtitle="No se encontro informacion de este vendedor" typo={typo} />
       </ScreenShell>
     )
   }
@@ -107,7 +111,7 @@ export default function ScreenDetalleVendedor() {
   const liqStatus = getLiquidationStatus(vendor)
 
   return (
-    <ScreenShell title={title} backTo="/equipo">
+    <ScreenShell tokens={TOKENS} title={title} backTo="/equipo">
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div style={{
@@ -131,7 +135,7 @@ export default function ScreenDetalleVendedor() {
               </p>
             )}
           </div>
-          <StatusBadge status={vendorStatusToBadge(vendor.status)} label={vendorStatusLabel(vendor.status)} />
+          <StatusBadge tokens={TOKENS} status={vendorStatusToBadge(vendor.status)} label={vendorStatusLabel(vendor.status)} />
         </div>
 
         {/* Phone */}
@@ -204,7 +208,7 @@ export default function ScreenDetalleVendedor() {
       </p>
 
       {stops.length === 0 ? (
-        <EmptyState
+        <EmptyState tokens={TOKENS}
           icon="📍"
           title="Sin paradas"
           subtitle={routeId ? 'No se encontraron paradas para esta ruta' : 'Este vendedor no tiene ruta asignada hoy'}
@@ -294,7 +298,7 @@ function StopCard({ stop, typo }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
           width: 24, height: 24, borderRadius: '50%',
-          background: 'rgba(255,255,255,0.08)',
+          background: TOKENS.colors.surfaceStrong,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 11, fontWeight: 700, color: TOKENS.colors.textMuted,
           flexShrink: 0,
@@ -307,7 +311,7 @@ function StopCard({ stop, typo }) {
         }}>
           {stop.customer || 'Cliente'}
         </span>
-        <StatusBadge status={visitState.badgeStatus} label={resultLabel} />
+        <StatusBadge tokens={TOKENS} status={visitState.badgeStatus} label={resultLabel} />
       </div>
 
       {/* Row 2: Details */}
