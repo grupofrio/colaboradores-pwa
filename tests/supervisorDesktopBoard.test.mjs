@@ -151,3 +151,11 @@ test('RutasView mantiene compatibilidad: la selección es opcional', () => {
   // La selección no se comunica SOLO por color.
   assert.match(src, /boxShadow: selected \?/, 'la fila seleccionada se marca con barra lateral, no solo con fondo')
 })
+
+test('la selección de unidades del radar del tablero funciona también con teclado', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/radar/RadarView.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /onKeyDown=/, 'la fila interactiva debe responder al teclado')
+  assert.match(src, /e\.key !== 'Enter' && e\.key !== ' '/, 'Enter y Espacio activan la selección')
+  assert.match(src, /e\.preventDefault\(\)/, 'Espacio no debe desplazar la página al seleccionar')
+})

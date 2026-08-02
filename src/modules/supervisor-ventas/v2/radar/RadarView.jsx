@@ -92,9 +92,16 @@ function UnitRow({ unit, nowMs, selected, onSelectUnit, onOpenRoute }) {
   const total = num(unit?.stops?.planned_total)
   const missing = num(unit?.stops?.missing_coordinates)
   const clickable = !!onSelectUnit && planId != null
+  const selectUnit = () => { if (clickable) onSelectUnit(planId) }
+  const handleKeyDown = (e) => {
+    if (!clickable || (e.key !== 'Enter' && e.key !== ' ')) return
+    e.preventDefault()
+    selectUnit()
+  }
   return (
     <div data-testid="radar-unit-row" role={clickable ? 'button' : undefined} tabIndex={clickable ? 0 : undefined}
-      onClick={clickable ? () => onSelectUnit(planId) : undefined}
+      onClick={clickable ? selectUnit : undefined}
+      onKeyDown={clickable ? handleKeyDown : undefined}
       style={{
         display: 'flex', gap: 10, alignItems: 'flex-start', justifyContent: 'space-between',
         padding: '10px 11px', marginTop: 8, background: C.surfaceSoft,
