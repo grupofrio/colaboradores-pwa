@@ -70,9 +70,15 @@ test('las navegaciones móviles de supervisión usan fondos del tema claro', () 
 })
 
 test('ningún componente COMPARTIDO importa el tema claro (se inyecta por prop)', () => {
-  // StateScreen y ScreenShell los usan otros roles: su tema debe llegar por
-  // prop con default oscuro, nunca por import directo.
-  for (const shared of ['components/kold/StateScreen.jsx', 'modules/entregas/components/ScreenShell.jsx']) {
+  // Estos los usan otros roles: su tema debe llegar por prop con default
+  // oscuro, nunca por import directo.
+  for (const shared of [
+    'components/kold/StateScreen.jsx',
+    'components/Loader.jsx',
+    'modules/entregas/components/ScreenShell.jsx',
+    'modules/entregas/components/EmptyState.jsx',
+    'modules/entregas/components/StatusBadge.jsx',
+  ]) {
     assert.ok(!LIGHT_FILES.includes(shared), `${shared} es compartido: no puede importar BRAND_TOKENS`)
     const src = readFileSync(path.join(SRC, shared), 'utf8')
     assert.match(src, /tokens\s*=\s*(TOKENS|DARK_TOKENS)/, `${shared} conserva el tema oscuro por default`)
@@ -96,6 +102,36 @@ test('el tema oscuro global sigue intacto y es el default de todo lo demás', as
   assert.equal(TOKENS.colors.bg0, '#030811')
   assert.equal(TOKENS.colors.text, '#FFFFFF')
   assert.equal(TOKENS.colors.surface, 'rgba(255,255,255,0.05)')
+})
+
+// Tokenizar literales que estaban incrustados NO puede cambiar el aspecto de
+// quien ya los usaba. Los valores oscuros son EXACTAMENTE los que StatusBadge
+// tenía escritos a mano antes de la tanda 3.
+test('los tokens de chip conservan pixel a pixel el valor oscuro original', async () => {
+  const { TOKENS } = await import('../src/tokens.js')
+  assert.equal(TOKENS.colors.chipNeutralBg, 'rgba(255,255,255,0.06)')
+  assert.equal(TOKENS.colors.chipInfoBg, 'rgba(43,143,224,0.12)')
+  assert.equal(TOKENS.colors.chipInfoFg, '#2B8FE0')
+})
+
+test('el aro del loader sale del tema activo y conserva contraste en claro', async () => {
+  const src = readFileSync(path.join(SRC, 'components/Loader.jsx'), 'utf8')
+  const { TOKENS } = await import('../src/tokens.js')
+  const { BRAND_TOKENS } = await import('../src/theme/brandTokens.js')
+
+  assert.match(src, /border: `2px solid \$\{TOKENS\.colors\.spinnerTrack\}`/)
+  assert.equal(TOKENS.colors.spinnerTrack, 'rgba(255,255,255,0.12)')
+  assert.notEqual(BRAND_TOKENS.colors.spinnerTrack, TOKENS.colors.spinnerTrack)
+})
+
+test('los círculos de cumplimiento se pintan con tokens, no con literales', () => {
+  const src = readFileSync(path.join(SRC, 'modules/supervisor-ventas/ScreenScoreSemanal.jsx'), 'utf8')
+
+  // getComplianceColor sigue siendo la ÚNICA fuente de los umbrales…
+  assert.match(src, /COMPLIANCE_FILL\[getComplianceColor\(pct\)\]/)
+  // …pero el color que se pinta sale del tema activo.
+  assert.ok(!/background: getComplianceColor\(/.test(src), 'el relleno ya no usa el literal')
+  assert.ok(!/color: getComplianceColor\(/.test(src), 'el texto ya no usa el literal')
 })
 
 test('BRAND_TOKENS tiene la MISMA forma que TOKENS (intercambiable)', async () => {
@@ -142,6 +178,19 @@ test('el texto del tema claro cumple AA sobre tarjeta blanca y sobre la página'
       assert.ok(ratio >= 4.5, `${key} sobre ${bg}: ${ratio.toFixed(2)}:1 (AA exige 4.5)`)
     }
   }
+})
+
+test('el texto blanco sobre relleno de semáforo cumple AA en el tema claro', async () => {
+  const { BRAND_TOKENS } = await import('../src/theme/brandTokens.js')
+  // Los círculos de cumplimiento y los contadores llevan blanco encima del
+  // relleno: si alguien aclara estos tonos, el número deja de leerse.
+  for (const key of ['success', 'warning', 'error']) {
+    const ratio = contrast('#FFFFFF', BRAND_TOKENS.colors[key])
+    assert.ok(ratio >= 4.5, `blanco sobre ${key} (${BRAND_TOKENS.colors[key]}): ${ratio.toFixed(2)}:1`)
+  }
+  // El chip informativo es texto sobre fondo pálido, no blanco sobre relleno.
+  const chip = contrast(BRAND_TOKENS.colors.chipInfoFg, BRAND_TOKENS.colors.surface)
+  assert.ok(chip >= 4.5, `chipInfoFg sobre tarjeta: ${chip.toFixed(2)}:1`)
 })
 
 test('los estados del semáforo son legibles sobre claro', async () => {

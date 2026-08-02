@@ -1,10 +1,14 @@
-import { TOKENS } from '../../../tokens'
+import { TOKENS as DARK_TOKENS } from '../../../tokens'
 
 /* ============================================================================
    EmptyState — Placeholder when a list has no items
 ============================================================================ */
 
-export default function EmptyState({ icon = '📋', title, subtitle, typo }) {
+// `tokens` OPCIONAL con default OSCURO: quien no lo pasa (Entregas, M2-M7,
+// torres, admin…) se ve exactamente igual que antes. Solo la superficie de
+// supervisión de ventas inyecta BRAND_TOKENS (rebranding tanda 3).
+export default function EmptyState({ icon = '📋', title, subtitle, typo, tokens = DARK_TOKENS }) {
+  const TOKENS = tokens
   const t = typo || {}
   const h2Style = t.h2 || { fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }
   const bodyStyle = t.body || { fontSize: 14, fontWeight: 500 }
