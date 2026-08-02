@@ -79,16 +79,17 @@ export const MODULES = [
     navPriority: 10,
   },
   // Brief de PLANTA — misma mecánica que el brief de ventas (mismo componente,
-  // mismo candado en el endpoint), otra variante del catálogo. Allowlist del
-  // DATO en n8n: supervisor_produccion + direccion_general; la pestaña, solo
-  // supervisor_produccion. Ver src/modules/brief/briefCatalog.js.
+  // mismo candado en el endpoint), otra variante del catálogo. `roles` debe
+  // coincidir con briefCatalog.viewerRoles (hay test). direccion_general ve la
+  // entrada porque dirección revisa el piloto; el candado del endpoint es el
+  // que autoriza el dato. Ver src/modules/brief/briefCatalog.js.
   {
     id:     'brief_produccion',
     label:  'Mi Brief de planta',
     shortLabel: 'Brief',
     route:  '/brief-produccion',
     tone:   'blue',
-    roles:  ['supervisor_produccion'],
+    roles:  ['supervisor_produccion', 'direccion_general'],
     status: 'live',
     icon:   'kpis',
     // Mismo 16 que el brief de ventas: entra después de las superficies
@@ -153,18 +154,18 @@ export const MODULES = [
     navPriority: 10,
   },
   // Brief de VENTAS — dashboard operativo de rutas y ventas servido por n8n.
-  // `roles` aquí decide SOLO la pestaña. El dato lo gatea el endpoint, que
-  // valida el gf_employee_token contra gf.employee.mobile.session y autoriza
-  // supervisor_ventas + direccion_general. Que dirección NO vea la tarjeta y
-  // sí pueda pedir el dato es deliberado: la UI es comodidad, el candado es el
-  // backend. Ver src/modules/brief/briefCatalog.js.
+  // `roles` aquí decide SOLO si se muestra la entrada, y debe coincidir con
+  // briefCatalog.viewerRoles (hay test). El dato lo gatea el endpoint, que
+  // valida el gf_employee_token contra gf.employee.mobile.session y aplica su
+  // propia allowlist: ampliar esta lista NO amplía el acceso, quien no esté
+  // autorizado recibe 403. Ver src/modules/brief/briefCatalog.js.
   {
     id:     'brief_dia',
     label:  'Mi Brief del día',
     shortLabel: 'Brief',
     route:  '/brief',
     tone:   'blue',
-    roles:  ['supervisor_ventas'],
+    roles:  ['supervisor_ventas', 'direccion_general'],
     status: 'live',
     icon:   'kpis',
     // 16 (no 11) a propósito: entra DESPUÉS de Torre operativa (15) para no
@@ -413,16 +414,17 @@ export const MODULES = [
   },
 
   // Brief de GERENCIA — tercera variante del mismo catálogo (mismo componente,
-  // mismo candado en el endpoint). Allowlist del DATO en n8n: gerente_sucursal +
-  // direccion_general; la pestaña, solo gerente_sucursal — dirección revisa por
-  // endpoint, no por UI. Ver src/modules/brief/briefCatalog.js.
+  // mismo candado en el endpoint). `roles` debe coincidir con
+  // briefCatalog.viewerRoles (hay test). direccion_general ve la entrada porque
+  // dirección revisa el piloto; el candado del endpoint autoriza el dato.
+  // Ver src/modules/brief/briefCatalog.js.
   {
     id:     'brief_gerencia',
     label:  'Brief de gerencia',
     shortLabel: 'Brief',
     route:  '/brief-gerencia',
     tone:   'blue',
-    roles:  ['gerente_sucursal'],
+    roles:  ['gerente_sucursal', 'direccion_general'],
     status: 'live',
     icon:   'kpis',
     // Mismo 16 que las otras variantes: entra después de las superficies

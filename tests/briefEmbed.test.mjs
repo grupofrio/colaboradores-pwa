@@ -8,7 +8,7 @@ import {
 } from '../src/modules/brief/briefApi.js'
 import { BRIEFS, getBriefById, briefSupportsDate } from '../src/modules/brief/briefCatalog.js'
 import { getModulesForRole, getModuleById } from '../src/modules/registry.js'
-import { getNavModules } from '../src/lib/navModel.js'
+import { getNavModules, getVisibleModulesForSession } from '../src/lib/navModel.js'
 
 const HTML_HEADERS = { get: (k) => (String(k).toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null) }
 const JSON_HEADERS = { get: (k) => (String(k).toLowerCase() === 'content-type' ? 'application/json' : null) }
@@ -272,33 +272,72 @@ test('el iframe usa srcDoc con sandbox allow-scripts y SIN allow-same-origin', (
 
 // ── Catálogo ⇄ registry: no pueden divergir ─────────────────────────────────
 
-test('cada brief del catálogo tiene su módulo, con EXACTAMENTE el rol que declara', () => {
+test('cada brief del catálogo tiene su módulo con EXACTAMENTE los mismos viewerRoles', () => {
   for (const brief of BRIEFS) {
     const module = getModuleById(brief.moduleId)
     assert.ok(module, `${brief.id} tiene módulo en el registry`)
     assert.equal(module.route, brief.route, `${brief.id}: misma ruta en catálogo y registry`)
-    assert.deepEqual(module.roles, [brief.role], `${brief.id}: un solo rol, el que declara el catálogo`)
+    assert.deepEqual(module.roles, brief.viewerRoles, `${brief.id}: catálogo y registry no pueden divergir`)
     assert.equal(module.status, 'live')
     assert.ok(brief.endpoint.startsWith('/api-n8n/'), `${brief.id} pasa por el rewrite, no por el host directo`)
+    assert.ok(!module.accessPolicy, `${brief.id}: sin accessPolicy — se gatea por rol, y una política ocultaría el módulo`)
   }
 })
 
-test('cada brief lo ve SOLO su rol', () => {
+test('dirección ve la entrada de TODOS los briefs (es quien revisa el piloto)', () => {
+  for (const brief of BRIEFS) {
+    assert.ok(
+      brief.viewerRoles.includes('direccion_general'),
+      `${brief.id}: dirección revisa el piloto y debe ver la entrada`,
+    )
+    assert.ok(
+      getModulesForRole('direccion_general').some((m) => m.id === brief.moduleId),
+      `${brief.moduleId} debe verse con rol direccion_general`,
+    )
+  }
+})
+
+test('el brief de gerencia conserva a su dueño y también es visible para dirección', () => {
+  const gerencia = getBriefById('gerencia')
+  const module = getModuleById('brief_gerencia')
+
+  assert.deepEqual(gerencia?.viewerRoles, ['gerente_sucursal', 'direccion_general'])
+  assert.deepEqual(module?.roles, ['gerente_sucursal', 'direccion_general'])
+})
+
+test('cada brief lo ven SOLO los roles que declara; el resto no', () => {
   const roles = ['supervisor_ventas', 'supervisor_produccion', 'direccion_general', 'jefe_ruta',
-    'gerente_sucursal', 'auxiliar_admin', 'operador_barra', 'almacenista_pt', '']
+    'gerente_sucursal', 'auxiliar_admin', 'operador_barra', 'almacenista_pt', 'auxiliar_ruta', '']
 
   for (const brief of BRIEFS) {
     for (const role of roles) {
       const visible = getModulesForRole(role).some((m) => m.id === brief.moduleId)
+      const esperado = brief.viewerRoles.includes(role)
       assert.equal(
-        visible, role === brief.role,
-        `${brief.moduleId} ${role === brief.role ? 'debe' : 'NO debe'} verse con rol ${role || '(sin rol)'}`,
+        visible, esperado,
+        `${brief.moduleId} ${esperado ? 'debe' : 'NO debe'} verse con rol ${role || '(sin rol)'}`,
       )
     }
   }
 })
 
-test('cada quien ve su brief sin perder su superficie operativa', () => {
+// Regresión del reporte "a Aida no le aparece la pestaña" (2026-08-01): el gate
+// del cliente sale de session.role / additional_job_keys, exactamente igual que
+// el módulo "Equipo" que Aida sí veía. Si un día el brief deja de aparecer para
+// una sesión que sí ve Equipo, el problema está fuera de este código.
+test('la sesión REAL de Aida (rol tal como lo guarda el login) ve Equipo y su brief', () => {
+  const aida = {
+    employee_id: 718, session_token: 'h.p.odoo', name: 'Aida Sugey Landa Jaimes',
+    role: 'supervisor_ventas', job_key: 'supervisor_ventas', additional_job_keys: [],
+  }
+  const ids = getVisibleModulesForSession(aida).map((m) => m.id)
+
+  assert.ok(ids.includes('supervisor_ventas'), 'Equipo')
+  assert.ok(ids.includes('brief_dia'), 'el brief se gatea igual que Equipo: si uno se ve, el otro también')
+  assert.ok(!ids.includes('brief_produccion'), 'no ve el brief de planta')
+})
+
+test('cada quien ve su brief en la barra sin perder su superficie operativa', () => {
   const nav = (role, employee_id) => getNavModules({ employee_id, session_token: 'h.p.s', role }).map((m) => m.id)
 
   assert.deepEqual(nav('supervisor_ventas', 718).slice(0, 2), ['supervisor_ventas', 'brief_dia'])

@@ -11,13 +11,14 @@ el mismo aislamiento**. Lo único que cambia por variante está en
 
 | brief | endpoint | pestaña (UI) | allowlist del DATO (n8n) | fecha |
 |---|---|---|---|---|
-| Ventas — "Mi Brief del día" | `/api-n8n/brief-aida` | `supervisor_ventas` (Aida, emp 718) | `supervisor_ventas` + `direccion_general` | no |
-| Producción — "Mi Brief de planta" | `/api-n8n/brief-produccion` | `supervisor_produccion` (Miguel Ángel Morales, emp 577) | `supervisor_produccion` + `direccion_general` | `?d=YYYY-MM-DD` |
-| Gerencia — "Brief de gerencia" | `/api-n8n/brief-gerencia` | `gerente_sucursal` | `gerente_sucursal` + `direccion_general` | no |
+| Ventas — "Mi Brief del día" | `/api-n8n/brief-aida` | `supervisor_ventas` (Aida, emp 718) + `direccion_general` | `supervisor_ventas` + `direccion_general` | no |
+| Producción — "Mi Brief de planta" | `/api-n8n/brief-produccion` | `supervisor_produccion` (Miguel Ángel Morales, emp 577) + `direccion_general` | `supervisor_produccion` + `direccion_general` | `?d=YYYY-MM-DD` |
+| Gerencia — "Brief de gerencia" | `/api-n8n/brief-gerencia` | `gerente_sucursal` + `direccion_general` | `gerente_sucursal` + `direccion_general` | no |
 
-`direccion_general` **puede pedir el dato pero no ve la pestaña** en ninguna de las
-tres: es acceso de revisión para dirección durante el piloto. Deliberado — la UI es
-comodidad, el candado es el backend.
+**Desde 2026-08-01, `direccion_general` también ve la entrada en la UI** (antes solo
+tenía acceso al dato). Dirección revisa el piloto y necesita llegar al brief sin
+escribir la URL a mano. Ampliar la lista de la UI **no amplía el acceso**: quien no
+esté en la allowlist del endpoint recibe 403 y la pantalla lo dice.
 
 ⚠️ **Pendiente del lado de n8n para la variante de gerencia:** cómo se resuelve el
 alcance de `gerente_sucursal` sigue **sin definir** (§4). No sale de
@@ -137,7 +138,7 @@ aplican al documento embebido. El aislamiento lo pone la PWA con
 | | Ve la pestaña | Puede pedir el dato |
 |---|---|---|
 | `supervisor_ventas` (Aida, emp **718**) | ✅ | ✅ |
-| `direccion_general` (Yamil, emp **1**) | ❌ a propósito | ✅ revisión del piloto |
+| `direccion_general` (Yamil, emp **1**) | ✅ desde 2026-08-01 | ✅ revisión del piloto |
 | cualquier otro | ❌ | ❌ → **403** |
 
 **`/api-n8n/brief-produccion`** (planta):
@@ -145,7 +146,7 @@ aplican al documento embebido. El aislamiento lo pone la PWA con
 | | Ve la pestaña | Puede pedir el dato |
 |---|---|---|
 | `supervisor_produccion` (Miguel Ángel Morales, emp **577**) | ✅ | ✅ |
-| `direccion_general` (Yamil, emp **1**) | ❌ a propósito | ✅ revisión del piloto |
+| `direccion_general` (Yamil, emp **1**) | ✅ desde 2026-08-01 | ✅ revisión del piloto |
 | cualquier otro | ❌ | ❌ → **403** |
 
 **`/api-n8n/brief-gerencia`** (gerencia):
@@ -153,12 +154,30 @@ aplican al documento embebido. El aislamiento lo pone la PWA con
 | | Ve la pestaña | Puede pedir el dato |
 |---|---|---|
 | `gerente_sucursal` | ✅ | ✅ |
-| `direccion_general` (Yamil, emp **1**) | ❌ a propósito | ✅ revisión del piloto |
+| `direccion_general` (Yamil, emp **1**) | ✅ desde 2026-08-01 | ✅ revisión del piloto |
 | cualquier otro | ❌ | ❌ → **403** |
 
 Cruzado también: ningún rol debe poder pedir el brief de otro. Verificado del lado de
 la PWA (la ruta cruzada redirige a `/` y la tarjeta no aparece); del lado del dato lo
 tiene que imponer el candado.
+
+### Estado REAL del candado — medido 2026-08-01
+
+Matriz ejecutada desde el navegador contra producción, con el `gf_employee_token`
+real de Aida (`supervisor_ventas`, emp 718):
+
+| endpoint | con token de Aida | **sin token** | token inventado |
+|---|---|---|---|
+| `brief-aida` | 200 · html · 31,879 B | **401** · text/plain | **401** · text/plain |
+| `brief-produccion` | 200 · html · 10,765 B | 🔴 **200** | 🔴 **200** |
+| `brief-gerencia` | 200 · html · 23,815 B | 🔴 **200** | 🔴 **200** |
+
+**Solo `brief-aida` tiene candado.** `brief-produccion` y `brief-gerencia` siguen
+sirviendo el HTML completo **a cualquiera con la liga, sin ninguna credencial** —
+`brief-produccion` a pesar de que el PR #124 ya está mergeado y desplegado.
+
+Tampoco está verificado el corte cruzado por rol: el token de una supervisora de
+ventas obtiene el brief de planta y el de gerencia con 200.
 
 ### ⚠️ Cómo entra Yamil — hay una trampa
 
@@ -200,7 +219,7 @@ esta lógica vive del lado del endpoint.
 
 ## 5. Cerrar las ligas públicas
 
-**Las dos** son públicas hoy. Al poner el candado, un `GET` sin header debe pasar de
+**Los tres** son públicos hoy. Al poner el candado, un `GET` sin header debe pasar de
 `200` a `401`:
 
 | endpoint | hoy (medido) |
@@ -220,11 +239,10 @@ mientras tanto.
 Requiere el candado puesto (Fase A); hoy los endpoints son públicos, así que el 403
 aún no existe y no hay nada que probar:
 
-- [ ] `jefe_ruta` con token válido → **403** en las dos rutas.
-- [ ] `supervisor_ventas` → 200 en `brief-aida`, **403** en `brief-produccion`.
-- [ ] `supervisor_produccion` → 200 en `brief-produccion`, **403** en `brief-aida`.
-- [ ] Yamil con login real de dirección → **200** en ambas.
-- [ ] `curl` sin header → **401** en ambas.
+- [ ] `jefe_ruta` con token válido → **403** en las tres rutas.
+- [ ] Cada rol dueño → 200 solo en su brief y **403** en los otros dos.
+- [ ] Yamil con login real de dirección → **200** en los tres.
+- [ ] `curl` sin header → **401** en los tres.
 
 ### Lo verificado del lado de la PWA (runtime, no aserción)
 

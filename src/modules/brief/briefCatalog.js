@@ -5,17 +5,22 @@
 // único que cambia por variante es lo declarado aquí.
 //
 // AGREGAR UN BRIEF NUEVO (gerencia, etc.) = una entrada aquí + una entrada en
-// src/modules/registry.js con el mismo `moduleId` y `roles: [role]` + una línea
-// de <Route> en App.jsx. Cero componentes nuevos.
+// src/modules/registry.js con el mismo `moduleId` y los mismos `viewerRoles` +
+// una línea de <Route> en App.jsx. Cero componentes nuevos.
 //
-// `role` está duplicado a propósito con el registry: el test de coherencia
-// (tests/briefDia.test.mjs) exige que coincidan, así una variante no puede
-// quedar visible para un rol distinto al que declara su catálogo.
+// `viewerRoles` está duplicado a propósito con el registry: el test de
+// coherencia (tests/briefEmbed.test.mjs) exige que coincidan, así una variante
+// no puede quedar visible para un rol distinto al que declara su catálogo.
 //
-// OJO — `role` decide SOLO la pestaña. El candado del DATO vive en el endpoint
-// de n8n, que valida el X-GF-Employee-Token contra gf.employee.mobile.session y
-// aplica su propia allowlist (que incluye direccion_general para revisión, sin
-// que dirección vea la pestaña). Ver docs/brief-dia-contrato-n8n.md.
+// El PRIMERO de `viewerRoles` es el dueño del brief (a quien va dirigido);
+// `direccion_general` va en todos porque dirección revisa el piloto y, desde
+// 2026-08-01, también ve la entrada en la UI (antes solo tenía acceso al dato).
+//
+// OJO — `viewerRoles` decide SOLO si se muestra la entrada. El candado del DATO
+// vive en el endpoint de n8n, que valida el X-GF-Employee-Token contra
+// gf.employee.mobile.session y aplica su propia allowlist. Ampliar esta lista
+// NO amplía el acceso: quien no esté en la allowlist del endpoint recibe 403 y
+// la pantalla lo dice. Ver docs/brief-dia-contrato-n8n.md.
 
 export const BRIEFS = Object.freeze([
   Object.freeze({
@@ -25,7 +30,7 @@ export const BRIEFS = Object.freeze([
     endpoint: '/api-n8n/brief-aida',
     title: 'Mi Brief del día',
     subtitle: 'Rutas y ventas de tu sucursal',
-    role: 'supervisor_ventas',
+    viewerRoles: ['supervisor_ventas', 'direccion_general'],
     // El endpoint de ventas no acepta parámetro de fecha: siempre "ayer".
     dateParam: '',
   }),
@@ -36,7 +41,7 @@ export const BRIEFS = Object.freeze([
     endpoint: '/api-n8n/brief-produccion',
     title: 'Mi Brief de planta',
     subtitle: 'Producción del día en Planta Iguala',
-    role: 'supervisor_produccion',
+    viewerRoles: ['supervisor_produccion', 'direccion_general'],
     // Acepta ?d=YYYY-MM-DD para revisar días pasados; sin él trae "ayer".
     dateParam: 'd',
   }),
@@ -47,7 +52,7 @@ export const BRIEFS = Object.freeze([
     endpoint: '/api-n8n/brief-gerencia',
     title: 'Brief de gerencia',
     subtitle: 'El día de tu sucursal',
-    role: 'gerente_sucursal',
+    viewerRoles: ['gerente_sucursal', 'direccion_general'],
     // Sin selector de día: esta variante siempre trae el default del endpoint.
     dateParam: '',
   }),
