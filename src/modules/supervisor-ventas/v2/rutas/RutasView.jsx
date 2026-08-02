@@ -20,14 +20,22 @@ function Chip({ text, tone }) {
   return <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: TOKENS.radius.pill, color: t.fg, background: t.bg, border: `1px solid ${t.border}` }}>{text}</span>
 }
 
-function RouteRow({ row, onOpen }) {
+function RouteRow({ row, onOpen, selected = false }) {
   const depTone = TONE[departureTone(row.departureStatus)] || S.no_evaluable
   const sales = moneyText(row.sales.amount, row.sales.currency, row.sales.available)
   const sigTone = row.signalStatus === 'recent' || row.signalStatus === 'delayed' ? S.signal : S.no_evaluable
   return (
     <RowButton testid="v2-ruta-row" ariaLabel={onOpen ? `Abrir ruta ${row.routeName}` : undefined}
       onClick={onOpen ? () => onOpen(row.planId) : undefined}
-      style={{ marginBottom: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg }}>
+      style={{
+        marginBottom: 10, background: selected ? C.surfaceSoft : C.surface,
+        // La selección se marca con BORDE + barra lateral, no solo con color:
+        // en escritorio cruza columnas (radar ↔ rutas) y debe leerse sin depender
+        // de distinguir dos azules.
+        border: `1px solid ${selected ? C.blue : C.border}`,
+        boxShadow: selected ? `inset 4px 0 0 ${C.blue}` : 'none',
+        borderRadius: TOKENS.radius.lg,
+      }}>
       <div style={{ padding: '12px 14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{row.routeName}</div>
@@ -49,7 +57,9 @@ function RouteRow({ row, onOpen }) {
   )
 }
 
-export default function RutasView({ dayControl, source = 'live', onOpenRoute, testid = 'supervisor-v2-rutas' }) {
+// `selectedPlanId` es OPCIONAL: en móvil no se pasa y la lista se ve igual que
+// siempre. Solo el tablero de escritorio lo usa para el cruce entre columnas.
+export default function RutasView({ dayControl, source = 'live', onOpenRoute, selectedPlanId = null, title = 'Rutas', testid = 'supervisor-v2-rutas' }) {
   const rows = deriveRouteRows(dayControl)
   const isDemo = source === 'demo'
   return (
@@ -59,10 +69,17 @@ export default function RutasView({ dayControl, source = 'live', onOpenRoute, te
           ◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.
         </div>
       )}
-      <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: '0 0 12px' }}>Rutas</h1>
+      <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: '0 0 12px' }}>{title}</h1>
       {rows.length === 0
         ? <div data-testid="v2-rutas-empty" style={{ fontSize: 13, color: C.textMuted }}>Sin rutas en la jornada.</div>
-        : rows.map((r, i) => <RouteRow key={r.planId ?? i} row={r} onOpen={onOpenRoute} />)}
+        : rows.map((r, i) => (
+          <RouteRow
+            key={r.planId ?? i}
+            row={r}
+            onOpen={onOpenRoute}
+            selected={selectedPlanId != null && r.planId === selectedPlanId}
+          />
+        ))}
     </div>
   )
 }

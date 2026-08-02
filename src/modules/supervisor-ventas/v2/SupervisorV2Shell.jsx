@@ -79,7 +79,11 @@ export default function SupervisorV2Shell({ active = 'hoy', children }) {
         </nav>
       ) : null}
 
-      <main style={{ maxWidth: 980, margin: '0 auto', padding: isDesktop ? '10px 20px 24px' : '14px 14px 84px', ...typo?.wrap }}>
+      {/* 980px es el ancho de lectura correcto para una columna, pero asfixia al
+          tablero de 3 columnas de "Hoy" en escritorio (medido: lo dejaba en 940px
+          de 1440 disponibles). Solo esa superficie se ensancha; las demás
+          pestañas conservan su ancho de lectura. */}
+      <main style={{ maxWidth: isDesktop && active === 'hoy' ? 1680 : 980, margin: '0 auto', padding: isDesktop ? '10px 20px 24px' : '14px 14px 84px', ...typo?.wrap }}>
         {children}
       </main>
 
