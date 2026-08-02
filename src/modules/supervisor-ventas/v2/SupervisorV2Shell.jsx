@@ -5,7 +5,11 @@
 // role="tablist", aria-current, foco por teclado, forma+texto (no solo color).
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../../tokens'
+import { getTypo } from '../../../tokens'
+// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
+// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 
 const C = TOKENS.colors
 
@@ -75,7 +79,11 @@ export default function SupervisorV2Shell({ active = 'hoy', children }) {
         </nav>
       ) : null}
 
-      <main style={{ maxWidth: 980, margin: '0 auto', padding: isDesktop ? '10px 20px 24px' : '14px 14px 84px', ...typo?.wrap }}>
+      {/* 980px es el ancho de lectura correcto para una columna, pero asfixia al
+          tablero de 3 columnas de "Hoy" en escritorio (medido: lo dejaba en 940px
+          de 1440 disponibles). Solo esa superficie se ensancha; las demás
+          pestañas conservan su ancho de lectura. */}
+      <main style={{ maxWidth: isDesktop && active === 'hoy' ? 1680 : 980, margin: '0 auto', padding: isDesktop ? '10px 20px 24px' : '14px 14px 84px', ...typo?.wrap }}>
         {children}
       </main>
 
@@ -84,7 +92,7 @@ export default function SupervisorV2Shell({ active = 'hoy', children }) {
         <nav role="tablist" aria-label="Supervisor" style={{
           position: 'fixed', left: 0, right: 0, bottom: 0, height: 64,
           display: 'flex', alignItems: 'stretch',
-          background: 'rgba(3,8,17,0.92)', borderTop: `1px solid ${C.border}`,
+          background: C.navBg, borderTop: `1px solid ${C.border}`,
           paddingBottom: 'env(safe-area-inset-bottom)', backdropFilter: 'blur(8px)', zIndex: 40,
         }}>
           {V2_TABS.map((t) => <TabButton key={t.key} tab={t} active={active} onClick={() => go(t)} />)}

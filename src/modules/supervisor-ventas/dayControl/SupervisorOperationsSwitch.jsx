@@ -1,9 +1,10 @@
 import StateScreen from '../../../components/kold/StateScreen'
+import { BRAND_TOKENS } from '../../../theme/brandTokens'
 
 function SafeSupervisorState({ state, onRetry }) {
   const retryable = state?.retryable === true
   return (
-    <StateScreen
+    <StateScreen tokens={BRAND_TOKENS}
       title={state?.title || 'No pudimos mostrar la operación'}
       detail={state?.detail || 'Intenta nuevamente.'}
       tone={state?.kind === 'error' || state?.kind === 'invalid_contract'

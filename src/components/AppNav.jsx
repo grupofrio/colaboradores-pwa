@@ -11,7 +11,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSession } from '../App'
-import { TOKENS } from '../tokens'
+import { TOKENS as DARK_TOKENS } from '../tokens'
+// La navegación es COMPARTIDA: el tema se elige por rol efectivo, no por
+// import. Solo supervision de ventas ve la version clara (rebranding PR2);
+// cualquier otro rol conserva exactamente la barra oscura de siempre.
+import { BRAND_TOKENS } from '../theme/brandTokens'
+import { isBrandLightSession } from '../theme/useBrandPalette'
 import {
   buildMobileNav, buildDesktopNav, navLabel,
   DESKTOP_MIN, RAIL_FULL_MIN, DESKTOP_RAIL_WIDTH, DESKTOP_RAIL_WIDTH_COMPACT,
@@ -47,7 +52,7 @@ function NavIcon({ name, size = 20 }) {
 const iconFor = (item) => item?.navIcon || item?.icon || 'more'
 
 /* ── Botón de la barra inferior móvil ─────────────────────────────────────── */
-function TabButton({ item, active, short, onClick }) {
+function TabButton({ item, active, short, onClick, t }) {
   return (
     <button
       type="button"
@@ -58,9 +63,9 @@ function TabButton({ item, active, short, onClick }) {
         flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 3, padding: '9px 2px',
         minHeight: 48,
-        color: active ? TOKENS.colors.blue2 : TOKENS.colors.textLow,
+        color: active ? t.colors.blue2 : t.colors.textLow,
         cursor: 'pointer', background: 'none', border: 'none',
-        transition: `color ${TOKENS.motion.fast}`,
+        transition: `color ${t.motion.fast}`,
       }}
     >
       <NavIcon name={iconFor(item)} />
@@ -83,7 +88,7 @@ function TabButton({ item, active, short, onClick }) {
    - bloqueo del scroll del body mientras está abierto (restaura al cerrar)
    - Back del navegador (popstate) cierra el sheet en vez de dejarlo colgado
    - al cerrar, el foco REGRESA al botón "Más" (lo restaura AppNav)            */
-function MoreSheet({ items, activeId, onPick, onClose }) {
+function MoreSheet({ items, activeId, onPick, onClose, t }) {
   const sheetRef = useRef(null)
   const closeBtnRef = useRef(null)
 
@@ -136,16 +141,16 @@ function MoreSheet({ items, activeId, onPick, onClose }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxHeight: '70vh', overflowY: 'auto',
-          background: 'rgba(6,12,22,0.98)',
+          background: t.colors.moreSheetBg,
           borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          borderTop: `1px solid ${TOKENS.colors.border}`,
+          borderTop: `1px solid ${t.colors.border}`,
           padding: '10px 12px calc(env(safe-area-inset-bottom) + 16px)',
           outline: 'none',
         }}
       >
-        <div style={{ width: 40, height: 4, borderRadius: 3, background: 'rgba(255,255,255,0.18)', margin: '4px auto 8px' }} />
+        <div style={{ width: 40, height: 4, borderRadius: 3, background: t.colors.moreSheetHandle, margin: '4px auto 8px' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 6px 10px' }}>
-          <p id="gf-more-sheet-title" style={{ fontSize: 11, letterSpacing: '0.14em', color: TOKENS.colors.textLow, margin: 0 }}>
+          <p id="gf-more-sheet-title" style={{ fontSize: 11, letterSpacing: '0.14em', color: t.colors.textLow, margin: 0 }}>
             MÁS MÓDULOS
           </p>
           <button
@@ -156,8 +161,8 @@ function MoreSheet({ items, activeId, onPick, onClose }) {
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 32, height: 32, borderRadius: 10, cursor: 'pointer',
-              background: 'rgba(255,255,255,0.06)', border: `1px solid ${TOKENS.colors.border}`,
-              color: TOKENS.colors.textSoft,
+              background: t.colors.surfaceStrong, border: `1px solid ${t.colors.border}`,
+              color: t.colors.textSoft,
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -176,9 +181,9 @@ function MoreSheet({ items, activeId, onPick, onClose }) {
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                   padding: '14px 6px', borderRadius: 14, cursor: 'pointer', minHeight: 48,
-                  background: active ? 'rgba(43,143,224,0.14)' : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${active ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
-                  color: active ? TOKENS.colors.blue2 : TOKENS.colors.textSoft,
+                  background: active ? t.colors.blueGlow : t.colors.moreSheetItemBg,
+                  border: `1px solid ${active ? t.colors.blue2 : t.colors.border}`,
+                  color: active ? t.colors.blue2 : t.colors.textSoft,
                 }}
               >
                 <NavIcon name={iconFor(item)} size={22} />
@@ -196,7 +201,7 @@ function MoreSheet({ items, activeId, onPick, onClose }) {
    compact=true (1024–1439px): solo iconos con title/aria-label — evita el
    triple panel comprimido en Admin/Gerente (rail 232 + sidebar 220 + feed 320
    dejaban ~252px de contenido a 1024px; compacto deja ≥408px).               */
-function DesktopRail({ nav, compact, onGo }) {
+function DesktopRail({ nav, compact, onGo, t }) {
   const items = [nav.home, ...nav.modules, nav.profile]
   const width = compact ? DESKTOP_RAIL_WIDTH_COMPACT : DESKTOP_RAIL_WIDTH
   return (
@@ -204,7 +209,7 @@ function DesktopRail({ nav, compact, onGo }) {
       aria-label="Navegación principal"
       style={{
         position: 'fixed', top: 0, left: 0, bottom: 0, width,
-        background: 'rgba(3,8,17,0.96)', borderRight: `1px solid ${TOKENS.colors.border}`,
+        background: t.colors.navBg, borderRight: `1px solid ${t.colors.border}`,
         backdropFilter: 'blur(20px)', display: 'flex', flexDirection: 'column',
         padding: compact ? '18px 10px' : '18px 12px', gap: 4, zIndex: 100, overflowY: 'auto',
       }}
@@ -212,7 +217,7 @@ function DesktopRail({ nav, compact, onGo }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: 8, padding: compact ? '0 0 14px' : '0 8px 14px' }}>
         <img src="/icons/icon-grupo-frio.svg" alt="Grupo Frío" style={{ width: 28, height: 28, borderRadius: 7 }} />
         {!compact && (
-          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: TOKENS.colors.textLow }}>COLABORADORES</span>
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: t.colors.textLow }}>COLABORADORES</span>
         )}
       </div>
       {items.map((item) => {
@@ -232,7 +237,7 @@ function DesktopRail({ nav, compact, onGo }) {
               textAlign: 'left', minHeight: 44,
               background: active ? 'rgba(43,143,224,0.14)' : 'transparent',
               border: `1px solid ${active ? 'rgba(43,143,224,0.35)' : 'transparent'}`,
-              color: active ? TOKENS.colors.blue2 : TOKENS.colors.textSoft,
+              color: active ? t.colors.blue2 : t.colors.textSoft,
             }}
           >
             <NavIcon name={iconFor(item)} />
@@ -247,6 +252,7 @@ function DesktopRail({ nav, compact, onGo }) {
 /* ── AppNav ───────────────────────────────────────────────────────────────── */
 export default function AppNav() {
   const { session } = useSession()
+  const t = isBrandLightSession(session) ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const location = useLocation()
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 375)
@@ -316,7 +322,7 @@ export default function AppNav() {
   if (w >= DESKTOP_MIN) {
     const nav = buildDesktopNav(session, location.pathname)
     if (nav.hidden) return null
-    return <DesktopRail nav={nav} compact={w < RAIL_FULL_MIN} onGo={go} />
+    return <DesktopRail nav={nav} compact={w < RAIL_FULL_MIN} onGo={go} t={t} />
   }
 
   const nav = buildMobileNav(session, location.pathname)
@@ -329,13 +335,13 @@ export default function AppNav() {
         aria-label="Navegación principal"
         style={{
           position: 'fixed', bottom: 0, left: 0, right: 0,
-          background: 'rgba(3,8,17,0.94)', borderTop: `1px solid ${TOKENS.colors.border}`,
+          background: t.colors.navBg, borderTop: `1px solid ${t.colors.border}`,
           backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
           display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)', zIndex: 100,
         }}
       >
         {tabs.map((item) => (
-          <TabButton key={item.id} item={item} short active={item.id === nav.activeId} onClick={() => go(item.route)} />
+          <TabButton t={t} key={item.id} item={item} short active={item.id === nav.activeId} onClick={() => go(item.route)} />
         ))}
         {nav.hasMore && (
           <button
@@ -352,7 +358,7 @@ export default function AppNav() {
               flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', gap: 3, padding: '9px 2px',
               minHeight: 48,
-              color: (moreOpen || nav.moreActive) ? TOKENS.colors.blue2 : TOKENS.colors.textLow,
+              color: (moreOpen || nav.moreActive) ? t.colors.blue2 : t.colors.textLow,
               cursor: 'pointer', background: 'none', border: 'none',
             }}
           >
@@ -360,10 +366,10 @@ export default function AppNav() {
             <span style={{ fontSize: 10, fontWeight: nav.moreActive ? 700 : 500, letterSpacing: '0.02em' }}>Más</span>
           </button>
         )}
-        <TabButton item={nav.profile} short active={nav.profile.id === nav.activeId} onClick={() => go(nav.profile.route)} />
+        <TabButton t={t} item={nav.profile} short active={nav.profile.id === nav.activeId} onClick={() => go(nav.profile.route)} />
       </nav>
       {moreOpen && (
-        <MoreSheet items={nav.overflow} activeId={nav.activeId} onPick={(item) => go(item.route)} onClose={closeMore} />
+        <MoreSheet items={nav.overflow} activeId={nav.activeId} onPick={(item) => go(item.route)} onClose={closeMore} t={t} />
       )}
     </>
   )

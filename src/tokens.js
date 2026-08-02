@@ -12,6 +12,13 @@ export const TOKENS = {
     surface:       'rgba(255,255,255,0.05)',
     surfaceSoft:   'rgba(255,255,255,0.03)',
     surfaceStrong: 'rgba(255,255,255,0.07)',
+    // Elementos del sheet móvil «Más». Conservan los literales previos para
+    // que los roles oscuros no cambien al tematizar la variante clara.
+    moreSheetBg:     'rgba(6,12,22,0.98)',
+    moreSheetHandle: 'rgba(255,255,255,0.18)',
+    moreSheetItemBg: 'rgba(255,255,255,0.04)',
+    // Fondo de la navegación global (antes hardcodeado en AppNav; mismo valor)
+    navBg:     'rgba(3,8,17,0.96)',
     // Bordes
     border:     'rgba(255,255,255,0.08)',
     borderBlue: 'rgba(97,178,255,0.18)',

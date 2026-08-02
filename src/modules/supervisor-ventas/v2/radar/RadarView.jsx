@@ -5,7 +5,10 @@
 // coordenadas NO se inventan (unidad sin posición no va al mapa, sí a la lista);
 // umbrales de frescura NO se hardcodean (se leen de radar.thresholds); JAMÁS se
 // presenta como "en vivo": se dice "última posición conocida".
-import { TOKENS } from '../../../../tokens'
+// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
+// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import {
   orderRadarUnits, RADAR_ORDERS, safeSignalStatus, signalLabel, ageText,
   radarSummary, operationalDateLabel, timezoneSourceLabel,
@@ -89,9 +92,16 @@ function UnitRow({ unit, nowMs, selected, onSelectUnit, onOpenRoute }) {
   const total = num(unit?.stops?.planned_total)
   const missing = num(unit?.stops?.missing_coordinates)
   const clickable = !!onSelectUnit && planId != null
+  const selectUnit = () => { if (clickable) onSelectUnit(planId) }
+  const handleKeyDown = (e) => {
+    if (!clickable || (e.key !== 'Enter' && e.key !== ' ')) return
+    e.preventDefault()
+    selectUnit()
+  }
   return (
     <div data-testid="radar-unit-row" role={clickable ? 'button' : undefined} tabIndex={clickable ? 0 : undefined}
-      onClick={clickable ? () => onSelectUnit(planId) : undefined}
+      onClick={clickable ? selectUnit : undefined}
+      onKeyDown={clickable ? handleKeyDown : undefined}
       style={{
         display: 'flex', gap: 10, alignItems: 'flex-start', justifyContent: 'space-between',
         padding: '10px 11px', marginTop: 8, background: C.surfaceSoft,
@@ -142,7 +152,7 @@ export default function RadarView({
   return (
     <div data-testid={testid} data-source={source}>
       {isDemo && (
-        <div data-testid="v2-demo-banner" role="note" style={{ fontSize: 12, fontWeight: 700, color: '#c084fc', background: 'rgba(192,132,252,0.10)', border: '1px solid rgba(192,132,252,0.30)', borderRadius: TOKENS.radius.md, padding: '9px 12px', marginBottom: 13 }}>
+        <div data-testid="v2-demo-banner" role="note" style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9', background: 'rgba(109,40,217,0.08)', border: '1px solid rgba(109,40,217,0.32)', borderRadius: TOKENS.radius.md, padding: '9px 12px', marginBottom: 13 }}>
           ◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.
         </div>
       )}
