@@ -36,6 +36,11 @@ export const BRAND_TOKENS = {
     surface:       '#FFFFFF',
     surfaceSoft:   '#F7FCFF',
     surfaceStrong: '#E0F3FC',
+    // Elementos del sheet móvil «Más»: superficies claras, legibles y con
+    // contraste respecto de la página institucional.
+    moreSheetBg:     'rgba(255,255,255,0.98)',
+    moreSheetHandle: '#DBEFF9',
+    moreSheetItemBg: '#F7FCFF',
     // Fondo de la navegación global
     navBg:     'rgba(255,255,255,0.96)',
     // Bordes

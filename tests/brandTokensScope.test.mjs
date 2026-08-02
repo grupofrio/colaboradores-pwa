@@ -59,6 +59,16 @@ test('la navegación global conmuta por rol, no por import fijo', () => {
   assert.match(nav, /isBrandLightSession\(session\)\s*\?\s*BRAND_TOKENS\s*:\s*DARK_TOKENS/)
 })
 
+test('las navegaciones móviles de supervisión usan fondos del tema claro', () => {
+  const nav = readFileSync(path.join(SRC, 'components/AppNav.jsx'), 'utf8')
+  const shell = readFileSync(path.join(SRC, 'modules/supervisor-ventas/v2/SupervisorV2Shell.jsx'), 'utf8')
+
+  assert.match(nav, /background: t\.colors\.moreSheetBg/)
+  assert.doesNotMatch(nav, /background: 'rgba\(6,12,22,0\.98\)'/)
+  assert.match(shell, /background: C\.navBg/)
+  assert.doesNotMatch(shell, /background: 'rgba\(3,8,17,0\.92\)'/)
+})
+
 test('ningún componente COMPARTIDO importa el tema claro (se inyecta por prop)', () => {
   // StateScreen y ScreenShell los usan otros roles: su tema debe llegar por
   // prop con default oscuro, nunca por import directo.

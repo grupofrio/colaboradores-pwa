@@ -141,14 +141,14 @@ function MoreSheet({ items, activeId, onPick, onClose, t }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxHeight: '70vh', overflowY: 'auto',
-          background: 'rgba(6,12,22,0.98)',
+          background: t.colors.moreSheetBg,
           borderTopLeftRadius: 20, borderTopRightRadius: 20,
           borderTop: `1px solid ${t.colors.border}`,
           padding: '10px 12px calc(env(safe-area-inset-bottom) + 16px)',
           outline: 'none',
         }}
       >
-        <div style={{ width: 40, height: 4, borderRadius: 3, background: 'rgba(255,255,255,0.18)', margin: '4px auto 8px' }} />
+        <div style={{ width: 40, height: 4, borderRadius: 3, background: t.colors.moreSheetHandle, margin: '4px auto 8px' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 6px 10px' }}>
           <p id="gf-more-sheet-title" style={{ fontSize: 11, letterSpacing: '0.14em', color: t.colors.textLow, margin: 0 }}>
             MÁS MÓDULOS
@@ -181,7 +181,7 @@ function MoreSheet({ items, activeId, onPick, onClose, t }) {
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                   padding: '14px 6px', borderRadius: 14, cursor: 'pointer', minHeight: 48,
-                  background: active ? 'rgba(43,143,224,0.14)' : 'rgba(255,255,255,0.04)',
+                  background: active ? t.colors.blueGlow : t.colors.moreSheetItemBg,
                   border: `1px solid ${active ? t.colors.blue2 : t.colors.border}`,
                   color: active ? t.colors.blue2 : t.colors.textSoft,
                 }}
