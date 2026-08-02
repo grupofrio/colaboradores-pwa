@@ -4,11 +4,16 @@
 // logging/evidencia, no a la cara del usuario.
 import { TOKENS } from '../../tokens'
 
-const C = TOKENS.colors
-
+// `tokens` es OPCIONAL y su default es el tema oscuro global: las pantallas que
+// no lo pasan (M2–M7, torres, admin…) se ven exactamente igual que antes. Solo
+// la superficie de supervisión de ventas inyecta BRAND_TOKENS para que sus
+// estados de carga/vacío/error no queden como una tarjeta oscura sobre el fondo
+// claro (rebranding PR2).
 export default function StateScreen({
   title, detail, tone = 'neutral', actionLabel, onAction, actionHref, testid = 'kold-state-screen',
+  tokens = TOKENS,
 }) {
+  const C = tokens.colors
   const toneColor = tone === 'error' ? C.error : tone === 'warning' ? C.warning : C.textMuted
   const btnStyle = {
     display: 'inline-block', marginTop: 16, fontSize: 13, fontWeight: 700, padding: '8px 16px',

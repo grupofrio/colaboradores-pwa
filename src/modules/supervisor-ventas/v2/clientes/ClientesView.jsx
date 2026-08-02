@@ -11,7 +11,10 @@
 //   · ausencia se NOMBRA (Sin resultado / Sin check-in), jamás se pinta como 0;
 //   · segmento vacío ⇒ vacío honesto, no una lista fantasma.
 // Sin window/fetch/hooks ⇒ SSR-testeable con props directas.
-import { TOKENS } from '../../../../tokens'
+// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
+// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import { CUSTOMER_SEGMENT_LABELS } from '../presentation.js'
 
 const C = TOKENS.colors
@@ -39,8 +42,8 @@ const SEGMENT_TONES = {
 const RESULT_LABELS = { con_venta: 'Con venta', no_venta: 'No venta' }
 
 const BANNER_STYLE = {
-  fontSize: 12, fontWeight: 700, color: '#c084fc', background: 'rgba(192,132,252,0.10)',
-  border: '1px solid rgba(192,132,252,0.30)', borderRadius: TOKENS.radius.md,
+  fontSize: 12, fontWeight: 700, color: '#6d28d9', background: 'rgba(109,40,217,0.08)',
+  border: '1px solid rgba(109,40,217,0.32)', borderRadius: TOKENS.radius.md,
   padding: '9px 12px', marginBottom: 13,
 }
 

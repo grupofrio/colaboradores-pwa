@@ -3,7 +3,10 @@
 // foco nativo, semántica correcta. Reset de estilos + foco visible. Se usa para
 // toda fila/tarjeta accionable de las superficies (Codex P12). Si no hay onClick,
 // degrada a un <div> no interactivo (no anuncia un botón inerte).
-import { TOKENS } from '../../../../tokens'
+// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
+// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 
 const C = TOKENS.colors
 

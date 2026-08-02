@@ -2,7 +2,10 @@
 // deriveRouteTimeline(route, capabilities). Estados por forma+texto (no solo
 // color): done ✓ · pending ○ · unknown — · not_available ∅. unknown/faltante
 // NUNCA es incumplimiento. Declara validated ≠ recepción física.
-import { TOKENS } from '../../../../tokens'
+// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
+// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import { deriveRouteTimeline, departureLabel, closeStageLabel } from '../presentation.js'
 
 const C = TOKENS.colors
@@ -32,7 +35,7 @@ export default function RutaDetalle({
   const isDemo = source === 'demo'
   return (
     <div data-testid={testid} data-source={source}>
-      {isDemo && <div data-testid="v2-demo-banner" role="note" style={{ fontSize: 12, fontWeight: 700, color: '#c084fc', background: 'rgba(192,132,252,0.10)', border: '1px solid rgba(192,132,252,0.30)', borderRadius: TOKENS.radius.md, padding: '9px 12px', marginBottom: 13 }}>◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.</div>}
+      {isDemo && <div data-testid="v2-demo-banner" role="note" style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9', background: 'rgba(109,40,217,0.08)', border: '1px solid rgba(109,40,217,0.32)', borderRadius: TOKENS.radius.md, padding: '9px 12px', marginBottom: 13 }}>◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.</div>}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         {onBack && <button type="button" onClick={onBack} aria-label="Volver" style={{ fontSize: 13, color: C.blue3, cursor: 'pointer', border: `1px solid ${C.borderBlue}`, borderRadius: TOKENS.radius.pill, padding: '4px 12px' }}>← Rutas</button>}

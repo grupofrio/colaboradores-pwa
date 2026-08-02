@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../../tokens'
 
 /* ============================================================================
    ScreenShell — Consistent layout wrapper for all Entregas V2 screens
 ============================================================================ */
 
-export default function ScreenShell({ title, backTo = '/entregas', children, rightAction }) {
+// `tokens` OPCIONAL: default = tema oscuro, así Entregas y el resto de sus
+// pantallas quedan idénticas. Solo la superficie de supervisión de ventas
+// inyecta BRAND_TOKENS (rebranding PR2).
+export default function ScreenShell({ title, backTo = '/entregas', children, rightAction, tokens = DARK_TOKENS }) {
+  const TOKENS = tokens
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])

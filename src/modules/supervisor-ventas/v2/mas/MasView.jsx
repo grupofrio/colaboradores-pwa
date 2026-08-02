@@ -23,7 +23,10 @@
 //    (flag V2 OFF); con V2 ON, un deep link cae en V2ExcludedRoute.
 // Todas estas rutas están protegidas por V2ExcludedRoute en App.jsx (deep-link
 // seguro: V2 ON ⇒ "no disponible" sin fetch; V2 OFF ⇒ pantalla legacy).
-import { TOKENS } from '../../../../tokens'
+// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
+// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 
 const C = TOKENS.colors
 

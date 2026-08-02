@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ScreenShell from '../entregas/components/ScreenShell'
 import StateScreen from '../../components/kold/StateScreen'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
 import OperationsHomeView from './dayControl/OperationsHomeView'
 import { runOperationsHome, RUN_STATUS } from './dayControl/runController'
 import { getDayControl, getRadar } from './api'
@@ -44,10 +45,10 @@ export default function ScreenOperacionesHoy() {
 
   let body
   if (state.status === RUN_STATUS.LOADING) {
-    body = <StateScreen title="Cargando el día operativo…" detail="Consultando venta, rutas y pendientes." tone="neutral" />
+    body = <StateScreen tokens={BRAND_TOKENS} title="Cargando el día operativo…" detail="Consultando venta, rutas y pendientes." tone="neutral" />
   } else if (state.status === RUN_STATUS.ERROR) {
     body = (
-      <StateScreen
+      <StateScreen tokens={BRAND_TOKENS}
         title="No se pudo cargar el día operativo"
         detail={state.error || 'El servicio no respondió. Puedes reintentar en unos momentos.'}
         tone="error"
@@ -68,5 +69,5 @@ export default function ScreenOperacionesHoy() {
     )
   }
 
-  return <ScreenShell title="Hoy" backTo="/">{body}</ScreenShell>
+  return <ScreenShell title="Hoy" backTo="/" tokens={BRAND_TOKENS}>{body}</ScreenShell>
 }
