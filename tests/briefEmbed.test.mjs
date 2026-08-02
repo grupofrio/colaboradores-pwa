@@ -272,6 +272,14 @@ test('dirección ve la entrada de TODOS los briefs (es quien revisa el piloto)',
   }
 })
 
+test('el brief de gerencia conserva a su dueño y también es visible para dirección', () => {
+  const gerencia = getBriefById('gerencia')
+  const module = getModuleById('brief_gerencia')
+
+  assert.deepEqual(gerencia?.viewerRoles, ['gerente_sucursal', 'direccion_general'])
+  assert.deepEqual(module?.roles, ['gerente_sucursal', 'direccion_general'])
+})
+
 test('cada brief lo ven SOLO los roles que declara; el resto no', () => {
   const roles = ['supervisor_ventas', 'supervisor_produccion', 'direccion_general', 'jefe_ruta',
     'gerente_sucursal', 'auxiliar_admin', 'operador_barra', 'almacenista_pt', 'auxiliar_ruta', '']
