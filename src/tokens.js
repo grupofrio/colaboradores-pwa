@@ -12,6 +12,8 @@ export const TOKENS = {
     surface:       'rgba(255,255,255,0.05)',
     surfaceSoft:   'rgba(255,255,255,0.03)',
     surfaceStrong: 'rgba(255,255,255,0.07)',
+    // Fondo de la navegación global (antes hardcodeado en AppNav; mismo valor)
+    navBg:     'rgba(3,8,17,0.96)',
     // Bordes
     border:     'rgba(255,255,255,0.08)',
     borderBlue: 'rgba(97,178,255,0.18)',

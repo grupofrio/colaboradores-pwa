@@ -5,7 +5,10 @@
 // coordenadas NO se inventan (unidad sin posición no va al mapa, sí a la lista);
 // umbrales de frescura NO se hardcodean (se leen de radar.thresholds); JAMÁS se
 // presenta como "en vivo": se dice "última posición conocida".
-import { TOKENS } from '../../../../tokens'
+// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
+// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import {
   orderRadarUnits, RADAR_ORDERS, safeSignalStatus, signalLabel, ageText,
   radarSummary, operationalDateLabel, timezoneSourceLabel,
@@ -142,7 +145,7 @@ export default function RadarView({
   return (
     <div data-testid={testid} data-source={source}>
       {isDemo && (
-        <div data-testid="v2-demo-banner" role="note" style={{ fontSize: 12, fontWeight: 700, color: '#c084fc', background: 'rgba(192,132,252,0.10)', border: '1px solid rgba(192,132,252,0.30)', borderRadius: TOKENS.radius.md, padding: '9px 12px', marginBottom: 13 }}>
+        <div data-testid="v2-demo-banner" role="note" style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9', background: 'rgba(109,40,217,0.08)', border: '1px solid rgba(109,40,217,0.32)', borderRadius: TOKENS.radius.md, padding: '9px 12px', marginBottom: 13 }}>
           ◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.
         </div>
       )}

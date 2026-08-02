@@ -5,7 +5,11 @@
 // role="tablist", aria-current, foco por teclado, forma+texto (no solo color).
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../../tokens'
+import { getTypo } from '../../../tokens'
+// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
+// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 
 const C = TOKENS.colors
 

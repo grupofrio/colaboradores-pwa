@@ -4,14 +4,15 @@
 // un StateScreen o null (=> la superficie renderiza su vista). DATE_NOT_ALLOWED
 // es explícito: no cae a error genérico, no a fecha actual, no a demo.
 import StateScreen from '../../../components/kold/StateScreen'
+import { BRAND_TOKENS } from '../../../theme/brandTokens'
 
 export default function DayStateGate({ day, loadingTitle = 'Cargando…' }) {
   if (!day || day.status === 'loading') {
-    return <StateScreen title={loadingTitle} tone="neutral" />
+    return <StateScreen tokens={BRAND_TOKENS} title={loadingTitle} tone="neutral" />
   }
   if (day.status === 'date_not_allowed') {
     return (
-      <StateScreen
+      <StateScreen tokens={BRAND_TOKENS}
         testid="v2-date-not-allowed"
         title="Fecha no permitida"
         detail="Esta superficie solo opera sobre la jornada actual de la sucursal. Vuelve al día de hoy."
@@ -23,7 +24,7 @@ export default function DayStateGate({ day, loadingTitle = 'Cargando…' }) {
   }
   if (day.status === 'error') {
     return (
-      <StateScreen
+      <StateScreen tokens={BRAND_TOKENS}
         title="No se pudo cargar el día operativo"
         detail={day.error}
         tone="error"

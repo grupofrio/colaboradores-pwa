@@ -8,19 +8,27 @@
 // llamador (la LISTA es la vista operativa principal). Anti-meridiano / bbox
 // degenerado ⇒ se prefiere la lista. SSR-safe (sin window).
 // A11y (P12): marcadores clicables = foco por teclado + Enter/Space + aria-label.
-import { TOKENS } from '../../../../tokens'
+// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
+// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import { computeBounds, project, validPoints } from './mapProjection.js'
 
 const C = TOKENS.colors
 
+// Puntos del mapa sobre fondo CLARO (#F0F9FF). Los rellenos translúcidos en
+// blanco del tema oscuro serían invisibles aquí, así que los estados "apagados"
+// (sin señal / parada pendiente) pasan a translúcidos en tinta oscura. Se
+// conserva la semántica de cada tipo y el contorno oscuro que los separa del
+// fondo. El tamaño (r) no cambia: la forma también distingue, no solo el color.
 const KIND_STYLE = {
-  unit: { r: 7, fill: '#60a5fa', stroke: '#0a2654' },
-  unit_stale: { r: 7, fill: '#f59e0b', stroke: '#5a3a00' },
-  unit_nosignal: { r: 6, fill: 'rgba(255,255,255,0.35)', stroke: 'rgba(255,255,255,0.2)' },
-  stop_done: { r: 4, fill: '#22c55e', stroke: '#0a3a1a' },
-  stop_pending: { r: 4, fill: 'rgba(255,255,255,0.5)', stroke: 'rgba(255,255,255,0.25)' },
-  incident: { r: 5, fill: '#ef4444', stroke: '#5a0a0a' },
-  cedis: { r: 6, fill: '#c084fc', stroke: '#3a1a5a' },
+  unit: { r: 7, fill: '#0077BB', stroke: '#013F5E' },
+  unit_stale: { r: 7, fill: '#d97706', stroke: '#5a3a00' },
+  unit_nosignal: { r: 6, fill: 'rgba(15,42,61,0.30)', stroke: 'rgba(15,42,61,0.50)' },
+  stop_done: { r: 4, fill: '#16a34a', stroke: '#0a3a1a' },
+  stop_pending: { r: 4, fill: 'rgba(15,42,61,0.35)', stroke: 'rgba(15,42,61,0.55)' },
+  incident: { r: 5, fill: '#dc2626', stroke: '#5a0a0a' },
+  cedis: { r: 6, fill: '#6d28d9', stroke: '#3a1a5a' },
 }
 
 function EmptyMap({ testid, height, note }) {
