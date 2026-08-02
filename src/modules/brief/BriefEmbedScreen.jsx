@@ -27,8 +27,7 @@ import StateScreen from '../../components/kold/StateScreen'
 import { logScreenError } from '../shared/logScreenError'
 import { fetchBriefHtml, isValidBriefDate, BRIEF_STATE } from './briefApi'
 import { getBriefById, briefSupportsDate } from './briefCatalog'
-
-const C = TOKENS.colors
+import { resolvePalette } from '../../theme/useBrandPalette'
 
 // Copy por estado: qué pasó y qué puede hacer quien lo lee. Sin jerga, sin
 // stack traces, sin "Unexpected token".
@@ -80,6 +79,10 @@ export default function BriefEmbedScreen({ briefId }) {
   const { session } = useSession()
   const brief = getBriefById(briefId)
   const withDate = briefSupportsDate(brief)
+  // Identidad clara SOLO para supervisión de ventas; los demás roles siguen en
+  // oscuro. Afecta al CONTENEDOR (fondo, título, controles): el documento del
+  // brief va dentro del iframe con su propio estilo y NO se toca.
+  const { light, c: C } = resolvePalette(session, TOKENS.colors)
 
   const [status, setStatus] = useState('loading') // loading | ok | <BRIEF_STATE>
   const [html, setHtml] = useState('')
@@ -144,7 +147,13 @@ export default function BriefEmbedScreen({ briefId }) {
   const copy = STATE_COPY[status] || STATE_COPY[BRIEF_STATE.UNAVAILABLE]
 
   return (
-    <div style={{ padding: '16px 14px 24px', maxWidth: 1180, margin: '0 auto' }}>
+    <div
+      data-theme={light ? 'brand-light' : undefined}
+      style={{
+        padding: '16px 14px 24px', maxWidth: 1180, margin: '0 auto',
+        ...(light ? { background: C.bg, minHeight: '100dvh' } : null),
+      }}
+    >
       <header style={{
         display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
         gap: 12, flexWrap: 'wrap', marginBottom: 12,
@@ -171,7 +180,7 @@ export default function BriefEmbedScreen({ briefId }) {
                 style={{
                   fontSize: 12.5, padding: '6px 10px', borderRadius: TOKENS.radius.sm,
                   background: C.surface, color: C.text, border: `1px solid ${C.border}`,
-                  colorScheme: 'dark',
+                  colorScheme: light ? 'light' : 'dark',
                 }}
               />
             </label>
@@ -183,7 +192,8 @@ export default function BriefEmbedScreen({ briefId }) {
             style={{
               cursor: 'pointer', fontSize: 12.5, fontWeight: 700, padding: '8px 16px',
               borderRadius: TOKENS.radius.pill, background: 'transparent',
-              color: C.blue3, border: `1px solid ${C.borderBlue}`,
+              color: light ? C.primary : C.blue3,
+              border: `1px solid ${light ? C.border : C.borderBlue}`,
             }}
           >
             Actualizar
@@ -203,7 +213,9 @@ export default function BriefEmbedScreen({ briefId }) {
           style={{
             width: '100%', height: 'calc(100dvh - 210px)', minHeight: 460,
             border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.md,
-            background: C.bg0, display: 'block',
+            // El documento del brief trae su propio fondo oscuro: el contenedor
+            // solo aporta el color de reserva mientras pinta.
+            background: light ? C.surface : C.bg0, display: 'block',
           }}
         />
       )}

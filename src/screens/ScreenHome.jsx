@@ -6,6 +6,8 @@ import { getHomeModulesForSession, getModuleEntryDecisionForSession } from '../l
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
 import { upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
+import { isBrandLightSession } from '../theme/useBrandPalette'
+import SupervisorVentasHome from '../modules/supervisor-ventas/brand/SupervisorVentasHome'
 
 /* ============================================================================
    ICONS
@@ -287,6 +289,29 @@ export default function ScreenHome() {
       },
       navigateToLogin: () => navigate('/login', { replace: true }),
     })
+  }
+
+  // Identidad CLARA solo para supervisión de ventas. Early-return: ningún otro
+  // rol entra a esta rama, así su portada oscura queda intacta. La autoridad de
+  // qué módulos hay y de si se puede entrar NO cambia — se inyecta la ya
+  // resuelta arriba (getHomeModulesForSession + handleModule).
+  if (isBrandLightSession(session)) {
+    return (
+      <>
+        <SupervisorVentasHome
+          session={session}
+          modules={modules}
+          onModule={handleModule}
+          onLogout={isBypass ? handleLogout : null}
+        />
+        <ModuleRolePrompt
+          title={rolePromptModule ? `Elegir puesto para ${rolePromptModule.module.label}` : undefined}
+          roles={rolePromptModule?.compatibleRoles || []}
+          onSelect={handleRoleSelect}
+          onCancel={rolePromptModule ? () => setRolePromptModule(null) : undefined}
+        />
+      </>
+    )
   }
 
   return (
