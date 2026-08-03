@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+// Tema CLARO (rebranding tanda 3): misma forma que TOKENS, paleta institucional.
+// Estas pantallas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { ScreenShell } from '../entregas/components'
 import { getWeeklyScore, getComplianceColor } from './supvService'
 
@@ -9,6 +13,24 @@ import { getWeeklyScore, getComplianceColor } from './supvService'
 ============================================================================ */
 
 const DAY_LABELS = ['L', 'M', 'Mi', 'J', 'V', 'S', 'D']
+
+// El cumplimiento se pinta como relleno (con texto blanco encima) y como
+// TEXTO. Los literales que
+// devuelve getComplianceColor (#22c55e / #f59e0b / #ef4444) dan ~1.9:1 con
+// blanco: ilegible en cualquier tema. Se traduce el color de la política —que
+// sigue siendo la única fuente de los umbrales— al token del tema activo.
+// En OSCURO los tokens valen exactamente esos mismos literales, así que no
+// cambia un píxel; en CLARO son los tonos AA (#166534 / #b45309 / #b91c1c).
+const COMPLIANCE_FILL = {
+  '#22c55e': 'success',
+  '#f59e0b': 'warning',
+  '#ef4444': 'error',
+}
+
+function complianceColor(pct) {
+  const key = COMPLIANCE_FILL[getComplianceColor(pct)]
+  return key ? TOKENS.colors[key] : TOKENS.colors.textMuted
+}
 
 export default function ScreenScoreSemanal() {
   const navigate = useNavigate()
@@ -49,15 +71,14 @@ export default function ScreenScoreSemanal() {
     return () => { cancelled = true }
   }, [])
 
-  // Determine today's column index
-  const todayStr = useMemo(() => {
-    const d = new Date()
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  }, [])
+  // Codex §14: el día de "hoy" sale de la fecha operativa del SERVIDOR (tz de la
+  // sucursal), devuelta por getWeeklyScore().serverDate. NO se usa `new Date()` ni
+  // ninguna semana derivada del dispositivo. Sin fecha del servidor ⇒ Score no
+  // disponible (data.unavailable) y no se resalta ningún día.
+  const todayStr = data?.serverDate || null
 
   const todayIdx = useMemo(() => {
-    if (!data) return -1
+    if (!data || !todayStr) return -1
     return data.weekDays.indexOf(todayStr)
   }, [data, todayStr])
 
@@ -105,7 +126,7 @@ export default function ScreenScoreSemanal() {
 
   if (loading) {
     return (
-      <ScreenShell title="Score Semanal" backTo="/equipo">
+      <ScreenShell tokens={TOKENS} title="Score Semanal" backTo="/equipo">
         <div style={{
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           padding: '80px 24px',
@@ -125,7 +146,7 @@ export default function ScreenScoreSemanal() {
 
   if (error) {
     return (
-      <ScreenShell title="Score Semanal" backTo="/equipo">
+      <ScreenShell tokens={TOKENS} title="Score Semanal" backTo="/equipo">
         <div style={{
           padding: '60px 24px', textAlign: 'center',
         }}>
@@ -136,9 +157,25 @@ export default function ScreenScoreSemanal() {
     )
   }
 
+  // Codex §14: sin fecha operativa del SERVIDOR no se calcula la semana con el
+  // dispositivo ⇒ estado explícito "no disponible" (nunca una semana inventada).
+  if (data?.unavailable) {
+    return (
+      <ScreenShell tokens={TOKENS} title="Score Semanal" backTo="/equipo">
+        <div data-testid="score-unavailable" style={{ padding: '60px 24px', textAlign: 'center' }}>
+          <div style={{ ...typo.h2, color: TOKENS.colors.textSoft, marginBottom: 8 }}>Fecha no disponible</div>
+          <div style={{ ...typo.body, color: TOKENS.colors.textMuted }}>
+            No se pudo obtener la fecha operativa de la sucursal. El Score se calcula con la
+            fecha del servidor, no con la del dispositivo. Reintenta más tarde.
+          </div>
+        </div>
+      </ScreenShell>
+    )
+  }
+
   if (!data || data.vendorScores.length === 0) {
     return (
-      <ScreenShell title="Score Semanal" backTo="/equipo">
+      <ScreenShell tokens={TOKENS} title="Score Semanal" backTo="/equipo">
         <div style={{
           padding: '60px 24px', textAlign: 'center',
         }}>
@@ -150,7 +187,7 @@ export default function ScreenScoreSemanal() {
   }
 
   return (
-    <ScreenShell title="Score Semanal" backTo="/equipo">
+    <ScreenShell tokens={TOKENS} title="Score Semanal" backTo="/equipo">
       {/* Dismiss tooltip on background tap */}
       {tooltip && (
         <div
@@ -259,7 +296,7 @@ export default function ScreenScoreSemanal() {
                   ) : (
                     <div style={{
                       width: 26, height: 26, borderRadius: '50%',
-                      background: getComplianceColor(day.compliance),
+                      background: complianceColor(day.compliance),
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                       <span style={{
@@ -279,7 +316,7 @@ export default function ScreenScoreSemanal() {
               }}>
                 <span style={{
                   ...typo.title, fontWeight: 700, fontSize: 13,
-                  color: vendor.total_stops > 0 ? getComplianceColor(vendor.week_compliance) : TOKENS.colors.textMuted,
+                  color: vendor.total_stops > 0 ? complianceColor(vendor.week_compliance) : TOKENS.colors.textMuted,
                 }}>
                   {vendor.total_stops > 0 ? `${vendor.week_compliance}%` : '—'}
                 </span>
@@ -312,7 +349,7 @@ export default function ScreenScoreSemanal() {
                 {avg !== null ? (
                   <span style={{
                     ...typo.caption, fontWeight: 600, fontSize: 10,
-                    color: getComplianceColor(avg),
+                    color: complianceColor(avg),
                   }}>
                     {avg}%
                   </span>
@@ -327,7 +364,7 @@ export default function ScreenScoreSemanal() {
             }}>
               <span style={{
                 ...typo.title, fontWeight: 700, fontSize: 13,
-                color: getComplianceColor(teamWeekAvg),
+                color: complianceColor(teamWeekAvg),
               }}>
                 {teamWeekAvg}%
               </span>
@@ -357,7 +394,7 @@ export default function ScreenScoreSemanal() {
           </div>
           <div style={{
             ...typo.caption, fontWeight: 700,
-            color: getComplianceColor(tooltip.compliance),
+            color: complianceColor(tooltip.compliance),
           }}>
             {tooltip.compliance}% cumplimiento
           </div>

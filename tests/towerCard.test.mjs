@@ -42,7 +42,7 @@ test('Aida (tower_status supervisor_ventas): ve la tarjeta Torre', () => {
 
 test('Home conserva el orden histórico del registry y agrega Torre al final', () => {
   assert.deepEqual(ids(getHomeModulesForSession(towerSession('supervisor_ventas'))), [
-    'kpis', 'encuestas', 'logros', 'supervisor_ventas', 'torre_operativa',
+    'kpis', 'encuestas', 'logros', 'supervisor_ventas', 'brief_dia', 'torre_operativa',
   ])
 })
 
@@ -175,10 +175,11 @@ test('registry: torre_operativa declara showOnHome/showInNav EXPLÍCITOS (=true)
 test('Aida móvil: Torre visible (Equipo antes por prioridad); overflow a Más', () => {
   const sess = towerSession('supervisor_ventas')
   const m = buildMobileNav(sess, '/')
-  // navPriority: Equipo(10) < Torre(15) < KPIs(30) < Encuestas(40) < Premios(50)
+  // navPriority: Equipo(10) < Torre(15) < Brief(16) < KPIs(30) < Encuestas(40) < Premios(50)
   const nav = ids(getNavModules(sess))
-  assert.deepEqual(nav, ['supervisor_ventas', 'torre_operativa', 'kpis', 'encuestas', 'logros'])
-  // móvil: Inicio + [Equipo, Torre] directos + Más + Yo
+  assert.deepEqual(nav, ['supervisor_ventas', 'torre_operativa', 'brief_dia', 'kpis', 'encuestas', 'logros'])
+  // móvil: Inicio + [Equipo, Torre] directos + Más + Yo — el Brief NO desplaza
+  // a Torre de la barra (por eso su navPriority es 16 y no 11).
   assert.deepEqual(ids(m.primary), ['supervisor_ventas', 'torre_operativa'])
   assert.equal(m.hasMore, true)
 })
@@ -194,10 +195,10 @@ test('estado activo: en /torre/backlog el item Torre resuelve activo', () => {
   assert.equal(resolveActiveId(items, '/torre/backlog?state_bucket=open'), 'torre_operativa')
 })
 
-// ── Política full-screen: /torre/backlog sigue ocultando la nav global ──────
-test('/torre/backlog sigue oculto para la nav global (pantalla full-screen)', () => {
-  assert.equal(isNavHiddenForPath('/torre/backlog'), true)
-  assert.equal(isNavHiddenForPath('/torre'), true)
+// ── Política Etapa 0A: /torre/backlog RECUPERA nav; /torre (E1) sigue oculto ──
+test('/torre/backlog recupera la nav global (M1); /torre (E1) sigue oculto', () => {
+  assert.equal(isNavHiddenForPath('/torre/backlog'), false, 'M1 recupera el sidebar')
+  assert.equal(isNavHiddenForPath('/torre'), true, 'la E1 Tower sigue full-screen/oculta')
 })
 
 // ── ScreenHome usa la fuente única session-aware de Home ────────────────────

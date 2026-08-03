@@ -1,3 +1,5 @@
+import { readPosScopeOption } from './posFlow.js'
+
 function toQuery(filters = {}) {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(filters)) {
@@ -8,11 +10,23 @@ function toQuery(filters = {}) {
   return search ? `?${search}` : ''
 }
 
-export function buildPosCatalogPath({ warehouseId, companyId, partnerId } = {}) {
+export function buildPosCatalogPath(filters = {}) {
+  const posScope = readPosScopeOption(filters)
+  const { warehouseId, companyId, partnerId } = filters
   return `/pwa-admin/pos-products${toQuery({
     warehouse_id: warehouseId,
     company_id: companyId,
     partner_id: partnerId,
+    pos_scope: posScope,
+  })}`
+}
+
+export function buildPosCustomerSearchPath(query, companyId, options = {}) {
+  const posScope = readPosScopeOption(options)
+  return `/pwa-admin/customers${toQuery({
+    q: query,
+    company_id: companyId,
+    pos_scope: posScope,
   })}`
 }
 

@@ -1,15 +1,76 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
 import { computePosSummary } from './posPricing'
+import {
+  getPosCancelBlockMessage,
+  getPosSaleStateLabel,
+  isKnownPosCancelBlockCode,
+} from './nightPosSales'
 import { resolveTicketCustomerName } from './ticketCustomer'
 import { printTicketViaQz } from './ticketPrinter'
+import { toPositiveSafeIntegerId } from './posCustomers'
+import {
+  ADMIN_POS_FLOW,
+  canCancelPosOrder,
+  submitPosCancellation,
+} from './posFlow'
 
-export default function ScreenTicket() {
-  const { session } = useSession()
+const DAY_POS_ACCESS_ERROR = 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+
+function getResolvedCancellationFailure(response) {
+  let current = response
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) return null
+    const status = typeof current.status === 'string' ? current.status.toLowerCase() : ''
+    const failed = current.ok === false
+      || current.success === false
+      || status === 'error'
+      || Boolean(current.error)
+    if (failed) {
+      const structuredData = current.data
+        && typeof current.data === 'object'
+        && !Array.isArray(current.data)
+        ? current.data
+        : null
+      const structuredCode = typeof structuredData?.cancel_block_code === 'string'
+        ? structuredData.cancel_block_code
+        : ''
+      const knownStructuredCode = isKnownPosCancelBlockCode(structuredCode)
+      const safeUserMessage = knownStructuredCode
+        && typeof structuredData?.user_message === 'string'
+        ? structuredData.user_message.trim()
+        : ''
+      let code = ''
+      let message = ''
+      if (structuredCode) code = structuredCode
+      if (!code && typeof current.code === 'string') code = current.code
+      if (!code && typeof current.cancel_block_code === 'string') {
+        code = current.cancel_block_code
+      }
+      if (typeof current.user_message === 'string') message = current.user_message
+      if (!message && typeof current.message === 'string') message = current.message
+      if (current.error && typeof current.error === 'object' && !Array.isArray(current.error)) {
+        if (!code && typeof current.error.code === 'string') code = current.error.code
+        if (!message && typeof current.error.message === 'string') {
+          message = current.error.message
+        }
+      }
+      if (!message && typeof current.error === 'string') message = current.error
+      return {
+        code,
+        message: message || 'Error al cancelar la venta',
+        safeUserMessage,
+      }
+    }
+    current = current.data
+  }
+  return null
+}
+
+export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   const navigate = useNavigate()
   const { orderId } = useParams()
   const [sw, setSw] = useState(window.innerWidth)
@@ -21,10 +82,16 @@ export default function ScreenTicket() {
 
   // Sale cancel flow (Sprint 4)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [cancelReasonCode, setCancelReasonCode] = useState('')
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState('')
   const [cancelResult, setCancelResult] = useState(null)
+  const cancelRequestRef = useRef(false)
+  const cancelRequestSeq = useRef(0)
+  const detailRequestSeq = useRef(0)
+  const routeGenerationRef = useRef(0)
+  const printMessageTimerRef = useRef(null)
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -32,46 +99,166 @@ export default function ScreenTicket() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
-  useEffect(() => { loadOrder() }, [orderId])
-
-  async function loadOrder() {
-    if (!orderId) { setError('Sin ID de orden'); setLoading(false); return }
-    setLoading(true)
+  const loadOrder = useCallback(async (targetOrderId, targetPosScope, expectedGeneration) => {
+    const normalizedTargetId = toPositiveSafeIntegerId(targetOrderId)
+    const isCurrent = (requestId) => (
+      routeGenerationRef.current === expectedGeneration
+      && detailRequestSeq.current === requestId
+    )
+    const requestId = ++detailRequestSeq.current
+    if (!normalizedTargetId) {
+      if (isCurrent(requestId)) {
+        setOrder(null)
+        setError('Sin ID de orden')
+        setLoading(false)
+      }
+      return false
+    }
+    if (isCurrent(requestId)) setLoading(true)
     try {
-      const data = await getSaleOrder(orderId)
+      const data = await getSaleOrder(normalizedTargetId, { posScope: targetPosScope })
+      if (!isCurrent(requestId)) return false
       const payload = data?.data ?? data
+      const payloadOrderId = toPositiveSafeIntegerId(payload?.id)
+        || toPositiveSafeIntegerId(payload?.order_id)
+      if (payloadOrderId !== normalizedTargetId) {
+        setOrder(null)
+        setError('No se pudo validar el ticket solicitado.')
+        return false
+      }
       setOrder(payload)
+      setError('')
+      return true
     } catch (e) {
-      setError(e.message || 'Error cargando ticket')
-    } finally { setLoading(false) }
-  }
+      if (!isCurrent(requestId)) return false
+      setOrder(null)
+      setError(targetPosScope === 'day' && e?.status === 403
+        ? DAY_POS_ACCESS_ERROR
+        : (e.message || 'Error cargando ticket'))
+      return false
+    } finally {
+      if (isCurrent(requestId)) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const generation = ++routeGenerationRef.current
+    detailRequestSeq.current += 1
+    cancelRequestSeq.current += 1
+    cancelRequestRef.current = false
+    setOrder(null)
+    setError('')
+    setLoading(true)
+    setConfirmOpen(false)
+    setCancelReasonCode('')
+    setCancelReason('')
+    setCancelling(false)
+    setCancelError('')
+    setCancelResult(null)
+    clearTimeout(printMessageTimerRef.current)
+    printMessageTimerRef.current = null
+    setPrintMsg('')
+    loadOrder(orderId, flow.posScope, generation)
+
+    return () => {
+      if (routeGenerationRef.current === generation) {
+        routeGenerationRef.current += 1
+        detailRequestSeq.current += 1
+        cancelRequestSeq.current += 1
+        cancelRequestRef.current = false
+      }
+      clearTimeout(printMessageTimerRef.current)
+      printMessageTimerRef.current = null
+    }
+  }, [flow.posScope, loadOrder, orderId])
 
   async function doCancel() {
-    if (!orderId) return
-    if (!cancelReason.trim()) { setCancelError('Explica brevemente el motivo'); return }
+    if (cancelRequestRef.current) return
+    const normalizedRouteOrderId = toPositiveSafeIntegerId(orderId)
+    const normalizedDisplayedOrderId = toPositiveSafeIntegerId(order?.id)
+      || toPositiveSafeIntegerId(order?.order_id)
+    if (
+      !normalizedRouteOrderId
+      || normalizedDisplayedOrderId !== normalizedRouteOrderId
+    ) {
+      setCancelError('No se pudo validar el ticket solicitado.')
+      return
+    }
+    const expectedGeneration = routeGenerationRef.current
+    const requestId = ++cancelRequestSeq.current
+    const isCurrent = () => (
+      routeGenerationRef.current === expectedGeneration
+      && cancelRequestSeq.current === requestId
+    )
+    cancelRequestRef.current = true
     setCancelling(true)
     setCancelError('')
     try {
-      const res = await cancelSaleOrder(orderId, cancelReason.trim())
-      const data = res?.data ?? res
-      setCancelResult(data || { ok: true })
+      const result = await submitPosCancellation({
+        flow,
+        orderId: normalizedRouteOrderId,
+        reasonCode: cancelReasonCode,
+        reason: cancelReason,
+        cancelFn: cancelSaleOrder,
+      })
+      if (!isCurrent()) return
+      const resolvedFailure = getResolvedCancellationFailure(result)
+      if (resolvedFailure !== null) {
+        setCancelError(usesClosedCancelReasons
+          ? (resolvedFailure.safeUserMessage
+            || getPosCancelBlockMessage(resolvedFailure.code))
+          : resolvedFailure.message)
+        return
+      }
+      setCancelResult({ ok: true })
       setConfirmOpen(false)
+      resetCancelReasons()
       // Refresca la orden para mostrar el state=cancel
-      await loadOrder()
+      await loadOrder(normalizedRouteOrderId, flow.posScope, expectedGeneration)
     } catch (e) {
-      setCancelError(e?.message || 'Error al cancelar la venta')
+      if (!isCurrent()) return
+      setCancelError(flow.posScope === 'day' && e?.status === 403
+        ? DAY_POS_ACCESS_ERROR
+        : (usesClosedCancelReasons
+          ? getPosCancelBlockMessage(e?.code)
+          : (e?.message || 'Error al cancelar la venta')))
     } finally {
-      setCancelling(false)
+      if (isCurrent()) {
+        cancelRequestRef.current = false
+        setCancelling(false)
+      }
     }
   }
 
+  function resetCancelReasons() {
+    setCancelReasonCode('')
+    setCancelReason('')
+  }
+
+  function closeCancelDialog() {
+    if (cancelRequestRef.current) return
+    setConfirmOpen(false)
+    setCancelError('')
+    resetCancelReasons()
+  }
+
   const orderState = order?.state || ''
-  const canCancel =
-    BACKEND_CAPS.saleCancel &&
-    order &&
-    orderState !== 'cancel' &&
-    orderState !== 'done'
+  const routeOrderId = toPositiveSafeIntegerId(orderId)
+  const displayedOrderId = toPositiveSafeIntegerId(order?.id)
+    || toPositiveSafeIntegerId(order?.order_id)
+  const hasCurrentOrder = Boolean(routeOrderId) && displayedOrderId === routeOrderId
+  const canCancel = hasCurrentOrder
+    && canCancelPosOrder(flow, order, BACKEND_CAPS.saleCancel)
+  const usesClosedCancelReasons = flow.cancellationMode === 'closed-reasons'
+  const hasCancelReason = usesClosedCancelReasons
+    ? Boolean(cancelReasonCode)
+    : Boolean(cancelReason.trim())
+  const cancelBlockMessage = usesClosedCancelReasons
+    && BACKEND_CAPS.saleCancel === true
+    && order
+    && !canCancel
+    ? getPosCancelBlockMessage(order.cancel_block_code)
+    : ''
 
   const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -91,6 +278,14 @@ export default function ScreenTicket() {
   const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: MX_TZ })
   const folio = order?.name || `S${String(orderId).padStart(5, '0')}`
   const customerName = resolveTicketCustomerName(order)
+  const authorizedWarehouseName = String(
+    (Array.isArray(order?.warehouse_id) ? order.warehouse_id[1] : '')
+    || (order?.warehouse_id && typeof order.warehouse_id === 'object'
+      ? (order.warehouse_id.name || order.warehouse_id.display_name)
+      : '')
+    || order?.warehouse_name
+    || 'Sucursal',
+  ).trim() || 'Sucursal'
 
   // Mapping completo de métodos de pago (alineado con gf_pwa_admin.sale-create
   // y catálogo de account.payment.method + Odoo 18 POS payment terms)
@@ -178,7 +373,7 @@ export default function ScreenTicket() {
     </style></head><body>
       <div class="ticket">
         <div class="center brand">GRUPO FRIO</div>
-        <div class="center sub">${esc(session?.warehouse_name || 'Sucursal')}</div>
+        <div class="center sub">${esc(authorizedWarehouseName)}</div>
         <div class="meta"><span>Fecha: ${esc(dateStr)}</span><span>Hora: ${esc(timeStr)}</span></div>
         <div class="folio">Folio: ${esc(folio)}</div>
         <div class="customer">Cliente: ${esc(customerName)}</div>
@@ -199,10 +394,13 @@ export default function ScreenTicket() {
   // Impresión: intenta QZ Tray (ESC/POS directo — ancho completo, corte de
   // cuchilla). Si QZ no está corriendo o falla, cae al método de iframe.
   async function printTicket() {
+    clearTimeout(printMessageTimerRef.current)
+    printMessageTimerRef.current = null
     setPrintMsg('')
+    const expectedGeneration = routeGenerationRef.current
     try {
       await printTicketViaQz({
-        sucursal: session?.warehouse_name || 'Sucursal',
+        sucursal: authorizedWarehouseName,
         dateStr,
         timeStr,
         folio,
@@ -215,9 +413,13 @@ export default function ScreenTicket() {
       })
       return
     } catch (e) {
+      if (routeGenerationRef.current !== expectedGeneration) return
       // QZ no disponible / rechazó → fallback iframe. Avisamos discretamente.
       setPrintMsg('Impresión directa no disponible, usando modo navegador.')
-      setTimeout(() => setPrintMsg(''), 4000)
+      printMessageTimerRef.current = setTimeout(() => {
+        if (routeGenerationRef.current === expectedGeneration) setPrintMsg('')
+        printMessageTimerRef.current = null
+      }, 4000)
       printTicketFallback()
     }
   }
@@ -275,6 +477,7 @@ export default function ScreenTicket() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
         * { font-family: 'DM Sans', sans-serif; box-sizing: border-box; }
         button { border: none; background: none; cursor: pointer; }
+        .night-cancel-reason:focus-visible { outline: 3px solid ${TOKENS.colors.blue}; outline-offset: 3px; }
         @keyframes spin { to { transform: rotate(360deg); } }
         /* La impresión NO usa @media print de esta página: el botón Imprimir
            renderiza el ticket en un iframe limpio (buildTicketHtml) para evitar
@@ -288,11 +491,15 @@ export default function ScreenTicket() {
       <div id="ticket-wrap" style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-          <button onClick={() => navigate('/admin/pos')} style={{
-            width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
+          <button
+            type="button"
+            aria-label="Volver al POS"
+            onClick={() => navigate(flow.posRoute)}
+            style={{
+              width: 44, height: 44, borderRadius: TOKENS.radius.md,
+              background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
@@ -317,7 +524,7 @@ export default function ScreenTicket() {
                 background: `${TOKENS.colors.error}10`, border: `1px solid ${TOKENS.colors.error}40`,
               }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: TOKENS.colors.error, margin: 0 }}>
-                  Venta cancelada{cancelResult?.picking_states ? ` · ${JSON.stringify(cancelResult.picking_states)}` : ''}
+                  Venta cancelada
                 </p>
               </div>
             )}
@@ -341,7 +548,7 @@ export default function ScreenTicket() {
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
                 <img src="/icons/logo-grupo-frio.svg" alt="Grupo Frio" style={{ height: 40, marginBottom: 6 }} />
                 <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>GRUPO FRIO</p>
-                <p style={{ fontSize: 11, color: '#666', margin: '2px 0 0' }}>{session?.warehouse_name || 'Sucursal'}</p>
+                <p style={{ fontSize: 11, color: '#666', margin: '2px 0 0' }}>{authorizedWarehouseName}</p>
               </div>
 
               {/* Date / Folio */}
@@ -353,6 +560,9 @@ export default function ScreenTicket() {
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>Folio: {folio}</span>
                 <div style={{ fontSize: 12, color: '#333', marginTop: 2 }}>
                   Cliente: {customerName}
+                </div>
+                <div style={{ fontSize: 12, color: '#333', marginTop: 2 }}>
+                  Estado: {getPosSaleStateLabel(orderState)}
                 </div>
               </div>
 
@@ -427,7 +637,7 @@ export default function ScreenTicket() {
                 }}>
                   <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>Imprimir</span>
                 </button>
-                <button onClick={() => navigate('/admin/pos')} style={{
+                <button onClick={() => navigate(flow.posRoute)} style={{
                   flex: 1, padding: '14px 0', borderRadius: TOKENS.radius.md,
                   background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
                 }}>
@@ -435,11 +645,19 @@ export default function ScreenTicket() {
                 </button>
               </div>
 
+              {cancelBlockMessage && (
+                <p role="status" style={{
+                  fontSize: 12, color: TOKENS.colors.textMuted, textAlign: 'center', margin: 0,
+                }}>
+                  {cancelBlockMessage}
+                </p>
+              )}
+
               {canCancel && (
                 <button
                   onClick={() => { setConfirmOpen(true); setCancelError('') }}
                   style={{
-                    width: '100%', padding: '12px 0', borderRadius: TOKENS.radius.md,
+                    width: '100%', minHeight: 44, padding: '12px 0', borderRadius: TOKENS.radius.md,
                     background: 'transparent', border: `1px solid ${TOKENS.colors.error}60`,
                   }}
                 >
@@ -457,7 +675,8 @@ export default function ScreenTicket() {
           <div
             role="dialog"
             aria-modal="true"
-            onClick={() => !cancelling && setConfirmOpen(false)}
+            aria-labelledby="cancel-sale-title"
+            onClick={closeCancelDialog}
             style={{
               position: 'fixed', inset: 0, zIndex: 1000,
               background: 'rgba(6, 10, 18, 0.72)',
@@ -481,7 +700,7 @@ export default function ScreenTicket() {
               }}>
                 CANCELAR VENTA
               </p>
-              <h2 style={{
+              <h2 id="cancel-sale-title" style={{
                 fontSize: 18, fontWeight: 700, color: TOKENS.colors.text,
                 margin: '4px 0 12px', letterSpacing: '-0.02em',
               }}>
@@ -491,24 +710,70 @@ export default function ScreenTicket() {
                 La venta se cancela y se revierten los movimientos de inventario. La razón queda en el chatter.
               </p>
 
-              <label style={{ fontSize: 11, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
-                Motivo *
-              </label>
-              <textarea
-                rows={3}
-                value={cancelReason}
-                onChange={e => setCancelReason(e.target.value)}
-                placeholder="Ej: Cliente se arrepintió / producto equivocado"
-                style={{
-                  width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.md,
-                  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                  color: TOKENS.colors.text, fontSize: 13, outline: 'none',
-                  fontFamily: "'DM Sans', sans-serif", resize: 'vertical', marginBottom: 10,
-                }}
-              />
+              {usesClosedCancelReasons ? (
+                <fieldset style={{ border: 0, padding: 0, margin: '0 0 10px' }}>
+                  <legend style={{
+                    fontSize: 11, color: TOKENS.colors.textMuted, marginBottom: 4,
+                  }}>
+                    Motivo *
+                  </legend>
+                  <div style={{ display: 'grid', gap: 4 }}>
+                    {flow.cancelReasons.map((reason) => {
+                      const inputId = `cancel-reason-${reason.code}`
+                      return (
+                        <label
+                          key={reason.code}
+                          htmlFor={inputId}
+                          style={{
+                            minHeight: 44, padding: '8px 10px', borderRadius: TOKENS.radius.md,
+                            background: TOKENS.colors.surface,
+                            border: `1px solid ${cancelReasonCode === reason.code ? TOKENS.colors.blue : TOKENS.colors.border}`,
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            color: TOKENS.colors.textSoft, fontSize: 13, cursor: 'pointer',
+                          }}
+                        >
+                          <input
+                            className="night-cancel-reason"
+                            id={inputId}
+                            name="cancel-reason"
+                            type="radio"
+                            value={reason.code}
+                            checked={cancelReasonCode === reason.code}
+                            onChange={() => {
+                              setCancelReasonCode(reason.code)
+                              setCancelError('')
+                            }}
+                            style={{ width: 20, height: 20, margin: 0, flexShrink: 0 }}
+                          />
+                          <span>{reason.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </fieldset>
+              ) : (
+                <>
+                  <label htmlFor="admin-cancel-reason" style={{ fontSize: 11, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
+                    Motivo *
+                  </label>
+                  <textarea
+                    id="admin-cancel-reason"
+                    rows={3}
+                    value={cancelReason}
+                    onChange={e => setCancelReason(e.target.value)}
+                    placeholder="Ej: Cliente se arrepintió / producto equivocado"
+                    style={{
+                      width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.md,
+                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                      color: TOKENS.colors.text, fontSize: 13, outline: 'none',
+                      fontFamily: "'DM Sans', sans-serif", resize: 'vertical', marginBottom: 10,
+                    }}
+                  />
+                </>
+              )}
 
               {cancelError && (
-                <div style={{
+                <div role="alert" style={{
                   padding: '8px 12px', borderRadius: TOKENS.radius.sm, marginBottom: 10,
                   background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
                   fontSize: 11, fontWeight: 600, color: TOKENS.colors.error,
@@ -520,10 +785,10 @@ export default function ScreenTicket() {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  onClick={() => setConfirmOpen(false)}
+                  onClick={closeCancelDialog}
                   disabled={cancelling}
                   style={{
-                    flex: 1, padding: '11px 0', borderRadius: TOKENS.radius.md,
+                    flex: 1, minHeight: 44, padding: '11px 0', borderRadius: TOKENS.radius.md,
                     background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
                     fontSize: 12, fontWeight: 600, color: TOKENS.colors.textSoft,
                     fontFamily: "'DM Sans', sans-serif",
@@ -534,14 +799,14 @@ export default function ScreenTicket() {
                 <button
                   type="button"
                   onClick={doCancel}
-                  disabled={cancelling || !cancelReason.trim()}
+                  disabled={cancelling || !hasCancelReason}
                   style={{
-                    flex: 1, padding: '11px 0', borderRadius: TOKENS.radius.md,
+                    flex: 1, minHeight: 44, padding: '11px 0', borderRadius: TOKENS.radius.md,
                     background: `linear-gradient(135deg, ${TOKENS.colors.error}, #d44)`,
                     border: 'none',
                     fontSize: 12, fontWeight: 700, color: 'white',
                     fontFamily: "'DM Sans', sans-serif",
-                    opacity: cancelling || !cancelReason.trim() ? 0.6 : 1,
+                    opacity: cancelling || !hasCancelReason ? 0.6 : 1,
                     cursor: cancelling ? 'wait' : 'pointer',
                   }}
                 >

@@ -2,13 +2,18 @@
 // Reemplazan los 20+ loaders y empty states duplicados en la app.
 // Todos comparten el diseño del design system (TOKENS).
 
-import { TOKENS } from '../tokens'
+import { TOKENS as DARK_TOKENS } from '../tokens'
 
-export function Loader({ label, size = 32, center = true }) {
+// `tokens` OPCIONAL con default OSCURO: quien no lo pasa (Entregas, M2-M7,
+// torres, admin…) se ve exactamente igual que antes. Solo la superficie de
+// supervisión de ventas inyecta BRAND_TOKENS (rebranding tanda 3).
+
+export function Loader({ label, size = 32, center = true, tokens = DARK_TOKENS }) {
+  const TOKENS = tokens
   const spinner = (
     <div style={{
       width: size, height: size,
-      border: '2px solid rgba(255,255,255,0.12)',
+      border: `2px solid ${TOKENS.colors.spinnerTrack}`,
       borderTop: `2px solid ${TOKENS.colors.blue2}`,
       borderRadius: '50%',
       animation: 'gfSpin 0.8s linear infinite',
@@ -39,7 +44,8 @@ export function Loader({ label, size = 32, center = true }) {
   )
 }
 
-export function EmptyState({ icon = '📭', title = 'Sin datos', subtitle, action }) {
+export function EmptyState({ icon = '📭', title = 'Sin datos', subtitle, action, tokens = DARK_TOKENS }) {
+  const TOKENS = tokens
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -58,7 +64,8 @@ export function EmptyState({ icon = '📭', title = 'Sin datos', subtitle, actio
   )
 }
 
-export function ErrorState({ title = 'Ocurrió un error', message, onRetry }) {
+export function ErrorState({ title = 'Ocurrió un error', message, onRetry, tokens = DARK_TOKENS }) {
+  const TOKENS = tokens
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -82,7 +89,7 @@ export function ErrorState({ title = 'Ocurrió un error', message, onRetry }) {
           style={{
             marginTop: 4, border: 'none', cursor: 'pointer', padding: '10px 22px',
             borderRadius: TOKENS.radius.pill,
-            background: 'linear-gradient(90deg,#15499B,#2B8FE0)',
+            background: TOKENS.colors.ctaGradient,
             color: 'white', fontSize: 13, fontWeight: 700,
             fontFamily: "'DM Sans', sans-serif",
           }}

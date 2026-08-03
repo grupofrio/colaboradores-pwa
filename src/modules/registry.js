@@ -78,6 +78,24 @@ export const MODULES = [
     icon:   'supervision',
     navPriority: 10,
   },
+  // Brief de PLANTA — misma mecánica que el brief de ventas (mismo componente,
+  // mismo candado en el endpoint), otra variante del catálogo. `roles` debe
+  // coincidir con briefCatalog.viewerRoles (hay test). direccion_general ve la
+  // entrada porque dirección revisa el piloto; el candado del endpoint es el
+  // que autoriza el dato. Ver src/modules/brief/briefCatalog.js.
+  {
+    id:     'brief_produccion',
+    label:  'Mi Brief de planta',
+    shortLabel: 'Brief',
+    route:  '/brief-produccion',
+    tone:   'blue',
+    roles:  ['supervisor_produccion', 'direccion_general'],
+    status: 'live',
+    icon:   'kpis',
+    // Mismo 16 que el brief de ventas: entra después de las superficies
+    // operativas del rol y no las desplaza de la barra móvil.
+    navPriority: 16,
+  },
   {
     id:     'almacen_pt',
     label:  'Almacén PT',
@@ -135,8 +153,73 @@ export const MODULES = [
     icon:   'equipo',
     navPriority: 10,
   },
+  // Brief de VENTAS — dashboard operativo de rutas y ventas servido por n8n.
+  // `roles` aquí decide SOLO si se muestra la entrada, y debe coincidir con
+  // briefCatalog.viewerRoles (hay test). El dato lo gatea el endpoint, que
+  // valida el gf_employee_token contra gf.employee.mobile.session y aplica su
+  // propia allowlist: ampliar esta lista NO amplía el acceso, quien no esté
+  // autorizado recibe 403. Ver src/modules/brief/briefCatalog.js.
+  {
+    id:     'brief_dia',
+    label:  'Mi Brief del día',
+    shortLabel: 'Brief',
+    route:  '/brief',
+    tone:   'blue',
+    roles:  ['supervisor_ventas', 'direccion_general'],
+    status: 'live',
+    icon:   'kpis',
+    // 16 (no 11) a propósito: entra DESPUÉS de Torre operativa (15) para no
+    // desplazarla de la barra móvil de quien tiene tower_status. Agregar una
+    // superficie no debe degradar una existente.
+    navPriority: 16,
+  },
+
+  // ── Asistencias de Iguala — allowlist exacta por employee_id ────────────
+  // `roles` es solo metadata de contexto. La política attendance_manager es
+  // la única autoridad local para tarjeta, nav y clic; Odoo revalida todo.
+  {
+    id:     'asistencias',
+    label:  'Asistencias',
+    shortLabel: 'Asistencias',
+    route:  '/asistencias',
+    tone:   'blueSoft',
+    roles:  ['gerente_sucursal'],
+    accessPolicy: 'attendance_manager',
+    status: 'live',
+    icon:   'equipo',
+    navPriority: 11,
+    showOnHome: true,
+    showInNav:  true,
+  },
 
   // ── Administración ───────────────────────────────────────────────────────
+  {
+    id: 'pos_nocturno',
+    label: 'POS nocturno',
+    shortLabel: 'POS Noche',
+    route: '/pos-nocturno',
+    tone: 'blueDeep',
+    roles: ['hector_tapia'],
+    accessPolicy: 'hectorNightPos',
+    status: 'live',
+    icon: 'admin',
+    navPriority: 10,
+    showOnHome: true,
+    showInNav: true,
+  },
+  {
+    id: 'pos_diurno',
+    label: 'POS día',
+    shortLabel: 'POS Día',
+    route: '/pos-diurno',
+    tone: 'blueDeep',
+    roles: ['pos_diurno'],
+    status: 'live',
+    icon: 'admin',
+    navPriority: 10,
+    showOnHome: true,
+    showInNav: true,
+  },
   {
     id:     'admin_sucursal',
     label:  'Admin Sucursal',
@@ -288,6 +371,22 @@ export const MODULES = [
     showInNav:  true,
   },
 
+  // ── Ventas Iguala — acceso UX configurado por employee_id ────────────────
+  // Odoo sigue siendo la autoridad de seguridad; accessPolicy solo gobierna
+  // qué superficie cliente se ofrece a los colaboradores configurados.
+  {
+    id:     'ventas_iguala',
+    label:  'Ventas Iguala',
+    shortLabel: 'Ventas',
+    route:  '/ventas-iguala',
+    tone:   'blueSoft',
+    roles:  ['*'],
+    accessPolicy: 'iguala_sales',
+    status: 'live',
+    icon:   'kpis',
+    navPriority: 14,
+  },
+
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',
@@ -312,6 +411,25 @@ export const MODULES = [
     status: 'live',
     icon:   'admin',
     navPriority: 12,
+  },
+
+  // Brief de GERENCIA — tercera variante del mismo catálogo (mismo componente,
+  // mismo candado en el endpoint). `roles` debe coincidir con
+  // briefCatalog.viewerRoles (hay test). direccion_general ve la entrada porque
+  // dirección revisa el piloto; el candado del endpoint autoriza el dato.
+  // Ver src/modules/brief/briefCatalog.js.
+  {
+    id:     'brief_gerencia',
+    label:  'Brief de gerencia',
+    shortLabel: 'Brief',
+    route:  '/brief-gerencia',
+    tone:   'blue',
+    roles:  ['gerente_sucursal', 'direccion_general'],
+    status: 'live',
+    icon:   'kpis',
+    // Mismo 16 que las otras variantes: entra después de las superficies
+    // operativas del rol (Admin 10, Gerente 12) sin desplazarlas de la barra.
+    navPriority: 16,
   },
 
   // ── KOLD Tower M1 — superficie de supervisión (read-only) ────────────────

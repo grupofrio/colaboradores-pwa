@@ -1,8 +1,6 @@
 // ─── ScreenTareasSupervisor — gestión de tareas del supervisor a su equipo ──
 // Permite: crear tarea, asignar a vendedor, prioridad, fecha, seguimiento.
-//
-// ⚠️ STUB MODE: los datos viven en localStorage hasta que backend exponga
-// /pwa-supv/tasks/*. Se muestra banner informativo al usuario.
+// Backend real vía /pwa-supv/tasks/* (gf_pwa_admin).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -10,7 +8,6 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { useToast } from '../../components/Toast'
 import { Loader, EmptyState, ErrorState } from '../../components/Loader'
-import AuthBanner from '../../components/AuthBanner'
 import { getTeam } from './api'
 import {
   listTasks,
@@ -19,7 +16,6 @@ import {
   cancelTask,
   TASK_STATES,
   TASK_PRIORITIES,
-  isStubMode,
 } from './tareasService'
 
 export default function ScreenTareasSupervisor() {
@@ -165,18 +161,6 @@ export default function ScreenTareasSupervisor() {
           </button>
           <span style={{ ...typo.title, color: TOKENS.colors.textSoft, flex: 1 }}>Tareas del equipo</span>
         </div>
-
-        {/* Stub banner */}
-        {isStubMode() && (
-          <div style={{ marginBottom: 14 }}>
-            <AuthBanner
-              level="info"
-              title="Módulo en modo temporal"
-              reason="Las tareas se almacenan en este dispositivo mientras se despliega el backend."
-              details="No se sincronizan entre equipos ni aparecen en reportes. Pronto se migrarán automáticamente."
-            />
-          </div>
-        )}
 
         {/* Stats */}
         <div style={{

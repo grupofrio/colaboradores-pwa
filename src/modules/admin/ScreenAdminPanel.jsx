@@ -8,9 +8,11 @@ import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { useSession } from '../../App'
 import { getEffectiveJobKeys } from '../../lib/roleContext'
+import { isCashShiftNavigationVisible } from '../../lib/navModel.js'
 import { getTodaySales, getTodayExpenses } from './api'
 import { logScreenError } from '../shared/logScreenError'
-import { AdminProvider } from './AdminContext'
+import { AdminProvider, useAdmin } from './AdminContext'
+import { BACKEND_CAPS } from './adminService.js'
 import AdminShell from './components/AdminShell'
 import HubV2 from './components/HubV2'
 
@@ -23,13 +25,15 @@ export default function ScreenAdminPanel() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  if (sw < 1024) return <MobileAdminHub />
-
   return (
     <AdminProvider>
-      <AdminShell activeBlock="hub" title="Administración de sucursal" hideActivityFeed>
-        <HubV2 />
-      </AdminShell>
+      {sw < 1024 ? (
+        <MobileAdminHub />
+      ) : (
+        <AdminShell activeBlock="hub" title="Administración de sucursal" hideActivityFeed>
+          <HubV2 />
+        </AdminShell>
+      )}
     </AdminProvider>
   )
 }
@@ -37,6 +41,7 @@ export default function ScreenAdminPanel() {
 // ── Vista mobile legacy (fallback) ──────────────────────────────────────────
 function MobileAdminHub() {
   const { session } = useSession()
+  const { capsReady } = useAdmin()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -78,12 +83,15 @@ function MobileAdminHub() {
     { id: 'historial_gastos', label: 'Historial de Gastos',desc: 'Consultar gastos',            route: '/admin/gastos-historial', color: TOKENS.colors.blue3 },
     { id: 'historial_cargas', label: 'Historial de Cargas',desc: 'Cargas y recargas por camioneta', route: '/admin/historial-cargas', color: TOKENS.colors.blue2 },
     { id: 'requisiciones',    label: 'Requisiciones',      desc: 'Solicitudes de compra',       route: '/admin/requisiciones',    color: TOKENS.colors.blue2 },
-    { id: 'cierre',           label: 'Cierre de Caja',     desc: 'Resumen y cierre del día',    route: '/admin/cierre',           color: TOKENS.colors.blue3 },
+    { id: 'cierre',           label: 'Cortes de caja',     desc: 'Turnos, arqueo y cortes',      route: '/admin/cierre',           color: TOKENS.colors.blue3 },
     { id: 'traspaso_mp',      label: 'TRASPASO MATERIA PRIMA', desc: 'Enviar material a rolito o PT', route: '/admin/traspaso-materia-prima', color: TOKENS.colors.blue2, roles: ['auxiliar_admin', 'gerente_sucursal'] },
     // Validar materiales / Validar bolsas eliminados (2026-04-25) —
     // el traspaso ahora mueve stock real, no requiere segunda validación.
   ]
-  const visibleActions = ACTIONS.filter((action) => !action.roles || action.roles.some((role) => effectiveRoles.includes(role)))
+  const visibleActions = ACTIONS.filter((action) => (
+    (!action.roles || action.roles.some((role) => effectiveRoles.includes(role)))
+    && (action.id !== 'cierre' || (capsReady && isCashShiftNavigationVisible(BACKEND_CAPS)))
+  ))
 
   return (
     <div style={{

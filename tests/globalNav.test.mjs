@@ -13,26 +13,31 @@ const ids = (arr) => arr.map((m) => m.id)
 const s = (role) => ({ employee_id: 100, session_token: 'h.p.s', role })
 
 // ── Fuente canónica única + orden por prioridad ─────────────────────────────
-test('supervisor_ventas (Aida): Equipo es prioritario y va directo; universales a Más', () => {
+test('supervisor_ventas (Aida): Equipo y Brief prioritarios y directos; universales a Más', () => {
   const session = s('supervisor_ventas')
   const nav = getNavModules(session)
   assert.equal(nav[0].id, 'supervisor_ventas', 'Equipo primero por navPriority 10')
+  assert.equal(nav[1].id, 'brief_dia', 'Brief del día enseguida (navPriority 16, sin Torre en esta sesión)')
   assert.ok(ids(nav).includes('kpis') && ids(nav).includes('encuestas') && ids(nav).includes('logros'))
 
+  // Con 5 módulos y 3 ranuras, la barra muestra 2 directos + "Más": el brief
+  // entra a la barra y KPIs baja a "Más" (decisión de producto, no accidente).
   const m = buildMobileNav(session, '/')
-  assert.deepEqual(ids(m.primary), ['supervisor_ventas', 'kpis'])
-  assert.deepEqual(ids(m.overflow), ['encuestas', 'logros'])
+  assert.deepEqual(ids(m.primary), ['supervisor_ventas', 'brief_dia'])
+  assert.deepEqual(ids(m.overflow), ['kpis', 'encuestas', 'logros'])
   assert.equal(m.hasMore, true)
   // No ve módulos de gestión que no le corresponden
   assert.ok(!ids(nav).includes('admin_sucursal'))
   assert.ok(!ids(nav).includes('gerente'))
 })
 
-test('gerente_sucursal (Angélica): Admin Sucursal + Gerente directos; KPIs/Encuestas/Premios a Más', () => {
+test('gerente_sucursal (Angélica): Admin Sucursal + Gerente directos; Brief y universales a Más', () => {
   const session = s('gerente_sucursal')
   const m = buildMobileNav(session, '/')
+  // El Brief de gerencia (navPriority 16) entra DESPUÉS de Admin(10) y
+  // Gerente(12): no les quita su lugar en la barra.
   assert.deepEqual(ids(m.primary), ['admin_sucursal', 'gerente'])
-  assert.deepEqual(ids(m.overflow), ['kpis', 'encuestas', 'logros'])
+  assert.deepEqual(ids(m.overflow), ['brief_gerencia', 'kpis', 'encuestas', 'logros'])
   assert.equal(m.hasMore, true)
   assert.ok(!ids(getNavModules(session)).includes('supervisor_ventas'), 'no ve Equipo')
 })
@@ -42,6 +47,18 @@ test('usuario común (solo universales): 3 módulos directos, sin "Más"', () =>
   assert.deepEqual(ids(m.primary), ['kpis', 'encuestas', 'logros'])
   assert.equal(m.hasMore, false)
   assert.equal(m.overflow.length, 0)
+})
+
+test('Héctor Tapia recibe POS nocturno en nav pero no Admin Sucursal', () => {
+  const nav = ids(getNavModules({
+    employee_id: 730,
+    session_token: 'h.p.s',
+    role: 'almacenista_entregas',
+    name: 'Héctor Tapia',
+  }))
+
+  assert.ok(nav.includes('pos_nocturno'))
+  assert.ok(!nav.includes('admin_sucursal'))
 })
 
 test('jefe_ruta: ve Mi Ruta pero NO admin/gerente/equipo', () => {
@@ -116,11 +133,13 @@ test('normalizePath: query/hash/trailing slash', () => {
   assert.equal(normalizePath(''), '/')
 })
 
-test('nav oculta: login y árbol completo de Tower', () => {
+test('nav: /torre (E1) OCULTA exacta; /torre/backlog (M1) recupera nav global (Etapa 0A)', () => {
   assert.equal(isNavHiddenForPath('/login'), true)
+  // /torre (E1 Tower): oculta EXACTA — full-screen, sin artefacto publicado.
   assert.equal(isNavHiddenForPath('/torre'), true)
-  assert.equal(isNavHiddenForPath('/torre/backlog'), true)
-  assert.equal(isNavHiddenForPath('/torre/backlog?state_bucket=open'), true)
+  // /torre/backlog (M1): VISIBLE — recupera el sidebar para volver a otros módulos.
+  assert.equal(isNavHiddenForPath('/torre/backlog'), false)
+  assert.equal(isNavHiddenForPath('/torre/backlog?state_bucket=open'), false)
 })
 
 test('nav oculta: subrutas operativas de captura; la RAÍZ del módulo la conserva', () => {
@@ -148,6 +167,30 @@ test('nav oculta: POS/ticket/cierre de caja en admin; resto de admin visible', (
   assert.equal(isNavHiddenForPath('/admin/ticket/123'), true)
   assert.equal(isNavHiddenForPath('/admin/cierre'), true)
   assert.equal(isNavHiddenForPath('/admin/cierre/'), true)
+})
+
+test('nav oculta: POS nocturno y tickets, sin capturar prefijos similares', () => {
+  assert.equal(isNavHiddenForPath('/pos-nocturno'), true)
+  assert.equal(isNavHiddenForPath('/pos-nocturno/ventas'), true)
+  assert.equal(isNavHiddenForPath('/pos-nocturno/ticket/9001'), true)
+  assert.equal(isNavHiddenForPath('/POS-NOCTURNO'), true)
+  assert.equal(isNavHiddenForPath('/Pos-Nocturno/Ventas'), true)
+  assert.equal(isNavHiddenForPath('/Pos-Nocturno/Ticket/9001'), true)
+  assert.equal(isNavHiddenForPath('/pos-nocturnos'), false)
+  assert.equal(isNavHiddenForPath('/pos-nocturnos/ventas'), false)
+  assert.equal(isNavHiddenForPath('/pos-nocturno-ventas'), false)
+  assert.equal(isNavHiddenForPath('/POS-NOCTURNOS'), false)
+})
+
+test('nav diurna conserva la raíz y oculta solamente ventas y tickets operativos', () => {
+  assert.equal(isNavHiddenForPath('/pos-diurno'), false)
+  assert.equal(isNavHiddenForPath('/POS-DIURNO'), false)
+  assert.equal(isNavHiddenForPath('/pos-diurno/ventas'), true)
+  assert.equal(isNavHiddenForPath('/Pos-Diurno/Ventas'), true)
+  assert.equal(isNavHiddenForPath('/pos-diurno/ticket/9001'), true)
+  assert.equal(isNavHiddenForPath('/POS-DIURNO/TICKET/9001'), true)
+  assert.equal(isNavHiddenForPath('/pos-diurnos'), false)
+  assert.equal(isNavHiddenForPath('/pos-diurno-ventas'), false)
 })
 
 test('nav oculta: prefijos similares NO se ocultan por accidente', () => {

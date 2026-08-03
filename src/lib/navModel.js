@@ -23,6 +23,9 @@ import { readM4Access } from '../modules/ventas/m4/access.js'
 import { readM5Access } from '../modules/inventario/m5/access.js'
 import { readM6Access } from '../modules/caja-conciliacion/m6/access.js'
 import { readM7Access } from '../modules/rentabilidad-costos/m7/access.js'
+import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
+import { readAttendanceAccess } from '../modules/asistencias/access.js'
+import { readConfiguredVentasIgualaAccessForSession } from '../modules/ventas-iguala/access.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
 // Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
@@ -34,12 +37,20 @@ import { readM7Access } from '../modules/rentabilidad-costos/m7/access.js'
 // readAuthoritativeTowerStatus (M1 intacto — no se convierte a x_job_key ni a
 // accessPolicy).
 export const ACCESS_POLICY_RESOLVERS = Object.freeze({
+  hectorNightPos: (session) => ({
+    level: canAccessHectorNightPos(session) ? 'global' : 'none',
+  }),
   m2: readM2Access,
   m3: readM3Access,
   m4: readM4Access,
   m5: readM5Access,
   m6: readM6Access,
   m7: readM7Access,
+  iguala_sales: (session) => ({
+    level: readConfiguredVentasIgualaAccessForSession(session).level === 'iguala_sales'
+      ? 'global'
+      : 'none',
+  }),
 })
 
 // Resuelve una accessPolicy. FAIL-CLOSED: si la política no está registrada
@@ -65,6 +76,30 @@ export const RAIL_FULL_MIN = 1440
 export const DESKTOP_RAIL_WIDTH = 232
 export const DESKTOP_RAIL_WIDTH_COMPACT = 76
 export const MOBILE_NAV_HEIGHT = 64
+
+// Los cortes POS no heredan acceso de roles ni de flags cacheados en la sesión.
+// Solo una capacidad booleana propia, publicada por el backend autenticado,
+// habilita su navegación. Evitamos getters y propiedades heredadas para que un
+// objeto manipulado no convierta valores truthy en permisos.
+function ownCapabilityTrue(capabilities, key) {
+  if (!capabilities || typeof capabilities !== 'object' || Array.isArray(capabilities)) return false
+  const descriptor = Object.getOwnPropertyDescriptor(capabilities, key)
+  return Boolean(
+    descriptor
+    && Object.prototype.hasOwnProperty.call(descriptor, 'value')
+    && descriptor.value === true,
+  )
+}
+
+export function cashShiftAccessMode(capabilities = {}) {
+  if (ownCapabilityTrue(capabilities, 'cashShiftManage')) return 'manage'
+  if (ownCapabilityTrue(capabilities, 'cashShiftAuthorize')) return 'authorize'
+  return 'denied'
+}
+
+export function isCashShiftNavigationVisible(capabilities = {}) {
+  return cashShiftAccessMode(capabilities) !== 'denied'
+}
 
 // Ancho del rail según viewport (AppShell reserva exactamente este espacio).
 export function railWidthFor(width) {
@@ -114,12 +149,26 @@ export function normalizePath(pathname = '') {
 //    /entregas/*    → operación diaria de entregas (carga, cierre de turno…)
 //    /koldcup/*     → capturas KOLDCUP (compra, producción, corte, traspaso)
 //    /torres/*      → validación de requisiciones (detalle con acciones)
-const NAV_HIDDEN_EXACT = ['/login']
-const NAV_HIDDEN_PREFIXES = ['/torre', '/admin/pos', '/admin/ticket', '/admin/cierre']
+// Etapa 0A — política exacta de /torre:
+//   · /torre         (E1 Tower)   → OCULTA EXACTA (full-screen). No hay artefacto E1
+//                                   publicado; se muestra StateScreen controlado. No
+//                                   es un módulo operativo (ninguna tarjeta apunta acá).
+//   · /torre/backlog (M1)         → NAV GLOBAL VISIBLE (recupera el sidebar).
+//   · /torres/*      (requisic.)  → operativo full-screen (subtree), sin cambios.
+// Antes '/torre' era prefijo y ocultaba también /torre/backlog (bug: M1 sin sidebar).
+const NAV_HIDDEN_EXACT = ['/login', '/torre']
+const NAV_HIDDEN_PREFIXES = [
+  '/admin/pos',
+  '/admin/ticket',
+  '/admin/cierre',
+  '/pos-nocturno',
+  '/pos-diurno/ventas',
+  '/pos-diurno/ticket',
+]
 const NAV_HIDDEN_SUBTREES = ['/ruta', '/produccion', '/almacen-pt', '/entregas', '/koldcup', '/torres']
 
 export function isNavHiddenForPath(pathname = '') {
-  const path = normalizePath(pathname)
+  const path = normalizePath(pathname).toLowerCase()
   if (NAV_HIDDEN_EXACT.includes(path)) return true
   if (NAV_HIDDEN_PREFIXES.some((p) => path === p || path.startsWith(p + '/'))) return true
   // Subtrees: solo subrutas (la raíz del módulo conserva la nav global).
@@ -143,10 +192,13 @@ function navPriorityOf(module) {
 //   2. module.accessPolicy        => resolver del registro; desconocida => deny
 //   3. module.towerGated          => tower_status autoritativo (M1, intacto)
 //   4. resto                      => roles x_job_key
-export function isModuleVisibleForSession(module, session) {
+export function isModuleVisibleForSession(module, session, attendanceManagerIdsRaw) {
   if (!module) return false
   if (module.showInNav === false && module.showOnHome === false) return false
   if (!isValidAuthenticatedSession(session)) return false
+  if (module.accessPolicy === 'attendance_manager') {
+    return readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
+  }
   if (module.accessPolicy) return resolveAccessPolicy(module.accessPolicy, session)
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
@@ -175,12 +227,17 @@ export function getHomeModulesForSession(session = null) {
 // visibilidad: módulos accessPolicy entran/deniegan por su contrato (navegan
 // directo, sin role-context); el resto delega en la lógica por rol.
 // El route guard (App.jsx) sigue siendo la autoridad final.
-export function getModuleEntryDecisionForSession(module, session) {
+export function getModuleEntryDecisionForSession(module, session, attendanceManagerIdsRaw) {
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
-  // accessPolicy (m2/m3/m4/m5/m6): entra o se deniega por SU contrato, sin role-context.
-  // Una política desconocida no tiene resolver ⇒ resolveAccessPolicy deniega.
+  if (module?.accessPolicy === 'attendance_manager') {
+    return readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
+      ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
+      : { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  // Toda política del registro canónico entra o se deniega por SU contrato,
+  // sin role-context. Una política desconocida falla cerrada.
   if (module?.accessPolicy) {
     return resolveAccessPolicy(module.accessPolicy, session)
       ? { type: 'direct', compatibleRoles: [], selectedRole: '' }

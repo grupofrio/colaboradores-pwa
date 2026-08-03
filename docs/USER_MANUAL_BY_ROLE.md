@@ -1,6 +1,8 @@
 # Manual de Uso por Puesto — PWA Colaboradores Grupo Frío
 
-> Guía operativa para usuarios internos de Grupo Frío. Documenta el estado real al **2026-04-27** sobre el commit `2476ea3`.
+> Guía operativa para usuarios internos de Grupo Frío. Actualizada al
+> **2026-07-28**. La sección de asistencias describe el flujo preparado; su
+> habilitación productiva requiere un despliegue autorizado por separado.
 > Este manual NO es para desarrolladores — para eso ver [`docs/CODE_MANUAL.md`](CODE_MANUAL.md).
 
 ---
@@ -122,17 +124,25 @@ Vista ejecutiva de la sucursal: ver alertas operativas del día, autorizar accio
 
 **Cuándo escalar:** si la requisición es por monto inusualmente alto y no estás seguro, llama a Dirección antes de aprobar.
 
-#### Operación: Autorizar cierre de caja con diferencia alta
+#### Operación: Autorizar un corte POS pendiente
 
-**Cuándo se usa:** Auxiliar Admin cerró caja y la diferencia es mayor a $1,000 o $10,000 (gerente o director respectivamente).
+**Cuándo se usa:** Angy preparó el corte y el backend determinó que la diferencia
+requiere autorización gerencial o de dirección.
 **Ruta:** `/admin/cierre`.
 **Pasos:**
-1. Entrar al cierre del día.
-2. Revisar el detalle de la diferencia y la nota dejada por el Auxiliar.
-3. Si está justificada, autorizar.
-4. Si no, NO autorizar y pedir reconteo.
+1. Abrir la solicitud pendiente desde **Cortes de caja**.
+2. Revisar el turno y versión, diferencia, nota y nivel solicitado. Si se trata
+   de una versión histórica que ya tenía evidencia, esa referencia permanece
+   visible; los cierres nuevos no requieren foto. La vista de autorización
+   muestra solo el detalle mínimo permitido.
+3. Si está justificada, autorizar con el nivel que la pantalla permite.
+4. Si no está justificada, no autorizar: dejar la versión pendiente, pedir a
+   Angy que verifique el conteo y escalar el caso. No intentar un segundo cierre
+   ni crear otro turno; un pendiente ya guardado no se reabre directamente.
 
-> **Nota técnica:** el backend valida los umbrales solo parcialmente hoy. La UI bloquea, pero un cliente malicioso podría llamar al endpoint directo. Esto es un gap conocido (G018) y no afecta tu operación normal.
+> **Importante:** la autorización de cortes por turno se valida en backend. El
+> gap G018 documentado más adelante corresponde al cierre diario Legacy, no a
+> este flujo Noche/Día.
 
 #### Operación: Desbloquear forecast confirmado
 
@@ -155,7 +165,7 @@ Vista ejecutiva de la sucursal: ver alertas operativas del día, autorizar accio
 
 - Forecast Unlock no fue validado E2E en QA reciente.
 - KPIs reales (Metabase) bloqueados hasta que backend exponga `/pwa-metabase-token` (G001).
-- Validación server-side de umbrales de cierre de caja pendiente (G018).
+- Validación server-side de umbrales del cierre diario Legacy pendiente (G018).
 
 ---
 
@@ -180,7 +190,7 @@ Operación administrativa diaria de la sucursal: vender en mostrador, registrar 
 | Materia Prima | `/admin/materia-prima` | live (desktop-only, solo Gerente) | Stock real de materia prima. |
 | Traspaso Materia Prima | `/admin/traspaso-materia-prima` | live | Enviar material a Rolito o PT. |
 | Validación Bolsas | `/admin/bolsas/validar` | live | Validar declaración de bolsas. |
-| Cierre de Caja | `/admin/cierre` | live | Arqueo y cierre del día. |
+| Cortes de caja | `/admin/cierre` | live | Apertura, arqueo, cierre e historial de turnos POS día/noche. |
 | Validar Materiales | `/admin/materiales/validar` | live (solo Gerente) | Validar entregas de materiales del Almacenista PT. |
 | Resolver Rechazo | `/admin/materiales/resolver-rechazo` | live | Resolver materiales rechazados. |
 
@@ -231,25 +241,128 @@ Operación administrativa diaria de la sucursal: vender en mostrador, registrar 
 
 **Errores comunes:** "No se pudo subir foto" — repetir; si persiste, tomarla con cámara externa y reintentar.
 
-#### Operación: Cierre de caja del día
+#### Operación: Administrar cortes POS por turno (Angy)
 
-**Cuándo se usa:** al final del día, para conciliar lo vendido vs lo cobrado físicamente.
-**Ruta:** `/admin/cierre`.
-**Pasos:**
-1. Capturar **fondo de apertura** (efectivo con que iniciaste el día).
-2. Capturar **denominaciones físicas**: cantidad de billetes y monedas por valor.
-3. Si hubo otros ingresos o egresos no registrados, capturar.
-4. Ver la **diferencia** que el sistema calcula automáticamente.
-5. Si la diferencia es **mayor a $100**, dejar **nota obligatoria** (mínimo 10 caracteres) explicando.
-6. Si es **mayor a $1,000**, aparece banner "requiere autorización gerente". Espera al gerente antes de cerrar.
-7. Si es **mayor a $10,000**, requiere autorización de dirección.
-8. Pulsar "Cerrar".
+**Cuándo se usa:** al entregar la caja nocturna o diurna, normalmente cerca de
+las 06:00 y 18:00, y al consultar o corregir un corte anterior.
 
-**Resultado esperado:** cierre registrado con estado `closed` (o `pending_auth` si requiere autorización).
+**Ruta:** `/admin/cierre`, menú **Cortes de caja**.
 
-**Errores comunes:** "No se puede enviar — falta nota": diferencia mayor a $100 sin nota.
+**Permiso y preparación previa:** esta función es para Angy como administradora
+del corte. Antes de usarla, el backend debe estar actualizado, la sucursal debe
+tener su configuración de turnos preparada y su empleado debe tener el permiso
+**Puede administrar cortes POS por turno**. El permiso se asigna al perfil, no
+al nombre escrito en el sistema. Después de asignarlo, Angy debe cerrar sesión y
+volver a entrar para recibir capacidades nuevas con un token fresco. Héctor, el
+POS diurno y cualquier auxiliar sin ese permiso no pueden ver ni administrar
+los cortes. El backend identifica a Angy por su token de empleado y no exige que
+su ficha esté vinculada a un usuario `res.users`; el responsable del corte es el
+empleado autenticado.
 
-**Cuándo escalar:** diferencia mayor a $1,000 — gerente. Mayor a $10,000 — dirección.
+Después de liberar una nueva versión de backend/PWA, Angy debe cerrar sesión,
+recargar la aplicación instalada y volver a iniciar sesión antes de probar el
+cierre. Esto renueva el token y evita conservar capacidades o recursos de la
+versión anterior.
+
+##### Primera apertura manual
+
+La primera apertura se hace una sola vez por sucursal. No cierres ni actives la
+configuración hasta que Angy esté lista y haya conciliado los movimientos que
+aparecen en la vista previa.
+
+1. Elegir **Noche** o **Día**.
+2. Capturar la **fecha operativa**, el inicio real y el fondo de apertura.
+3. Revisar la vista previa del servidor: periodo, tickets, gastos elegibles y
+   totales. Si se cambia cualquier dato, generar una vista previa nueva antes
+   de confirmar. El servidor vuelve a evaluar y bloquear los movimientos al
+   abrir, por lo que el resultado final puede incluir un movimiento creado
+   mientras se revisaba.
+4. Conciliar los folios mostrados contra los movimientos existentes y confirmar
+   **Abrir primer turno**.
+
+Las 06:00 y 18:00 son referencias normales, no cierres automáticos. La hora
+real que Angy confirma es la frontera entre turnos. Los periodos son
+semiabiertos: incluyen el inicio y excluyen el final (`inicio <= movimiento <
+fin`), así ninguna venta se cuenta dos veces.
+
+**Ejemplo indispensable:** si el turno nocturno comienza el día 26 a las 18:00,
+se abre como **Noche 27**. Todo movimiento desde ese inicio hasta el cierre
+manual de la mañana pertenece a la fecha operativa 27, aunque parte del periodo
+haya ocurrido el 26.
+
+##### Cerrar Noche o Día con arqueo
+
+1. Abrir el turno activo y pulsar **Hacer corte**. La pantalla trae de nuevo
+   el resumen autoritativo del servidor.
+2. Revisar el desglose completo: tickets y ventas, productos y cantidades,
+   efectivo, terminal, gastos, cancelaciones y ajustes.
+3. Confirmar la conciliación: las ventas en efectivo aumentan el efectivo
+   esperado y los gastos de caja lo disminuyen. Los cobros por terminal se
+   reportan por separado y no incrementan el efectivo físico esperado.
+4. Contar la caja y capturar la cantidad de cada denominación de billetes y
+   monedas. Si hubo un ingreso o egreso excepcional que no es una venta ni un
+   gasto ya registrado, agregar un ajuste con tipo, monto y concepto. No uses un
+   ajuste para ocultar una diferencia.
+5. Revisar **esperado**, **efectivo físico** y **diferencia**. Toda diferencia,
+   sin importar el monto, exige una nota clara. El cierre móvil nuevo no pide ni
+   permite adjuntar una foto del arqueo.
+6. En un cierre normal, capturar el **fondo del turno siguiente**. Ese campo no
+   aparece en un recierre. Confirmar una sola vez.
+7. Si no requiere autorización, el sistema guarda una versión inmutable del
+   corte y abre el turno siguiente en la misma operación. Al cerrar Noche 27,
+   normalmente se abre Día 27; al cerrar Día 27, normalmente se abre Noche 28.
+
+Si aparece `pending_auth`, el corte espera autorización de gerente o dirección
+según el nivel indicado. El turno sucesor ya fue abierto una sola vez como parte
+del cierre; no repitas el cierre ni abras otro turno manualmente. La persona
+autorizadora debe revisar la diferencia, nota y los importes mínimos mostrados.
+Autorizar completa la revisión de la misma versión, sin crear otro sucesor.
+
+##### Respuesta incierta, reapertura y recierre
+
+- Si la red se corta después de confirmar y aparece **respuesta incierta**, no
+  cambies datos ni inicies otra operación. Usa **Consultar estado** o reintenta
+  la acción pendiente desde la misma pantalla: el sistema conserva la misma
+  clave. Nunca generes una clave nueva para “destrabarlo”, porque podrías perder
+  la capacidad de reconciliar el resultado real.
+- Un turno cerrado es inmutable: sus ventas y gastos no se modifican ni se
+  cancelan directamente. Para corregirlo, abre **Historial**, selecciona la
+  versión y pulsa **Reabrir**; la razón es obligatoria.
+- Ya reabierto, realiza la corrección permitida —por ejemplo cancelar una venta
+  con su motivo auditado—, vuelve a contar, captura de nuevo la nota si existe
+  diferencia y usa **Volver a cerrar**. El recierre tampoco solicita foto;
+  genera una versión nueva ligada a la anterior y **no crea otro turno sucesor
+  ni pide un nuevo fondo siguiente**.
+- Si sales del formulario después de reabrir, el turno histórico permanece
+  `reopened`; vuelve a entrar y termina el recierre. El botón **Cancelar** solo
+  descarta el borrador local, no revierte una reapertura ya confirmada.
+
+##### Historial, Consolidado e impresión
+
+En **Historial** se consulta por fecha operativa, no por fecha calendario. Cada
+tarjeta muestra Noche/Día y permite abrir una versión exacta. **Consolidado**
+suma ambos turnos de la fecha sin duplicar fondos, arqueos ni versiones
+anteriores. Desde el detalle se puede imprimir el corte con folio, periodo,
+responsable, ventas, productos, pagos, gastos, cancelaciones, ajustes,
+denominaciones, diferencia y autorizaciones. Las versiones históricas que ya
+tenían evidencia conservan y muestran su referencia, digest y archivo al
+imprimir. Una versión nueva sin foto sigue siendo imprimible y muestra
+**Sin evidencia adjunta**.
+
+Los cierres diarios anteriores aparecen en una sección **Legacy** separada. Son
+históricos de solo lectura después de activar los cortes por turno; no deben
+mezclarse con Noche/Día ni usarse para registrar un cierre nuevo. Sus reglas y
+comprobantes no cambiaron con esta liberación. Tampoco cambió la foto de recibo
+que se solicita al registrar un gasto: solo se eliminó la foto del cierre y
+recierre POS por turno.
+
+**Resultado esperado:** turno en `closed` con versión imprimible, o
+`pending_auth` hasta completar la autorización; el siguiente turno solo se crea
+una vez en un cierre normal exitoso.
+
+**Cuándo escalar:** si faltan tickets/gastos en la vista previa, hay más de un
+turno abierto, el estado de una operación no puede recuperarse o la sucursal
+aparece fuera del alcance. No sigas operando el corte hasta reconciliarlo.
 
 #### Operación: Crear una requisición de compra
 
@@ -272,13 +385,15 @@ Operación administrativa diaria de la sucursal: vender en mostrador, registrar 
 ### 5.6 Errores comunes
 
 - "Folio obligatorio cuando es tarjeta": faltó capturar referencia del terminal.
-- "Diferencia > $100 requiere nota": cierre con nota faltante.
+- "Falta nota": cualquier diferencia del corte por turno exige explicación;
+  no intentes adjuntar una foto para resolverla.
 
 ### 5.7 Pendientes conocidos
 
 - Liquidaciones y Materia Prima son **desktop-only** (no funcionan bien en celular).
-- Validación de umbrales server-side pendiente (G018).
-- Reapertura de cierre de caja una vez cerrado: no implementada (escalar a desarrollo si se requiere).
+- G018 continúa referido al cierre diario **Legacy**; los cortes POS por turno
+  validan nota y autorizaciones en backend. La evidencia solo se conserva en
+  versiones históricas que ya la tenían.
 
 ---
 
@@ -1014,7 +1129,96 @@ Centro de **control comercial** de la sucursal: ver el día y el día anterior, 
 
 ---
 
-## 13. Glosario operativo
+## 13. Angélica — Administración de asistencias de Iguala
+
+### 13.1 Alcance y entrada
+
+El módulo **Asistencias** (`/asistencias`) es exclusivo para Angélica. Muestra
+empleados activos asignados a las cuentas `IGU` e `IGU34`. Odoo valida tu
+sesión en cada consulta y cambio; si el módulo aparece pero Odoo niega acceso,
+no se mostrará información parcial.
+
+### 13.2 Consultar y filtrar
+
+1. En Inicio, abre **Asistencias**.
+2. Elige **Día**, **Semana** o **Rango** y confirma fecha inicial/final.
+3. Elige **Todas**, **IGU** o **IGU34**.
+4. Si hace falta, busca por nombre/número y filtra por estado.
+5. Revisa jornadas esperadas, presentes, faltas, incompletos y horas. Cada
+   renglón representa un empleado-día y puede contener múltiples tramos.
+
+Los filtros permanecen seleccionados después de guardar, recargar o fallar una
+exportación. `Sin registro` es una alerta operativa: nunca crea una falta por sí
+sola.
+
+### 13.3 Registrar, corregir y cerrar asistencias
+
+- **Registrar asistencia:** abre un empleado-día sin registro, confirma
+  empleado/fecha, captura entrada, salida opcional y motivo administrativo.
+- **Agregar tramo:** úsalo para comida o reingreso cuando todos los tramos
+  anteriores estén cerrados. No captures horarios traslapados.
+- **Corregir horario:** abre el tramo correcto, ajusta entrada/salida y explica
+  el motivo. La versión evita sobrescribir un cambio de otra persona.
+- **Registrar salida:** cierra un tramo abierto con la hora real y un motivo.
+
+Si aparece un traslape o rango inválido, el formulario conserva lo capturado y
+enfoca el horario a corregir. Si el registro cambió (`stale_record`) o el
+empleado salió de alcance, el sistema recarga primero; abre de nuevo el registro
+actualizado antes de reintentar.
+
+### 13.4 Registrar y justificar faltas
+
+1. En un empleado-día sin asistencia, pulsa **Registrar falta**.
+2. Selecciona motivo, agrega notas y escribe el motivo administrativo.
+3. Si aparece **Falta no programada**, verifica el calendario y activa la
+   confirmación explícita antes de reenviar. Sin esa confirmación no se guarda.
+4. Para una falta pendiente, pulsa **Justificar falta**, elige el tipo, agrega
+   notas y, opcionalmente, un PDF, JPG o PNG de hasta **5 MiB**.
+
+No es posible registrar una falta si ya hay asistencia. Si ya existe una falta
+o asistencia para esa fecha, el formulario se cierra, el listado se recarga y
+se abre el historial del registro existente cuando Odoo entrega su ID. Una
+falta procesada ya no puede justificarse desde esta pantalla.
+
+Si aparece que el administrador no tiene usuario Odoo, no reintentes la
+justificación: soporte debe vincular primero al empleado 717 con una cuenta
+`res.users` activa. Un comprobante inválido conserva el formulario; reemplázalo
+por un archivo permitido de hasta 5 MiB.
+
+### 13.5 Historial y Excel
+
+- **Ver historial** muestra quién creó, corrigió, cerró o justificó el registro,
+  cuándo ocurrió, el motivo y valores anteriores/posteriores. No muestra
+  tokens ni el contenido binario de comprobantes.
+- **Exportar Excel** descarga exactamente el rango, cuenta, empleado y estado
+  activos. El archivo contiene `Resumen`, `Asistencias` y `Faltas`. Espera a que
+  termine; el botón queda bloqueado para evitar doble descarga.
+- Si la exportación falla, no se descarga un archivo parcial ni se pierden los
+  filtros. Corrige la conexión/configuración indicada y vuelve a pulsar
+  **Exportar Excel**.
+
+### 13.6 Errores y recuperación
+
+- **Sesión vencida:** vuelve a iniciar sesión.
+- **Acceso denegado:** vuelve al inicio y pide que revisen ambas allowlists; no
+  intentes entrar por URL directa.
+- **Falta configurar IGU o IGU34:** reporta exactamente el código indicado para
+  que lo creen/corrijan en Odoo.
+- **Registro cambió / empleado cambió de cuenta:** espera la recarga y vuelve a
+  abrir el registro vigente.
+- **Traslape o salida anterior a entrada:** corrige el campo enfocado; no se
+  pierde el formulario.
+- **Falta/asistencia existente:** revisa el historial que se abre y evita crear
+  un duplicado.
+- **Día no programado:** confirma solo después de verificar que realmente debe
+  contabilizarse como falta.
+- **Comprobante inválido:** usa PDF, JPG o PNG, no vacío y máximo 5 MiB.
+- **Error de Excel:** conserva los filtros y reintenta desde el mismo botón; si
+  persiste, reporta rango y hora sin adjuntar datos sensibles.
+
+---
+
+## 14. Glosario operativo
 
 | Término | Significado |
 |---------|-------------|
@@ -1044,7 +1248,7 @@ Centro de **control comercial** de la sucursal: ver el día y el día anterior, 
 
 ---
 
-## 14. Errores frecuentes y solución rápida
+## 15. Errores frecuentes y solución rápida
 
 | Mensaje | Significado | Qué hacer |
 |---------|-------------|-----------|
@@ -1061,7 +1265,7 @@ Centro de **control comercial** de la sucursal: ver el día y el día anterior, 
 
 ---
 
-## 15. Escalamiento y soporte
+## 16. Escalamiento y soporte
 
 ### Niveles de escalamiento
 
@@ -1092,7 +1296,7 @@ Lista completa: ver [`docs/GAPS_BACKLOG.md`](GAPS_BACKLOG.md).
 
 ---
 
-## 16. Changelog
+## 17. Changelog
 
 | Fecha | Versión | Cambios |
 |-------|---------|---------|

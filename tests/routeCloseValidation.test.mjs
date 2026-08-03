@@ -19,6 +19,19 @@ test('validateCierre allows closing when route kilometers are missing', () => {
   assert.deepEqual(result.errors, [])
 })
 
+test('validateCierre blocks closing when backend liquidation confirmation is absent', () => {
+  const result = validateCierre(
+    { id: 293 },
+    { kmSalida: null, kmLlegada: null },
+    { corteDone: true, liquidacionDone: false },
+    { source: 'reconciliation', lines: [] },
+    validCorte,
+  )
+
+  assert.equal(result.valid, false)
+  assert.deepEqual(result.errors, ['Liquidacion no completada'])
+})
+
 test('validateCierre rejects invalid kilometers only when both are captured', () => {
   const result = validateCierre(
     { id: 293 },

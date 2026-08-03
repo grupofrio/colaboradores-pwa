@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+// Tema CLARO (rebranding tanda 3): misma forma que TOKENS, paleta institucional.
+// Estas pantallas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
+import { ErrorState } from '../../components/Loader'
 import { getTeamTargets } from './api'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -12,6 +17,9 @@ export default function ScreenMetasVendedores() {
   const typo = useMemo(() => getTypo(sw), [sw])
   const [targets, setTargets] = useState([])
   const [loading, setLoading] = useState(true)
+  // Estado de ERROR diferenciado del vacío legítimo: un fallo de red NO debe
+  // pintarse como "sin metas" (falso vacío). Ver rama de render más abajo.
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -23,13 +31,18 @@ export default function ScreenMetasVendedores() {
 
   async function loadData() {
     setLoading(true)
+    setError('')
     try {
       const t = await getTeamTargets().catch((e) => {
         logScreenError('ScreenMetasVendedores', 'getTeamTargets', e)
+        setError('No se pudieron cargar las metas')
         return []
       })
       setTargets(t || [])
-    } catch (e) { logScreenError('ScreenMetasVendedores', 'loadData', e) }
+    } catch (e) {
+      logScreenError('ScreenMetasVendedores', 'loadData', e)
+      setError('No se pudieron cargar las metas')
+    }
     finally { setLoading(false) }
   }
 
@@ -73,14 +86,23 @@ export default function ScreenMetasVendedores() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
           <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Metas del Mes</span>
         </div>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          </div>
+        ) : error ? (
+          // Error de carga: mensaje honesto + reintentar. JAMÁS caer al vacío falso.
+          <div style={{ marginTop: 40 }}>
+            <ErrorState tokens={TOKENS}
+              title="No se pudieron cargar las metas"
+              message="Revisa tu conexión e inténtalo de nuevo."
+              onRetry={loadData}
+            />
           </div>
         ) : targets.length === 0 ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>

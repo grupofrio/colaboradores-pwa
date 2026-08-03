@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { api } from '../src/lib/api.js'
+import { getPendingLiquidations } from '../src/modules/admin/api.js'
 
 const originalLocalStorage = globalThis.localStorage
 const originalFetch = globalThis.fetch
@@ -71,6 +72,27 @@ test('admin liquidaciones pending uses the HTTP GET controller instead of JSON-R
   assert.equal(calls[0].url, '/odoo-api/pwa-admin/liquidaciones/pending?company_id=34&warehouse_id=76')
   assert.equal(calls[0].options.method, 'GET')
   assert.equal(Object.hasOwn(calls[0].options, 'body'), false)
+})
+
+test('admin liquidaciones pending wrapper sends only company and warehouse over GET', async () => {
+  setSession()
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return createJsonResponse(200, { ok: true, data: { plans: [] } })
+  }
+
+  await getPendingLiquidations({ companyId: 34, warehouseId: 76 })
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].options.method, 'GET')
+  assert.equal(Object.hasOwn(calls[0].options, 'body'), false)
+  const query = new URL(calls[0].url, 'https://pwa.test').searchParams
+  assert.equal(query.get('company_id'), '34')
+  assert.equal(query.get('warehouse_id'), '76')
+  assert.equal(query.has('cash_reception_status'), false)
+  assert.equal(query.has('reception_status'), false)
 })
 
 test('admin liquidaciones detail and history use HTTP GET controllers', async () => {

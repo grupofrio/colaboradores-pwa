@@ -83,6 +83,7 @@ test('ModuleRoleRoute existe y aplica la triple autoridad (sesión→módulo→r
 test('cada familia de módulo usa ModuleRoleRoute con su moduleId canónico', () => {
   const expected = [
     ['/kpis', 'kpis'], ['/surveys', 'encuestas'], ['/badges', 'logros'],
+    ['/pos-diurno', 'pos_diurno'],
     ['/admin', 'admin_sucursal'], ['/gerente', 'gerente'], ['/equipo', 'supervisor_ventas'],
     ['/ruta', 'cierre_ruta'], ['/entregas', 'almacen_entregas'], ['/almacen-pt', 'almacen_pt'],
     ['/koldcup', 'koldcup'], ['/supervision', 'supervision_produccion'], ['/torres', 'torre_control'],
@@ -116,6 +117,39 @@ test('Tower conserva TowerRoute especializado (rol autoritativo) + sesión estri
   // TowerRoute también exige sesión válida (no solo truthy)
   const towerBlock = appSrc.slice(appSrc.indexOf('function TowerRoute'), appSrc.indexOf('function TowerRoute') + 400)
   assert.match(towerBlock, /isValidAuthenticatedSession/)
+})
+
+test('NightPosRoute exige sesión válida e identidad nominal autorizada', () => {
+  assert.match(appSrc, /function NightPosRoute\(\{ children \}\)/)
+  const nightPosBlock = appSrc.slice(
+    appSrc.indexOf('function NightPosRoute'),
+    appSrc.indexOf('function NightPosRoute') + 400,
+  )
+  assert.match(nightPosBlock, /isValidAuthenticatedSession\(session\)/)
+  assert.match(nightPosBlock, /canAccessHectorNightPos\(session\)/)
+  assert.match(nightPosBlock, /Navigate to="\/login"/)
+  assert.match(nightPosBlock, /Navigate to="\/"/)
+})
+
+test('POS nocturno monta rutas directas con guard propio y NIGHT_POS_FLOW', () => {
+  const posRoute = '<Route path="/pos-nocturno" element={<NightPosRoute><ScreenPOS flow={NIGHT_POS_FLOW} /></NightPosRoute>} />'
+  const salesRoute = '<Route path="/pos-nocturno/ventas" element={<NightPosRoute><ScreenNightPosSales /></NightPosRoute>} />'
+  const ticketRoute = '<Route path="/pos-nocturno/ticket/:orderId" element={<NightPosRoute><ScreenTicket flow={NIGHT_POS_FLOW} /></NightPosRoute>} />'
+
+  assert.ok(appSrc.includes(posRoute), 'ruta exacta del POS nocturno')
+  assert.ok(appSrc.includes(salesRoute), 'ruta exacta de ventas nocturnas')
+  assert.ok(appSrc.includes(ticketRoute), 'ruta exacta del ticket nocturno')
+  assert.ok(!appSrc.includes('moduleId="pos_nocturno"'), 'no amplía ModuleRoleRoute ni roles de Admin')
+})
+
+test('POS diurno monta todas sus rutas directas con ModuleRoleRoute y DAY_POS_FLOW', () => {
+  const posRoute = '<Route path="/pos-diurno" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenPOS flow={DAY_POS_FLOW} /></ModuleRoleRoute>} />'
+  const salesRoute = '<Route path="/pos-diurno/ventas" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenDayPosSales /></ModuleRoleRoute>} />'
+  const ticketRoute = '<Route path="/pos-diurno/ticket/:orderId" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenTicket flow={DAY_POS_FLOW} /></ModuleRoleRoute>} />'
+
+  assert.ok(appSrc.includes(posRoute), 'ruta exacta del POS diurno')
+  assert.ok(appSrc.includes(salesRoute), 'ruta exacta de ventas diurnas')
+  assert.ok(appSrc.includes(ticketRoute), 'ruta exacta del ticket diurno')
 })
 
 test('getStoredSession y PrivateRoute usan la validación estricta única', () => {
@@ -166,8 +200,8 @@ test('workflow CI ejecuta npm run build (el job "build" compila)', () => {
 // ── AdminShell: feed lateral solo con ancho holgado (≥1366) ──────────────────
 test('AdminShell no compone triple panel en 1024–1365', () => {
   const shell = readFileSync(new URL('../src/modules/admin/components/AdminShell.jsx', import.meta.url), 'utf8')
-  assert.match(shell, /showActivityFeed = !hideActivityFeed && sw >= 1366/)
-  assert.match(shell, /showActivityFeed \? '220px 1fr 320px' : '220px 1fr'/)
+  assert.match(shell, /showActivityFeed = !hideNavigation && !hideActivityFeed && sw >= 1366/)
+  assert.match(shell, /hideNavigation[\s\S]*\? 'minmax\(0, 1fr\)'[\s\S]*: showActivityFeed[\s\S]*\? '220px 1fr 320px'[\s\S]*: '220px 1fr'/)
   assert.match(shell, /\{showActivityFeed && <ActivityFeed/)
 })
 

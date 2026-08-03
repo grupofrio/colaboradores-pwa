@@ -1,30 +1,34 @@
-import { TOKENS } from '../../../tokens'
+import { TOKENS as DARK_TOKENS } from '../../../tokens'
 
 /* ============================================================================
    StatusBadge — Reusable status chip for steps, tickets, pallets, etc.
 ============================================================================ */
 
-const STATUS_MAP = {
+const statusMap = (TOKENS) => ({
   pending:     { color: TOKENS.colors.warning,  bg: TOKENS.colors.warningSoft, label: 'Pendiente' },
   draft:       { color: TOKENS.colors.warning,  bg: TOKENS.colors.warningSoft, label: 'Borrador' },
   completed:   { color: TOKENS.colors.success,  bg: TOKENS.colors.successSoft, label: 'Completado' },
   done:        { color: TOKENS.colors.success,  bg: TOKENS.colors.successSoft, label: 'Hecho' },
   received:    { color: TOKENS.colors.success,  bg: TOKENS.colors.successSoft, label: 'Recibido' },
   dispatched:  { color: TOKENS.colors.success,  bg: TOKENS.colors.successSoft, label: 'Despachado' },
-  in_progress: { color: TOKENS.colors.blue2,    bg: 'rgba(43,143,224,0.12)',   label: 'En progreso' },
-  published:   { color: TOKENS.colors.blue2,    bg: 'rgba(43,143,224,0.12)',   label: 'Publicado' },
-  sale:        { color: TOKENS.colors.blue2,    bg: 'rgba(43,143,224,0.12)',   label: 'Venta' },
+  in_progress: { color: TOKENS.colors.chipInfoFg, bg: TOKENS.colors.chipInfoBg, label: 'En progreso' },
+  published:   { color: TOKENS.colors.chipInfoFg, bg: TOKENS.colors.chipInfoBg, label: 'Publicado' },
+  sale:        { color: TOKENS.colors.chipInfoFg, bg: TOKENS.colors.chipInfoBg, label: 'Venta' },
   alert:       { color: TOKENS.colors.error,    bg: TOKENS.colors.errorSoft,   label: 'Alerta' },
   error:       { color: TOKENS.colors.error,    bg: TOKENS.colors.errorSoft,   label: 'Error' },
   rejected:    { color: TOKENS.colors.error,    bg: TOKENS.colors.errorSoft,   label: 'Rechazado' },
-  locked:      { color: TOKENS.colors.textMuted, bg: 'rgba(255,255,255,0.06)', label: 'Bloqueado' },
-  hold:        { color: TOKENS.colors.textMuted, bg: 'rgba(255,255,255,0.06)', label: 'En espera' },
-}
+  locked:      { color: TOKENS.colors.textMuted, bg: TOKENS.colors.chipNeutralBg, label: 'Bloqueado' },
+  hold:        { color: TOKENS.colors.textMuted, bg: TOKENS.colors.chipNeutralBg, label: 'En espera' },
+})
 
-const FALLBACK = { color: TOKENS.colors.textMuted, bg: 'rgba(255,255,255,0.06)', label: '—' }
+const fallback = (TOKENS) => ({ color: TOKENS.colors.textMuted, bg: TOKENS.colors.chipNeutralBg, label: '—' })
 
-export default function StatusBadge({ status, label }) {
-  const cfg = STATUS_MAP[status] || FALLBACK
+// `tokens` OPCIONAL con default OSCURO: quien no lo pasa (Entregas, M2-M7,
+// torres, admin…) se ve exactamente igual que antes. Solo la superficie de
+// supervisión de ventas inyecta BRAND_TOKENS (rebranding tanda 3).
+export default function StatusBadge({ status, label, tokens = DARK_TOKENS }) {
+  const TOKENS = tokens
+  const cfg = statusMap(TOKENS)[status] || fallback(TOKENS)
   const displayLabel = label || cfg.label
 
   return (

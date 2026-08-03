@@ -482,7 +482,20 @@ export default function ScreenEjecucionM3({ session }) {
         <button type="button" onClick={clearFilters} style={pagerBtn(false)}>Limpiar filtros</button>
       </div>
 
-      <div style={{ overflowX: 'auto', marginTop: 10, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg }}>
+      {/* Affordance de desplazamiento: la tabla tiene 10 columnas y desborda en
+          pantallas angostas; se avisa para que no queden columnas invisibles. */}
+      <div data-testid="m3-scroll-hint" aria-hidden="true" style={{
+        fontSize: 10.5, color: C.textLow, marginTop: 10, display: 'flex', gap: 4,
+        alignItems: 'center', justifyContent: 'flex-end',
+      }}>Desliza horizontalmente para ver todas las columnas →</div>
+      <div style={{
+        overflowX: 'auto', marginTop: 4, border: `1px solid ${C.border}`,
+        borderRadius: TOKENS.radius.lg,
+        // sombra en el borde derecho: pista visual de que hay más contenido al lado.
+        backgroundImage: `linear-gradient(to left, ${C.bg0}00, ${C.bg0}00), radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,0.28), rgba(0,0,0,0))`,
+        backgroundPosition: 'right center', backgroundRepeat: 'no-repeat', backgroundSize: '24px 100%',
+        backgroundAttachment: 'local',
+      }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: C.surfaceSoft, textAlign: 'left' }}>

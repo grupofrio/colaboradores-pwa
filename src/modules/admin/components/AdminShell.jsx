@@ -13,6 +13,8 @@ import { TOKENS, getTypo } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import { useSession } from '../../../App'
 import { getEffectiveJobKeys } from '../../../lib/roleContext'
+import { isCashShiftNavigationVisible } from '../../../lib/navModel.js'
+import { BACKEND_CAPS } from '../adminService.js'
 import CompanySelector from './CompanySelector'
 import ActivityFeed from './ActivityFeed'
 
@@ -34,7 +36,7 @@ export const NAV_ITEMS = [
   // Aprobar gastos: SOLO gerente/dirección (auxiliar_admin NO aprueba — ver guía §2d)
   { id: 'gastos-aprobar', label: 'Aprobar gastos', route: '/admin/gastos/aprobar',     roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
   { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'cierre',       label: 'Cierre del día',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'cierre',       label: 'Cortes de caja',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
   // ── Restringidos a gerente / dirección ──────────────────────────────────
   { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
   { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
@@ -47,14 +49,20 @@ export const NAV_ITEMS = [
 
 /** Filtra NAV_ITEMS por el rol actual. Export para tests y HubV2. */
 // eslint-disable-next-line react-refresh/only-export-components
-export function navItemsForRole(role) {
+export function navItemsForRole(role, capabilities = {}) {
   if (!role) return []
-  return NAV_ITEMS.filter(item => item.roles.includes(role))
+  return NAV_ITEMS.filter((item) => (
+    item.roles.includes(role)
+    && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
+  ))
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function navItemsForRoles(roles = []) {
-  return NAV_ITEMS.filter((item) => item.roles.some((role) => roles.includes(role)))
+export function navItemsForRoles(roles = [], capabilities = {}) {
+  return NAV_ITEMS.filter((item) => (
+    item.roles.some((role) => roles.includes(role))
+    && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
+  ))
 }
 
 export default function AdminShell({
@@ -62,10 +70,13 @@ export default function AdminShell({
   title = 'Administración de sucursal',
   children,
   onBack,
+  backButtonLabel,
+  backButtonSize = 38,
   hideActivityFeed = false,
+  hideNavigation = false,
 }) {
   const navigate = useNavigate()
-  const { sucursal, employeeName } = useAdmin()
+  const { sucursal, employeeName, capsReady } = useAdmin()
   const { session } = useSession()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -73,12 +84,15 @@ export default function AdminShell({
   // Feed de actividad (320px) solo con ancho holgado: bajo 1366px el rail
   // global compacto (76px) + sidebar interno (220px) + feed dejarían el
   // contenido comprimido (hallazgo Codex PR #66 — triple panel a 1024–1280).
-  const showActivityFeed = !hideActivityFeed && sw >= 1366
+  const showActivityFeed = !hideNavigation && !hideActivityFeed && sw >= 1366
 
   // Filtrar módulos según rol del usuario
   const visibleNavItems = useMemo(
-    () => navItemsForRoles(getEffectiveJobKeys(session)),
-    [session],
+    () => navItemsForRoles(
+      getEffectiveJobKeys(session),
+      capsReady ? BACKEND_CAPS : {},
+    ),
+    [capsReady, session],
   )
 
   useEffect(() => {
@@ -121,11 +135,15 @@ export default function AdminShell({
         position: 'sticky', top: 0, zIndex: 500,
         backdropFilter: 'blur(8px)',
       }}>
-        <button onClick={handleBack} style={{
-          width: 38, height: 38, borderRadius: TOKENS.radius.md,
-          background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}>
+        <button
+          type="button"
+          {...(backButtonLabel ? { 'aria-label': backButtonLabel } : {})}
+          onClick={handleBack}
+          style={{
+            width: backButtonSize, height: backButtonSize, borderRadius: TOKENS.radius.md,
+            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
           </svg>
@@ -185,11 +203,16 @@ export default function AdminShell({
       {isDesktop ? (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: showActivityFeed ? '220px 1fr 320px' : '220px 1fr',
+          gridTemplateColumns: hideNavigation
+            ? 'minmax(0, 1fr)'
+            : showActivityFeed
+              ? '220px 1fr 320px'
+              : '220px 1fr',
           minHeight: 'calc(100dvh - 68px)',
         }}>
           {/* Sidebar izquierda */}
-          <nav style={{
+          {!hideNavigation && (
+            <nav style={{
             padding: '20px 12px', borderRight: `1px solid ${TOKENS.colors.border}`,
             background: TOKENS.colors.surfaceSoft,
           }}>
@@ -243,7 +266,8 @@ export default function AdminShell({
                 )
               })}
             </div>
-          </nav>
+            </nav>
+          )}
 
           {/* Main */}
           <main style={{ padding: '24px 28px', overflowY: 'auto' }}>

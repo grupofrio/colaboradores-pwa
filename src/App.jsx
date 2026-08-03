@@ -4,12 +4,14 @@ import { useState, useEffect, createContext, useContext } from 'react'
 import { ToastProvider } from './components/Toast'
 import AppShell from './components/AppShell'
 import { normalizeSessionRoleContext } from './lib/roleContext'
+import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervisor-ventas/v2/sessionScope'
 import { api } from './lib/api'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById, isModuleVisibleForRoles } from './modules/registry'
 import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
 import { isValidAuthenticatedSession } from './lib/session'
+import { isModuleVisibleForSession } from './lib/navModel'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
@@ -18,6 +20,8 @@ import { readM4Access } from './modules/ventas/m4/access'
 import { readM5Access } from './modules/inventario/m5/access'
 import { readM6Access } from './modules/caja-conciliacion/m6/access'
 import { readM7Access } from './modules/rentabilidad-costos/m7/access'
+import { canAccessHectorNightPos } from './modules/admin/nightPosAccess'
+import { DAY_POS_FLOW, NIGHT_POS_FLOW } from './modules/admin/posFlow'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -45,6 +49,8 @@ const ScreenInventarioM5 = lazy(() => import('./modules/inventario/ScreenInventa
 const ScreenCajaConciliacionM6 = lazy(() => import('./modules/caja-conciliacion/ScreenCajaConciliacionM6'))
 // KOLD OS · M7 — Rentabilidad y costos (observatorio read-only, gate propio M7RentabilidadRoute)
 const ScreenRentabilidadCostosM7 = lazy(() => import('./modules/rentabilidad-costos/ScreenRentabilidadCostosM7'))
+const ScreenAsistencias = lazy(() => import('./modules/asistencias/ScreenAsistencias'))
+const ScreenVentasIguala = lazy(() => import('./modules/ventas-iguala/ScreenVentasIguala'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -88,6 +94,8 @@ const ScreenControlTurno    = lazy(() => import('./modules/supervision/ScreenCon
 // Admin Sucursal
 const ScreenAdminPanel      = lazy(() => import('./modules/admin/ScreenAdminPanel'))
 const ScreenPOS             = lazy(() => import('./modules/admin/ScreenPOS'))
+const ScreenNightPosSales   = lazy(() => import('./modules/admin/ScreenNightPosSales'))
+const ScreenDayPosSales     = lazy(() => import('./modules/admin/ScreenDayPosSales'))
 const ScreenTicket          = lazy(() => import('./modules/admin/ScreenTicket'))
 const ScreenGastos          = lazy(() => import('./modules/admin/ScreenGastos'))
 const ScreenGastosHistorial = lazy(() => import('./modules/admin/ScreenGastosHistorial'))
@@ -135,7 +143,9 @@ const ScreenMetasVendedores  = lazy(() => import('./modules/supervisor-ventas/Sc
 const ScreenTareasSupervisor     = lazy(() => import('./modules/supervisor-ventas/ScreenTareasSupervisor'))
 const ScreenNotasCliente         = lazy(() => import('./modules/supervisor-ventas/ScreenNotasCliente'))
 const ScreenClientesRecuperacion = lazy(() => import('./modules/supervisor-ventas/ScreenClientesRecuperacion'))
-const ScreenControlComercial    = lazy(() => import('./modules/supervisor-ventas/ScreenControlComercial'))
+const ScreenSupervisorOperationsEntry = lazy(
+  () => import('./modules/supervisor-ventas/ScreenSupervisorOperationsEntry')
+)
 const ScreenBajasHub            = lazy(() => import('./modules/supervisor-ventas/ScreenBajasHub'))
 const ScreenBajasSugey          = lazy(() => import('./modules/supervisor-ventas/ScreenBajasSugey'))
 const ScreenBajasSugeyDetail    = lazy(() => import('./modules/supervisor-ventas/ScreenBajasSugeyDetail'))
@@ -146,6 +156,16 @@ const ScreenClientesSinVisitar = lazy(() => import('./modules/supervisor-ventas/
 const ScreenScoreSemanal       = lazy(() => import('./modules/supervisor-ventas/ScreenScoreSemanal'))
 const ScreenCierreOperativo    = lazy(() => import('./modules/supervisor-ventas/ScreenCierreOperativo'))
 const ScreenNotaRapida         = lazy(() => import('./modules/supervisor-ventas/ScreenNotaRapida'))
+const ScreenOperacionesHoy     = lazy(() => import('./modules/supervisor-ventas/ScreenOperacionesHoy'))
+// Supervisor V2 — shell de 6 superficies (gated por flag fail-closed).
+const HoyTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/HoyTab'))
+const RadarTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RadarTab'))
+const RutasTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RutasTab'))
+const ClientesTab   = lazy(() => import('./modules/supervisor-ventas/v2/tabs/ClientesTab'))
+const PendientesTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/PendientesTab'))
+const MasTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/MasTab'))
+import SupervisorV2Gate from './modules/supervisor-ventas/v2/SupervisorV2Gate'
+import V2ExcludedRoute from './modules/supervisor-ventas/v2/V2ExcludedRoute'
 // Torres de Control — Validación de Requisiciones
 const ScreenTorreRequisiciones = lazy(() => import('./modules/torre/ScreenTorreRequisiciones'))
 const ScreenTorreDetail        = lazy(() => import('./modules/torre/ScreenTorreDetail'))
@@ -155,6 +175,9 @@ const ScreenDashboardGerente = lazy(() => import('./modules/gerente/ScreenDashbo
 const ScreenAlertasGerente   = lazy(() => import('./modules/gerente/ScreenAlertasGerente'))
 const ScreenForecastUnlock   = lazy(() => import('./modules/gerente/ScreenForecastUnlock'))
 const ScreenGastosGerente    = lazy(() => import('./modules/gerente/ScreenGastos'))
+// Briefs (ventas, producción, …) — HTML servido por n8n, embebido aislado.
+// UNA sola pantalla para todas las variantes; lo que cambia vive en briefCatalog.
+const BriefEmbedScreen       = lazy(() => import('./modules/brief/BriefEmbedScreen'))
 
 // ─── Contexto de sesión ──────────────────────────────────────────────────────
 // NOTA: Mover SessionContext + useSession a un archivo aparte para satisfacer
@@ -282,6 +305,33 @@ function M7RentabilidadRoute({ children }) {
 function ScreenRentabilidadCostosM7Mount() {
   const { session } = useSession()
   return <ScreenRentabilidadCostosM7 session={session} />
+}
+
+function NightPosRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (!canAccessHectorNightPos(session)) return <Navigate to="/" replace />
+  return children
+}
+
+// La misma política session-aware controla tarjeta, navegación, clic y URL.
+// Este gate cliente es UX; Odoo permanece como autoridad de cada petición.
+function AttendanceRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  const module = getModuleById('asistencias')
+  if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
+  return children
+}
+
+// La política registrada `iguala_sales` controla tarjeta, navegación, clic y
+// URL. Este gate conserva esa misma autoridad y Odoo revalida cada petición.
+function VentasIgualaRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  const module = getModuleById('ventas_iguala')
+  if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
+  return children
 }
 
 function ScreenPlaneacionM2Mount() {
@@ -483,9 +533,26 @@ class ErrorBoundary extends Component {
   }
 }
 
+// Codex §3/§5: la firma de identidad usa la IDENTIDAD CANÓNICA compartida
+// (buildSessionIdentity) — misma autoridad que sessionStore/sessionScope, sin
+// duplicar campos. `sessionKey` no serializa el token.
+function sessionIdentitySig(s) {
+  if (!s || typeof s !== 'object') return ''
+  return buildSessionIdentity(s).sessionKey
+}
+
+// Codex §5/§6: `withScopeNonce` = alias local del helper canónico
+// `ensureSessionScopeNonce` (vive en sessionScope, misma casa que la identidad).
+// Toda sesión persistida debe tener una huella no sensible estable; dos sesiones
+// legacy del mismo empleado ya NO comparten scopeKey.
+const withScopeNonce = ensureSessionScopeNonce
+
 // ─── App principal ────────────────────────────────────────────────────────────
 export default function App() {
-  const [session, setSession] = useState(getStoredSession)
+  // §5/§6: migra en memoria la sesión legacy (sin session_id/nonce) añadiéndole un
+  // nonce estable en la inicialización (una sola vez; el efecto de persistencia la
+  // guarda ya con el nonce).
+  const [session, setSession] = useState(() => withScopeNonce(getStoredSession()))
 
   useEffect(() => {
     if (session) {
@@ -493,6 +560,11 @@ export default function App() {
     } else {
       localStorage.removeItem('gf_session')
     }
+    // Codex §2/§3: notifica a la capa reactiva de scope (sessionStore) que la
+    // sesión cambió EN ESTA pestaña (los writes de localStorage de la misma
+    // pestaña NO disparan `storage`). Al cambiar la identidad, los hooks de datos
+    // limpian su estado visible, invalidan caché y refetch.
+    try { window.dispatchEvent(new Event('gf:session-changed')) } catch { /* noop */ }
   }, [session])
 
   // Global listener: any api.js that detects expired/missing token fires this.
@@ -506,20 +578,29 @@ export default function App() {
     return () => window.removeEventListener('gf:session-expired', onSessionExpired)
   }, [])
 
-  // Multi-tab safety: detect when another tab cambia la sesion (logout o
-  // login distinto). Cuando el employee_id en localStorage difiere del que
-  // tenemos en memoria, hard-reload para descartar cualquier estado en RAM
-  // del usuario anterior y arrancar limpio con la nueva sesion.
+  // Multi-tab safety (Codex §5): detecta cuando otra pestaña cambia la sesión.
+  // Compara la IDENTIDAD COMPLETA (no solo employee_id): misma persona + distinta
+  // sucursal/company/token también es drift. Resolución:
+  //   · otra pestaña cerró sesión ⇒ logout local;
+  //   · cambió de USUARIO ⇒ hard reload (descarta estado en RAM de módulos);
+  //   · misma persona, distinta sucursal/token/company/rol ⇒ ADOPTAR la sesión
+  //     nueva en el Context (sessionStore publica snapshot, invalida caches,
+  //     useOperationalDay refetch). Sin hard reload innecesario.
   useEffect(() => {
     function checkSessionDrift() {
       const stored = getStoredSession()
-      const memEmpId = session?.employee_id || null
+      if (sessionIdentitySig(session) === sessionIdentitySig(stored)) return
+      const storedHasSession = !!(stored && (stored.employee_id || stored.odoo_employee_token || stored.gf_employee_token))
+      if (!storedHasSession) { setSession(null); return }
       const storedEmpId = stored?.employee_id || null
-      if (memEmpId !== storedEmpId) {
-        // Drift detectado: hard reload a "/" para que el routing recompute
-        // landing y se descarte la pila de history del usuario anterior.
+      const memEmpId = session?.employee_id || null
+      if (storedEmpId && memEmpId && String(storedEmpId) !== String(memEmpId)) {
         window.location.replace('/')
+        return
       }
+      // Misma persona, distinta sucursal/token/session_id/nonce ⇒ adoptar (con
+      // nonce garantizado). sessionStore publica snapshot, invalida cachés, refetch.
+      setSession(withScopeNonce(normalizeSessionRoleContext(stored)))
     }
     function onStorage(e) {
       if (e.key === 'gf_session') checkSessionDrift()
@@ -534,10 +615,20 @@ export default function App() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [session?.employee_id])
+  }, [session])
 
   function login(sessionData) {
     const next = normalizeSessionRoleContext(sessionData)
+    // Codex §6: nonce de scope NO sensible por sesión — separa re-logins de la
+    // misma persona en las claves de caché. Se genera una vez y persiste con la
+    // sesión; estable durante la sesión, nuevo en cada login.
+    if (next && !next.gf_scope_nonce) {
+      try {
+        next.gf_scope_nonce = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `n${Date.now()}${Math.random().toString(36).slice(2, 8)}`
+      } catch { next.gf_scope_nonce = `n${Date.now()}` }
+    }
     const nextEmpId = next?.employee_id || null
     const prevEmpId = session?.employee_id || null
     setSession(next)
@@ -588,6 +679,16 @@ export default function App() {
             <Route path="/torre" element={<TowerRoute><ScreenKoldTowerE1Mount /></TowerRoute>} />
             {/* ── M1-D — Backlog M1 (read-only, mismo gate; SIN menú, ruta directa) ── */}
             <Route path="/torre/backlog" element={<TowerRoute><ScreenM1BacklogMount /></TowerRoute>} />
+
+            {/* ── POS nocturno — acceso nominal fail-closed, fuera de Admin ── */}
+            <Route path="/pos-nocturno" element={<NightPosRoute><ScreenPOS flow={NIGHT_POS_FLOW} /></NightPosRoute>} />
+            <Route path="/pos-nocturno/ventas" element={<NightPosRoute><ScreenNightPosSales /></NightPosRoute>} />
+            <Route path="/pos-nocturno/ticket/:orderId" element={<NightPosRoute><ScreenTicket flow={NIGHT_POS_FLOW} /></NightPosRoute>} />
+
+            {/* ── POS diurno — permiso asignable, independiente de Admin ── */}
+            <Route path="/pos-diurno" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenPOS flow={DAY_POS_FLOW} /></ModuleRoleRoute>} />
+            <Route path="/pos-diurno/ventas" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenDayPosSales /></ModuleRoleRoute>} />
+            <Route path="/pos-diurno/ticket/:orderId" element={<ModuleRoleRoute moduleId="pos_diurno"><ScreenTicket flow={DAY_POS_FLOW} /></ModuleRoleRoute>} />
 
             {/* ── Producción — Operadores ─────────────────────────────────── */}
             <Route path="/produccion" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenMiTurno /></ProductionOperatorRoute></ModuleRoleRoute>} />
@@ -689,25 +790,45 @@ export default function App() {
 
             {/* ── Supervisor de Ventas ─────────────────────────────────── */}
             {/* Supervisor Ventas V2 — Centro de Control Comercial */}
-            <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenControlComercial /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasHub /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/sugey" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugey /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/sugey/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasSugeyDetail /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/angelica" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasAngelica /></ModuleRoleRoute>} />
-            <Route path="/equipo/bajas/angelica/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenBajasAngelicaDetail /></ModuleRoleRoute>} />
+            {/* CONTRATO DE `/equipo` (decisión autorizada):
+                SupervisorV2Gate GOBIERNA el entry y decide UNA sola experiencia.
+                  · V2 ON  ⇒ experiencia nueva (SupervisorV2Shell + HoyTab).
+                  · V2 OFF / flag ausente / estado desconocido ⇒ fail-closed al
+                    entry LEGACY de main, `ScreenSupervisorOperationsEntry` (que a
+                    su vez alterna ScreenControlComercial ↔ ScreenSupervisorToday).
+                `ScreenSupervisorOperationsEntry` NO se elimina: es el fallback.
+                Nunca se montan ambas. El gate decide EXPERIENCIA, no autorización:
+                el rol lo impone ModuleRoleRoute y la autoridad de seguridad sigue
+                siendo el guard + rol + flags del backend. */}
+            <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="hoy" legacy={<ScreenSupervisorOperationsEntry />}><HoyTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/radar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="radar" v2Only><RadarTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/rutas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="rutas" v2Only><RutasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/pendientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="pendientes" v2Only><PendientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/mas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="mas" v2Only><MasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            {/* `/equipo/hoy` es una CAPACIDAD V2 (no una ruta legacy permitida):
+                V2 ON ⇒ acceso a la home ejecutable standalone; V2 OFF ⇒ redirect
+                a `/equipo` (sin evadir el gate principal). `shell={false}` evita
+                anidar dos shells/navegaciones: la pantalla ya trae la suya. */}
+            <Route path="/equipo/hoy" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="hoy" v2Only shell={false}><ScreenOperacionesHoy /></SupervisorV2Gate></ModuleRoleRoute>} />
+            {/* Bajas: EXCLUIDA de V2 (backend no auditado). V2 ON ⇒ no disponible sin fetch; V2 OFF ⇒ legacy. */}
+            <Route path="/equipo/bajas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasHub />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/sugey" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasSugey />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/sugey/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasSugeyDetail />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/angelica" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasAngelica />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/bajas/angelica/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasAngelicaDetail />} /></ModuleRoleRoute>} />
             <Route path="/equipo/vendedor/:vendedorId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDetalleVendedor /></ModuleRoleRoute>} />
             <Route path="/equipo/sin-visitar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesSinVisitar /></ModuleRoleRoute>} />
             <Route path="/equipo/score-semanal" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenScoreSemanal /></ModuleRoleRoute>} />
             <Route path="/equipo/cierre" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenCierreOperativo /></ModuleRoleRoute>} />
             <Route path="/equipo/dashboard" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDashboardVentas /></ModuleRoleRoute>} />
-            <Route path="/equipo/pronostico" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPronostico /></ModuleRoleRoute>} />
-            <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenPlanDiarioClientes /></ModuleRoleRoute>} />
-            <Route path="/equipo/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesSupervisor /></ModuleRoleRoute>} />
+            <Route path="/equipo/pronostico" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenPronostico />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenPlanDiarioClientes />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="clientes" legacy={<ScreenClientesSupervisor />}><ClientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/metas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenMetasVendedores /></ModuleRoleRoute>} />
-            <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenTareasSupervisor /></ModuleRoleRoute>} />
-            <Route path="/equipo/notas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenNotasCliente /></ModuleRoleRoute>} />
+            <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenTareasSupervisor />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/notas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenNotasCliente />} /></ModuleRoleRoute>} />
             <Route path="/equipo/recuperacion" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesRecuperacion /></ModuleRoleRoute>} />
-            <Route path="/equipo/nota-rapida" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenNotaRapida /></ModuleRoleRoute>} />
+            <Route path="/equipo/nota-rapida" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenNotaRapida />} /></ModuleRoleRoute>} />
             {/* V1 legacy routes */}
             <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />
             <Route path="/equipo/control" element={<Navigate to="/equipo" replace />} />
@@ -725,12 +846,29 @@ export default function App() {
             {/* ── KOLD OS · M7 — Rentabilidad y costos (read-only) ─────── */}
             <Route path="/rentabilidad-costos" element={<M7RentabilidadRoute><ScreenRentabilidadCostosM7Mount /></M7RentabilidadRoute>} />
 
+            {/* ── Asistencias de Iguala — allowlist exacta por employee_id ── */}
+            <Route path="/asistencias" element={<AttendanceRoute><ScreenAsistencias /></AttendanceRoute>} />
+
+            <Route path="/ventas-iguala" element={
+              <VentasIgualaRoute><ScreenVentasIguala /></VentasIgualaRoute>
+            } />
+
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />
             <Route path="/gerente/dashboard" element={<ModuleRoleRoute moduleId="gerente"><ScreenDashboardGerente /></ModuleRoleRoute>} />
             <Route path="/gerente/alertas" element={<ModuleRoleRoute moduleId="gerente"><ScreenAlertasGerente /></ModuleRoleRoute>} />
             <Route path="/gerente/gastos" element={<ModuleRoleRoute moduleId="gerente"><ScreenGastosGerente /></ModuleRoleRoute>} />
             <Route path="/gerente/forecast" element={<ModuleRoleRoute moduleId="gerente"><ScreenForecastUnlock /></ModuleRoleRoute>} />
+
+            {/* ── Briefs embebidos (una pantalla, N variantes) ───────────────
+                La pestaña la gatea el registry (un rol por variante); el DATO lo
+                gatea el endpoint de n8n con el gf_employee_token. Este guard no
+                es la única defensa: si alguien llega a la ruta a mano, el fetch
+                sigue exigiendo credencial válida y rol autorizado.
+                Agregar un brief = entrada en briefCatalog + registry + esta lista. */}
+            <Route path="/brief" element={<ModuleRoleRoute moduleId="brief_dia"><BriefEmbedScreen briefId="ventas" /></ModuleRoleRoute>} />
+            <Route path="/brief-produccion" element={<ModuleRoleRoute moduleId="brief_produccion"><BriefEmbedScreen briefId="produccion" /></ModuleRoleRoute>} />
+            <Route path="/brief-gerencia" element={<ModuleRoleRoute moduleId="brief_gerencia"><BriefEmbedScreen briefId="gerencia" /></ModuleRoleRoute>} />
 
             {/* ── Torres de Control — Validación de Requisiciones ────────── */}
             <Route path="/torres" element={<ModuleRoleRoute moduleId="torre_control"><ScreenTorreRequisiciones /></ModuleRoleRoute>} />
