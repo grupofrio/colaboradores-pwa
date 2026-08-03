@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import React from 'react'
 import TestRenderer, { act } from 'react-test-renderer'
 import { createServer } from 'vite'
-import { normalizeCashShift } from '../src/modules/admin/cashShiftModel.js'
+import { normalizeCashShift, normalizePendingCashShiftPreview } from '../src/modules/admin/cashShiftModel.js'
 import * as closeModel from '../src/modules/admin/cashShiftCloseModel.js'
 
 const { buildCashShiftCloseOperation, calculateCloseFeedback } = closeModel
@@ -901,7 +901,7 @@ test('desktop and mobile render the same authoritative active source, day/night 
     assert.match(renderedText(renderer), /Ventas con terminal/)
     assert.match(renderedText(renderer), /Efectivo esperado/)
     assert.equal(renderer.root.findByProps({ 'data-cash-shift-source': 'server-active' }).props['data-layout'], layout)
-    if (overdue) assert.match(renderedText(renderer), /turno excedió la hora esperada/i)
+    if (overdue) assert.match(renderedText(renderer), /alcanzó su frontera operativa/i)
     act(() => renderer.unmount())
   }
 })
@@ -1350,6 +1350,39 @@ test('a deterministic fresh close error preserves the draft and allows a fresh r
   act(() => renderer.unmount())
 })
 
+test('a boundary guard that cannot navigate still removes normal close retry and offers only the pending-count action', async () => {
+  const redirects = []
+  const renderer = await mountClose({
+    cashShift: cashShiftForClose(),
+    onPreview: async () => ({ ok: true, data: validShift() }),
+    onClose: async () => {
+      throw Object.assign(new Error('boundary reached'), {
+        code: 'pending_count_required',
+        details: { shift_id: 41 },
+      })
+    },
+    onPendingCountRequired: async (request) => {
+      redirects.push(request)
+      throw new Error('pending preview unavailable')
+    },
+  })
+  changeOpenField(renderer, 'denomination-1000', '1')
+  changeOpenField(renderer, 'denomination-200', '1')
+  changeOpenField(renderer, 'nextOpeningFund', '0')
+
+  await act(async () => {
+    button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick()
+    await flush()
+  })
+
+  assert.deepEqual(redirects, [{ shiftId: 41 }])
+  assert.match(renderedText(renderer), /separó automáticamente/i)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27'), undefined)
+  assert.equal(button(renderer, 'Reintentar mismo corte'), undefined)
+  assert.equal(button(renderer, 'Abrir arqueo pendiente')?.type, 'button')
+  act(() => renderer.unmount())
+})
+
 test('only a manager can enter the active close workflow and a completed close reloads its successor', async () => {
   const calls = []
   let activeReads = 0
@@ -1466,6 +1499,89 @@ test('manager reopens by exact ID/reason, preserves pending request and enters r
   assert.equal(activeReads, 1, 'el sucesor activo no cambia ni se recarga al reabrir')
   assert.match(renderedText(renderer), /Volver a cerrar Noche 27/)
   assert.equal(renderer.root.findAllByProps({ name: 'nextOpeningFund' }).length, 0)
+  act(() => renderer.unmount())
+})
+
+test('a boundary guard while re-closing opens the returned pending count instead of leaving the reclose retry', async () => {
+  let activeReads = 0
+  let pendingReads = 0
+  const closeCalls = []
+  const pendingPreviewRequests = []
+  const closed = closedResultDetail()
+  const reopened = structuredClone(closed)
+  reopened.shift.state = 'reopened'
+  reopened.version_id = false
+  reopened.closing_type = false
+  reopened.printable = false
+  const successor = validShift({ type: 'day' })
+  successor.shift.id = 42
+  const pendingRow = {
+    shift_id: 41,
+    shift_type: 'night',
+    business_date: '2026-07-27',
+    state: 'pending_count',
+    expected_version: 0,
+    expected_cash: 212,
+    operational_closed_at: '2026-07-27 06:00:00',
+    scheduled_boundary_at: '2026-07-27 06:00:00',
+    boundary_executed_at: '2026-07-27 06:03:00',
+    late_execution: false,
+    next_shift_id: 42,
+  }
+  const renderer = await mount({
+    sessionIdentity: 'reclose-pending-count-guard',
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      activeReads += 1
+      return { ok: true, data: successor }
+    },
+    loadPendingCounts: async () => {
+      pendingReads += 1
+      return { ok: true, data: { shifts: pendingReads === 1 ? [] : [pendingRow] } }
+    },
+    loadShiftDetail: async () => ({ ok: true, data: closed }),
+    reopenShift: async () => ({
+      status: 'completed',
+      data: { ok: true, data: { shift_id: 41, state: 'reopened', version: 1 } },
+    }),
+    previewActive: async () => ({ ok: true, data: reopened }),
+    previewPending: async (request) => {
+      pendingPreviewRequests.push(request)
+      return { ok: true, data: pendingCountPreview() }
+    },
+    closeShift: async (operation, request) => {
+      closeCalls.push({ operation, request })
+      throw Object.assign(new Error('boundary reached'), {
+        code: 'pending_count_required',
+        details: { shift_id: 41 },
+      })
+    },
+  })
+
+  act(() => button(renderer, 'Reabrir un corte').props.onClick())
+  changeOpenField(renderer, 'reopenShiftId', '41')
+  await act(async () => { button(renderer, 'Consultar corte').props.onClick(); await flush() })
+  changeOpenField(renderer, 'reopenReason', 'Corrección de conteo')
+  await act(async () => { button(renderer, 'Reabrir corte').props.onClick(); await flush() })
+  changeOpenField(renderer, 'denomination-1000', '1')
+  changeOpenField(renderer, 'denomination-200', '1')
+  await act(async () => {
+    button(renderer, 'Volver a cerrar Noche 27').props.onClick()
+    await flush()
+  })
+
+  assert.equal(closeCalls.length, 1)
+  assert.equal(closeCalls[0].operation, 'reclose')
+  assert.equal(activeReads, 2)
+  assert.equal(pendingReads, 2)
+  assert.equal(pendingPreviewRequests.length >= 1, true)
+  assert.equal(pendingPreviewRequests.every((request) => (
+    request.mode === 'pending' && request.shiftId === 41
+  )), true)
+  assert.match(renderedText(renderer), /Arqueo posterior a cierre automático/)
+  assert.equal(button(renderer, 'Volver a cerrar Noche 27'), undefined)
+  assert.equal(button(renderer, 'Reintentar mismo corte'), undefined)
   act(() => renderer.unmount())
 })
 
@@ -1875,4 +1991,226 @@ test('losing scope/access clears a loaded reclose and an unmounted pending reope
     await flush()
   })
   assert.equal(previewCalls, 2, 'desmontar no inicia una carga adicional del recierre')
+})
+
+function pendingCountPreview() {
+  return {
+    form_kind: 'pending_count',
+    expected_version: 0,
+    shift: { id: 41, type: 'night', business_date: '2026-07-27', state: 'pending_count' },
+    opening_fund: 0,
+    totals: {
+      sales_cash: 212,
+      sales_card: 0,
+      sales_total: 212,
+      expenses: 0,
+      expected_cash: 212,
+    },
+    denominations: [],
+    adjustments: [],
+    notes_required: false,
+    boundary: {
+      operational_closed_at: '2026-07-27 06:00:00',
+      scheduled_boundary_at: '2026-07-27 06:00:00',
+      executed_at: '2026-07-27 06:03:00',
+      late_execution: true,
+      separation_confirmed: false,
+      separation_exception_note: '',
+      next_shift_id: 42,
+    },
+  }
+}
+
+test('a boundary guard refreshes the manager view and opens its authoritative pending count instead of retrying the normal close', async () => {
+  let activeReads = 0
+  let pendingReads = 0
+  const closeCalls = []
+  const pendingPreviewRequests = []
+  const successor = validShift({ type: 'day' })
+  successor.shift.id = 42
+  const pendingRow = {
+    shift_id: 41,
+    shift_type: 'night',
+    business_date: '2026-07-27',
+    state: 'pending_count',
+    expected_version: 0,
+    expected_cash: 212,
+    operational_closed_at: '2026-07-27 06:00:00',
+    scheduled_boundary_at: '2026-07-27 06:00:00',
+    boundary_executed_at: '2026-07-27 06:03:00',
+    late_execution: false,
+    next_shift_id: 42,
+  }
+  const renderer = await mount({
+    sessionIdentity: 'pending-count-guard-session',
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      activeReads += 1
+      return { ok: true, data: activeReads === 1 ? validShift() : successor }
+    },
+    loadPendingCounts: async () => {
+      pendingReads += 1
+      return { ok: true, data: { shifts: pendingReads === 1 ? [] : [pendingRow] } }
+    },
+    previewActive: async () => ({ ok: true, data: validShift() }),
+    previewPending: async (request) => {
+      pendingPreviewRequests.push(request)
+      return { ok: true, data: pendingCountPreview() }
+    },
+    closeShift: async (operation, request) => {
+      closeCalls.push({ operation, request })
+      throw Object.assign(new Error('boundary reached'), {
+        code: 'pending_count_required',
+        details: { shift_id: 41 },
+      })
+    },
+  })
+
+  await act(async () => { button(renderer, 'Hacer corte').props.onClick(); await flush() })
+  changeOpenField(renderer, 'denomination-1000', '1')
+  changeOpenField(renderer, 'denomination-200', '1')
+  changeOpenField(renderer, 'nextOpeningFund', '0')
+  await act(async () => {
+    button(renderer, 'Cerrar Noche 27 y abrir Día 27').props.onClick()
+    await flush()
+  })
+
+  assert.equal(closeCalls.length, 1)
+  assert.equal(activeReads, 2, 'el guard refresca el turno sucesor')
+  assert.equal(pendingReads, 2, 'el guard refresca la lista pendiente con el mismo corte')
+  assert.equal(pendingPreviewRequests.length >= 1, true)
+  assert.equal(pendingPreviewRequests.every((request) => (
+    request.mode === 'pending' && request.shiftId === 41
+  )), true)
+  assert.match(renderedText(renderer), /Arqueo posterior a cierre automático/)
+  assert.match(renderedText(renderer), /Efectivo esperado.*\$212\.00/)
+  assert.equal(button(renderer, 'Reintentar mismo corte'), undefined)
+  assert.equal(button(renderer, 'Cerrar Noche 27 y abrir Día 27'), undefined)
+  act(() => renderer.unmount())
+})
+
+test('manager sees only the server pending list and opens the authoritative deferred count', async () => {
+  const calls = []
+  const renderer = await mount({
+    sessionIdentity: 'pending-count-session',
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      calls.push('active')
+      return { ok: true, data: validShift({ type: 'day' }) }
+    },
+    loadPendingCounts: async () => {
+      calls.push('pending-list')
+      return {
+        ok: true,
+        data: {
+          shifts: [{
+            shift_id: 41,
+            shift_type: 'night',
+            business_date: '2026-07-27',
+            state: 'pending_count',
+            expected_version: 0,
+            expected_cash: 212,
+            operational_closed_at: '2026-07-27 06:00:00',
+            scheduled_boundary_at: '2026-07-27 06:00:00',
+            boundary_executed_at: '2026-07-27 06:03:00',
+            late_execution: true,
+            next_shift_id: 42,
+          }],
+        },
+      }
+    },
+    previewPending: async (request) => {
+      calls.push(['pending-preview', request])
+      return { ok: true, data: pendingCountPreview() }
+    },
+  })
+
+  assert.deepEqual(calls.sort((left, right) => String(left).localeCompare(String(right))), ['active', 'pending-list'])
+  const listing = renderedText(renderer)
+  assert.match(listing, /Arqueos pendientes/)
+  assert.match(listing, /Noche 27/)
+  assert.match(listing, /06:00:00/)
+  assert.match(listing, /Importe esperado.*\$212\.00/)
+  assert.match(listing, /ejecutó tarde/i)
+  assert.match(listing, /Separe y etiquete el efectivo/i)
+  assert.doesNotMatch(listing, /hora esperada funciona como referencia/i)
+
+  await act(async () => {
+    button(renderer, 'Capturar arqueo Noche 27').props.onClick()
+    await flush()
+  })
+  assert.deepEqual(calls.at(-1), ['pending-preview', { mode: 'pending', shiftId: 41 }])
+  const form = renderedText(renderer)
+  assert.match(form, /Arqueo posterior a cierre automático/)
+  assert.match(form, /Efectivo esperado.*\$212\.00/)
+  assert.match(form, /Confirmo que el efectivo fue separado y etiquetado/i)
+  assert.equal(renderer.root.findAllByProps({ name: 'nextOpeningFund' }).length, 0)
+  assert.equal(renderer.root.findAllByProps({ name: 'evidence' }).length, 0)
+  act(() => renderer.unmount())
+})
+
+test('deferred count disables a lost response and retries the exact settlement request', async () => {
+  const calls = []
+  const cashShift = normalizePendingCashShiftPreview(pendingCountPreview())
+  const renderer = await mountClose({
+    cashShift,
+    onPreview: async () => ({ ok: true, data: pendingCountPreview() }),
+    onClose: async (operation, request) => {
+      calls.push({ operation, request })
+      return { status: 'pending', request }
+    },
+  })
+  act(() => renderer.root.findAllByProps({ name: 'cashSeparationConfirmed' }).find((input) => input.props.checked === false).props.onChange())
+  changeOpenField(renderer, 'differenceNote', 'Conteo tardío documentado')
+  changeOpenField(renderer, 'denomination-200', '1')
+  await act(async () => {
+    button(renderer, 'Guardar arqueo pendiente Noche 27').props.onClick()
+    await flush()
+  })
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].operation, 'settle')
+  assert.equal(Object.hasOwn(calls[0].request, 'nextOpeningFund'), false)
+  assert.equal(calls[0].request.separationConfirmed, true)
+  await act(async () => {
+    button(renderer, 'Reintentar mismo corte').props.onClick()
+    await flush()
+  })
+  assert.equal(calls.length, 2)
+  assert.deepEqual(calls[1], calls[0])
+  act(() => renderer.unmount())
+})
+
+test('manual and scheduled active refresh also reload the pending selector coherently', async () => {
+  let activeReads = 0
+  let pendingReads = 0
+  let scheduledRefresh
+  const renderer = await mount({
+    sessionIdentity: 'coherent-refresh',
+    accessMode: 'manage',
+    scopeReady: true,
+    loadActive: async () => {
+      activeReads += 1
+      return { ok: true, data: validShift({ type: 'day' }) }
+    },
+    loadPendingCounts: async () => {
+      pendingReads += 1
+      return { ok: true, data: { shifts: [] } }
+    },
+    scheduleRefresh: (callback) => {
+      scheduledRefresh = callback
+      return 1
+    },
+    cancelRefresh() {},
+  })
+  assert.equal(activeReads, 1)
+  assert.equal(pendingReads, 1)
+  await act(async () => { button(renderer, 'Actualizar turno').props.onClick(); await flush() })
+  assert.equal(activeReads, 2)
+  assert.equal(pendingReads, 2)
+  await act(async () => { scheduledRefresh(); await flush() })
+  assert.equal(activeReads, 3)
+  assert.equal(pendingReads, 3)
+  act(() => renderer.unmount())
 })

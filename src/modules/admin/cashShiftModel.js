@@ -804,6 +804,7 @@ export function normalizePendingCashShiftList(value) {
       'business_date',
       'state',
       'expected_version',
+      'expected_cash',
       'operational_closed_at',
       'scheduled_boundary_at',
       'boundary_executed_at',
@@ -822,6 +823,7 @@ export function normalizePendingCashShiftList(value) {
         if (version !== 0) throw new TypeError('La versión esperada no es válida.')
         return version
       })(),
+      expectedCash: serverNumber(row, 'expected_cash', 'El efectivo esperado'),
       operationalClosedAt: exactDatetime(
         ownValue(row, 'operational_closed_at', 'El cierre operativo'),
         'El cierre operativo',

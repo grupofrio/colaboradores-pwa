@@ -439,6 +439,92 @@ test('print view preserves historical evidence and prints new photo-free version
   assert.equal(renderer.root.findAllByType('button').some((item) => textOf(item) === 'Imprimir'), false)
 })
 
+test('print identifies a deferred automatic settlement without attributing its count to the scheduler', async () => {
+  vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
+  const { default: PrintView } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftPrintView.jsx')
+  const raw = fullShift({ id: 45, type: 'night', versionId: 705 })
+  raw.closing_type = 'automatic_settlement'
+  raw.boundary = {
+    operational_closed_at: '2026-07-27 06:00:00',
+    scheduled_boundary_at: '2026-07-27 06:00:00',
+    executed_at: '2026-07-27 06:03:00',
+    origin: 'scheduler',
+    late_execution: true,
+    separation_confirmed: true,
+    separation_exception_note: '',
+    next_shift_id: 46,
+  }
+  const cashShift = normalizeCashShift(raw, { contractVersion: 'v2' })
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(React.createElement(PrintView, { cashShift, onPrint() {} }))
+  })
+  const text = renderedText(renderer)
+  assert.match(text, /Arqueo posterior a cierre automático/)
+  assert.match(text, /Frontera operativa/)
+  assert.match(text, /programada.*2026-07-27 06:00:00/i)
+  assert.match(text, /Ejecución tardía/i)
+  assert.doesNotMatch(text, /conteo realizado por el scheduler/i)
+})
+
+test('history requests only its exact printable detail as v2 for an automatic settlement', async () => {
+  vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
+  const { default: History } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftHistory.jsx')
+  const detail = fullShift({ id: 41, type: 'night', versionId: 701 })
+  detail.closing_type = 'automatic_settlement'
+  detail.boundary = {
+    operational_closed_at: '2026-07-27 06:00:00',
+    scheduled_boundary_at: '2026-07-27 06:00:00',
+    executed_at: '2026-07-27 06:03:00',
+    origin: 'scheduler',
+    late_execution: true,
+    separation_confirmed: true,
+    separation_exception_note: '',
+    next_shift_id: 42,
+  }
+  const detailCalls = []
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(React.createElement(History, {
+      accessMode: 'manage',
+      sessionIdentity: 'automatic-detail',
+      loadHistory: async () => ({ data: historyPayload() }),
+      loadDetail: async (input) => {
+        detailCalls.push(input)
+        return { data: detail }
+      },
+      now: () => Date.parse('2026-07-28T04:30:00Z'),
+    }))
+    await flush()
+  })
+  const detailButton = renderer.root.findAllByType('button').find((item) => /Ver detalle Noche 27/.test(textOf(item)))
+  await act(async () => { detailButton.props.onClick(); await flush() })
+  assert.deepEqual(detailCalls, [{ shiftId: 41, versionId: 701, contractVersion: 'v2' }])
+  assert.match(renderedText(renderer), /Arqueo posterior a cierre automático/)
+  act(() => renderer.unmount())
+})
+
+test('history fails closed when the targeted v2 printable detail omits its boundary', async () => {
+  vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
+  const { default: History } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftHistory.jsx')
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(React.createElement(History, {
+      accessMode: 'manage',
+      sessionIdentity: 'missing-v2-boundary',
+      loadHistory: async () => ({ data: historyPayload() }),
+      loadDetail: async () => ({ data: fullShift({ id: 41, type: 'night', versionId: 701 }) }),
+      now: () => Date.parse('2026-07-28T04:30:00Z'),
+    }))
+    await flush()
+  })
+  const detailButton = renderer.root.findAllByType('button').find((item) => /Ver detalle Noche 27/.test(textOf(item)))
+  await act(async () => { detailButton.props.onClick(); await flush() })
+  assert.match(renderedText(renderer), /No se pudo cargar la versión exacta del corte/i)
+  assert.doesNotMatch(renderedText(renderer), /REPORTE DE CORTE POS/)
+  act(() => renderer.unmount())
+})
+
 test('history UI rejects future Mexico date without an API call and ignores stale session response', async () => {
   vite = vite || await createServer({ appType: 'custom', logLevel: 'silent', server: { middlewareMode: true } })
   const { default: History } = await vite.ssrLoadModule('/src/modules/admin/components/CashShiftHistory.jsx')

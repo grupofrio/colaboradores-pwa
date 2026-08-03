@@ -122,6 +122,17 @@ test('wrappers v2 aíslan los arqueos pendientes y no modifican los reads v1', a
   ])
 })
 
+test('detail exacto puede pedir v2 sin alterar el lector histórico v1', async () => {
+  const { apiModule } = await loadRuntime()
+  const calls = installSuccessApi()
+
+  await apiModule.getCashShiftDetail({ shiftId: 41, versionId: 701, contractVersion: 'v2' })
+
+  assert.deepEqual(calls.map(({ url, method }) => [method, url]), [
+    ['GET', '/odoo-api/pwa-admin/cash-shifts/detail?shift_id=41&version_id=701&contract_version=v2'],
+  ])
+})
+
 test('wrappers de mutación envían allowlists exactas y jamás scope ni totales', async () => {
   const { apiModule } = await loadRuntime()
   const calls = installSuccessApi()

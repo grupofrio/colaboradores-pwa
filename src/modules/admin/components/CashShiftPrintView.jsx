@@ -15,7 +15,7 @@ function paymentLabel(method) {
 }
 
 function stateLabel(state) {
-  return ({ open: 'Abierto', pending_auth: 'Pendiente de autorización', closed: 'Cerrado', reopened: 'Reabierto' })[state] || state
+  return ({ open: 'Abierto', pending_count: 'Pendiente de arqueo', pending_auth: 'Pendiente de autorización', closed: 'Cerrado', reopened: 'Reabierto' })[state] || state
 }
 
 function EmptyRow({ columns, children }) {
@@ -71,6 +71,19 @@ export default function CashShiftPrintView({ cashShift, onPrint = defaultPrint }
         <div><dt>Estado</dt><dd>{stateLabel(cashShift.shift.state)}</dd></div>
         <div><dt>Versión</dt><dd>Versión {cashShift.versionNumber}</dd></div>
       </dl>
+
+      {cashShift.closingType === 'automatic_settlement' && cashShift.boundary ? (
+        <section className="cash-shift-print-section">
+          <p className="cash-shift-automatic-label">Arqueo posterior a cierre automático</p>
+          <p>El cierre automático separó el periodo operativo; el conteo fue capturado posteriormente por la persona responsable indicada en este reporte.</p>
+          <dl className="cash-shift-period-grid cash-shift-print-summary">
+            <div><dt>Frontera operativa programada</dt><dd>{cashShift.boundary.scheduledBoundaryAt || 'Por confirmar'}</dd></div>
+            <div><dt>Frontera operativa ejecutada</dt><dd>{cashShift.boundary.executedAt || 'Por confirmar'}</dd></div>
+            <div><dt>Fin operativo</dt><dd>{cashShift.boundary.operationalClosedAt || 'Por confirmar'}</dd></div>
+            <div><dt>Estado de ejecución</dt><dd>{cashShift.boundary.lateExecution ? 'Ejecución tardía' : 'En horario'}</dd></div>
+          </dl>
+        </section>
+      ) : null}
 
       {cashShift.previousVersionId ? (
         <p className="cash-shift-info">

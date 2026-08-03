@@ -74,6 +74,18 @@
 .cash-shift-history-arqueos { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .cash-shift-history-arqueos article { display: grid; gap: 5px; padding: 13px; border-radius: 10px; background: rgba(255,255,255,.04); }
 .cash-shift-history-arqueos span { color: rgba(232,240,250,.72); font-size: 12px; }
+.cash-shift-pending-list { display: grid; gap: 14px; margin: 18px 0 0; padding: 0; list-style: none; }
+.cash-shift-pending-list > li { display: grid; gap: 12px; padding: 16px; border: 1px solid rgba(224,171,43,.26); border-radius: 13px; background: rgba(224,171,43,.045); }
+.cash-shift-pending-list h3 { margin: 0; }
+.cash-shift-pending-list .cash-shift-muted { margin: 5px 0 0; }
+.cash-shift-pending-list .cash-shift-warning { margin: 0; }
+.cash-shift-pending-list .cash-shift-primary { justify-self: start; }
+.cash-shift-separation-confirmation { display: grid; gap: 12px; padding: 16px; border: 1px solid rgba(224,171,43,.3); border-radius: 13px; background: rgba(224,171,43,.055); }
+.cash-shift-separation-confirmation p { margin: 0; }
+.cash-shift-choice-list { display: grid; gap: 9px; }
+.cash-shift-choice-list label { display: flex; align-items: flex-start; gap: 9px; color: rgba(232,240,250,.88); font-size: 14px; font-weight: 650; }
+.cash-shift-choice-list input { width: 18px; min-height: 18px; margin: 1px 0 0; accent-color: #3d9ae0; }
+.cash-shift-automatic-label { margin: 0; padding: 10px 12px; border: 1px solid rgba(224,171,43,.3); border-radius: 10px; color: #ffe09c; background: rgba(224,171,43,.1); font-weight: 800; }
 .cash-shift-print-report { width: min(100%,900px); margin: 0 auto; }
 .cash-shift-print-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .cash-shift-print-header p { margin: 5px 0; }
@@ -103,6 +115,7 @@
   .cash-shift-history-filter { align-items: stretch; flex-direction: column; }
   .cash-shift-history-arqueos, .cash-shift-legacy-filters { grid-template-columns: 1fr; }
   .cash-shift-legacy-list button { align-items: flex-start; flex-direction: column; }
+  .cash-shift-pending-list .cash-shift-primary { width: 100%; }
 }
 @media print {
   body * { visibility: hidden !important; }

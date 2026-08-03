@@ -107,6 +107,12 @@ function cashShiftDate(value) {
   return value
 }
 
+function cashShiftContractVersion(value) {
+  if (value === undefined || value === 'v1') return undefined
+  if (value === 'v2') return 'v2'
+  throw new TypeError('La versión del contrato de cortes no es válida.')
+}
+
 // ── POS Mostrador ────────────────────────────────────────────────────────────
 
 const DAY_POS_ACCESS_ERROR = 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
@@ -503,6 +509,7 @@ export function getCashShiftDetail(input) {
     version_id: value.versionId === undefined
       ? undefined
       : cashShiftInteger(value.versionId, 'El ID de versión', 1),
+    contract_version: cashShiftContractVersion(value.contractVersion),
   })}`)
 }
 

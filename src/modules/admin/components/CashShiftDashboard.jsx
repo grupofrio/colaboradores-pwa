@@ -3,14 +3,20 @@ import {
   getActiveCashShift,
   getCashShiftDetail,
   getCashShiftHistory,
+  getPendingCashShiftCounts,
   previewCashShift,
 } from '../api.js'
-import { normalizeCashShift } from '../cashShiftModel.js'
+import {
+  normalizeCashShift,
+  normalizePendingCashShiftList,
+  normalizePendingCashShiftPreview,
+} from '../cashShiftModel.js'
 import { mutateShiftWithRecovery } from '../cashShiftService.js'
 import CashShiftActivePanel from './CashShiftActivePanel.jsx'
 import CashShiftCloseForm from './CashShiftCloseForm.jsx'
 import CashShiftFirstOpenForm from './CashShiftFirstOpenForm.jsx'
 import CashShiftHistory from './CashShiftHistory.jsx'
+import CashShiftPendingCounts from './CashShiftPendingCounts.jsx'
 import CashShiftReopenForm from './CashShiftReopenForm.jsx'
 import LegacyCashClosingHistory from './LegacyCashClosingHistory.jsx'
 
@@ -237,9 +243,11 @@ export default function CashShiftDashboard({
   authorizerShiftId = null,
   layout = 'desktop',
   loadActive = getActiveCashShift,
+  loadPendingCounts = getPendingCashShiftCounts,
   loadPendingDetail = getCashShiftDetail,
   previewInitial = previewCashShift,
   previewActive = previewCashShift,
+  previewPending = previewCashShift,
   openInitial = defaultOpenInitial,
   authorizePending = defaultAuthorizePending,
   closeShift = defaultCloseShift,
@@ -271,7 +279,11 @@ export default function CashShiftDashboard({
   const [transitionNotice, setTransitionNotice] = useState('')
   const [recloseVerification, setRecloseVerification] = useState(null)
   const [activeArea, setActiveArea] = useState('active')
+  const [pendingCounts, setPendingCounts] = useState({ status: 'idle', shifts: [], error: '' })
+  const [pendingOpeningId, setPendingOpeningId] = useState(null)
+  const [pendingTarget, setPendingTarget] = useState(null)
   const requestGeneration = useRef(0)
+  const pendingGeneration = useRef(0)
   const requestInFlight = useRef(null)
   const authorizationInFlight = useRef(null)
   const recloseVerificationInFlight = useRef(null)
@@ -289,6 +301,7 @@ export default function CashShiftDashboard({
     authorizationInFlight.current = null
     recloseVerificationInFlight.current = null
     recloseActiveShiftId.current = null
+    pendingGeneration.current += 1
   }
 
   const captureWorkflow = useCallback(() => {
@@ -331,6 +344,9 @@ export default function CashShiftDashboard({
     setTransitionNotice('')
     setRecloseVerification(null)
     setActiveArea('active')
+    setPendingCounts({ status: 'idle', shifts: [], error: '' })
+    setPendingOpeningId(null)
+    setPendingTarget(null)
     setView({ status: 'idle', kind: null, data: null })
     authorizationInFlight.current = null
     recloseVerificationInFlight.current = null
@@ -397,10 +413,91 @@ export default function CashShiftDashboard({
     }
   }, [load])
 
-  const refreshActive = useCallback(
-    () => load({ preserveActive: true }),
-    [load],
-  )
+  const refreshPendingCounts = useCallback(async ({ preserveRows = true } = {}) => {
+    if (!scopeReady || accessMode !== 'manage') return null
+    const generation = ++pendingGeneration.current
+    const workflow = captureWorkflow()
+    if (!preserveRows) setPendingCounts({ status: 'loading', shifts: [], error: '' })
+    try {
+      const shifts = normalizePendingCashShiftList(unwrap(await loadPendingCounts()))
+      if (generation === pendingGeneration.current && workflowIsCurrent(workflow, { manage: true })) {
+        setPendingCounts({ status: 'ready', shifts, error: '' })
+      }
+      return shifts
+    } catch {
+      if (generation === pendingGeneration.current && workflowIsCurrent(workflow, { manage: true })) {
+        setPendingCounts((current) => ({
+          status: preserveRows && current.shifts.length ? 'ready' : 'error',
+          shifts: preserveRows ? current.shifts : [],
+          error: 'No se pudieron consultar los arqueos pendientes. Reintenta antes de conciliarlos.',
+        }))
+      }
+      return null
+    }
+  }, [accessMode, captureWorkflow, loadPendingCounts, scopeReady, workflowIsCurrent])
+
+  const refreshActive = useCallback(async () => {
+    const [active] = await Promise.all([
+      load({ preserveActive: true }),
+      refreshPendingCounts({ preserveRows: true }),
+    ])
+    return active
+  }, [load, refreshPendingCounts])
+
+  useEffect(() => {
+    if (accessMode !== 'manage' || !scopeReady) return undefined
+    void refreshPendingCounts({ preserveRows: false })
+    return () => { pendingGeneration.current += 1 }
+  }, [accessMode, refreshPendingCounts, scopeReady, workflowIdentity])
+
+  async function openPendingCount(row) {
+    if (!row || pendingOpeningId !== null) return
+    const workflow = captureWorkflow()
+    if (!workflowIsCurrent(workflow, { manage: true })) return
+    setPendingOpeningId(row.shiftId)
+    try {
+      const pending = normalizePendingCashShiftPreview(unwrap(await previewPending({
+        mode: 'pending', shiftId: row.shiftId,
+      })))
+      if (
+        pending.shift.id !== row.shiftId
+        || pending.expectedVersion !== row.expectedVersion
+      ) throw new TypeError('El arqueo pendiente no coincide con el selector autorizado.')
+      if (workflowIsCurrent(workflow, { manage: true })) {
+        setPendingTarget(pending)
+      }
+    } catch {
+      if (workflowIsCurrent(workflow, { manage: true })) {
+        setPendingCounts((current) => ({
+          ...current,
+          error: 'No se pudo abrir el arqueo pendiente. Actualiza la lista e inténtalo de nuevo.',
+        }))
+      }
+    } finally {
+      if (workflowIsCurrent(workflow, { manage: true })) setPendingOpeningId(null)
+    }
+  }
+
+  async function reloadPendingShift({ shiftId }) {
+    return previewPending({ mode: 'pending', shiftId })
+  }
+
+  async function redirectToPendingCount({ shiftId }) {
+    const workflow = captureWorkflow()
+    if (!workflowIsCurrent(workflow, { manage: true })) {
+      throw new Error('cash_shift_context_changed')
+    }
+    // La frontera ya separó el efectivo: nunca dejamos visible el cierre normal
+    // mientras se refresca/abre el arqueo pendiente autoritativo.
+    setShowClose(false)
+    setRecloseTarget(null)
+    recloseActiveShiftId.current = null
+    await refreshActive()
+    if (!workflowIsCurrent(workflow, { manage: true })) {
+      throw new Error('cash_shift_context_changed')
+    }
+    await openPendingCount({ shiftId, expectedVersion: 0 })
+  }
 
   useEffect(() => {
     if (
@@ -463,12 +560,17 @@ export default function CashShiftDashboard({
 
   async function handleCloseCompleted({ mode, result, request }) {
     const version = Number(result?.version)
-    const nextShiftId = positiveId(result?.next_shift_id)
     const shiftId = positiveId(result?.shift_id)
-    const detail = normalizeCashShift(result?.detail)
+    const detail = normalizeCashShift(
+      result?.detail,
+      mode === 'settle' ? { contractVersion: 'v2' } : undefined,
+    )
+    const nextShiftId = mode === 'settle'
+      ? positiveId(detail.boundary?.nextShiftId)
+      : positiveId(result?.next_shift_id)
     if (
       !Number.isSafeInteger(version) || version < 1
-      || shiftId === null || nextShiftId === null
+      || shiftId === null || (mode !== 'settle' && nextShiftId === null)
       || !['closed', 'pending_auth'].includes(result?.state)
       || shiftId !== request.shiftId
       || version !== request.expectedVersion + 1
@@ -487,6 +589,12 @@ export default function CashShiftDashboard({
       needsManagerAuth: detail.needsManagerAuth,
       needsDirectorAuth: detail.needsDirectorAuth,
       authorizationCount: detail.authorizations.length,
+    }
+    if (mode === 'settle') {
+      setPendingTarget(null)
+      setLastOperation(completedOperation)
+      await Promise.all([load(), refreshPendingCounts({ preserveRows: false })])
+      return
     }
     if (mode === 'reclose') {
       const expectedActiveShiftId = positiveId(recloseActiveShiftId.current)
@@ -703,6 +811,20 @@ export default function CashShiftDashboard({
   if (view.kind === 'inactive') {
     return wrapManage(<CashShiftFirstOpenForm onPreview={previewInitial} onOpen={handleOpen} />)
   }
+  if (pendingTarget) {
+    return wrapManage(
+      <CashShiftCloseForm
+        key={`pending-count-${pendingTarget.shift.id}-${pendingTarget.expectedVersion}`}
+        cashShift={pendingTarget}
+        onPreview={previewPending}
+        onClose={handleCloseShift}
+        onCompleted={handleCloseCompleted}
+        onStale={reloadPendingShift}
+        sessionIdentity={workflowIdentity}
+        onCancel={() => setPendingTarget(null)}
+      />,
+    )
+  }
   if (recloseVerification) {
     const checking = recloseVerification.status === 'checking'
     const inconsistent = recloseVerification.status === 'inconsistent'
@@ -729,6 +851,7 @@ export default function CashShiftDashboard({
           onClose={handleCloseShift}
           onCompleted={handleCloseCompleted}
           onStale={reloadStaleShift}
+          onPendingCountRequired={redirectToPendingCount}
           sessionIdentity={workflowIdentity}
           onCancel={() => { recloseActiveShiftId.current = null; setRecloseTarget(null) }}
         />
@@ -749,11 +872,13 @@ export default function CashShiftDashboard({
   if (showClose) {
     return wrapManage(
       <CashShiftCloseForm
+        key={`active-close-${view.data.shift.id}-${view.data.shift.version}`}
         cashShift={view.data}
         onPreview={previewActive}
         onClose={handleCloseShift}
         onCompleted={handleCloseCompleted}
         onStale={reloadStaleShift}
+        onPendingCountRequired={redirectToPendingCount}
         sessionIdentity={workflowIdentity}
         onCancel={() => setShowClose(false)}
       />
@@ -766,7 +891,9 @@ export default function CashShiftDashboard({
         <p className="cash-shift-info" role="status">
           {lastOperation.mode === 'reclose'
             ? `Recierre guardado en versión ${lastOperation.version}; turno activo #${lastOperation.verifiedActiveShiftId} verificado sin cambios.`
-            : lastOperation.state === 'pending_auth'
+            : lastOperation.mode === 'settle'
+              ? `Arqueo pendiente #${lastOperation.shiftId} guardado en versión ${lastOperation.version}. El turno sucesor${lastOperation.nextShiftId ? ` #${lastOperation.nextShiftId}` : ''} continúa activo sin cambios.`
+              : lastOperation.state === 'pending_auth'
               ? `Corte #${lastOperation.shiftId} guardado en autorización pendiente, versión ${lastOperation.version}. Requiere ${[
                 lastOperation.needsManagerAuth ? 'gerencia' : null,
                 lastOperation.needsDirectorAuth ? 'dirección' : null,
@@ -781,6 +908,14 @@ export default function CashShiftDashboard({
         refreshError={refreshError}
         onRefresh={refreshActive}
         onStartClose={() => { setTransitionNotice(''); setShowClose(true) }}
+      />
+      <CashShiftPendingCounts
+        status={pendingCounts.status}
+        shifts={pendingCounts.shifts}
+        error={pendingCounts.error}
+        openingShiftId={pendingOpeningId}
+        onOpen={openPendingCount}
+        onRefresh={refreshActive}
       />
       <section className="cash-shift-card cash-shift-reopen-launch">
         <h2>Corrección de un corte cerrado</h2>
