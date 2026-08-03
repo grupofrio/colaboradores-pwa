@@ -14,12 +14,12 @@ import {
   radarSummary, operationalDateLabel, timezoneSourceLabel,
 } from '../presentation.js'
 import PositionMap from './PositionMap.jsx'
+import { buildRadarPlanOptions, buildSelectedPlanPoints, isPlanId, resolveActivePlanId } from './radarSelection.js'
 
 const C = TOKENS.colors
 const S = TOKENS.state
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
-const isCoord = (v) => typeof v === 'number' && Number.isFinite(v)
 
 const ORDER_LABELS = {
   urgente: 'Urgente', ultima_senal: 'Última señal', menor_avance: 'Menor avance',
@@ -49,49 +49,13 @@ function Chip({ text, tone }) {
   return <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: TOKENS.radius.pill, color: t.fg, background: t.bg, border: `1px solid ${t.border}` }}>{text}</span>
 }
 
-// ── Construcción HONESTA de puntos del mapa ───────────────────────────────────
-// Solo coordenadas VÁLIDAS entran; nada se inventa. Unidades sin posición se
-// omiten del mapa (van a la lista). CEDIS solo si el branch trae coords (el
-// contrato radar/1 no las expone ⇒ en la práctica se omite).
-function buildPoints(radar, nowMs) {
-  const points = []
-  const units = Array.isArray(radar?.units) ? radar.units : []
-  const b = radar?.branch
-  if (b && isCoord(b.latitude) && isCoord(b.longitude)) {
-    points.push({ id: `cedis:${b.branch_config_id}`, lat: b.latitude, lng: b.longitude, kind: 'cedis', label: b.name || 'CEDIS' })
-  }
-  for (const u of units) {
-    if (isCoord(u.latitude) && isCoord(u.longitude)) {
-      const safe = safeSignalStatus(u, nowMs)
-      points.push({
-        id: u.plan_id,
-        lat: u.latitude, lng: u.longitude,
-        kind: safe === 'recent' ? 'unit' : 'unit_stale', // recent→unit, resto (con coords)→stale
-        label: u.route_name || u.name || 'Unidad',
-      })
-    }
-    const planned = Array.isArray(u.stops?.planned) ? u.stops.planned : []
-    for (const st of planned) {
-      if (isCoord(st.latitude) && isCoord(st.longitude)) {
-        points.push({
-          id: `stop:${st.stop_id}`,
-          lat: st.latitude, lng: st.longitude,
-          kind: st.done ? 'stop_done' : 'stop_pending',
-          label: st.name || '',
-        })
-      }
-    }
-  }
-  return points
-}
-
 function UnitRow({ unit, nowMs, selected, onSelectUnit, onOpenRoute }) {
   const planId = unit?.plan_id ?? null
   const safe = safeSignalStatus(unit, nowMs)
   const done = num(unit?.stops?.done)
   const total = num(unit?.stops?.planned_total)
   const missing = num(unit?.stops?.missing_coordinates)
-  const clickable = !!onSelectUnit && planId != null
+  const clickable = !!onSelectUnit && isPlanId(planId)
   const selectUnit = () => { if (clickable) onSelectUnit(planId) }
   const handleKeyDown = (e) => {
     if (!clickable || (e.key !== 'Enter' && e.key !== ' ')) return
@@ -143,11 +107,17 @@ export default function RadarView({
   const currentOrder = RADAR_ORDERS.includes(order) ? order : 'urgente'
   const units = Array.isArray(radar?.units) ? radar.units : []
   const rsum = radar ? radarSummary(units, nowMs) : null
-  const points = radar ? buildPoints(radar, nowMs) : []
+  const planOptions = buildRadarPlanOptions(units)
+  const activePlanId = resolveActivePlanId(units, selectedId)
+  const points = radar ? buildSelectedPlanPoints(radar, activePlanId, nowMs) : []
   const ordered = radar ? orderRadarUnits(units, currentOrder, nowMs) : []
   // Solo se rutan al mapa los puntos de UNIDAD (ids numéricos = plan_id); los
   // puntos de parada (ids 'stop:*') no seleccionan unidad.
   const handleMapSelect = (id) => { if (typeof id === 'number' && onSelectUnit) onSelectUnit(id) }
+  const handlePlanSelect = (event) => {
+    const planId = Number(event.target.value)
+    if (onSelectUnit && planOptions.some((option) => option.planId === planId)) onSelectUnit(planId)
+  }
 
   return (
     <div data-testid={testid} data-source={source}>
@@ -190,7 +160,16 @@ export default function RadarView({
 
           <Card testid="radar-map">
             <Title>Mapa de posiciones</Title>
-            <PositionMap points={points} selectedId={selectedId} onSelect={onSelectUnit ? handleMapSelect : undefined} />
+            {activePlanId != null && (
+              <label style={{ fontSize: 11.5, color: C.textMuted, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
+                Plan diario
+                <select data-testid="radar-plan-select" value={activePlanId} onChange={handlePlanSelect}
+                  style={{ fontSize: 11.5, fontWeight: 700, color: C.textSoft, background: C.surfaceSoft, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.pill, padding: '4px 8px' }}>
+                  {planOptions.map((option) => <option key={option.planId} value={option.planId}>{option.label}</option>)}
+                </select>
+              </label>
+            )}
+            <PositionMap points={points} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} />
           </Card>
 
           <Card testid="radar-list">
@@ -209,7 +188,7 @@ export default function RadarView({
             ) : (
               ordered.map((u) => (
                 <UnitRow key={u?.plan_id ?? `${u?.employee_id}-${u?.route_name}`} unit={u} nowMs={nowMs}
-                  selected={u?.plan_id != null && u.plan_id === selectedId}
+                  selected={u?.plan_id != null && u.plan_id === activePlanId}
                   onSelectUnit={onSelectUnit} onOpenRoute={onOpenRoute} />
               ))
             )}

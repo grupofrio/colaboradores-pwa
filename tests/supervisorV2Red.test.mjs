@@ -5,6 +5,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
 import { fileURLToPath } from 'node:url'
+import { readFile } from 'node:fs/promises'
 // Contrato canónico del harness en main: { Component, mod, cleanup } + ruta
 // ABSOLUTA. `loadView` adapta las cargas de este archivo a ese contrato.
 const loadView = async (rel) => (
@@ -41,8 +42,10 @@ test('validPoints filtra inválidos; computeBounds marca anti-meridiano', () => 
   assert.equal(normal.antimeridian, false) // punto único, bbox no degenerado
 })
 
-// ── PositionMap SSR (mapa vial NO; a11y de marcadores) ───────────────────────
+// ── PositionMap SSR + contrato Leaflet ───────────────────────────────────────
 const PositionMap = await loadView('src/modules/supervisor-ventas/v2/radar/PositionMap.jsx')
+const positionMapSource = await readFile(fileURLToPath(new URL('../src/modules/supervisor-ventas/v2/radar/PositionMap.jsx', import.meta.url)), 'utf8')
+const leafletPositionMapSource = await readFile(fileURLToPath(new URL('../src/modules/supervisor-ventas/v2/radar/LeafletPositionMap.jsx', import.meta.url)), 'utf8')
 test('PositionMap: coords inválidas ⇒ nota (lista), no crash', () => {
   const html = render(PositionMap, { points: [{ id: 1, lat: NaN, lng: 0, kind: 'unit' }], height: 200 })
   assert.match(html, /v2-position-map-empty/)
@@ -52,11 +55,47 @@ test('PositionMap: anti-meridiano ⇒ prefiere lista', () => {
   assert.match(html, /v2-position-map-empty/)
   assert.match(html, /línea de fecha/)
 })
-test('PositionMap: marcador clicable es role=button + tabindex (teclado)', () => {
+test('PositionMap: CEDIS se excluye antes de calcular geometría del mapa', () => {
+  const cedisOnly = render(PositionMap, { points: [{ id: 'cedis:1', lat: 19.4, lng: -99.1, kind: 'cedis' }], height: 200 })
+  assert.match(cedisOnly, /v2-position-map-empty/)
+  const unitWithDistantCedis = render(PositionMap, {
+    points: [
+      { id: 1, lat: 19.4, lng: 179, kind: 'unit' },
+      { id: 'cedis:1', lat: 19.4, lng: -179, kind: 'cedis' },
+    ],
+    height: 200,
+  })
+  assert.doesNotMatch(unitWithDistantCedis, /línea de fecha/)
+})
+test('PositionMap: SSR válido conserva un fallback accesible, sin afirmar calles visibles', () => {
   const html = render(PositionMap, { points: [{ id: 1, lat: 10, lng: -35, kind: 'unit', label: 'R1' }], onSelect: () => {}, height: 200 })
-  assert.match(html, /role="button"/)
-  assert.match(html, /tabindex="0"/)
-  assert.match(html, /no es mapa vial/) // se declara vista geoespacial
+  assert.match(html, /data-testid="v2-position-map"/)
+  assert.match(html, /últimas posiciones conocidas/i)
+  assert.doesNotMatch(html, /calles visibles/i)
+})
+test('PositionMap: conserva width y backdropUrl para los callers del SVG previo', () => {
+  assert.match(positionMapSource, /height = 300, backdropUrl = null, width = 640, testid = 'v2-position-map'/)
+  assert.match(positionMapSource, /backdropUrl=\{backdropUrl\} width=\{width\}/)
+  assert.match(leafletPositionMapSource, /backdropUrl/)
+  assert.match(leafletPositionMapSource, /backdropUrl se conserva como no-op/i)
+  assert.match(leafletPositionMapSource, /width: width === 640 \? '100%' : width/)
+})
+test('PositionMap: wrapper carga Leaflet de forma diferida y el hijo define el contrato vial', () => {
+  assert.doesNotMatch(positionMapSource, /^\s*import[\s\S]*?from\s+['"](?:react-leaflet|leaflet|leaflet\/dist\/leaflet\.css)['"]/m)
+  assert.match(positionMapSource, /lazy\(\(\)\s*=>\s*import\(['"]\.\/LeafletPositionMap\.jsx['"]\)\)/)
+  assert.match(leafletPositionMapSource, /import\s*{\s*MapContainer,\s*TileLayer,\s*CircleMarker,\s*Marker,\s*Tooltip,\s*useMap\s*}\s*from\s*['"]react-leaflet['"]/) ;
+  assert.match(leafletPositionMapSource, /import\s*{\s*divIcon\s*}\s*from\s*['"]leaflet['"]/) ;
+  assert.match(leafletPositionMapSource, /import\s*['"]leaflet\/dist\/leaflet\.css['"]/) ;
+  assert.match(leafletPositionMapSource, /https:\/\/\{s\}\.tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/)
+  assert.match(leafletPositionMapSource, /OpenStreetMap/)
+  assert.match(leafletPositionMapSource, /if \(!UNIT_STYLES\[point\.kind\]\) return null/)
+  assert.match(leafletPositionMapSource, /event\.originalEvent\?\.preventDefault\?\.\(\)/)
+})
+test('PositionMap: el mapa no obtiene ni persiste datos y declara últimas posiciones, no seguimiento vivo', () => {
+  const source = `${positionMapSource}\n${leafletPositionMapSource}`
+  assert.doesNotMatch(source, /\b(fetch|localStorage|sessionStorage|indexedDB|POST|PUT|PATCH|DELETE)\b/i)
+  assert.match(source, /posiciones conocidas/i)
+  assert.doesNotMatch(source, /seguimiento en vivo|rastreo en vivo|posiciones en vivo/i)
 })
 
 // ── Normalizador único (§4) — ENVELOPES REALES ───────────────────────────────

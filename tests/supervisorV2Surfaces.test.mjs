@@ -13,6 +13,7 @@ const loadView = async (rel) => (
 import { DAY_CONTROL_FIXTURE, RADAR_FIXTURE, DAY_CONTROL_FIXTURE_DEGRADED } from '../src/modules/supervisor-ventas/dayControl/fixtures.js'
 import { ROUTE_STOPS_FIXTURE } from '../src/modules/supervisor-ventas/v2/fixtures/routeStops.fixture.js'
 import { derivePendientes, deriveSituation, deriveFreshness } from '../src/modules/supervisor-ventas/v2/presentation.js'
+import { buildSelectedPlanPoints } from '../src/modules/supervisor-ventas/v2/radar/radarSelection.js'
 
 const NOW = Date.parse('2026-01-15T15:20:00Z')
 const HoyView = await loadView('src/modules/supervisor-ventas/v2/hoy/HoyView.jsx')
@@ -21,6 +22,44 @@ const RutasView = await loadView('src/modules/supervisor-ventas/v2/rutas/RutasVi
 const RutaDetalle = await loadView('src/modules/supervisor-ventas/v2/rutas/RutaDetalle.jsx')
 const PendientesView = await loadView('src/modules/supervisor-ventas/v2/pendientes/PendientesView.jsx')
 const render = (C, props) => renderToStaticMarkup(createElement(C, props))
+
+const TWO_PLAN_RADAR = {
+  ...RADAR_FIXTURE,
+  units: [
+    {
+      plan_id: 902,
+      route_name: 'Ruta Sierra',
+      name: 'Ana Sierra',
+      vehicle: { name: 'Unidad S-2' },
+      latitude: 18.4,
+      longitude: -99.6,
+      age_seconds: 900,
+      signal_status: 'delayed',
+      stops: {
+        planned: [{ stop_id: 9021, name: 'Cliente Sierra', latitude: 18.41, longitude: -99.61, done: false }],
+        planned_total: 1,
+        done: 0,
+        missing_coordinates: 0,
+      },
+    },
+    {
+      plan_id: 901,
+      route_name: 'Ruta Costa',
+      name: 'Beto Costa',
+      vehicle: { name: 'Unidad C-1' },
+      latitude: 18.5,
+      longitude: -99.7,
+      age_seconds: 120,
+      signal_status: 'recent',
+      stops: {
+        planned: [{ stop_id: 9011, name: 'Cliente Costa', latitude: 18.51, longitude: -99.71, done: true }],
+        planned_total: 1,
+        done: 1,
+        missing_coordinates: 0,
+      },
+    },
+  ],
+}
 
 // ── derivaciones puras ───────────────────────────────────────────────────────
 test('deriveSituation: conteos del golden y honestidad de ausencia', () => {
@@ -70,6 +109,32 @@ test('Radar sin datos: estado honesto (no crash)', () => {
 })
 test('Radar orden ultima_senal no crashea', () => {
   assert.doesNotThrow(() => render(RadarView, { radar: RADAR_FIXTURE, source: 'live', order: 'ultima_senal', nowMs: NOW }))
+})
+test('Radar muestra el selector Plan diario con los planes en el orden crudo', () => {
+  const html = render(RadarView, { radar: TWO_PLAN_RADAR, source: 'live', selectedId: null, nowMs: NOW })
+  assert.match(html, /Plan diario/)
+  assert.match(html, /data-testid="radar-plan-select"/)
+  assert.match(html, /Ruta Sierra · Ana Sierra · Unidad S-2/)
+  assert.match(html, /Ruta Costa · Beto Costa · Unidad C-1/)
+  assert.match(html, /<option value="902" selected="">Ruta Sierra · Ana Sierra · Unidad S-2<\/option>/)
+})
+test('Radar conserva la selección diaria válida y recupera el primer plan crudo ante una selección obsoleta', () => {
+  const selected = render(RadarView, { radar: TWO_PLAN_RADAR, source: 'live', selectedId: 901, nowMs: NOW })
+  const stale = render(RadarView, { radar: TWO_PLAN_RADAR, source: 'live', selectedId: 999, nowMs: NOW })
+  assert.match(selected, /<option value="901" selected="">Ruta Costa · Beto Costa · Unidad C-1<\/option>/)
+  assert.match(stale, /<option value="902" selected="">Ruta Sierra · Ana Sierra · Unidad S-2<\/option>/)
+})
+test('Radar entrega al mapa exclusivamente la geometría del plan diario activo', () => {
+  assert.deepEqual(buildSelectedPlanPoints(TWO_PLAN_RADAR, 901, NOW), [
+    { id: 901, lat: 18.5, lng: -99.7, kind: 'unit', label: 'Ruta Costa' },
+    { id: 'stop:9011', lat: 18.51, lng: -99.71, kind: 'stop_done', label: 'Cliente Costa' },
+  ])
+})
+test('Radar no expone filas con plan_id inválido como seleccionables', () => {
+  const radar = { ...RADAR_FIXTURE, units: [{ ...RADAR_FIXTURE.units[0], plan_id: 0 }] }
+  const html = render(RadarView, { radar, source: 'live', nowMs: NOW, onSelectUnit: () => {} })
+  assert.match(html, /radar-unit-row/)
+  assert.doesNotMatch(html, /data-testid="radar-unit-row" role="button"/)
 })
 
 // ── Rutas ────────────────────────────────────────────────────────────────────
