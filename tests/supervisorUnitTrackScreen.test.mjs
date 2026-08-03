@@ -1,8 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { unitTrackAvailability } from '../src/modules/supervisor-ventas/unitTrackState.js'
+import {
+  canRenderUnitTrackMap,
+  createUnitTrackRequestGate,
+  loadRouteStopsWithUnitTrack,
+  retryUnitTrackRequest,
+} from '../src/modules/supervisor-ventas/unitTrackScreenState.js'
 
 const componentUrl = new URL('../src/modules/supervisor-ventas/UnitTrackMap.jsx', import.meta.url)
+const detailScreenUrl = new URL('../src/modules/supervisor-ventas/ScreenDetalleVendedor.jsx', import.meta.url)
 const packageUrl = new URL('../package.json', import.meta.url)
 const packageLockUrl = new URL('../package-lock.json', import.meta.url)
 
@@ -67,6 +75,175 @@ async function readJson(url) {
 async function readComponent() {
   return stripComments(await readFile(componentUrl, 'utf8'))
 }
+
+async function readDetailScreen() {
+  return stripComments(await readFile(detailScreenUrl, 'utf8'))
+}
+
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+test('unavailable unit-track responses cannot render UnitTrackMap even when geometry exists', () => {
+  const geometry = { current: { lat: 19.43, lng: -99.13 }, trail: [], stops: [] }
+  const unavailableResponses = [
+    { result: { ok: false, data: { code: 'FEATURE_DISABLED' } } },
+    { result: { ok: false, payload: { status: 'FORBIDDEN' } } },
+    { result: { ok: false, payload: { status: 'DATE_NOT_ALLOWED' } } },
+    { jsonrpc: '2.0', error: { code: 'SERVER_ERROR' } },
+  ]
+
+  for (const response of unavailableResponses) {
+    const unitTrackState = unitTrackAvailability(response)
+    assert.equal(canRenderUnitTrackMap({
+      routePlanId: 41,
+      unitTrackPlanId: 41,
+      unitTrackState,
+      unitTrack: geometry,
+    }), false)
+  }
+})
+
+test('stale unit-track responses are ignored after a route change or unmount', async () => {
+  const gate = createUnitTrackRequestGate()
+  const acceptedResponses = []
+
+  const routeChangeResponse = deferred()
+  const routeChangeRequestId = gate.start()
+  const routeChangeRequest = retryUnitTrackRequest({
+    requestGate: gate,
+    requestId: routeChangeRequestId,
+    routePlanId: 41,
+    api: { getUnitTrack: () => routeChangeResponse.promise },
+    onResponse: (response) => acceptedResponses.push(response),
+    onError: assert.fail,
+  })
+  gate.invalidate()
+  routeChangeResponse.resolve({ result: { ok: true, data: {} } })
+  await routeChangeRequest
+
+  const unmountResponse = deferred()
+  const unmountRequestId = gate.start()
+  const unmountRequest = retryUnitTrackRequest({
+    requestGate: gate,
+    requestId: unmountRequestId,
+    routePlanId: 42,
+    api: { getUnitTrack: () => unmountResponse.promise },
+    onResponse: (response) => acceptedResponses.push(response),
+    onError: assert.fail,
+  })
+  gate.invalidate()
+  unmountResponse.resolve({ result: { ok: true, data: {} } })
+  await unmountRequest
+
+  assert.deepEqual(acceptedResponses, [])
+})
+
+test('detail stops complete while the concurrent unit-track request remains unresolved', async () => {
+  const gate = createUnitTrackRequestGate()
+  const requestId = gate.start()
+  const stopsResponse = deferred()
+  const trackResponse = deferred()
+  const trackHandled = deferred()
+
+  const stopsCompletion = loadRouteStopsWithUnitTrack({
+    requestGate: gate,
+    requestId,
+    routePlanId: 41,
+    getRouteStops: () => stopsResponse.promise,
+    api: { getUnitTrack: () => trackResponse.promise },
+    onTrackResponse: (response) => trackHandled.resolve(response),
+    onTrackError: trackHandled.reject,
+  })
+
+  stopsResponse.resolve([{ id: 1 }])
+  assert.deepEqual(await stopsCompletion, [{ id: 1 }])
+
+  trackResponse.resolve({ result: { ok: true, data: {} } })
+  assert.deepEqual(await trackHandled.promise, { result: { ok: true, data: {} } })
+})
+
+test('unit-track retry calls only getUnitTrack', async () => {
+  const gate = createUnitTrackRequestGate()
+  const requestId = gate.start()
+  const accessedMethods = []
+  const api = new Proxy({
+    getUnitTrack: async (planId) => {
+      assert.equal(planId, 41)
+      return { result: { ok: true, data: {} } }
+    },
+  }, {
+    get(target, property) {
+      accessedMethods.push(property)
+      if (property === 'getDayOverview' || property === 'getRouteStops') {
+        throw new Error(`${String(property)} must not be accessed by retry`)
+      }
+      return target[property]
+    },
+  })
+  const acceptedResponses = []
+
+  await retryUnitTrackRequest({
+    requestGate: gate,
+    requestId,
+    routePlanId: 41,
+    api,
+    onResponse: (response) => acceptedResponses.push(response),
+    onError: assert.fail,
+  })
+
+  assert.deepEqual(accessedMethods, ['getUnitTrack'])
+  assert.equal(acceptedResponses.length, 1)
+})
+
+test('vendor detail wires the optional, read-only unit-track map without disrupting route stops', async () => {
+  const source = await readDetailScreen()
+  const rawSource = await readFile(detailScreenUrl, 'utf8')
+
+  assert.match(source, /import\s*\{\s*getUnitTrack\s*\}\s*from\s*['"]\.\/api\.js['"]/)
+  assert.match(source, /import\s*\{\s*UnitTrackMap\s*\}\s*from\s*['"]\.\/UnitTrackMap\.jsx['"]/)
+  assert.match(source, /import\s*\{\s*normalizeUnitTrack\s*,\s*unitTrackAvailability\s*,\s*buildUnitTrackBounds\s*\}\s*from\s*['"]\.\/unitTrackState\.js['"]/)
+  assert.match(source, /import\s*\{\s*canRenderUnitTrackMap\s*,\s*createUnitTrackRequestGate\s*,\s*loadRouteStopsWithUnitTrack\s*,\s*retryUnitTrackRequest\s*,?\s*\}\s*from\s*['"]\.\/unitTrackScreenState\.js['"]/)
+  assert.match(source, /const\s+routePlanId\s*=\s*useMemo\(/)
+  assert.match(source, /routePlanId\s*=.*?Number\.isSafeInteger.*?>\s*0/s)
+  assert.match(rawSource, /\/\/[^\n]*route_id[^\n]*gf\.route\.plan[^\n]*(?:plan|id)/i)
+  assert.match(source, /const\s*\[unitTrack,\s*setUnitTrack\]\s*=\s*useState\(null\)/)
+  assert.match(source, /const\s*\[unitTrackState,\s*setUnitTrackState\]\s*=\s*useState\(['"]idle['"]\)/)
+  assert.match(source, /const\s*\[unitTrackError,\s*setUnitTrackError\]\s*=\s*useState\(['"]['"]\)/)
+  assert.match(source, /await\s+loadRouteStopsWithUnitTrack\(/)
+  assert.match(source, /getRouteStops\s*,/)
+  assert.match(source, /api:\s*\{\s*getUnitTrack\s*\}/)
+  assert.match(source, /setStops\(Array\.isArray\(stopsData\)/)
+  assert.match(source, /onTrackResponse:\s*\(response\)\s*=>\s*setUnitTrackResponse\(response,\s*trackRequestId\)/)
+  assert.match(source, /unitTrackAvailability\(response\)/)
+  assert.match(source, /normalizeUnitTrack\(/)
+  assert.match(source, /buildUnitTrackBounds\(unitTrackForCurrentPlan\)/)
+  assert.match(source, /RECORRIDO DE UNIDAD/)
+  assert.match(source, /Sin recorrido GPS disponible para esta jornada\./)
+  assert.match(source, /Reintentar/)
+  assert.match(source, /onClick=\{retryUnitTrack\}/)
+  assert.match(source, /const\s+unitTrackRequestIdRef\s*=\s*useRef\(createUnitTrackRequestGate\(\)\)/)
+  assert.match(source, /const\s+unitTrackRequestGate\s*=\s*unitTrackRequestIdRef\.current/)
+  assert.match(source, /unitTrackRequestIdRef\.current\.start\(\)/)
+  assert.match(source, /return\s*\(\)\s*=>\s*\{[\s\S]*?unitTrackRequestGate\.invalidate\(\)/)
+  assert.match(source, /unitTrackRequestIdRef\.current\.isCurrent\(requestId\)/)
+  assert.match(source, /const\s+shouldRenderUnitTrackMap\s*=\s*canRenderUnitTrackMap\(/)
+  assert.match(source, /\{shouldRenderUnitTrackMap\s*&&\s*\(\s*<UnitTrackMap/)
+  const retryFunction = source.match(/async function retryUnitTrack\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? ''
+  assert.match(retryFunction, /retryUnitTrackRequest\(/)
+  assert.doesNotMatch(retryFunction, /getDayOverview|getRouteStops/)
+  assert.doesNotMatch(source, /\bfetch\s*\(/)
+  assert.doesNotMatch(source, /\b(?:axios|XMLHttpRequest|sendBeacon)\b/)
+  assert.doesNotMatch(source, /\b(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|removeItem|clear)\s*\(/)
+  assert.doesNotMatch(source, /\b(?:indexedDB|caches)\s*\.\s*\w+\s*\(/)
+  assert.doesNotMatch(source, /\b(?:POST|PUT|PATCH|DELETE)\b/)
+})
 
 test('UnitTrackMap is a read-only Leaflet view with the required operational geometry', async () => {
   const source = await readComponent()

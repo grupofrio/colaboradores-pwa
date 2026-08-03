@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { ScreenShell, StatusBadge, EmptyState } from '../entregas/components'
@@ -12,6 +12,19 @@ import {
   isStopUnvisited,
   isStopWithSale,
 } from './stopVisitState.js'
+import { getUnitTrack } from './api.js'
+import { UnitTrackMap } from './UnitTrackMap.jsx'
+import {
+  normalizeUnitTrack,
+  unitTrackAvailability,
+  buildUnitTrackBounds
+} from './unitTrackState.js'
+import {
+  canRenderUnitTrackMap,
+  createUnitTrackRequestGate,
+  loadRouteStopsWithUnitTrack,
+  retryUnitTrackRequest,
+} from './unitTrackScreenState.js'
 
 /* ============================================================================
    ScreenDetalleVendedor — Vendor detail with route stops, departure,
@@ -21,7 +34,13 @@ import {
 export default function ScreenDetalleVendedor() {
   const { vendedorId } = useParams()
   const [searchParams] = useSearchParams()
+  // Compatibility: route_id from /pwa-supv/team-routes is the gf.route.plan record ID.
   const routeId = searchParams.get('route_id')
+  const routePlanId = useMemo(() => {
+    if (!/^\d+$/.test(routeId || '')) return null
+    const parsedRoutePlanId = Number(routeId)
+    return Number.isSafeInteger(parsedRoutePlanId) && parsedRoutePlanId > 0 ? parsedRoutePlanId : null
+  }, [routeId])
 
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -30,6 +49,12 @@ export default function ScreenDetalleVendedor() {
   const [stops, setStops] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [unitTrack, setUnitTrack] = useState(null)
+  const [unitTrackState, setUnitTrackState] = useState('idle')
+  const [unitTrackError, setUnitTrackError] = useState('')
+  const [unitTrackPlanId, setUnitTrackPlanId] = useState(null)
+  const detailRequestIdRef = useRef(0)
+  const unitTrackRequestIdRef = useRef(createUnitTrackRequestGate())
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -37,26 +62,117 @@ export default function ScreenDetalleVendedor() {
     return () => window.removeEventListener('resize', h)
   }, [])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
-  useEffect(() => { load() }, [vendedorId, routeId])
+  useEffect(() => {
+    const unitTrackRequestGate = unitTrackRequestIdRef.current
+    const detailRequestId = ++detailRequestIdRef.current
+    const trackRequestId = unitTrackRequestGate.start()
 
-  async function load() {
+    setUnitTrack(null)
+    setUnitTrackPlanId(null)
+    setUnitTrackError('')
+    setUnitTrackState(routePlanId ? 'loading' : 'idle')
+    load(detailRequestId, trackRequestId)
+
+    return () => {
+      detailRequestIdRef.current += 1
+      unitTrackRequestGate.invalidate()
+    }
+  }, [vendedorId, routePlanId]) // eslint-disable-line react-hooks/exhaustive-deps -- load is request-scoped; the route and vendor IDs are the effect inputs.
+
+  function isCurrentDetailRequest(requestId) {
+    return requestId === detailRequestIdRef.current
+  }
+
+  function isCurrentUnitTrackRequest(requestId) {
+    return unitTrackRequestIdRef.current.isCurrent(requestId)
+  }
+
+  function unitTrackPayload(response) {
+    const result = response?.result && typeof response.result === 'object'
+      ? response.result
+      : response
+    return result?.data ?? result?.payload ?? result ?? {}
+  }
+
+  function setUnitTrackResponse(response, requestId) {
+    if (!isCurrentUnitTrackRequest(requestId)) return
+
+    const availability = unitTrackAvailability(response)
+    if (availability === 'ready' || availability === 'empty') {
+      setUnitTrack(normalizeUnitTrack(unitTrackPayload(response)))
+      setUnitTrackPlanId(routePlanId)
+      setUnitTrackState(availability)
+      setUnitTrackError('')
+      return
+    }
+
+    setUnitTrack(null)
+    setUnitTrackPlanId(null)
+    setUnitTrackState(availability)
+    setUnitTrackError(availability === 'error' ? 'No se pudo cargar el recorrido GPS.' : '')
+  }
+
+  function setUnitTrackRequestError(requestId) {
+    if (!isCurrentUnitTrackRequest(requestId)) return
+    setUnitTrack(null)
+    setUnitTrackPlanId(null)
+    setUnitTrackState('error')
+    setUnitTrackError('No se pudo cargar el recorrido GPS.')
+  }
+
+  async function load(detailRequestId, trackRequestId) {
     setLoading(true)
     setError('')
     try {
       const overview = await getDayOverview()
+      if (!isCurrentDetailRequest(detailRequestId)) return
+
       const v = overview.vendors?.find((x) => String(x.id) === String(vendedorId))
       setVendor(v || null)
 
-      if (routeId && routeId !== 'null' && routeId !== '') {
-        const stopsData = await getRouteStops(routeId)
-        setStops(Array.isArray(stopsData) ? stopsData : [])
+      if (!v || !routePlanId) {
+        setStops([])
+        return
       }
+
+      const stopsData = await loadRouteStopsWithUnitTrack({
+        requestGate: unitTrackRequestIdRef.current,
+        requestId: trackRequestId,
+        routePlanId,
+        getRouteStops,
+        api: { getUnitTrack },
+        onTrackResponse: (response) => setUnitTrackResponse(response, trackRequestId),
+        onTrackError: () => setUnitTrackRequestError(trackRequestId),
+      })
+      if (!isCurrentDetailRequest(detailRequestId)) return
+
+      setStops(Array.isArray(stopsData) ? stopsData : [])
     } catch (e) {
-      if (e.message !== 'no_session') setError('Error al cargar datos del vendedor')
+      if (isCurrentDetailRequest(detailRequestId) && e.message !== 'no_session') {
+        setError('Error al cargar datos del vendedor')
+      }
     } finally {
-      setLoading(false)
+      if (isCurrentDetailRequest(detailRequestId)) setLoading(false)
     }
+  }
+
+  async function retryUnitTrack() {
+    if (!routePlanId) return
+
+    const trackRequestId = unitTrackRequestIdRef.current.start()
+    setUnitTrack(null)
+    setUnitTrackPlanId(null)
+    setUnitTrackError('')
+    setUnitTrackState('loading')
+
+    await retryUnitTrackRequest({
+      requestGate: unitTrackRequestIdRef.current,
+      requestId: trackRequestId,
+      routePlanId,
+      api: { getUnitTrack },
+      onResponse: (response) => setUnitTrackResponse(response, trackRequestId),
+      onError: () => setUnitTrackRequestError(trackRequestId),
+    })
   }
 
   const title = vendor?.name || 'Vendedor'
@@ -67,6 +183,17 @@ export default function ScreenDetalleVendedor() {
   const visited = stops.filter((s) => isStopVisited(s)).length
   const notVisited = stops.filter((s) => isStopUnvisited(s)).length
   const withSale = stops.filter((s) => isStopWithSale(s)).length
+  const unitTrackForCurrentPlan = unitTrackPlanId === routePlanId ? unitTrack : null
+  const unitTrackBounds = buildUnitTrackBounds(unitTrackForCurrentPlan)
+  const isUnitTrackUnavailable = ['disabled', 'forbidden', 'date_not_allowed'].includes(unitTrackState)
+  const isUnitTrackDisplayable = unitTrackState === 'ready' || unitTrackState === 'empty'
+  const hasUnitTrackTrail = Array.isArray(unitTrackForCurrentPlan?.trail) && unitTrackForCurrentPlan.trail.length > 0
+  const shouldRenderUnitTrackMap = canRenderUnitTrackMap({
+    routePlanId,
+    unitTrackPlanId,
+    unitTrackState,
+    unitTrack: unitTrackForCurrentPlan,
+  })
 
   /* ── Loading ─────────────────────────────────────────────────────────────── */
   if (loading) {
@@ -198,7 +325,62 @@ export default function ScreenDetalleVendedor() {
         </div>
       )}
 
-      {/* ── Section C: Client List (stops) ────────────────────────────────── */}
+      {/* ── Section C: Unit track ───────────────────────────────────────── */}
+      {routePlanId && (
+        <section style={{
+          marginTop: 20, padding: '14px', borderRadius: TOKENS.radius.lg,
+          background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+        }}>
+          <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0, marginBottom: 10 }}>
+            RECORRIDO DE UNIDAD
+          </p>
+
+          {unitTrackState === 'loading' && (
+            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
+              Cargando recorrido GPS...
+            </p>
+          )}
+
+          {isUnitTrackUnavailable && (
+            <div style={{ padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS.glass.hero }}>
+              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
+                El recorrido GPS no esta disponible para esta jornada.
+              </p>
+            </div>
+          )}
+
+          {unitTrackState === 'error' && (
+            <div style={{ padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.errorSoft }}>
+              <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>
+                {unitTrackError}
+              </p>
+              <button
+                type="button"
+                onClick={retryUnitTrack}
+                style={{
+                  marginTop: 8, padding: '6px 10px', borderRadius: TOKENS.radius.pill,
+                  border: `1px solid ${TOKENS.colors.blue2}50`, background: 'transparent',
+                  color: TOKENS.colors.blue3, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Reintentar
+              </button>
+            </div>
+          )}
+
+          {isUnitTrackDisplayable && !hasUnitTrackTrail && (
+            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginBottom: unitTrackBounds.length > 0 ? 10 : 0 }}>
+              Sin recorrido GPS disponible para esta jornada.
+            </p>
+          )}
+
+          {shouldRenderUnitTrackMap && (
+            <UnitTrackMap track={unitTrackForCurrentPlan} typo={typo} />
+          )}
+        </section>
+      )}
+
+      {/* ── Section D: Client List (stops) ────────────────────────────────── */}
       <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 10 }}>
         CLIENTES ({stops.length})
       </p>
@@ -218,7 +400,7 @@ export default function ScreenDetalleVendedor() {
         </div>
       )}
 
-      {/* ── Section D: Summary footer ─────────────────────────────────────── */}
+      {/* ── Section E: Summary footer ─────────────────────────────────────── */}
       {stops.length > 0 && (
         <div style={{
           display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8,
