@@ -126,6 +126,7 @@ export function unitTrackAvailability(response) {
   if (code === 'FORBIDDEN') return 'forbidden'
   if (code === 'DATE_NOT_ALLOWED') return 'date_not_allowed'
 
+  if (!response?.result && response?.error) return 'error'
   if (!result || typeof result !== 'object') return 'error'
   if (result.ok === false || result.success === false || Number(result.status) >= 400) return 'error'
 

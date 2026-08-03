@@ -156,3 +156,7 @@ test('unitTrackAvailability unwraps JSON-RPC result payloads', () => {
   assert.equal(unitTrackAvailability(errorResponse), 'error')
   assert.deepEqual(buildUnitTrackBounds(normalizeUnitTrack(errorResponse.result.data)), [])
 })
+
+test('unitTrackAvailability treats a top-level JSON-RPC error as an error', () => {
+  assert.equal(unitTrackAvailability({ jsonrpc: '2.0', error: { code: 'SERVER_ERROR' } }), 'error')
+})
