@@ -38,6 +38,33 @@ const virtualDemoStub = {
   },
 }
 
+// Leaflet necesita DOM al inicializarse. Esbuild sigue imports dinámicos aun si
+// el SSR no los ejecuta, así que este stub sólo cubre los tres imports concretos
+// que usa el límite cliente de PositionMap; Vite de producción no lo recibe.
+const leafletSsrStub = {
+  name: 'leaflet-ssr-stub',
+  setup(b) {
+    b.onResolve({ filter: /^react-leaflet$/ }, (a) => ({ path: a.path, namespace: 'leaflet-ssr' }))
+    b.onResolve({ filter: /^leaflet$/ }, (a) => ({ path: a.path, namespace: 'leaflet-ssr' }))
+    b.onResolve({ filter: /^leaflet\/dist\/leaflet\.css$/ }, (a) => ({ path: a.path, namespace: 'leaflet-ssr' }))
+    b.onLoad({ filter: /^react-leaflet$/, namespace: 'leaflet-ssr' }, () => ({
+      contents:
+        "import { createElement } from 'react';\n"
+        + 'const inert = ({ children }) => createElement(\'div\', null, children);\n'
+        + 'export const MapContainer = inert; export const TileLayer = inert; export const CircleMarker = inert; export const Marker = inert; export const Tooltip = inert;\n'
+        + 'export const useMap = () => ({ invalidateSize() {}, fitBounds() {}, setView() {} });\n',
+      loader: 'js',
+    }))
+    b.onLoad({ filter: /^leaflet$/, namespace: 'leaflet-ssr' }, () => ({
+      contents: 'export const divIcon = (options) => options;\n',
+      loader: 'js',
+    }))
+    b.onLoad({ filter: /^leaflet\/dist\/leaflet\.css$/, namespace: 'leaflet-ssr' }, () => ({
+      contents: '', loader: 'js',
+    }))
+  },
+}
+
 // Carpeta dentro del árbol del repo para que `import 'react'` resuelva por node.
 const CACHE_ROOT = join(process.cwd(), 'node_modules', '.cache', 'ssr-jsx-tests')
 
@@ -55,7 +82,7 @@ export async function loadJsxDefault(absEntry) {
     jsx: 'automatic',
     write: false,
     external: EXTERNAL,
-    plugins: [virtualDemoStub],
+    plugins: [virtualDemoStub, leafletSsrStub],
     logLevel: 'silent',
   })
   const code = out.outputFiles[0].text
