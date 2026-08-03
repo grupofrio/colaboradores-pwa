@@ -29,22 +29,24 @@ cambiar el plan desde un selector y al pulsar una unidad de la lista.
 
 | Pieza | Responsabilidad | Cambio |
 | --- | --- | --- |
-| `tabs/RadarTab.jsx` | Mantiene interacción de pestaña y navegación. | Conserva el plan elegido y lo sincroniza con clics de la lista o del mapa. |
-| `radar/RadarView.jsx` | Vista pura de Radar y adaptación del contrato de datos. | Resuelve la selección inicial, renderiza el selector y genera puntos sólo del plan activo. |
+| `tabs/RadarTab.jsx` | Mantiene interacción de pestaña y navegación. | Guarda el `selectedId` solicitado por el usuario y lo actualiza desde selector, lista o marcador. |
+| `radar/RadarView.jsx` | Vista pura de Radar y adaptación del contrato de datos. | Deriva el plan activo efectivo sin mutar estado, renderiza el selector y genera puntos sólo de ese plan. |
 | `radar/PositionMap.jsx` | Presentación geoespacial. | Sustituye el SVG/retícula por Leaflet con teselas OpenStreetMap, marcadores y ajuste de límites. |
 | Pruebas Radar existentes | Protegen contratos y render. | Cubren selección, filtrado, estados sin coordenadas y contrato de mapa vial. |
 
-La selección usa exclusivamente `plan_id` numérico válido. La lista ordenada no
-define la selección inicial: ésta será el primer plan válido en el arreglo del
-radar, para que cambiar el orden visual no cambie la ruta que el usuario está
-consultando.
+La selección usa exclusivamente `plan_id` numérico válido. `RadarTab` conserva
+la preferencia opcional del usuario; `RadarView` obtiene el plan activo efectivo
+usando esa preferencia sólo si sigue presente y, de otro modo, el primer plan
+válido. La lista ordenada no define la selección inicial: ésta sale del arreglo
+original del radar para que cambiar el orden visual no cambie la ruta consultada.
 
 ## Flujo de datos e interacción
 
 1. `useOperationalDay` entrega `radar.units` como hoy; no cambia el contrato.
-2. Radar resuelve el plan activo: conserva el `selectedId` si sigue presente;
-   de lo contrario usa el primer `plan_id` válido de `radar.units`; si no hay
-   ninguno, no hay selección.
+2. RadarView resuelve el plan activo efectivo: usa el `selectedId` de RadarTab
+   si sigue presente; de lo contrario usa el primer `plan_id` válido de
+   `radar.units`; si no hay ninguno, no hay selección. Esta resolución es pura:
+   no dispara una escritura de estado durante el render.
 3. El selector ofrece cada plan con una etiqueta entendible: nombre de ruta,
    responsable y unidad cuando existan. Cambiarlo actualiza el `selectedId`.
 4. `buildPoints` recibe el plan activo y sólo transforma sus coordenadas
