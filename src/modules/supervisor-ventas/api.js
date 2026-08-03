@@ -215,6 +215,15 @@ export function getRouteStops(routePlanId) {
   return api('GET', `/pwa-supv/route-stops?route_plan_id=${routePlanId}`)
 }
 
+/** Seguimiento de unidades para un plan diario de ruta */
+export function getUnitTrack(planId, date) {
+  const query = new URLSearchParams()
+  const normalizedPlanId = Number(planId)
+  query.set('plan_id', String(Number.isFinite(normalizedPlanId) ? normalizedPlanId : 0))
+  if (date) query.set('date', date)
+  return api('GET', `/pwa-supv/unit-track?${query}`)
+}
+
 // ── Score Semanal ───────────────────────────────────────────────────────────
 
 /** Rutas de la semana (lunes a domingo) para score grid */

@@ -8339,6 +8339,30 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/unit-track') {
+    if (method !== 'GET') {
+      throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+    }
+
+    const rawPlanId = query.get('plan_id') || ''
+    const planId = Number(rawPlanId)
+    if (!/^[1-9]\d*$/.test(rawPlanId) || !Number.isSafeInteger(planId)) {
+      return {
+        ok: false,
+        data: { code: 'VALIDATION_ERROR' },
+        message: 'plan_id requerido',
+      }
+    }
+
+    return odooJson('/gf/salesops/supervisor/v2/unit-track', {
+      meta: supervisorMeta(),
+      data: {
+        plan_id: planId,
+        date: query.get('date') || undefined,
+      },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/subpolygons' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/subpolygons', {
       meta: supervisorMeta(),
