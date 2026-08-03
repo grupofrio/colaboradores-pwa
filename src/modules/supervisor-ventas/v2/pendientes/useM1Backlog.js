@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../../lib/api'
 import { TOWER_M1_BACKLOG_PATH } from '../../../../lib/towerM1Route'
 import {
-  classifyError, normalizePayload, toQueryString, withTimeout,
+  classifyError, isM1BacklogPayload, normalizePayload, toQueryString, withTimeout,
 } from '../../../torre/m1/m1BacklogModel'
 import { buildM1Accommodation } from './m1Accommodation.js'
 
@@ -64,13 +64,12 @@ export function useM1Backlog({ enabled = true } = {}) {
     ])
       .then(([mainRaw, candRaw]) => {
         if (cancelled || !alive.current) return
-        const main = normalizePayload(mainRaw, ROLE)
-        const cand = normalizePayload(candRaw, ROLE)
-        // Forma inesperada ⇒ se NOMBRA como fallo; jamás se pinta en ceros.
-        if (!Array.isArray(main.rows) || !main.kpis?.length) {
-          setState({ status: 'error', accommodation: null, error: { code: 'malformed' } })
+        if (!isM1BacklogPayload(mainRaw) || !isM1BacklogPayload(candRaw)) {
+          setState({ status: 'error', accommodation: null, error: { code: 'malformed', retryable: true } })
           return
         }
+        const main = normalizePayload(mainRaw, ROLE)
+        const cand = normalizePayload(candRaw, ROLE)
         const accommodation = buildM1Accommodation(main, cand.rows)
         setState({
           status: main.rows.length === 0 ? 'empty' : 'ok',

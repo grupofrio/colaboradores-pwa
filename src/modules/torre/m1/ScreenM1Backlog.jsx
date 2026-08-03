@@ -51,7 +51,7 @@ function Badge({ color, children }) {
 }
 
 function RiskPill({ level }) {
-  const r = RISK_LABELS[level] || RISK_LABELS.low
+  const r = RISK_LABELS[level] || RISK_LABELS.unknown
   return <Badge color={r.color}>{r.icon} {r.label}</Badge>
 }
 

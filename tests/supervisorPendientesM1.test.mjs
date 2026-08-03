@@ -6,7 +6,7 @@ import {
   buildM1Accommodation, groupByRecommendedAction, countByRisk, distributeByAge, sumCash,
   REZAGO_MIN_DAYS,
 } from '../src/modules/supervisor-ventas/v2/pendientes/m1Accommodation.js'
-import { normalizePayload } from '../src/modules/torre/m1/m1BacklogModel.js'
+import { isM1BacklogPayload, normalizePayload } from '../src/modules/torre/m1/m1BacklogModel.js'
 
 // Forma REAL medida en producción (sucursal 29, 2026-08-02), recortada.
 const RAW_MAIN = {
@@ -91,9 +91,20 @@ test('sin parcialidad cuando la página cubre el total', () => {
   assert.equal(buildM1Accommodation(completo, []).risk.partial, false)
 })
 
-test('un risk_level desconocido no se cuenta como bajo', () => {
-  assert.deepEqual(countByRisk([{ risk_level: 'catastrofico' }, { risk_level: null }]),
+test('un risk_level desconocido normalizado no se cuenta como bajo', () => {
+  const payload = normalizePayload({
+    ...RAW_MAIN,
+    rows: [{ risk_level: 'catastrofico' }, { risk_level: null }],
+  }, 'supervisor_ventas')
+  assert.deepEqual(countByRisk(payload.rows),
     { high: 0, medium: 0, low: 0 })
+})
+
+test('la forma cruda exige filas y KPIs antes de normalizar', () => {
+  assert.equal(isM1BacklogPayload({}), false)
+  assert.equal(isM1BacklogPayload({ rows: [] }), false)
+  assert.equal(isM1BacklogPayload({ kpis: {} }), false)
+  assert.equal(isM1BacklogPayload({ rows: [], kpis: {} }), true)
 })
 
 // ── Rezago: separado, y con el corte declarado ──────────────────────────────
@@ -180,5 +191,6 @@ test('el hook reutiliza el cliente y la normalización de M1, no los reconstruye
   assert.ok(src.includes("from '../../../torre/m1/m1BacklogModel'"), 'usa el modelo existente')
   assert.ok(src.includes('TOWER_M1_BACKLOG_PATH'), 'usa la ruta declarada')
   assert.ok(src.includes('normalizePayload') && src.includes('classifyError'))
+  assert.ok(src.includes('isM1BacklogPayload'), 'rechaza payloads crudos malformados antes de normalizar')
   assert.ok(!/state_bucket:\s*'(draft|closed)/.test(src), 'no re-clasifica buckets')
 })
