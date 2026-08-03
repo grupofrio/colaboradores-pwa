@@ -70,6 +70,19 @@ export function toQueryString(query) {
 // ── Normalización tolerante (compatibilidad aditiva) ────────────────────────
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
 
+// La normalización es tolerante para consumidores que ya tienen un payload
+// válido. Las superficies que necesitan distinguir una respuesta rota de un
+// backlog vacío deben validar primero esta forma mínima del contrato.
+export function isM1BacklogPayload(payload) {
+  return !!payload
+    && typeof payload === 'object'
+    && !Array.isArray(payload)
+    && Array.isArray(payload.rows)
+    && !!payload.kpis
+    && typeof payload.kpis === 'object'
+    && !Array.isArray(payload.kpis)
+}
+
 export function normalizeKpis(kpis, role) {
   const k = kpis && typeof kpis === 'object' ? kpis : {}
   const cards = [
@@ -109,7 +122,7 @@ export function normalizeRow(row) {
     cash_closed_pending_flag: r.cash_closed_pending_flag === true,
     cash_closed_pending_amount: num(r.cash_closed_pending_amount) ?? 0,
     close_candidate_flag: r.close_candidate_flag === true,
-    risk_level: ['low', 'medium', 'high'].includes(r.risk_level) ? r.risk_level : 'low',
+    risk_level: ['low', 'medium', 'high'].includes(r.risk_level) ? r.risk_level : 'unknown',
     recommended_action: typeof r.recommended_action === 'string' ? r.recommended_action : '',
     last_activity_at: typeof r.last_activity_at === 'string' ? r.last_activity_at : '',
   }
@@ -240,4 +253,5 @@ export const RISK_LABELS = {
   low: { label: 'Bajo', icon: '●', color: '#22c55e' },
   medium: { label: 'Medio', icon: '●', color: '#f59e0b' },
   high: { label: 'Alto', icon: '●', color: '#ef4444' },
+  unknown: { label: 'No evaluado', icon: '●', color: '#94a3b8' },
 }

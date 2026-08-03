@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path'
 import {
   DEFAULT_FILTERS, DEFAULT_LIMIT,
   applyFilterChange, buildBacklogQuery, classifyError, clearFilters,
-  fmtKpiValue, normalizeKpis, normalizePayload, pagination,
+  fmtKpiValue, normalizeKpis, normalizePayload, pagination, RISK_LABELS,
   showBranchSelector, toQueryString, visibleBranchOptions, withTimeout,
 } from '../src/modules/torre/m1/m1BacklogModel.js'
 import { readAuthoritativeTowerStatus } from '../src/modules/torre/e1/loadTowerStatus.js'
@@ -236,6 +236,16 @@ test('I: claves desconocidas en payload/rows/kpis no rompen; KPIs con fallback �
   // payload totalmente vacío tampoco truena
   const blank = normalizePayload({}, 'supervisor_ventas')
   assert.equal(blank.status, 'empty')
+})
+
+test('I: riesgo desconocido permanece no evaluado y la Torre no lo pinta como bajo', () => {
+  const normalized = normalizePayload({
+    ...PAYLOAD,
+    rows: [{ ...PAYLOAD.rows[0], risk_level: 'catastrofico' }],
+  }, 'admin_plataforma')
+  assert.equal(normalized.rows[0].risk_level, 'unknown')
+  assert.equal(RISK_LABELS.unknown.label, 'No evaluado')
+  assert.match(SCREEN, /RISK_LABELS\[level\] \|\| RISK_LABELS\.unknown/)
 })
 
 // ── Accesibilidad y alcance (wiring) ─────────────────────────────────────────
