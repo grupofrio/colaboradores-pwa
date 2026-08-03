@@ -160,3 +160,9 @@ test('unitTrackAvailability unwraps JSON-RPC result payloads', () => {
 test('unitTrackAvailability treats a top-level JSON-RPC error as an error', () => {
   assert.equal(unitTrackAvailability({ jsonrpc: '2.0', error: { code: 'SERVER_ERROR' } }), 'error')
 })
+
+test('unitTrackAvailability treats normal Odoo error envelopes as errors', () => {
+  for (const code of ['SERVER_ERROR', 'UNAUTHORIZED']) {
+    assert.equal(unitTrackAvailability({ status: 'error', code, data: {} }), 'error')
+  }
+})

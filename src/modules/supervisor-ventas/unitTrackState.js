@@ -128,6 +128,7 @@ export function unitTrackAvailability(response) {
 
   if (!response?.result && response?.error) return 'error'
   if (!result || typeof result !== 'object') return 'error'
+  if (typeof result.status === 'string' && result.status.toUpperCase() === 'ERROR') return 'error'
   if (result.ok === false || result.success === false || Number(result.status) >= 400) return 'error'
 
   const payload = result.data ?? result.payload ?? result
