@@ -3,6 +3,7 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const DATETIME_PATTERN = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-](\d{2}):?(\d{2}))?$/
 const SHIFT_TYPES = new Set(['night', 'day'])
 const SHIFT_STATES = new Set(['open', 'pending_auth', 'closed', 'reopened'])
+const SHIFT_STATES_V2 = new Set([...SHIFT_STATES, 'pending_count'])
 const ADJUSTMENT_TYPES = new Set(['income', 'expense'])
 const PAYMENT_METHODS = new Set(['cash', 'credit', 'transfer', 'card'])
 const SALE_CHANNELS = new Set(['admin', 'day', 'night', 'legacy_pwa'])
@@ -672,8 +673,223 @@ export function normalizeAdjustments(value) {
   })
 }
 
-export function normalizeCashShift(value) {
-  const root = exactRecord(safeClone(value, 'El turno'), [
+function cashShiftContractVersion(options) {
+  if (options === undefined) return 'v1'
+  if (typeof options === 'string') {
+    if (options === 'v1' || options === 'v2') return options
+    throw new TypeError('La versión del contrato de cortes no es válida.')
+  }
+  const record = exactRecord(options, ['contractVersion'], 'Las opciones del contrato')
+  const version = ownValue(record, 'contractVersion', 'La versión del contrato')
+  if (version !== 'v1' && version !== 'v2') {
+    throw new TypeError('La versión del contrato de cortes no es válida.')
+  }
+  return version
+}
+
+function normalizeFullBoundary(value) {
+  const boundary = exactRecord(value, [
+    'operational_closed_at',
+    'scheduled_boundary_at',
+    'executed_at',
+    'origin',
+    'late_execution',
+    'separation_confirmed',
+    'separation_exception_note',
+    'next_shift_id',
+  ], 'La frontera operativa')
+  const rawOrigin = ownValue(boundary, 'origin', 'El origen de la frontera')
+  if (
+    rawOrigin !== false
+    && rawOrigin !== null
+    && rawOrigin !== 'scheduler'
+    && rawOrigin !== 'movement_guard'
+  ) {
+    throw new TypeError('El origen de la frontera no es válido.')
+  }
+  return {
+    operationalClosedAt: optionalDatetime(
+      ownValue(boundary, 'operational_closed_at', 'El cierre operativo'),
+      'El cierre operativo',
+    ),
+    scheduledBoundaryAt: optionalDatetime(
+      ownValue(boundary, 'scheduled_boundary_at', 'La frontera programada'),
+      'La frontera programada',
+    ),
+    executedAt: optionalDatetime(
+      ownValue(boundary, 'executed_at', 'La ejecución de la frontera'),
+      'La ejecución de la frontera',
+    ),
+    origin: rawOrigin || null,
+    lateExecution: exactBoolean(
+      ownValue(boundary, 'late_execution', 'La ejecución tardía'),
+      'La ejecución tardía',
+    ),
+    separationConfirmed: exactBoolean(
+      ownValue(boundary, 'separation_confirmed', 'La confirmación de separación'),
+      'La confirmación de separación',
+    ),
+    separationExceptionNote: exactString(
+      ownValue(boundary, 'separation_exception_note', 'La nota de separación'),
+      'La nota de separación',
+    ),
+    nextShiftId: optionalId(
+      ownValue(boundary, 'next_shift_id', 'El siguiente turno'),
+      'El siguiente turno',
+    ),
+  }
+}
+
+function normalizePendingBoundary(value) {
+  const boundary = exactRecord(value, [
+    'operational_closed_at',
+    'scheduled_boundary_at',
+    'executed_at',
+    'late_execution',
+    'separation_confirmed',
+    'separation_exception_note',
+    'next_shift_id',
+  ], 'La frontera de arqueo pendiente')
+  return {
+    operationalClosedAt: exactDatetime(
+      ownValue(boundary, 'operational_closed_at', 'El cierre operativo'),
+      'El cierre operativo',
+    ),
+    scheduledBoundaryAt: exactDatetime(
+      ownValue(boundary, 'scheduled_boundary_at', 'La frontera programada'),
+      'La frontera programada',
+    ),
+    executedAt: exactDatetime(
+      ownValue(boundary, 'executed_at', 'La ejecución de la frontera'),
+      'La ejecución de la frontera',
+    ),
+    lateExecution: exactBoolean(
+      ownValue(boundary, 'late_execution', 'La ejecución tardía'),
+      'La ejecución tardía',
+    ),
+    separationConfirmed: exactBoolean(
+      ownValue(boundary, 'separation_confirmed', 'La confirmación de separación'),
+      'La confirmación de separación',
+    ),
+    separationExceptionNote: exactString(
+      ownValue(boundary, 'separation_exception_note', 'La nota de separación'),
+      'La nota de separación',
+    ),
+    nextShiftId: optionalId(
+      ownValue(boundary, 'next_shift_id', 'El siguiente turno'),
+      'El siguiente turno',
+    ),
+  }
+}
+
+function normalizePendingShift(value, label = 'El turno pendiente') {
+  const shift = exactRecord(value, ['id', 'type', 'business_date', 'state'], label)
+  const type = exactEnum(ownValue(shift, 'type', 'El tipo de turno'), SHIFT_TYPES, 'El tipo de turno')
+  const state = ownValue(shift, 'state', 'El estado del turno')
+  if (state !== 'pending_count') throw new TypeError('El estado del turno no es válido.')
+  return {
+    id: exactInteger(ownValue(shift, 'id', 'El ID del turno'), 'El ID del turno', 1),
+    type,
+    businessDate: validDate(ownValue(shift, 'business_date', 'La fecha operativa'), 'La fecha operativa'),
+    state,
+  }
+}
+
+export function normalizePendingCashShiftList(value) {
+  const root = exactRecord(safeClone(value, 'Los arqueos pendientes'), ['shifts'], 'Los arqueos pendientes')
+  return safeArrayValues(ownValue(root, 'shifts', 'Los arqueos pendientes'), 'Los arqueos pendientes').map((raw, index) => {
+    const row = exactRecord(raw, [
+      'shift_id',
+      'shift_type',
+      'business_date',
+      'state',
+      'expected_version',
+      'expected_cash',
+      'operational_closed_at',
+      'scheduled_boundary_at',
+      'boundary_executed_at',
+      'late_execution',
+      'next_shift_id',
+    ], `El arqueo pendiente ${index + 1}`)
+    const state = ownValue(row, 'state', 'El estado del turno')
+    if (state !== 'pending_count') throw new TypeError('El estado del turno no es válido.')
+    return {
+      shiftId: exactInteger(ownValue(row, 'shift_id', 'El ID del turno'), 'El ID del turno', 1),
+      shiftType: exactEnum(ownValue(row, 'shift_type', 'El tipo de turno'), SHIFT_TYPES, 'El tipo de turno'),
+      businessDate: validDate(ownValue(row, 'business_date', 'La fecha operativa'), 'La fecha operativa'),
+      state,
+      expectedVersion: (() => {
+        const version = exactInteger(ownValue(row, 'expected_version', 'La versión esperada'), 'La versión esperada')
+        if (version !== 0) throw new TypeError('La versión esperada no es válida.')
+        return version
+      })(),
+      expectedCash: serverNumber(row, 'expected_cash', 'El efectivo esperado'),
+      operationalClosedAt: exactDatetime(
+        ownValue(row, 'operational_closed_at', 'El cierre operativo'),
+        'El cierre operativo',
+      ),
+      scheduledBoundaryAt: exactDatetime(
+        ownValue(row, 'scheduled_boundary_at', 'La frontera programada'),
+        'La frontera programada',
+      ),
+      boundaryExecutedAt: exactDatetime(
+        ownValue(row, 'boundary_executed_at', 'La ejecución de la frontera'),
+        'La ejecución de la frontera',
+      ),
+      lateExecution: exactBoolean(
+        ownValue(row, 'late_execution', 'La ejecución tardía'),
+        'La ejecución tardía',
+      ),
+      nextShiftId: optionalId(ownValue(row, 'next_shift_id', 'El siguiente turno'), 'El siguiente turno'),
+    }
+  })
+}
+
+export function normalizePendingCashShiftPreview(value) {
+  const root = exactRecord(safeClone(value, 'El arqueo pendiente'), [
+    'form_kind',
+    'expected_version',
+    'shift',
+    'opening_fund',
+    'totals',
+    'denominations',
+    'adjustments',
+    'notes_required',
+    'boundary',
+  ], 'El arqueo pendiente')
+  if (ownValue(root, 'form_kind', 'El tipo de formulario') !== 'pending_count') {
+    throw new TypeError('El tipo de formulario no es válido.')
+  }
+  const expectedVersion = exactInteger(
+    ownValue(root, 'expected_version', 'La versión esperada'),
+    'La versión esperada',
+  )
+  if (expectedVersion !== 0) throw new TypeError('La versión esperada no es válida.')
+  const totals = exactRecord(ownValue(root, 'totals', 'Los totales'), [
+    'sales_cash', 'sales_card', 'sales_total', 'expenses', 'expected_cash',
+  ], 'Los totales')
+  return {
+    formKind: 'pendingCount',
+    expectedVersion,
+    shift: normalizePendingShift(ownValue(root, 'shift', 'El turno pendiente')),
+    openingFund: finiteNumber(ownValue(root, 'opening_fund', 'El fondo inicial'), 'El fondo inicial'),
+    totals: {
+      salesCash: serverNumber(totals, 'sales_cash', 'Ventas en efectivo'),
+      salesCard: serverNumber(totals, 'sales_card', 'Ventas con terminal'),
+      salesTotal: serverNumber(totals, 'sales_total', 'Ventas totales'),
+      expenses: serverNumber(totals, 'expenses', 'Gastos'),
+      expectedCash: serverNumber(totals, 'expected_cash', 'Efectivo esperado'),
+    },
+    denominations: normalizeDenominations(ownValue(root, 'denominations', 'El arqueo')),
+    adjustments: normalizeAdjustments(ownValue(root, 'adjustments', 'Los ajustes')),
+    notesRequired: exactBoolean(ownValue(root, 'notes_required', 'La nota requerida'), 'La nota requerida'),
+    boundary: normalizePendingBoundary(ownValue(root, 'boundary', 'La frontera de arqueo pendiente')),
+  }
+}
+
+export function normalizeCashShift(value, options) {
+  const contractVersion = cashShiftContractVersion(options)
+  const rootFields = [
     'folio',
     'version_id',
     'version_number',
@@ -706,7 +922,9 @@ export function normalizeCashShift(value) {
     'needs_manager_auth',
     'needs_director_auth',
     'printable',
-  ], 'El turno')
+  ]
+  if (contractVersion === 'v2') rootFields.push('boundary')
+  const root = exactRecord(safeClone(value, 'El turno'), rootFields, 'El turno')
   const folio = exactString(ownValue(root, 'folio', 'El folio'), 'El folio', {
     allowEmpty: false,
   })
@@ -716,7 +934,12 @@ export function normalizeCashShift(value) {
     'El número de versión',
   )
   const rawClosingType = ownValue(root, 'closing_type', 'El tipo de cierre')
-  if (rawClosingType !== false && rawClosingType !== 'close' && rawClosingType !== 'reclose') {
+  if (
+    rawClosingType !== false
+    && rawClosingType !== 'close'
+    && rawClosingType !== 'reclose'
+    && (contractVersion !== 'v2' || rawClosingType !== 'automatic_settlement')
+  ) {
     throw new TypeError('El tipo de cierre no es válido.')
   }
   const rawResponsible = exactRecord(
@@ -780,7 +1003,10 @@ export function normalizeCashShift(value) {
     'La fecha operativa',
   )
   const state = ownValue(rawShift, 'state', 'El estado del turno')
-  if (typeof state !== 'string' || !SHIFT_STATES.has(state)) {
+  if (
+    typeof state !== 'string'
+    || !(contractVersion === 'v2' ? SHIFT_STATES_V2 : SHIFT_STATES).has(state)
+  ) {
     throw new TypeError('El estado del turno no es válido.')
   }
   const version = exactInteger(
@@ -832,7 +1058,7 @@ export function normalizeCashShift(value) {
   }
   const payments = normalizePaymentSnapshots(ownValue(root, 'payments', 'Los pagos'))
 
-  return {
+  const result = {
     folio,
     versionId,
     versionNumber,
@@ -891,6 +1117,10 @@ export function normalizeCashShift(value) {
     needsDirectorAuth: exactBoolean(ownValue(root, 'needs_director_auth', 'La autorización de dirección'), 'La autorización de dirección'),
     printable: exactBoolean(ownValue(root, 'printable', 'El indicador de impresión'), 'El indicador de impresión'),
   }
+  if (contractVersion === 'v2') {
+    result.boundary = normalizeFullBoundary(ownValue(root, 'boundary', 'La frontera operativa'))
+  }
+  return result
 }
 
 function nextBusinessDate(value) {

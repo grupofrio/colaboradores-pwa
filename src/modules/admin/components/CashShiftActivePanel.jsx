@@ -42,11 +42,11 @@ export default function CashShiftActivePanel({
 
       {schedule.overdue ? (
         <p className="cash-shift-warning" role="status">
-          Este turno excedió la hora esperada. El corte sigue siendo manual.
+          Este turno alcanzó su frontera operativa. Actualiza antes de cerrar: el servidor separa el periodo y conserva su arqueo pendiente.
         </p>
       ) : (
         <p className="cash-shift-info" role="status">
-          El corte es manual; la hora esperada funciona como referencia.
+          A la hora programada el servidor abre el turno siguiente con fondo $0.00. Separe y etiquete el efectivo del periodo terminado; su arqueo se captura después.
         </p>
       )}
 

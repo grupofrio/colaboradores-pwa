@@ -3,6 +3,7 @@ import {
   CASH_SHIFT_DENOMINATIONS,
   nextTransitionLabel,
   normalizeCashShift,
+  normalizePendingCashShiftPreview,
 } from '../cashShiftModel.js'
 import {
   buildCashShiftCloseOperation,
@@ -89,6 +90,40 @@ function AuditPreview({ cashShift }) {
   )
 }
 
+function PendingCountPreview({ cashShift }) {
+  const boundary = cashShift.boundary
+  return (
+    <div className="cash-shift-audit-sections">
+      <section>
+        <h3>Totales autoritativos del periodo</h3>
+        <dl className="cash-shift-preview-totals">
+          <div><dt>Ventas en efectivo</dt><dd>{money(cashShift.totals.salesCash)}</dd></div>
+          <div><dt>Ventas con terminal</dt><dd>{money(cashShift.totals.salesCard)}</dd></div>
+          <div><dt>Gastos</dt><dd>{money(cashShift.totals.expenses)}</dd></div>
+          <div><dt>Efectivo esperado</dt><dd>{money(cashShift.totals.expectedCash)}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Frontera operativa</h3>
+        <dl className="cash-shift-preview-totals">
+          <div><dt>Programada</dt><dd>{boundary.scheduledBoundaryAt}</dd></div>
+          <div><dt>Ejecutada</dt><dd>{boundary.executedAt}</dd></div>
+          <div><dt>Fin del periodo</dt><dd>{boundary.operationalClosedAt}</dd></div>
+          <div><dt>Turno sucesor</dt><dd>{boundary.nextShiftId ? `#${boundary.nextShiftId}` : 'Por confirmar'}</dd></div>
+        </dl>
+        {boundary.lateExecution ? <p className="cash-shift-warning">La frontera se ejecutó tarde; la nota del arqueo es obligatoria.</p> : null}
+      </section>
+    </div>
+  )
+}
+
+function normalizeClosePreview(raw, purpose) {
+  const data = unwrap(raw)
+  return purpose === 'settle'
+    ? normalizePendingCashShiftPreview(data)
+    : normalizeCashShift(data)
+}
+
 export default function CashShiftCloseForm({
   cashShift,
   sessionIdentity = 'cash-shift-session',
@@ -96,6 +131,7 @@ export default function CashShiftCloseForm({
   onClose,
   onCompleted = async () => {},
   onStale = async () => {},
+  onPendingCountRequired = async () => {},
   onCancel = null,
 }) {
   const binding = cashShiftCloseBinding(cashShift)
@@ -105,10 +141,13 @@ export default function CashShiftCloseForm({
   const [adjustments, setAdjustments] = useState([])
   const [notes, setNotes] = useState('')
   const [nextOpeningFund, setNextOpeningFund] = useState('')
+  const [separationConfirmed, setSeparationConfirmed] = useState(null)
+  const [separationExceptionNote, setSeparationExceptionNote] = useState('')
   const [mutationBusy, setMutationBusy] = useState(false)
   const [pendingRequest, setPendingRequest] = useState(null)
   const [completed, setCompleted] = useState(null)
   const [staleStatus, setStaleStatus] = useState(null)
+  const [pendingCountRedirect, setPendingCountRedirect] = useState(null)
   const [error, setError] = useState('')
   const mounted = useRef(false)
   const previewGeneration = useRef(0)
@@ -169,10 +208,13 @@ export default function CashShiftCloseForm({
     setAdjustments([])
     setNotes('')
     setNextOpeningFund('')
+    setSeparationConfirmed(null)
+    setSeparationExceptionNote('')
     setMutationBusy(false)
     setPendingRequest(null)
     setCompleted(null)
     setStaleStatus(null)
+    setPendingCountRedirect(null)
     setError('')
   }, [sessionIdentity])
 
@@ -182,8 +224,11 @@ export default function CashShiftCloseForm({
     setPreviewBusy(true)
     if (!preserveError) setError('')
     try {
-      const response = await onPreview({ mode: 'active', shiftId: binding.shiftId })
-      const normalized = normalizeCashShift(unwrap(response))
+      const response = await onPreview({
+        mode: binding.purpose === 'settle' ? 'pending' : 'active',
+        shiftId: binding.shiftId,
+      })
+      const normalized = normalizeClosePreview(response, binding.purpose)
       if (cashShiftCloseBinding(normalized).key !== binding.key) {
         throw Object.assign(new TypeError('La vista previa corresponde a otra versión.'), {
           code: 'stale_preview',
@@ -204,7 +249,7 @@ export default function CashShiftCloseForm({
     } finally {
       if (workflowIsCurrent(workflow) && generation === previewGeneration.current) setPreviewBusy(false)
     }
-  }, [binding.key, binding.shiftId, onPreview])
+  }, [binding.key, binding.purpose, binding.shiftId, onPreview])
 
   useEffect(() => {
     let bindingChanged = false
@@ -263,6 +308,8 @@ export default function CashShiftCloseForm({
           adjustments: rawAdjustments(adjustments),
           notes,
           nextOpeningFund,
+          separationConfirmed,
+          separationExceptionNote,
         }),
         error: null,
       }
@@ -279,10 +326,17 @@ export default function CashShiftCloseForm({
       }
       return { operation: null, feedback, error: draftError.message }
     }
-  }, [adjustments, counts, nextOpeningFund, notes, preview])
+  }, [adjustments, counts, nextOpeningFund, notes, preview, separationConfirmed, separationExceptionNote])
   const feedback = draftState.operation?.feedback || draftState.feedback
   const staleLocked = ['reloading', 'stale_requires_reload'].includes(staleStatus)
-  const locked = mutationBusy || Boolean(pendingRequest) || Boolean(completed) || staleLocked
+  const locked = mutationBusy || Boolean(pendingRequest) || Boolean(completed) || staleLocked || Boolean(pendingCountRedirect)
+
+  async function redirectToPendingCount(shiftId) {
+    if (!Number.isSafeInteger(shiftId) || shiftId < 1) {
+      throw new TypeError('El turno pendiente no es válido.')
+    }
+    await onPendingCountRequired({ shiftId })
+  }
 
   async function reloadAuthoritativeShift() {
     if (staleReloadInFlight.current) return staleReloadInFlight.current.promise
@@ -296,16 +350,20 @@ export default function CashShiftCloseForm({
     setError('El turno cambió y el arqueo conservado todavía no es autoritativo. Recargando los totales actuales…')
     marker.promise = (async () => {
       try {
-        const normalized = normalizeCashShift(unwrap(await onStale({
-          shiftId: binding.shiftId,
-          mode: binding.purpose,
-          expectedVersion: binding.expectedVersion,
-        })))
+        const normalized = normalizeClosePreview(
+          await onStale({
+            shiftId: binding.shiftId,
+            mode: binding.purpose,
+            expectedVersion: binding.expectedVersion,
+          }),
+          binding.purpose,
+        )
         if (!workflowIsCurrent(workflow) || generation !== staleReloadGeneration.current) return null
         const refreshedBinding = cashShiftCloseBinding(normalized)
         if (
           (binding.purpose === 'reclose' && (normalized.shift.state !== 'reopened' || normalized.shift.id !== binding.shiftId))
           || (binding.purpose === 'close' && !['open', 'reopened'].includes(normalized.shift.state))
+          || (binding.purpose === 'settle' && normalized.shift.state !== 'pending_count')
         ) throw new TypeError('La recarga no corresponde al corte vigente.')
         bindingRef.current = refreshedBinding.key
         previewBindingRef.current = refreshedBinding.key
@@ -364,7 +422,23 @@ export default function CashShiftCloseForm({
       await onCompleted({ mode: operation.operation, result: response, request: operation.request })
     } catch (mutationError) {
       if (!workflowIsCurrent(workflow) || mutationInFlight.current !== marker) return
-      if (mutationError?.code === 'stale_version') {
+      if (mutationError?.code === 'pending_count_required') {
+        const shiftId = Number(mutationError?.details?.shift_id)
+        if (!Number.isSafeInteger(shiftId) || shiftId < 1) {
+          setError('El servidor indicó un arqueo pendiente sin un turno válido. Actualiza la página antes de continuar.')
+          keepLocked = false
+        } else {
+          setPendingCountRedirect({ shiftId })
+          keepLocked = true
+          try {
+            await redirectToPendingCount(shiftId)
+          } catch {
+            if (workflowIsCurrent(workflow) && mutationInFlight.current === marker) {
+              setError('El turno se separó automáticamente. Abre el arqueo pendiente para continuar; no reintentes el cierre normal.')
+            }
+          }
+        }
+      } else if (mutationError?.code === 'stale_version') {
         staleRecoveryRef.current = true
         setPendingRequest(null)
         setCompleted(null)
@@ -386,25 +460,33 @@ export default function CashShiftCloseForm({
     }
   }
 
-  const fallbackLabel = binding.purpose === 'reclose'
-    ? `Volver a cerrar ${cashShift.shift.type === 'night' ? 'Noche' : 'Día'} ${Number(cashShift.shift.businessDate.slice(-2))}`
-    : nextTransitionLabel(cashShift.shift)
+  const fallbackLabel = binding.purpose === 'settle'
+    ? `Guardar arqueo pendiente ${cashShift.shift.type === 'night' ? 'Noche' : 'Día'} ${Number(cashShift.shift.businessDate.slice(-2))}`
+    : binding.purpose === 'reclose'
+      ? `Volver a cerrar ${cashShift.shift.type === 'night' ? 'Noche' : 'Día'} ${Number(cashShift.shift.businessDate.slice(-2))}`
+      : nextTransitionLabel(cashShift.shift)
 
   return (
     <section className="cash-shift-card cash-shift-close" aria-labelledby="cash-shift-close-title">
       <div className="cash-shift-heading-row">
         <div>
-          <p className="cash-shift-eyebrow">{binding.purpose === 'reclose' ? 'RECIERRE' : 'HACER CORTE'}</p>
+          <p className="cash-shift-eyebrow">{binding.purpose === 'settle' ? 'ARQUEO DIFERIDO' : binding.purpose === 'reclose' ? 'RECIERRE' : 'HACER CORTE'}</p>
           <h2 id="cash-shift-close-title">{fallbackLabel}</h2>
         </div>
         {onCancel ? <button className="cash-shift-secondary" type="button" disabled={locked} onClick={onCancel}>Volver</button> : null}
       </div>
-      <p className="cash-shift-info" role="status">
-        Se actualiza la vista del servidor antes de cerrar. Sus totales y la respuesta final son autoritativos.
-      </p>
+      {binding.purpose === 'settle' ? (
+        <p className="cash-shift-automatic-label" role="status">
+          Arqueo posterior a cierre automático. El turno sucesor continúa operando con fondo $0.00; este formulario no crea ni modifica otro turno.
+        </p>
+      ) : (
+        <p className="cash-shift-info" role="status">
+          Se actualiza la vista del servidor antes de cerrar. Sus totales y la respuesta final son autoritativos.
+        </p>
+      )}
       {previewBusy ? <p role="status">Actualizando vista previa…</p> : null}
       {!previewBusy && !preview && !staleStatus ? <button className="cash-shift-primary" type="button" onClick={refreshPreview}>Reintentar vista previa</button> : null}
-      {preview ? <AuditPreview cashShift={preview} /> : null}
+      {preview ? (binding.purpose === 'settle' ? <PendingCountPreview cashShift={preview} /> : <AuditPreview cashShift={preview} />) : null}
 
       <div className="cash-shift-reconciliation">
         <CashShiftDenominations counts={counts} disabled={locked} onChange={updateCount} />
@@ -436,6 +518,44 @@ export default function CashShiftCloseForm({
             </label>
           ) : null}
         </div>
+        {binding.purpose === 'settle' ? (
+          <section className="cash-shift-separation-confirmation" aria-labelledby="cash-separation-title">
+            <h3 id="cash-separation-title">Separación física del efectivo</h3>
+            <p className="cash-shift-muted">Confirma la condición real del efectivo del turno terminado. No registramos una separación que no ocurrió.</p>
+            <div className="cash-shift-choice-list">
+              <label>
+                <input
+                  type="radio"
+                  name="cashSeparationConfirmed"
+                  checked={separationConfirmed === true}
+                  disabled={locked}
+                  onChange={() => setSeparationConfirmed(true)}
+                />
+                Confirmo que el efectivo fue separado y etiquetado.
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="cashSeparationConfirmed"
+                  checked={separationConfirmed === false}
+                  disabled={locked}
+                  onChange={() => setSeparationConfirmed(false)}
+                />
+                El efectivo no se separó a tiempo.
+              </label>
+            </div>
+            {separationConfirmed === false ? (
+              <label className="cash-shift-single-field">Explica la excepción de separación
+                <textarea
+                  name="separationExceptionNote"
+                  disabled={locked}
+                  value={separationExceptionNote}
+                  onChange={(event) => setSeparationExceptionNote(event.target.value)}
+                />
+              </label>
+            ) : null}
+          </section>
+        ) : null}
         {draftState.error && !error ? <p className="cash-shift-muted">{draftState.error}</p> : null}
         {error ? <p className="cash-shift-error" role="alert">{error}</p> : null}
         {completed ? (
@@ -449,7 +569,20 @@ export default function CashShiftCloseForm({
           <p className="cash-shift-warning" role="status">Los totales actualizados ya son autoritativos. Revisa el arqueo conservado antes de cerrar.</p>
         ) : null}
         <div className="cash-shift-actions">
-          {['reloading', 'stale_requires_reload'].includes(staleStatus) ? (
+          {pendingCountRedirect ? (
+            <button
+              className="cash-shift-primary"
+              type="button"
+              disabled={mutationBusy}
+              onClick={() => {
+                void redirectToPendingCount(pendingCountRedirect.shiftId).catch(() => {
+                  setError('El turno se separó automáticamente. Abre el arqueo pendiente para continuar; no reintentes el cierre normal.')
+                })
+              }}
+            >
+              Abrir arqueo pendiente
+            </button>
+          ) : ['reloading', 'stale_requires_reload'].includes(staleStatus) ? (
             <button className="cash-shift-primary" type="button" disabled={staleStatus === 'reloading'} onClick={reloadAuthoritativeShift}>Recargar corte</button>
           ) : pendingRequest ? (
             <button className="cash-shift-primary" type="button" disabled={mutationBusy} onClick={submit}>Reintentar mismo corte</button>

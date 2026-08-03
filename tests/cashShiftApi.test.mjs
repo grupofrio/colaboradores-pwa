@@ -109,6 +109,30 @@ test('wrappers GET usan paths y query exactos sin alcance cliente', async () => 
   ])
 })
 
+test('wrappers v2 aíslan los arqueos pendientes y no modifican los reads v1', async () => {
+  const { apiModule } = await loadRuntime()
+  const calls = installSuccessApi()
+
+  await apiModule.getPendingCashShiftCounts()
+  await apiModule.previewCashShift({ mode: 'pending', shiftId: 41 })
+
+  assert.deepEqual(calls.map(({ url, method }) => [method, url]), [
+    ['GET', '/odoo-api/pwa-admin/cash-shifts/pending-counts?contract_version=v2'],
+    ['GET', '/odoo-api/pwa-admin/cash-shifts/preview?mode=pending&shift_id=41&contract_version=v2'],
+  ])
+})
+
+test('detail exacto puede pedir v2 sin alterar el lector histórico v1', async () => {
+  const { apiModule } = await loadRuntime()
+  const calls = installSuccessApi()
+
+  await apiModule.getCashShiftDetail({ shiftId: 41, versionId: 701, contractVersion: 'v2' })
+
+  assert.deepEqual(calls.map(({ url, method }) => [method, url]), [
+    ['GET', '/odoo-api/pwa-admin/cash-shifts/detail?shift_id=41&version_id=701&contract_version=v2'],
+  ])
+})
+
 test('wrappers de mutación envían allowlists exactas y jamás scope ni totales', async () => {
   const { apiModule } = await loadRuntime()
   const calls = installSuccessApi()
@@ -210,6 +234,44 @@ test('close y reclose validan localmente la versión semántica exacta', async (
     expectedVersion: 0,
   }), TypeError)
   assert.equal(calls.length, 0)
+})
+
+test('settle envía únicamente el arqueo pendiente v2 permitido, sin scope ni fondo sucesor', async () => {
+  const { apiModule } = await loadRuntime()
+  const calls = installSuccessApi()
+  await apiModule.settleCashShift({
+    shiftId: 41,
+    expectedVersion: 0,
+    denominations: [{ denomination: '200', count: 1, subtotal: 200 }],
+    adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20, total: 20 }],
+    notes: 'Conteo tardío',
+    separationConfirmed: false,
+    separationExceptionNote: 'El efectivo se entregó después',
+    nextOpeningFund: 999,
+    companyId: 34,
+    warehouseId: 89,
+    expectedCash: 212,
+    idempotencyKey: 'settle-key',
+  })
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, '/odoo-api/pwa-admin/cash-shifts/settle')
+  assert.equal(calls[0].method, 'POST')
+  assert.deepEqual(calls[0].payload.params, {
+    shift_id: 41,
+    expected_version: 0,
+    denominations: [{ denomination: '200', count: 1 }],
+    adjustments: [{ type: 'expense', concept: 'Bolsas', amount: 20 }],
+    notes: 'Conteo tardío',
+    separation_confirmed: false,
+    separation_exception_note: 'El efectivo se entregó después',
+    idempotency_key: 'settle-key',
+  })
+  await assert.rejects(async () => apiModule.settleCashShift({
+    shiftId: 41,
+    expectedVersion: 1,
+    denominations: [], adjustments: [], separationConfirmed: true, idempotencyKey: 'wrong-version',
+  }), TypeError)
 })
 
 test('capacidades de cash shift fallan cerradas incluso tras respuestas parciales', async () => {
@@ -486,6 +548,39 @@ test('cada mutación con dos respuestas perdidas recupera la respuesta guardada 
       key,
     })
   }
+})
+
+test('settle conserva la misma key y el registro al recuperar un timeout', async () => {
+  const { serviceModule } = await loadRuntime()
+  const registry = new Map()
+  const draft = {
+    shiftId: 41,
+    expectedVersion: 0,
+    denominations: [{ denomination: '200', count: 1 }],
+    adjustments: [],
+    notes: 'Conteo pendiente',
+    separationConfirmed: true,
+    idempotencyKey: 'settle-after-timeout',
+  }
+  const pending = await serviceModule.mutateShiftWithRecovery('settle', draft, {
+    mutate: async () => { throw uncertain() },
+    getOperationStatus: async () => { throw uncertain('status lost') },
+    requestRegistry: registry,
+    sessionIdentity: 'settle-session',
+  })
+  assert.equal(pending.status, 'pending')
+  const attempts = []
+  const recovered = await serviceModule.mutateShiftWithRecovery('settle', draft, {
+    mutate: async (_operation, request) => {
+      attempts.push(request)
+      return { ok: true, data: { state: 'closed', shift_id: 41 } }
+    },
+    requestRegistry: registry,
+    sessionIdentity: 'settle-session',
+  })
+  assert.equal(recovered.status, 'completed')
+  assert.deepEqual(attempts, [draft])
+  assert.ok([...registry.keys()].some((key) => key.endsWith(':settle:settle-after-timeout')))
 })
 
 test('si también se pierde status preserva pending con key, request y draft estables', async () => {

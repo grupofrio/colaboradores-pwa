@@ -107,6 +107,12 @@ function cashShiftDate(value) {
   return value
 }
 
+function cashShiftContractVersion(value) {
+  if (value === undefined || value === 'v1') return undefined
+  if (value === 'v2') return 'v2'
+  throw new TypeError('La versión del contrato de cortes no es válida.')
+}
+
 // ── POS Mostrador ────────────────────────────────────────────────────────────
 
 const DAY_POS_ACCESS_ERROR = 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
@@ -395,6 +401,13 @@ export function previewCashShift(input = {}) {
       start_at: cashShiftText(value.startAt, 'La hora inicial'),
     })}`)
   }
+  if (mode === 'pending') {
+    return api('GET', `/pwa-admin/cash-shifts/preview${toQuery({
+      mode,
+      shift_id: cashShiftInteger(value.shiftId, 'El ID del turno', 1),
+      contract_version: 'v2',
+    })}`)
+  }
   if (mode !== 'active') throw new TypeError('El modo de vista previa no es válido.')
   return api('GET', `/pwa-admin/cash-shifts/preview${toQuery({
     mode,
@@ -402,6 +415,11 @@ export function previewCashShift(input = {}) {
       ? undefined
       : cashShiftInteger(value.shiftId, 'El ID del turno', 1),
   })}`)
+}
+
+/** Arqueos separados automáticamente; este selector es exclusivamente v2. */
+export function getPendingCashShiftCounts() {
+  return api('GET', '/pwa-admin/cash-shifts/pending-counts?contract_version=v2')
 }
 
 export function openCashShift(input) {
@@ -450,6 +468,31 @@ export function recloseCashShift(input) {
   }))
 }
 
+export function settleCashShift(input) {
+  const value = cashShiftInput(input, 'Los datos del arqueo pendiente')
+  const expectedVersion = cashShiftInteger(value.expectedVersion, 'La versión esperada')
+  if (expectedVersion !== 0) {
+    throw new TypeError('La versión esperada no corresponde al arqueo pendiente.')
+  }
+  if (typeof value.separationConfirmed !== 'boolean') {
+    throw new TypeError('La confirmación de separación no es válida.')
+  }
+  return api('POST', '/pwa-admin/cash-shifts/settle', {
+    shift_id: cashShiftInteger(value.shiftId, 'El ID del turno', 1),
+    expected_version: expectedVersion,
+    denominations: normalizeDenominations(value.denominations ?? []),
+    adjustments: normalizeAdjustments(value.adjustments ?? []),
+    notes: cashShiftText(value.notes, 'Las notas', { optional: true }),
+    separation_confirmed: value.separationConfirmed,
+    separation_exception_note: cashShiftText(
+      value.separationExceptionNote,
+      'La nota de separación',
+      { optional: true },
+    ),
+    idempotency_key: cashShiftText(value.idempotencyKey, 'La clave de idempotencia'),
+  })
+}
+
 export function getCashShiftHistory(input = {}) {
   const value = cashShiftInput(input, 'Los filtros de historial')
   return api('GET', `/pwa-admin/cash-shifts/history${toQuery({
@@ -466,6 +509,7 @@ export function getCashShiftDetail(input) {
     version_id: value.versionId === undefined
       ? undefined
       : cashShiftInteger(value.versionId, 'El ID de versión', 1),
+    contract_version: cashShiftContractVersion(value.contractVersion),
   })}`)
 }
 
@@ -495,7 +539,7 @@ export function authorizeCashShift(input) {
 export function getCashShiftOperationStatus(input) {
   const value = cashShiftInput(input, 'La consulta de operación')
   const operation = value.operation
-  if (!['open', 'close', 'reclose', 'reopen', 'authorize'].includes(operation)) {
+  if (!['open', 'close', 'reclose', 'settle', 'reopen', 'authorize'].includes(operation)) {
     throw new TypeError('La operación no es válida.')
   }
   return api('GET', `/pwa-admin/cash-shifts/operations/status${toQuery({

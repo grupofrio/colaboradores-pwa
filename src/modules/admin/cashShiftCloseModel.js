@@ -43,8 +43,20 @@ export function calculateCloseFeedback({ serverExpectedCash, denominations, adju
 
 export function cashShiftCloseBinding(cashShift) {
   const state = cashShift?.shift?.state
-  if (state !== 'open' && state !== 'reopened') {
+  if (state !== 'open' && state !== 'reopened' && state !== 'pending_count') {
     throw new TypeError('El turno no está disponible para cierre.')
+  }
+  if (state === 'pending_count') {
+    const expectedVersion = cashShift.expectedVersion
+    if (!Number.isSafeInteger(expectedVersion) || expectedVersion !== 0) {
+      throw new TypeError('La versión del turno no corresponde al arqueo pendiente.')
+    }
+    return {
+      shiftId: cashShift.shift.id,
+      expectedVersion,
+      purpose: 'settle',
+      key: `${cashShift.shift.id}:${expectedVersion}:settle`,
+    }
   }
   const reclose = state === 'reopened'
   const expectedVersion = reclose ? cashShift.shift.version : 0
@@ -66,6 +78,8 @@ export function buildCashShiftCloseOperation({
   adjustments,
   notes,
   nextOpeningFund,
+  separationConfirmed,
+  separationExceptionNote,
 }) {
   const binding = cashShiftCloseBinding(cashShift)
   const normalizedDenominations = normalizeDenominations(denominations)
@@ -79,6 +93,17 @@ export function buildCashShiftCloseOperation({
   if (hasCashDifference(feedback.difference) && !normalizedNotes) {
     throw new TypeError('Toda diferencia requiere nota.')
   }
+  const pendingBoundary = cashShift.boundary || {}
+  const pendingNeedsNote = binding.purpose === 'settle' && (
+    cashShift.notesRequired
+    || pendingBoundary.lateExecution
+    || Boolean(pendingBoundary.separationExceptionNote)
+    || separationConfirmed !== true
+    || Boolean(String(separationExceptionNote || '').trim())
+  )
+  if (pendingNeedsNote && !normalizedNotes) {
+    throw new TypeError('El arqueo pendiente requiere una nota.')
+  }
   const request = {
     shiftId: binding.shiftId,
     expectedVersion: binding.expectedVersion,
@@ -89,14 +114,24 @@ export function buildCashShiftCloseOperation({
   if (binding.purpose === 'close') {
     request.nextOpeningFund = moneyValue(nextOpeningFund, 'El fondo inicial del siguiente turno')
   }
+  if (binding.purpose === 'settle') {
+    if (typeof separationConfirmed !== 'boolean') {
+      throw new TypeError('La confirmación de separación es obligatoria.')
+    }
+    request.separationConfirmed = separationConfirmed
+    const exceptionNote = String(separationExceptionNote || '').trim()
+    if (exceptionNote) request.separationExceptionNote = exceptionNote
+  }
   const shiftName = cashShift.shift.type === 'night' ? 'Noche' : 'Día'
   const day = Number(cashShift.shift.businessDate.slice(-2))
   return {
     operation: binding.purpose,
     request,
     feedback,
-    label: binding.purpose === 'reclose'
-      ? `Volver a cerrar ${shiftName} ${day}`
-      : nextTransitionLabel(cashShift.shift),
+    label: binding.purpose === 'settle'
+      ? `Arqueo pendiente · ${shiftName} ${day}`
+      : binding.purpose === 'reclose'
+        ? `Volver a cerrar ${shiftName} ${day}`
+        : nextTransitionLabel(cashShift.shift),
   }
 }

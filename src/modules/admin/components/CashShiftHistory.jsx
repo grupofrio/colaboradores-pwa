@@ -24,6 +24,10 @@ function unwrap(raw) {
   return envelope?.data ?? envelope
 }
 
+function normalizePrintableDetail(raw) {
+  return normalizeCashShift(unwrap(raw), { contractVersion: 'v2' })
+}
+
 function HistoryState({ title, children, onRetry = null }) {
   return (
     <section className="cash-shift-card" role={onRetry ? 'alert' : 'status'}>
@@ -281,7 +285,11 @@ export default function CashShiftHistory({
     setDetailView({ status: 'loading', data: null, error: '' })
     marker.promise = (async () => {
       try {
-        const detail = normalizeCashShift(unwrap(await loadDetail({ shiftId: cashShift.shift.id, versionId })))
+        const detail = normalizePrintableDetail(await loadDetail({
+          shiftId: cashShift.shift.id,
+          versionId,
+          contractVersion: 'v2',
+        }))
         if (
           detail.shift.id !== cashShift.shift.id
           || detail.versionId !== versionId
