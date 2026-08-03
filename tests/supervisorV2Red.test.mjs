@@ -3,6 +3,7 @@
 // / unauthorized), estados degradados homogéneos, accesibilidad (button real).
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import TestRenderer, { act } from 'react-test-renderer'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
 import { fileURLToPath } from 'node:url'
 import { readFile } from 'node:fs/promises'
@@ -83,7 +84,7 @@ test('PositionMap: conserva width y backdropUrl para los callers del SVG previo'
 test('PositionMap: wrapper carga Leaflet de forma diferida y el hijo define el contrato vial', () => {
   assert.doesNotMatch(positionMapSource, /^\s*import[\s\S]*?from\s+['"](?:react-leaflet|leaflet|leaflet\/dist\/leaflet\.css)['"]/m)
   assert.match(positionMapSource, /lazy\(\(\)\s*=>\s*import\(['"]\.\/LeafletPositionMap\.jsx['"]\)\)/)
-  assert.match(leafletPositionMapSource, /import\s*{\s*MapContainer,\s*TileLayer,\s*CircleMarker,\s*Marker,\s*Tooltip,\s*useMap\s*}\s*from\s*['"]react-leaflet['"]/) ;
+  assert.match(leafletPositionMapSource, /import\s*{\s*MapContainer,\s*TileLayer,\s*CircleMarker,\s*Marker,\s*Polyline,\s*Tooltip,\s*useMap\s*}\s*from\s*['"]react-leaflet['"]/) ;
   assert.match(leafletPositionMapSource, /import\s*{\s*divIcon\s*}\s*from\s*['"]leaflet['"]/) ;
   assert.match(leafletPositionMapSource, /import\s*['"]leaflet\/dist\/leaflet\.css['"]/) ;
   assert.match(leafletPositionMapSource, /https:\/\/\{s\}\.tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/)
@@ -96,6 +97,130 @@ test('PositionMap: el mapa no obtiene ni persiste datos y declara últimas posic
   assert.doesNotMatch(source, /\b(fetch|localStorage|sessionStorage|indexedDB|POST|PUT|PATCH|DELETE)\b/i)
   assert.match(source, /posiciones conocidas/i)
   assert.doesNotMatch(source, /seguimiento en vivo|rastreo en vivo|posiciones en vivo/i)
+})
+
+test('PositionMap: el rastro GPS válido se pasa como una Polyline y amplía la geometría sin crear marcadores', () => {
+  assert.match(positionMapSource, /trail = \[\]/)
+  assert.match(positionMapSource, /computeBounds\(\[\.\.\.plotted, \.\.\.trailPoints\]\)/)
+  assert.match(positionMapSource, /LeafletPositionMap[\s\S]*trail=\{trailPoints\}/)
+  assert.match(leafletPositionMapSource, /\bPolyline\b/)
+  assert.match(leafletPositionMapSource, /trail\.length >= 2/)
+  assert.match(leafletPositionMapSource, /Polyline[^>]*positions=\{trail\}/)
+  assert.doesNotMatch(leafletPositionMapSource, /Polyline[^>]*positions=\{points\}/)
+})
+
+test('PositionMap: un rastro GPS puede ser la única geometría y también participa en el límite anti-meridiano', () => {
+  const trailOnly = render(PositionMap, {
+    points: [], trail: [{ lat: 18.34, lng: -99.53 }, { lat: 18.35, lng: -99.54 }], height: 200,
+  })
+  assert.match(trailOnly, /data-testid="v2-position-map"/)
+  assert.doesNotMatch(trailOnly, /v2-position-map-empty/)
+
+  const crossDateLine = render(PositionMap, {
+    points: [{ id: 41, kind: 'unit', lat: 18.34, lng: 179 }],
+    trail: [{ lat: 18.35, lng: -179 }, { lat: 18.36, lng: -178.9 }], height: 200,
+  })
+  assert.match(crossDateLine, /línea de fecha/)
+})
+
+test('PositionMap: un solo punto GPS no cambia la elegibilidad ni el límite del mapa', () => {
+  const singleTrailOnly = render(PositionMap, { points: [], trail: [{ lat: 18.34, lng: -99.53 }], height: 200 })
+  assert.match(singleTrailOnly, /v2-position-map-empty/)
+
+  const unitWithDistantSingleTrail = render(PositionMap, {
+    points: [{ id: 41, kind: 'unit', lat: 18.34, lng: 179 }],
+    trail: [{ lat: 18.35, lng: -179 }], height: 200,
+  })
+  assert.doesNotMatch(unitWithDistantSingleTrail, /línea de fecha/)
+})
+
+const RadarView = await loadView('src/modules/supervisor-ventas/v2/radar/RadarView.jsx')
+
+test('RadarView: abre mapa con el mismo rastro GPS y el diálogo atrapa Tab, cierra con Escape y devuelve foco', async () => {
+  const priorWindow = globalThis.window
+  const priorDocument = globalThis.document
+  const focusLog = []
+  const documentMock = { activeElement: null }
+  globalThis.window = { addEventListener() {}, removeEventListener() {} }
+  globalThis.document = documentMock
+  const nodeMocks = new Map()
+
+  let renderer
+  try {
+    const nodeMock = (element) => {
+      if (element.type === 'button') {
+        const key = element.props['data-testid'] || element.props['aria-label'] || element.props.children
+        if (nodeMocks.has(key)) return nodeMocks.get(key)
+        const node = {
+          focus() {
+            documentMock.activeElement = node
+            focusLog.push(element.props['aria-label'] || element.props.children)
+          },
+        }
+        nodeMocks.set(key, node)
+        return node
+      }
+      if (element.props?.role === 'dialog') {
+        return {
+          querySelectorAll() {
+            return [documentMock.closeButton]
+          },
+        }
+      }
+      return {}
+    }
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(RadarView, {
+        radar: { units: [{ plan_id: 41, route_name: 'Ruta norte', name: 'Ana', vehicle: { name: 'U-1' }, stops: {} }] },
+        selectedId: 41,
+        trail: [{ lat: 18.34, lng: -99.53 }, { lat: 18.35, lng: -99.54 }],
+      }), { createNodeMock: nodeMock })
+    })
+    const expand = renderer.root.findByProps({ 'data-testid': 'radar-expand-map' })
+    const expandNode = expand.instance
+    assert.equal(documentMock.activeElement, null)
+
+    await act(async () => { expand.props.onClick() })
+    const dialog = renderer.root.findByProps({ role: 'dialog' })
+    const close = renderer.root.findByProps({ 'data-testid': 'radar-close-expanded-map' })
+    documentMock.closeButton = close.instance
+    assert.equal(documentMock.activeElement, close.instance)
+
+    let tabPrevented = false
+    await act(async () => {
+      dialog.props.onKeyDown({ key: 'Tab', shiftKey: false, preventDefault() { tabPrevented = true } })
+    })
+    assert.equal(tabPrevented, true)
+    assert.equal(documentMock.activeElement, close.instance)
+
+    let shiftTabPrevented = false
+    await act(async () => {
+      dialog.props.onKeyDown({ key: 'Tab', shiftKey: true, preventDefault() { shiftTabPrevented = true } })
+    })
+    assert.equal(shiftTabPrevented, true)
+    assert.equal(documentMock.activeElement, close.instance)
+
+    await act(async () => { dialog.props.onKeyDown({ key: 'Escape', preventDefault() {} }) })
+    assert.throws(() => renderer.root.findByProps({ role: 'dialog' }))
+    assert.equal(documentMock.activeElement, expandNode)
+    assert.deepEqual(focusLog, ['Cerrar mapa ampliado', 'Cerrar mapa ampliado', 'Cerrar mapa ampliado', 'Ampliar mapa'])
+  } finally {
+    if (renderer) act(() => renderer.unmount())
+    globalThis.window = priorWindow
+    globalThis.document = priorDocument
+  }
+})
+
+test('RadarView: declara el rastro GPS o su ausencia, sin afirmar tiempo real', async () => {
+  const radarViewSource = await readFile(fileURLToPath(new URL('../src/modules/supervisor-ventas/v2/radar/RadarView.jsx', import.meta.url)), 'utf8')
+  assert.match(radarViewSource, /Rastro GPS de hoy/)
+  assert.match(radarViewSource, /Sin recorrido GPS disponible para esta jornada\./)
+  assert.doesNotMatch(radarViewSource, /rastro GPS en vivo|rastro GPS en tiempo real/i)
+  const radar = { units: [{ plan_id: 41, route_name: 'Ruta norte', name: 'Ana', vehicle: { name: 'U-1' }, stops: {} }] }
+  assert.match(render(RadarView, { radar, selectedId: 41 }), /Sin recorrido GPS disponible para esta jornada\./)
+  assert.match(render(RadarView, {
+    radar, selectedId: 41, trail: [{ lat: 18.34, lng: -99.53 }, { lat: 18.35, lng: -99.54 }],
+  }), /Recorrido GPS disponible para esta jornada\./)
 })
 
 // ── Normalizador único (§4) — ENVELOPES REALES ───────────────────────────────

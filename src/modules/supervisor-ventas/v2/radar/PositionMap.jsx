@@ -31,14 +31,18 @@ function LoadingMap({ testid, height }) {
 // Límite SSR: valida geometría sin cargar Leaflet. En servidor no se intenta
 // representar cartografía; el navegador carga el mapa vial de manera diferida.
 export default function PositionMap({
-  points = [], selectedId = null, onSelect, height = 300, backdropUrl = null, width = 640, testid = 'v2-position-map',
+  points = [], trail = [], selectedId = null, onSelect, height = 300, backdropUrl = null, width = 640, testid = 'v2-position-map',
 }) {
   // CEDIS y otros puntos ajenos al plan seleccionado no forman parte de la
   // geometría del mapa: no se dibujan ni pueden modificar su encuadre.
   const plotted = validPoints(points).filter(isMappablePoint)
-  const bounds = computeBounds(plotted)
+  // `trail` ya llega normalizado por RadarTab. Sólo se conserva como geometría
+  // cuando aporta dos coordenadas GPS válidas; nunca genera marcadores.
+  const validTrail = validPoints(trail)
+  const trailPoints = validTrail.length >= 2 ? validTrail : []
+  const bounds = computeBounds([...plotted, ...trailPoints])
 
-  if (!bounds || plotted.length === 0) {
+  if (!bounds || (plotted.length === 0 && trailPoints.length === 0)) {
     return <EmptyMap testid={testid} height={height} note="Sin posiciones válidas para el mapa. Consulta la lista de unidades." />
   }
   if (bounds.antimeridian) {
@@ -48,7 +52,7 @@ export default function PositionMap({
 
   return (
     <Suspense fallback={<LoadingMap testid={testid} height={height} />}>
-      <LeafletPositionMap points={plotted} selectedId={selectedId} onSelect={onSelect} height={height} backdropUrl={backdropUrl} width={width} testid={testid} />
+      <LeafletPositionMap points={plotted} trail={trailPoints} selectedId={selectedId} onSelect={onSelect} height={height} backdropUrl={backdropUrl} width={width} testid={testid} />
     </Suspense>
   )
 }

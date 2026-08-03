@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Marker, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Marker, Polyline, Tooltip, useMap } from 'react-leaflet'
 import { divIcon } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
@@ -13,6 +13,7 @@ const STOP_STYLES = {
   stop_done: { fill: '#16a34a', stroke: '#0a3a1a' },
   stop_pending: { fill: 'rgba(15,42,61,0.35)', stroke: 'rgba(15,42,61,0.55)' },
 }
+const GPS_TRAIL_STYLE = { color: C.blue3, weight: 4, opacity: 0.78 }
 
 function isPlanId(id) {
   return typeof id === 'number' && Number.isFinite(id)
@@ -40,11 +41,11 @@ function unitIcon(point, selected) {
   })
 }
 
-export default function LeafletPositionMap({ points, selectedId, onSelect, height, backdropUrl, width = 640, testid }) {
+export default function LeafletPositionMap({ points, trail = [], selectedId, onSelect, height, backdropUrl, width = 640, testid }) {
   // backdropUrl se conserva como no-op: superponer una imagen sobre calles reales
   // alteraría la cartografía y podría volver engañosa la posición del plan.
   void backdropUrl
-  const positions = points.map((point) => [point.lat, point.lng])
+  const positions = [...points, ...trail].map((point) => [point.lat, point.lng])
   return (
     <section data-testid={testid} aria-label="Mapa vial de las últimas posiciones conocidas del plan seleccionado" style={{ border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.md, overflow: 'hidden' }}>
       <MapContainer scrollWheelZoom={false} style={{ height, width: width === 640 ? '100%' : width }} aria-label="Mapa vial de posiciones conocidas">
@@ -53,6 +54,9 @@ export default function LeafletPositionMap({ points, selectedId, onSelect, heigh
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution={'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}
         />
+        {trail.length >= 2 && (
+          <Polyline positions={trail} pathOptions={GPS_TRAIL_STYLE} />
+        )}
         {points.map((point) => {
           const position = [point.lat, point.lng]
           if (STOP_STYLES[point.kind]) {
