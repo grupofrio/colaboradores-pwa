@@ -4,6 +4,11 @@ import { computeBounds, validPoints } from './mapProjection.js'
 
 const C = TOKENS.colors
 const LeafletPositionMap = lazy(() => import('./LeafletPositionMap.jsx'))
+const MAP_KINDS = new Set(['unit', 'unit_stale', 'stop_done', 'stop_pending'])
+
+function isMappablePoint(point) {
+  return MAP_KINDS.has(point.kind)
+}
 
 function EmptyMap({ testid, height, note }) {
   return (
@@ -28,8 +33,10 @@ function LoadingMap({ testid, height }) {
 export default function PositionMap({
   points = [], selectedId = null, onSelect, height = 300, backdropUrl = null, width = 640, testid = 'v2-position-map',
 }) {
-  const bounds = computeBounds(points)
-  const plotted = validPoints(points)
+  // CEDIS y otros puntos ajenos al plan seleccionado no forman parte de la
+  // geometría del mapa: no se dibujan ni pueden modificar su encuadre.
+  const plotted = validPoints(points).filter(isMappablePoint)
+  const bounds = computeBounds(plotted)
 
   if (!bounds || plotted.length === 0) {
     return <EmptyMap testid={testid} height={height} note="Sin posiciones válidas para el mapa. Consulta la lista de unidades." />

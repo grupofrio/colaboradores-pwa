@@ -55,6 +55,18 @@ test('PositionMap: anti-meridiano ⇒ prefiere lista', () => {
   assert.match(html, /v2-position-map-empty/)
   assert.match(html, /línea de fecha/)
 })
+test('PositionMap: CEDIS se excluye antes de calcular geometría del mapa', () => {
+  const cedisOnly = render(PositionMap, { points: [{ id: 'cedis:1', lat: 19.4, lng: -99.1, kind: 'cedis' }], height: 200 })
+  assert.match(cedisOnly, /v2-position-map-empty/)
+  const unitWithDistantCedis = render(PositionMap, {
+    points: [
+      { id: 1, lat: 19.4, lng: 179, kind: 'unit' },
+      { id: 'cedis:1', lat: 19.4, lng: -179, kind: 'cedis' },
+    ],
+    height: 200,
+  })
+  assert.doesNotMatch(unitWithDistantCedis, /línea de fecha/)
+})
 test('PositionMap: SSR válido conserva un fallback accesible, sin afirmar calles visibles', () => {
   const html = render(PositionMap, { points: [{ id: 1, lat: 10, lng: -35, kind: 'unit', label: 'R1' }], onSelect: () => {}, height: 200 })
   assert.match(html, /data-testid="v2-position-map"/)
