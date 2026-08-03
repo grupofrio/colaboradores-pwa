@@ -1061,6 +1061,79 @@ test('reclose binds the current version and omits next opening fund completely',
   assert.equal(Object.hasOwn(operation.request, 'nextOpeningFund'), false)
 })
 
+test('pending count binds settle at version zero, confirms separation and requires a dynamic note', () => {
+  const shift = {
+    formKind: 'pendingCount',
+    expectedVersion: 0,
+    shift: { id: 41, type: 'night', businessDate: '2026-07-27', state: 'pending_count' },
+    totals: { expectedCash: 212 },
+    boundary: {
+      lateExecution: true,
+      separationConfirmed: false,
+      separationExceptionNote: '',
+    },
+  }
+  assert.deepEqual(closeModel.cashShiftCloseBinding(shift), {
+    shiftId: 41,
+    expectedVersion: 0,
+    purpose: 'settle',
+    key: '41:0:settle',
+  })
+  assert.throws(() => buildCashShiftCloseOperation({
+    cashShift: shift,
+    denominations: [],
+    adjustments: [],
+    notes: 'Conteo pendiente',
+  }), /confirmación/i)
+  assert.throws(() => buildCashShiftCloseOperation({
+    cashShift: shift,
+    denominations: [{ denomination: '200', count: 1 }],
+    adjustments: [],
+    notes: '',
+    separationConfirmed: false,
+    separationExceptionNote: 'Efectivo separado al terminar',
+    nextOpeningFund: 999,
+  }), /nota/i)
+  assert.throws(() => buildCashShiftCloseOperation({
+    cashShift: {
+      ...shift,
+      notesRequired: false,
+      totals: { expectedCash: 200 },
+      boundary: {
+        lateExecution: false,
+        separationConfirmed: true,
+        separationExceptionNote: '',
+      },
+    },
+    denominations: [{ denomination: '200', count: 1 }],
+    adjustments: [],
+    notes: '',
+    separationConfirmed: true,
+    separationExceptionNote: 'Efectivo entregado después',
+  }), /nota/i)
+  const operation = buildCashShiftCloseOperation({
+    cashShift: shift,
+    denominations: [{ denomination: '200', count: 1 }],
+    adjustments: [],
+    notes: 'Conteo tardío',
+    separationConfirmed: false,
+    separationExceptionNote: 'Efectivo separado al terminar',
+    nextOpeningFund: 999,
+  })
+  assert.equal(operation.operation, 'settle')
+  assert.deepEqual(operation.request, {
+    shiftId: 41,
+    expectedVersion: 0,
+    denominations: [{ denomination: '200', count: 1 }],
+    adjustments: [],
+    notes: 'Conteo tardío',
+    separationConfirmed: false,
+    separationExceptionNote: 'Efectivo separado al terminar',
+  })
+  assert.equal(Object.hasOwn(operation.request, 'nextOpeningFund'), false)
+  assert.equal(operation.label, 'Arqueo pendiente · Noche 27')
+})
+
 test('close form refreshes authoritative preview and renders every audit section', async () => {
   const calls = []
   const shift = cashShiftForClose()

@@ -9,6 +9,8 @@ import {
   normalizeAdjustments,
   normalizeCashShift,
   normalizeDenominations,
+  normalizePendingCashShiftList,
+  normalizePendingCashShiftPreview,
 } from '../src/modules/admin/cashShiftModel.js'
 
 function validShift(overrides = {}) {
@@ -102,6 +104,127 @@ test('normaliza un turno estricto sin recalcular ni aceptar autoridad local sobr
   })
   assert.equal(dto.physicalCash, 0)
   assert.equal(dto.difference, -1200)
+  assert.equal(Object.hasOwn(dto, 'boundary'), false)
+})
+
+test('el contrato v2 añade frontera sin cambiar la lectura v1 existente', () => {
+  const v1 = normalizeCashShift(validShift())
+  assert.equal(Object.hasOwn(v1, 'boundary'), false)
+
+  const v2 = normalizeCashShift(validShift({
+    shift: { ...validShift().shift, state: 'pending_count' },
+    boundary: {
+      operational_closed_at: '2026-07-27 06:00:00',
+      scheduled_boundary_at: '2026-07-27 06:00:00',
+      executed_at: '2026-07-27 06:03:00',
+      origin: 'scheduler',
+      late_execution: true,
+      separation_confirmed: false,
+      separation_exception_note: '',
+      next_shift_id: 42,
+    },
+  }), { contractVersion: 'v2' })
+
+  assert.equal(v2.shift.state, 'pending_count')
+  assert.deepEqual(v2.boundary, {
+    operationalClosedAt: '2026-07-27 06:00:00',
+    scheduledBoundaryAt: '2026-07-27 06:00:00',
+    executedAt: '2026-07-27 06:03:00',
+    origin: 'scheduler',
+    lateExecution: true,
+    separationConfirmed: false,
+    separationExceptionNote: '',
+    nextShiftId: 42,
+  })
+})
+
+test('v2 admite automatic_settlement y v1 conserva sus enums cerrados', () => {
+  const v2 = normalizeCashShift(validShift({
+    closing_type: 'automatic_settlement',
+    version_id: 701,
+    version_number: 1,
+    closed_or_reclosed_at: '2026-07-27 06:15:00',
+    shift: { ...validShift().shift, state: 'closed', version: 1 },
+    boundary: {
+      operational_closed_at: '2026-07-27 06:00:00',
+      scheduled_boundary_at: '2026-07-27 06:00:00',
+      executed_at: '2026-07-27 06:03:00',
+      origin: 'movement_guard',
+      late_execution: true,
+      separation_confirmed: true,
+      separation_exception_note: 'Entrega tardía',
+      next_shift_id: 42,
+    },
+  }), { contractVersion: 'v2' })
+  assert.equal(v2.closingType, 'automatic_settlement')
+  assert.throws(() => normalizeCashShift(validShift({ closing_type: 'automatic_settlement' })), TypeError)
+})
+
+test('normaliza la lista mínima v2 de arqueos pendientes con shape y prototipos seguros', () => {
+  const response = {
+    shifts: [{
+      shift_id: 41,
+      shift_type: 'night',
+      business_date: '2026-07-27',
+      state: 'pending_count',
+      expected_version: 0,
+      operational_closed_at: '2026-07-27 06:00:00',
+      scheduled_boundary_at: '2026-07-27 06:00:00',
+      boundary_executed_at: '2026-07-27 06:03:00',
+      late_execution: true,
+      next_shift_id: 42,
+    }],
+  }
+  assert.deepEqual(normalizePendingCashShiftList(response), [{
+    shiftId: 41,
+    shiftType: 'night',
+    businessDate: '2026-07-27',
+    state: 'pending_count',
+    expectedVersion: 0,
+    operationalClosedAt: '2026-07-27 06:00:00',
+    scheduledBoundaryAt: '2026-07-27 06:00:00',
+    boundaryExecutedAt: '2026-07-27 06:03:00',
+    lateExecution: true,
+    nextShiftId: 42,
+  }])
+
+  let reads = 0
+  assert.throws(() => normalizePendingCashShiftList({
+    shifts: [{
+      ...response.shifts[0],
+      get unexpected() { reads += 1; return true },
+    }],
+  }), TypeError)
+  assert.equal(reads, 0)
+  assert.throws(() => normalizePendingCashShiftList({
+    shifts: [{ ...response.shifts[0], state: 'closed' }],
+  }), TypeError)
+})
+
+test('normaliza el formulario v2 de arqueo pendiente sin inventar efectivo físico', () => {
+  const dto = normalizePendingCashShiftPreview({
+    form_kind: 'pending_count',
+    expected_version: 0,
+    shift: { id: 41, type: 'night', business_date: '2026-07-27', state: 'pending_count' },
+    opening_fund: 0,
+    totals: { sales_cash: 212, sales_card: 0, sales_total: 212, expenses: 0, expected_cash: 212 },
+    denominations: [],
+    adjustments: [],
+    notes_required: true,
+    boundary: {
+      operational_closed_at: '2026-07-27 06:00:00',
+      scheduled_boundary_at: '2026-07-27 06:00:00',
+      executed_at: '2026-07-27 06:03:00',
+      late_execution: true,
+      separation_confirmed: false,
+      separation_exception_note: '',
+      next_shift_id: 42,
+    },
+  })
+  assert.equal(dto.expectedVersion, 0)
+  assert.equal(dto.totals.expectedCash, 212)
+  assert.equal(Object.hasOwn(dto, 'physicalCash'), false)
+  assert.equal(dto.boundary.separationConfirmed, false)
 })
 
 test('acepta la zona IANA autoritativa configurada por la sucursal', () => {

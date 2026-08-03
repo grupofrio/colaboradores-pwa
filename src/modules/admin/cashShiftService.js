@@ -5,10 +5,11 @@ import {
   openCashShift,
   recloseCashShift,
   reopenCashShift,
+  settleCashShift,
 } from './api.js'
 import { buildSessionIdentity } from '../supervisor-ventas/v2/sessionScope.js'
 
-const OPERATIONS = new Set(['open', 'close', 'reclose', 'reopen', 'authorize'])
+const OPERATIONS = new Set(['open', 'close', 'reclose', 'settle', 'reopen', 'authorize'])
 const DEFAULT_REQUEST_REGISTRY = new Map()
 const DEFAULT_REGISTRY_LIMIT = 128
 let defaultRegistryIdentity = null
@@ -251,6 +252,7 @@ async function defaultMutate(operation, request) {
     open: openCashShift,
     close: closeCashShift,
     reclose: recloseCashShift,
+    settle: settleCashShift,
     reopen: reopenCashShift,
     authorize: authorizeCashShift,
   }
