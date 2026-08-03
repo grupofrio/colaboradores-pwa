@@ -20,6 +20,8 @@ capa sobre Radar.
 - Conservar unidad actual y paradas planeadas como referencias secundarias.
 - Agregar un botón «Ampliar mapa» que abre una capa modal accesible sobre Radar,
   con el mismo plan, rastro, mapa y control para cerrar. No navega fuera de Radar.
+  Usa `role="dialog"`, `aria-modal="true"`, nombre accesible, foco inicial,
+  contención de foco, cierre por Escape/botón y devolución de foco al botón.
 - Si tracking no entrega rastro, conservar el mapa de posición/paradas y
   declarar «Sin recorrido GPS disponible para esta jornada.» No inventar línea.
 - Respuestas deshabilitadas, prohibidas o con error de tracking no bloquean
@@ -27,16 +29,19 @@ capa sobre Radar.
 
 ## Diseño técnico
 
-`RadarTab` conserva el plan elegido. Un estado acotado de tracking se asocia al
-`plan_id` activo y descarta respuestas tardías al cambiarlo o desmontar. La
+La fecha de tracking será siempre `dayControl.date` del Radar (fecha operativa
+`YYYY-MM-DD`); nunca la fecha del dispositivo ni el valor por defecto del API.
+`RadarTab` conserva el plan elegido. Un estado acotado se asocia a `(plan_id,
+dayControl.date)` y descarta respuestas tardías al cambiarlo o desmontar. Un
+error limpia sólo el rastro anterior, nunca la posición/paradas base. La
 normalización y validación existentes de `unitTrackState` se reutilizan, evitando
 persistir GPS en almacenamiento local.
 
-`PositionMap` recibe opcionalmente el rastro ya normalizado y lo entrega a la
-presentación Leaflet; ésta sólo lo dibuja cuando hay al menos dos puntos válidos.
+`PositionMap` conserva sus `points` base y recibe opcionalmente un `trail`
+normalizado. Leaflet sólo lo dibuja con al menos dos puntos válidos, los suma al
+viewport y evita duplicar el último punto con la posición actual.
 El panel ampliado reutiliza el mismo componente Leaflet y datos, no una segunda
-consulta ni una segunda implementación del mapa. El modal debe cerrar con botón,
-Escape y foco devuelto al botón que lo abrió.
+consulta ni una segunda implementación del mapa.
 
 ## Pruebas
 
@@ -46,6 +51,6 @@ Escape y foco devuelto al botón que lo abrió.
   si no hay plan válido; falla de tracking conserva Radar.
 - Mapa: polilínea sólo con dos puntos, leyenda/copia de rastro GPS y sin
   afirmación de tiempo real.
-- Modal: botón, cierre por Escape y foco restaurado; datos y selector se
-  conservan al ampliar/cerrar.
+- Modal: botón, foco atrapado, cierre por Escape y foco restaurado; datos y
+  selector se conservan al ampliar/cerrar sin una segunda solicitud.
 - Ejecutar suite completa, lint y build.
