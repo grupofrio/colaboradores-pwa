@@ -61,6 +61,13 @@ test('PositionMap: SSR válido conserva un fallback accesible, sin afirmar calle
   assert.match(html, /últimas posiciones conocidas/i)
   assert.doesNotMatch(html, /calles visibles/i)
 })
+test('PositionMap: conserva width y backdropUrl para los callers del SVG previo', () => {
+  assert.match(positionMapSource, /height = 300, backdropUrl = null, width = 640, testid = 'v2-position-map'/)
+  assert.match(positionMapSource, /backdropUrl=\{backdropUrl\} width=\{width\}/)
+  assert.match(leafletPositionMapSource, /backdropUrl/)
+  assert.match(leafletPositionMapSource, /backdropUrl se conserva como no-op/i)
+  assert.match(leafletPositionMapSource, /width: width === 640 \? '100%' : width/)
+})
 test('PositionMap: wrapper carga Leaflet de forma diferida y el hijo define el contrato vial', () => {
   assert.doesNotMatch(positionMapSource, /^\s*import[\s\S]*?from\s+['"](?:react-leaflet|leaflet|leaflet\/dist\/leaflet\.css)['"]/m)
   assert.match(positionMapSource, /lazy\(\(\)\s*=>\s*import\(['"]\.\/LeafletPositionMap\.jsx['"]\)\)/)

@@ -40,11 +40,14 @@ function unitIcon(point, selected) {
   })
 }
 
-export default function LeafletPositionMap({ points, selectedId, onSelect, height, testid }) {
+export default function LeafletPositionMap({ points, selectedId, onSelect, height, backdropUrl, width = 640, testid }) {
+  // backdropUrl se conserva como no-op: superponer una imagen sobre calles reales
+  // alteraría la cartografía y podría volver engañosa la posición del plan.
+  void backdropUrl
   const positions = points.map((point) => [point.lat, point.lng])
   return (
     <section data-testid={testid} aria-label="Mapa vial de las últimas posiciones conocidas del plan seleccionado" style={{ border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.md, overflow: 'hidden' }}>
-      <MapContainer scrollWheelZoom={false} style={{ height, width: '100%' }} aria-label="Mapa vial de posiciones conocidas">
+      <MapContainer scrollWheelZoom={false} style={{ height, width: width === 640 ? '100%' : width }} aria-label="Mapa vial de posiciones conocidas">
         <MapViewport positions={positions} />
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

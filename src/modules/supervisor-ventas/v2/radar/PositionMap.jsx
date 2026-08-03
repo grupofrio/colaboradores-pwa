@@ -26,7 +26,7 @@ function LoadingMap({ testid, height }) {
 // Límite SSR: valida geometría sin cargar Leaflet. En servidor no se intenta
 // representar cartografía; el navegador carga el mapa vial de manera diferida.
 export default function PositionMap({
-  points = [], selectedId = null, onSelect, height = 300, testid = 'v2-position-map',
+  points = [], selectedId = null, onSelect, height = 300, backdropUrl = null, width = 640, testid = 'v2-position-map',
 }) {
   const bounds = computeBounds(points)
   const plotted = validPoints(points)
@@ -41,7 +41,7 @@ export default function PositionMap({
 
   return (
     <Suspense fallback={<LoadingMap testid={testid} height={height} />}>
-      <LeafletPositionMap points={plotted} selectedId={selectedId} onSelect={onSelect} height={height} testid={testid} />
+      <LeafletPositionMap points={plotted} selectedId={selectedId} onSelect={onSelect} height={height} backdropUrl={backdropUrl} width={width} testid={testid} />
     </Suspense>
   )
 }
