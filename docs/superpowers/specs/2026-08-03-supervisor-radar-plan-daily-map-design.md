@@ -1,6 +1,6 @@
 # Supervisor Ventas V2 — mapa vial filtrado por plan diario
 
-**Fecha:** 2026-08-03  
+**Fecha:** 2026-08-03
 **Estado:** diseño aprobado por el usuario
 
 ## Objetivo
