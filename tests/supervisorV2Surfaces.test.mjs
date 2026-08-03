@@ -3,6 +3,7 @@
 // (null≠0, unknown≠incumplimiento), banners de demo y estados degradados.
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { loadJsxDefault, createElement, renderToStaticMarkup } from './helpers/renderJsx.mjs'
 import { fileURLToPath } from 'node:url'
 // Contrato canónico del harness en main: { Component, mod, cleanup } + ruta
@@ -22,6 +23,7 @@ const RutasView = await loadView('src/modules/supervisor-ventas/v2/rutas/RutasVi
 const RutaDetalle = await loadView('src/modules/supervisor-ventas/v2/rutas/RutaDetalle.jsx')
 const PendientesView = await loadView('src/modules/supervisor-ventas/v2/pendientes/PendientesView.jsx')
 const render = (C, props) => renderToStaticMarkup(createElement(C, props))
+const radarTabSource = readFileSync(fileURLToPath(new URL('../src/modules/supervisor-ventas/v2/tabs/RadarTab.jsx', import.meta.url)), 'utf8')
 
 const TWO_PLAN_RADAR = {
   ...RADAR_FIXTURE,
@@ -135,6 +137,32 @@ test('Radar no expone filas con plan_id inválido como seleccionables', () => {
   const html = render(RadarView, { radar, source: 'live', nowMs: NOW, onSelectUnit: () => {} })
   assert.match(html, /radar-unit-row/)
   assert.doesNotMatch(html, /data-testid="radar-unit-row" role="button"/)
+})
+test('Radar carga el rastro con el plan resuelto y la fecha operativa del day-control', () => {
+  assert.match(radarTabSource, /resolveActivePlanId\(day\.radar\?\.units, selectedId\)/)
+  assert.match(radarTabSource, /const operationalDate = day\.dayControl\?\.date/)
+  assert.match(radarTabSource, /createRadarTrailRequest\(activePlanId, operationalDate\)/)
+  assert.match(radarTabSource, /getUnitTrack\(request\.planId, request\.operationalDate\)/)
+})
+test('Radar limpia y protege el rastro al cambiar plan o fecha', () => {
+  assert.match(radarTabSource, /setTrailState\(request\)/)
+  assert.match(radarTabSource, /applyRadarTrailResponse\(state, request\.key, response\)/)
+  assert.match(radarTabSource, /applyRadarTrailError\(state, request\.key\)/)
+  assert.match(radarTabSource, /selectRadarTrail\(trailState, activePlanId, operationalDate\)/)
+})
+test('Radar conserva mapa y lista base si el rastro falla', () => {
+  const html = render(RadarView, {
+    radar: RADAR_FIXTURE,
+    dayControl: DAY_CONTROL_FIXTURE,
+    source: 'live',
+    nowMs: NOW,
+    trail: [],
+    trailStatus: 'error',
+  })
+  assert.match(html, /data-trail-status="error"/)
+  assert.match(html, /data-testid="radar-map"/)
+  assert.match(html, /data-testid="radar-list"/)
+  assert.match(html, /Ruta Demo/)
 })
 
 // ── Rutas ────────────────────────────────────────────────────────────────────

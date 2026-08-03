@@ -28,9 +28,9 @@ const ORDER_LABELS = {
 const SIGNAL_TONE = { recent: S.signal, delayed: S.risk, no_signal: S.no_evaluable, invalid: S.no_evaluable }
 const signalTone = (s) => SIGNAL_TONE[s] || S.no_evaluable
 
-function Card({ children, testid }) {
+function Card({ children, testid, ...props }) {
   return (
-    <section data-testid={testid} style={{
+    <section data-testid={testid} {...props} style={{
       background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg,
       padding: '15px 17px', marginBottom: 13,
     }}>{children}</section>
@@ -99,6 +99,7 @@ function UnitRow({ unit, nowMs, selected, onSelectUnit, onOpenRoute }) {
 
 export default function RadarView({
   radar = null, dayControl = null, radarError = null, source = 'live', nowMs = null,
+  trail = [], trailStatus = 'idle',
   order = 'urgente', onSelectOrder, selectedId = null, onSelectUnit, onOpenRoute,
   testid = 'supervisor-v2-radar',
 }) {
@@ -110,6 +111,8 @@ export default function RadarView({
   const planOptions = buildRadarPlanOptions(units)
   const activePlanId = resolveActivePlanId(units, selectedId)
   const points = radar ? buildSelectedPlanPoints(radar, activePlanId, nowMs) : []
+  const normalizedTrail = Array.isArray(trail) ? trail : []
+  const normalizedTrailStatus = typeof trailStatus === 'string' ? trailStatus : 'idle'
   const ordered = radar ? orderRadarUnits(units, currentOrder, nowMs) : []
   // Solo se rutan al mapa los puntos de UNIDAD (ids numéricos = plan_id); los
   // puntos de parada (ids 'stop:*') no seleccionan unidad.
@@ -158,7 +161,7 @@ export default function RadarView({
             </div>
           </Card>
 
-          <Card testid="radar-map">
+          <Card testid="radar-map" data-trail-status={normalizedTrailStatus} data-trail-points={normalizedTrail.length}>
             <Title>Mapa de posiciones</Title>
             {activePlanId != null && (
               <label style={{ fontSize: 11.5, color: C.textMuted, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
