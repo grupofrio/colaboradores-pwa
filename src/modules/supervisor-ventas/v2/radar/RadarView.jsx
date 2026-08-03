@@ -31,7 +31,7 @@ const SIGNAL_TONE = { recent: S.signal, delayed: S.risk, no_signal: S.no_evaluab
 const signalTone = (s) => SIGNAL_TONE[s] || S.no_evaluable
 const MAP_ACTION_STYLE = {
   fontSize: 11.5, fontWeight: 700, color: C.blue3, background: C.surface,
-  border: `1px solid ${C.borderBlue}`, borderRadius: TOKENS.radius.pill, padding: '5px 11px', cursor: 'pointer',
+  minHeight: 44, border: `1px solid ${C.borderBlue}`, borderRadius: TOKENS.radius.pill, padding: '5px 11px', cursor: 'pointer',
 }
 const MAP_TRAIL_STYLE = { fontSize: 12, color: C.textMuted, marginBottom: 10 }
 const MAP_OVERLAY_STYLE = {

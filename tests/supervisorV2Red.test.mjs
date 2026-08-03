@@ -223,6 +223,13 @@ test('RadarView: declara el rastro GPS o su ausencia, sin afirmar tiempo real', 
   }), /Recorrido GPS disponible para esta jornada\./)
 })
 
+test('RadarView: los controles del mapa tienen un objetivo táctil mínimo de 44px', async () => {
+  const radarViewSource = await readFile(fileURLToPath(new URL('../src/modules/supervisor-ventas/v2/radar/RadarView.jsx', import.meta.url)), 'utf8')
+  assert.match(radarViewSource, /const MAP_ACTION_STYLE = \{[\s\S]*minHeight: 44/)
+  assert.match(radarViewSource, /radar-expand-map[\s\S]*style=\{MAP_ACTION_STYLE\}/)
+  assert.match(radarViewSource, /radar-close-expanded-map[\s\S]*style=\{MAP_ACTION_STYLE\}/)
+})
+
 // ── Normalizador único (§4) — ENVELOPES REALES ───────────────────────────────
 test('normalizeSupervisorV2Response: envelope de servicio real {status,code,data}', () => {
   assert.equal(normalizeSupervisorV2Response({ status: 'ok', code: 'OK', data: { stops: [] } }).phase, PHASE.OK)
