@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../App";
+import {
+  BRAND_LIGHT as C,
+  BRAND_HEADER_GRADIENT,
+  BRAND_LOGO,
+} from "../theme/brandLight";
 import { normalizeSessionRoleContext } from "../lib/roleContext";
 import { buildSupervisorV2SessionProjection } from '../modules/supervisor-ventas/v2/sessionProjection.js'
 import { buildSessionEmployee } from "../modules/torre/e1/employeeSessionFields";
@@ -255,23 +260,28 @@ async function verifyMagicToken(token, phone) {
 */
 
 // ── Design tokens ────────────────────────────────────────────────────────
+// IDENTIDAD CLARA GRUPO FRÍO EN EL LOGIN, PARA TODOS LOS ROLES.
+// Decisión de dirección: al autenticar todavía no se conoce el rol, así que no
+// hay dónde ramificar por tema. En vez de dejar la puerta con la piel vieja, se
+// rebrandea completa. El tema oscuro global (`src/tokens.js`) NO se toca: cada
+// rol sigue entrando a su propia superficie.
+//
+// Los colores salen de `theme/brandLight` (fuente de verdad), no se redefinen
+// aquí: si la paleta cambia, esta pantalla cambia con ella.
 const UI = {
   colors: {
-    bgStart: "#050D1A",
-    bgMid: "#091628",
-    bgEnd: "#050E1F",
-    blue: "#15499B",
-    blueBright: "#2B8FE0",
-    blueSoft: "rgba(43,143,224,0.12)",
-    whiteSoft: "rgba(255,255,255,0.82)",
-    whiteMuted: "rgba(255,255,255,0.60)",  /* ↑ 0.52→0.60 textos secundarios legibles bajo sol */
-    whiteLow: "rgba(255,255,255,0.55)",    /* ↑ 0.24→0.55 legible en exterior/campo */
-    border: "rgba(255,255,255,0.10)",
-    borderBlue: "rgba(97,178,255,0.18)",
-    success: "#22c55e",
-    successSoft: "rgba(34,197,94,0.10)",
-    successBorder: "rgba(34,197,94,0.22)",
-    danger: "#ef4444",
+    // Superficie clara
+    bg: C.bg,
+    surface: C.surface,
+    border: C.border,
+    // Texto — AA sobre #F0F9FF: #0F2A3D da ~12.9:1 y #5B7285 ~4.9:1
+    text: C.text,
+    textMuted: C.textMuted,
+    // Institucionales
+    primary: C.primary,
+    ice: C.ice,
+    danger: C.error,
+    warning: C.warning,
   },
   radius: {
     lg: 18,
@@ -279,9 +289,9 @@ const UI = {
     full: 999,
   },
   shadow: {
-    blue: "0 0 24px rgba(43,143,224,0.18)",
-    soft: "0 10px 28px rgba(0,0,0,0.28)",
-    card: "0 14px 30px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.05)",
+    // Sombras suaves: sobre fondo claro las sombras negras duras ensucian.
+    card: "0 10px 30px rgba(15,42,61,0.10), 0 1px 2px rgba(15,42,61,0.06)",
+    button: "0 10px 24px rgba(0,90,141,0.24)",
   },
 };
 
@@ -306,13 +316,16 @@ function IceParticles() {
       {particles.map((p) => (
         <div
           key={p.id}
-          className="absolute rounded-full bg-blue-400"
+          className="absolute rounded-full"
           style={{
+            // Sobre fondo claro el azul del tema oscuro desaparecía: se usa el
+            // "ice" institucional, que sí se lee como textura sin competir.
+            background: C.ice,
             left: `${p.x}%`,
             top: `${p.y}%`,
             width: p.size,
             height: p.size,
-            opacity: p.opacity,
+            opacity: Math.min(0.5, p.opacity + 0.16),
             animation: `float ${p.duration}s ${p.delay}s ease-in-out infinite alternate`,
           }}
         />
@@ -449,9 +462,12 @@ export default function LoginScreen() {
 
   return (
     <div
+      data-testid="login-screen"
+      data-theme="brand-light"
       className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden select-none"
       style={{
-        background: `linear-gradient(160deg, ${UI.colors.bgStart} 0%, ${UI.colors.bgMid} 50%, ${UI.colors.bgEnd} 100%)`,
+        background: UI.colors.bg,
+        color: UI.colors.text,
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
         overscrollBehaviorY: "none",
@@ -494,14 +510,14 @@ export default function LoginScreen() {
         .fade-up-4 { animation: fadeUp 0.6s 0.48s both; }
 
         .btn-shine {
-          background: linear-gradient(90deg, #15499B, #2B8FE0, #15499B);
+          background: ${BRAND_HEADER_GRADIENT};
           background-size: 200% auto;
           transition: background-position 0.35s ease, transform 0.1s ease, box-shadow 0.2s ease;
         }
 
         .btn-shine:hover {
           background-position: right center;
-          box-shadow: 0 0 24px rgba(43,143,224,0.34);
+          box-shadow: 0 12px 28px rgba(0,90,141,0.30);
         }
 
         .btn-shine:active {
@@ -509,41 +525,44 @@ export default function LoginScreen() {
         }
 
         .input-gf {
-          background: rgba(255,255,255,0.05);
-          border: 1.5px solid rgba(255,255,255,0.10);
-          color: white;
-          transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+          background: ${C.surface};
+          border: 1.5px solid ${C.border};
+          color: ${C.text};
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
         .input-gf:focus {
           outline: none;
-          border-color: rgba(43,143,224,0.48);
-          box-shadow: 0 0 0 3px rgba(43,143,224,0.08);
-          background: rgba(255,255,255,0.065);
+          border-color: ${C.primary};
+          box-shadow: 0 0 0 3px rgba(0,119,187,0.14);
         }
 
+        /* AA: el placeholder del tema oscuro quedaba en 0.22 de blanco, que
+           sobre fondo claro no se veía. #5B7285 da ~4.9:1 sobre #FFFFFF. */
         .input-gf::placeholder {
-          color: rgba(255,255,255,0.22);
+          color: ${C.textMuted};
+          opacity: 1;
         }
       `}</style>
 
       <IceParticles />
 
-      {/* Glow de fondo */}
+      {/* Halo institucional de fondo */}
       <div
         className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full"
         style={{
-          background: "radial-gradient(circle, rgba(0,100,255,0.12) 0%, transparent 70%)",
+          background: `radial-gradient(circle, ${C.ice}22 0%, transparent 70%)`,
           filter: "blur(40px)",
         }}
       />
 
-      {/* Grid */}
+      {/* Retícula: casi imperceptible, solo para que el fondo no sea plano */}
       <div
-        className="absolute inset-0 opacity-[0.045]"
+        className="absolute inset-0"
         style={{
+          opacity: 0.5,
           backgroundImage:
-            "linear-gradient(rgba(43,143,224,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(43,143,224,0.5) 1px, transparent 1px)",
+            `linear-gradient(${C.border} 1px, transparent 1px), linear-gradient(90deg, ${C.border} 1px, transparent 1px)`,
           backgroundSize: "48px 48px",
         }}
       />
@@ -552,25 +571,27 @@ export default function LoginScreen() {
       <div className="relative w-full max-w-sm mx-auto px-6 flex flex-col items-center gap-7">
         {/* Portada corporativa */}
         <div className={`flex flex-col items-center gap-4 ${mounted ? "fade-up-1" : "opacity-0"}`}>
-          <div className="relative">
-            <div className="absolute -inset-3 rounded-[36px] bg-blue-500/12 blur-2xl" />
-            <div className="absolute inset-0 rounded-[32px] border border-blue-400/20 shadow-[0_0_28px_rgba(43,143,224,0.16)]" />
-
-            <div className="relative w-[228px] rounded-[32px] border border-white/10 bg-white/[0.04] px-7 py-7 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_16px_40px_rgba(0,0,0,0.34),0_0_32px_rgba(43,143,224,0.18)]">
-              <div className="pointer-events-none absolute inset-[1px] rounded-[31px] bg-gradient-to-b from-white/[0.08] via-white/[0.03] to-transparent" />
-
-              <div className="relative flex flex-col items-center gap-4">
-                <img
-                  src="/icons/logo-grupo-frio.svg"
-                  alt="Grupo Frío"
-                  className="w-[168px] h-auto object-contain"
-                />
-              </div>
-            </div>
+          {/* Un solo logo: el oficial completo (marca + palabra). */}
+          <div
+            className="relative w-[228px] px-7 py-7 flex items-center justify-center"
+            style={{
+              background: UI.colors.surface,
+              border: `1px solid ${UI.colors.border}`,
+              borderRadius: 32,
+              boxShadow: UI.shadow.card,
+            }}
+          >
+            <img
+              src={BRAND_LOGO}
+              alt="Grupo Frío"
+              data-testid="login-logo"
+              className="w-[168px] h-auto object-contain"
+            />
           </div>
 
           <span
-            className="text-[11px] font-medium uppercase tracking-[0.42em] text-white/35 cursor-default select-none"
+            className="text-[11px] font-semibold uppercase tracking-[0.42em] cursor-default select-none"
+            style={{ color: UI.colors.textMuted }}
             onClick={handleAdminTap}
           >
             COLABORADORES
@@ -579,21 +600,23 @@ export default function LoginScreen() {
 
         {/* Separador */}
         <div className={`w-full flex items-center gap-3 ${mounted ? "fade-up-2" : "opacity-0"}`}>
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent to-white/10" />
-          <span className="text-white/20 text-xs tracking-widest uppercase">Grupo Frío</span>
-          <div className="flex-1 h-px bg-gradient-to-l from-transparent to-white/10" />
+          <div className="flex-1 h-px" style={{ background: UI.colors.border }} />
+          <span className="text-xs tracking-widest uppercase" style={{ color: UI.colors.textMuted }}>
+            Grupo Frío
+          </span>
+          <div className="flex-1 h-px" style={{ background: UI.colors.border }} />
         </div>
 
         {/* Formulario */}
         {step === "admin" ? (
           <div className={`w-full flex flex-col gap-3 ${mounted ? "fade-up-3" : "opacity-0"}`}>
             <div className="flex items-center justify-between mb-1">
-              <p className="text-white/60 text-xs font-semibold uppercase tracking-widest">
+              <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: UI.colors.textMuted }}>
                 Bypass — Elegir empleado
               </p>
               <button
                 onClick={() => { setStep("input"); setTapCount(0); }}
-                className="text-white/30 text-xs underline hover:text-white/50 transition-colors"
+                className="text-xs underline transition-colors" style={{ color: UI.colors.primary }}
               >
                 Cancelar
               </button>
@@ -601,8 +624,8 @@ export default function LoginScreen() {
             <div
               className="w-full rounded-2xl border overflow-hidden"
               style={{
-                borderColor: "rgba(255,255,255,0.08)",
-                background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
+                borderColor: UI.colors.border,
+                background: UI.colors.surface,
                 maxHeight: "52vh",
                 overflowY: "auto",
               }}
@@ -612,22 +635,22 @@ export default function LoginScreen() {
                 <button
                   key={`emp-${emp.id}`}
                   onClick={() => handleBypassLogin(emp)}
-                  className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors"
-                  style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+                  className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors"
+                  style={{ borderBottom: `1px solid ${UI.colors.border}`, minHeight: 44 }}
                 >
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0"
                     style={{
-                      background: "rgba(43,143,224,0.15)",
-                      color: "#61b2ff",
+                      background: "#E8F6FD",
+                      color: UI.colors.primary,
                     }}
                   >
                     {emp.name.split(' ').slice(0, 2).map(w => w[0]).join('')}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-white text-sm font-medium truncate">{emp.name}</p>
-                    <p className="text-white/30 text-[10px] truncate">
-                      <span className="text-blue-400/60">{emp.role}</span>
+                    <p className="text-sm font-medium truncate" style={{ color: UI.colors.text }}>{emp.name}</p>
+                    <p className="text-[10px] truncate" style={{ color: UI.colors.textMuted }}>
+                      <span style={{ color: UI.colors.primary }}>{emp.role}</span>
                       {' · '}{emp.job} · {emp.company}
                     </p>
                   </div>
@@ -635,8 +658,8 @@ export default function LoginScreen() {
               ))}
 
               {/* Separador — roles sin empleado */}
-              <div className="px-4 py-2" style={{ background: "rgba(245,158,11,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <p className="text-yellow-400/50 text-[10px] font-semibold uppercase tracking-wider">
+              <div className="px-4 py-2" style={{ background: "#FFF6E5", borderBottom: `1px solid ${UI.colors.border}` }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: UI.colors.warning }}>
                   Roles sin empleado asignado
                 </p>
               </div>
@@ -650,27 +673,27 @@ export default function LoginScreen() {
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0"
                     style={{
-                      background: "rgba(245,158,11,0.12)",
-                      color: "#f59e0b",
+                      background: "#FFF0D6",
+                      color: UI.colors.warning,
                     }}
                   >
                     {p.label.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-white/60 text-sm font-medium truncate">{p.label}</p>
-                    <p className="text-white/30 text-[10px] truncate">{p.desc}</p>
+                    <p className="text-sm font-medium truncate" style={{ color: UI.colors.text }}>{p.label}</p>
+                    <p className="text-[10px] truncate" style={{ color: UI.colors.textMuted }}>{p.desc}</p>
                   </div>
                 </button>
               ))}
             </div>
-            <p className="text-yellow-400/40 text-[10px] text-center mt-1">
+            <p className="text-[10px] text-center mt-1" style={{ color: UI.colors.warning }}>
               Sesión de prueba — las llamadas a API no funcionarán sin JWT real
             </p>
           </div>
         ) : (
           <div className={`w-full flex flex-col gap-4 ${mounted ? "fade-up-3" : "opacity-0"}`}>
             <div>
-              <label className="block text-white/40 text-xs font-medium tracking-widest uppercase mb-2.5">
+              <label className="block text-xs font-semibold tracking-widest uppercase mb-2.5" style={{ color: UI.colors.textMuted }}>
                 PIN de empleado
               </label>
 
@@ -682,17 +705,20 @@ export default function LoginScreen() {
                   onKeyDown={handleKeyDown}
                   placeholder="Ingresa tu PIN"
                   disabled={step === "loading"}
-                  className="input-gf w-full rounded-2xl py-4 pr-4 text-base font-medium"
+                  className="input-gf w-full rounded-2xl text-base font-medium"
                   autoComplete="off"
                   autoCapitalize="off"
                   spellCheck={false}
-                  style={{ paddingLeft: "16px" }}
+                  /* El alto va INLINE, no por `py-4`: esa utilidad la estaba
+                     anulando el reset y los campos medían 26px reales — por
+                     debajo del mínimo táctil. Medido en el navegador. */
+                  style={{ padding: "13px 16px", minHeight: 48 }}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-white/40 text-xs font-medium tracking-widest uppercase mb-2.5">
+              <label className="block text-xs font-semibold tracking-widest uppercase mb-2.5" style={{ color: UI.colors.textMuted }}>
                 Barcode
               </label>
 
@@ -704,17 +730,20 @@ export default function LoginScreen() {
                   onKeyDown={handleKeyDown}
                   placeholder="Ingresa o escanea el barcode"
                   disabled={step === "loading"}
-                  className="input-gf w-full rounded-2xl py-4 pr-4 text-base font-medium"
+                  className="input-gf w-full rounded-2xl text-base font-medium"
                   autoComplete="off"
                   autoCapitalize="off"
                   spellCheck={false}
-                  style={{ paddingLeft: "16px" }}
+                  /* El alto va INLINE, no por `py-4`: esa utilidad la estaba
+                     anulando el reset y los campos medían 26px reales — por
+                     debajo del mínimo táctil. Medido en el navegador. */
+                  style={{ padding: "13px 16px", minHeight: 48 }}
                 />
               </div>
             </div>
 
             {error && (
-              <p className="text-red-400 text-xs mt-0 flex items-center gap-1.5">
+              <p className="text-xs mt-0 flex items-center gap-1.5" style={{ color: UI.colors.danger }}>
                 <span>⚠</span> {error}
               </p>
             )}
@@ -726,7 +755,7 @@ export default function LoginScreen() {
               style={{
                 minHeight: 52,            /* Touch target ≥44px — estándar Apple HIG */
                 padding: "14px 24px",
-                boxShadow: "0 10px 24px rgba(21,73,155,0.30)",
+                boxShadow: UI.shadow.button,
               }}
             >
               {step === "loading" ? (
@@ -742,7 +771,7 @@ export default function LoginScreen() {
               )}
             </button>
 
-            <p className="text-white/20 text-xs text-center leading-relaxed">
+            <p className="text-xs text-center leading-relaxed" style={{ color: UI.colors.textMuted }}>
               Ingresa tu PIN y barcode para obtener tu clave de PWA.
             </p>
           </div>
@@ -750,7 +779,7 @@ export default function LoginScreen() {
 
         {/* Footer */}
         <div className={`${mounted ? "fade-up-4" : "opacity-0"}`}>
-          <p className="text-white/15 text-[10px] text-center tracking-wider">
+          <p className="text-[10px] text-center tracking-wider" style={{ color: UI.colors.textMuted }}>
             © 2026 Grupo Frío · Todos los derechos reservados
           </p>
         </div>
@@ -759,7 +788,7 @@ export default function LoginScreen() {
       {/* Línea inferior */}
       <div
         className="absolute bottom-0 left-0 right-0 h-px"
-        style={{ background: "linear-gradient(90deg, transparent, rgba(43,143,224,0.3), transparent)" }}
+        style={{ background: `linear-gradient(90deg, transparent, ${C.ice}, transparent)` }}
       />
     </div>
   );

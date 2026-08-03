@@ -13,7 +13,6 @@ import {
   BRAND_LIGHT as C,
   BRAND_HEADER_GRADIENT,
   BRAND_LOGO,
-  BRAND_LOGO_MARK,
 } from '../../../theme/brandLight'
 
 const ICON = {
@@ -92,15 +91,27 @@ export default function SupervisorVentasHome({
           color: C.onPrimary,
         }}
       >
+        {/* UN SOLO LOGO. Antes había dos: la marca suelta (hexágono) en una
+            cajita blanca y, debajo, el logo completo — que YA trae el mismo
+            hexágono. Se veía repetido. Queda el completo (marca + palabra).
+            VA SOBRE BLANCO: el artwork oficial lleva la palabra en azul marino
+            y sobre el gradiente institucional se perdía — medido en pantalla,
+            era casi ilegible. No se recolorea el logo; se le pone el fondo que
+            necesita, igual que en el login. */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <span
             style={{
-              width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-              background: 'rgba(255,255,255,0.18)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              display: 'inline-flex', alignItems: 'center',
+              background: C.surface, borderRadius: 14, padding: '9px 14px',
+              boxShadow: '0 2px 8px rgba(15,42,61,0.12)',
             }}
           >
-            <img src={BRAND_LOGO_MARK} alt="" aria-hidden="true" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+            <img
+              src={BRAND_LOGO}
+              alt="Grupo Frío"
+              data-testid="brand-home-logo"
+              style={{ display: 'block', height: 30, width: 'auto' }}
+            />
           </span>
           {onLogout && (
             <button
@@ -119,13 +130,7 @@ export default function SupervisorVentasHome({
           )}
         </div>
 
-        <img
-          src={BRAND_LOGO}
-          alt="Grupo Frío"
-          style={{ display: 'block', height: 44, width: 'auto', marginTop: 18 }}
-        />
-
-        <p style={{ margin: '14px 0 0', fontSize: 13, opacity: 0.9 }}>
+        <p style={{ margin: '20px 0 0', fontSize: 13, opacity: 0.9 }}>
           Hola, <strong style={{ fontWeight: 700 }}>{firstName}</strong>
         </p>
         <p style={{ margin: '2px 0 0', fontSize: 12, opacity: 0.78 }}>
