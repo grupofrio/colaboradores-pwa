@@ -14,7 +14,7 @@ import {
   radarSummary, operationalDateLabel, timezoneSourceLabel,
 } from '../presentation.js'
 import PositionMap from './PositionMap.jsx'
-import { buildRadarPlanOptions, buildSelectedPlanPoints, resolveActivePlanId } from './radarSelection.js'
+import { buildRadarPlanOptions, buildSelectedPlanPoints, isPlanId, resolveActivePlanId } from './radarSelection.js'
 
 const C = TOKENS.colors
 const S = TOKENS.state
@@ -55,7 +55,7 @@ function UnitRow({ unit, nowMs, selected, onSelectUnit, onOpenRoute }) {
   const done = num(unit?.stops?.done)
   const total = num(unit?.stops?.planned_total)
   const missing = num(unit?.stops?.missing_coordinates)
-  const clickable = !!onSelectUnit && planId != null
+  const clickable = !!onSelectUnit && isPlanId(planId)
   const selectUnit = () => { if (clickable) onSelectUnit(planId) }
   const handleKeyDown = (e) => {
     if (!clickable || (e.key !== 'Enter' && e.key !== ' ')) return

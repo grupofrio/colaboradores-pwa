@@ -130,6 +130,12 @@ test('Radar entrega al mapa exclusivamente la geometría del plan diario activo'
     { id: 'stop:9011', lat: 18.51, lng: -99.71, kind: 'stop_done', label: 'Cliente Costa' },
   ])
 })
+test('Radar no expone filas con plan_id inválido como seleccionables', () => {
+  const radar = { ...RADAR_FIXTURE, units: [{ ...RADAR_FIXTURE.units[0], plan_id: 0 }] }
+  const html = render(RadarView, { radar, source: 'live', nowMs: NOW, onSelectUnit: () => {} })
+  assert.match(html, /radar-unit-row/)
+  assert.doesNotMatch(html, /data-testid="radar-unit-row" role="button"/)
+})
 
 // ── Rutas ────────────────────────────────────────────────────────────────────
 test('Rutas lista: N filas del golden', () => {
