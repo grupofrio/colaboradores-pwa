@@ -94,3 +94,113 @@ test('la portada clara usa el logo oficial y el gradiente institucional', () => 
   assert.ok(src.includes('BRAND_LOGO'), 'logo oficial, no un redibujo')
   assert.ok(!/#15499B|#030811/.test(src), 'sin colores del tema oscuro')
 })
+
+// ── PR marca 2026-08-03: login claro, un solo logo, rail y brief ─────────────
+
+function sinComentarios(src) {
+  // Los comentarios EXPLICAN lo que se quitó, así que citan lo prohibido. Se
+  // escanea el código sin ellos: si no, el test se caza a sí mismo.
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+}
+
+const LOGIN = () => readFileSync(new URL('../src/screens/ScreenLogin.jsx', import.meta.url), 'utf8')
+
+test('el login usa la identidad clara y ya no el fondo navy', () => {
+  const src = sinComentarios(LOGIN())
+
+  assert.ok(src.includes("from \"../theme/brandLight\""), 'toma la paleta de la fuente de verdad')
+  assert.ok(src.includes('BRAND_LOGO'), 'logo oficial')
+  assert.ok(src.includes('BRAND_HEADER_GRADIENT'), 'acento con el gradiente institucional')
+
+  // Los colores del tema oscuro viejo desaparecen de la pantalla.
+  for (const viejo of ['#050D1A', '#091628', '#050E1F', '#15499B', '#2B8FE0']) {
+    assert.ok(!src.includes(viejo), `el login conserva el color oscuro ${viejo}`)
+  }
+  assert.ok(!/text-white\/\d/.test(src), 'sin textos blancos translúcidos sobre fondo claro')
+})
+
+test('el login NO toca la lógica de autenticación', () => {
+  const src = LOGIN()
+
+  // La piel cambia; el contrato con Odoo no.
+  assert.ok(src.includes('/api-odoo/employee-sign-in'), 'mismo endpoint')
+  assert.ok(src.includes('buildSessionFromOdoo'), 'misma construcción de sesión')
+  assert.ok(src.includes('handleAdminTap'), 'el bypass de 5 taps sigue ahí')
+  assert.match(src, /pin|barcode/i, 'PIN y barcode siguen siendo la entrada')
+})
+
+test('el login respeta AA y el touch target', () => {
+  const src = LOGIN()
+
+  // Texto principal e input sobre superficie clara: #0F2A3D ~12.9:1, #5B7285 ~4.9:1.
+  assert.ok(src.includes('C.text'), 'texto con el color de alto contraste')
+  assert.ok(src.includes('C.textMuted'), 'secundarios con el muted AA, no un gris claro')
+  assert.match(src, /minHeight: 52/, 'el botón principal se mantiene ≥44px')
+  assert.match(src, /minHeight: 44/, 'las filas del bypass llegan al mínimo táctil')
+})
+
+test('el login es el MISMO para todos los roles: no ramifica por rol', () => {
+  const src = LOGIN()
+  // Al autenticar todavía no hay rol; si alguien mete una rama aquí, se rompe.
+  assert.ok(!src.includes('isBrandLightSession'), 'sin conmutador de tema por rol')
+  assert.ok(!src.includes('BRAND_LIGHT_ROLE'), 'sin gate de rol en la puerta')
+})
+
+test('la portada del supervisor pinta UN solo logo', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/brand/SupervisorVentasHome.jsx', import.meta.url), 'utf8')
+  const code = sinComentarios(src)
+
+  // El hexágono suelto salía además del logo completo, que ya lo incluye.
+  assert.ok(!code.includes('BRAND_LOGO_MARK'), 'la marca suelta ya no se pinta')
+  const imgs = code.match(/<img/g) || []
+  assert.equal(imgs.length, 1, `la portada pinta ${imgs.length} imágenes; debe ser 1`)
+  assert.ok(code.includes('BRAND_LOGO'), 'y la que queda es el logo oficial completo')
+})
+
+test('el rail desktop usa la marca oficial en claro y conserva el icono en oscuro', () => {
+  const src = readFileSync(new URL('../src/components/AppNav.jsx', import.meta.url), 'utf8')
+  const code = sinComentarios(src)
+
+  assert.match(code, /light \? BRAND_LOGO_MARK : '\/icons\/icon-grupo-frio\.svg'/,
+    'la marca oficial entra SOLO en la superficie clara')
+  assert.ok(code.includes("import { BRAND_LOGO_MARK }"), 'sale de la fuente de verdad')
+  // El resto de los roles no cambia de icono: es el alcance acordado.
+  assert.ok(code.includes('/icons/icon-grupo-frio.svg'), 'el rail oscuro conserva el suyo')
+})
+
+test('el brief pinta el fondo claro de extremo a extremo, sin franjas', () => {
+  const src = readFileSync(new URL('../src/modules/brief/BriefEmbedScreen.jsx', import.meta.url), 'utf8')
+  const code = sinComentarios(src)
+
+  // El nodo que limita el ancho y el que pinta el fondo son DISTINTOS: si vuelven
+  // a ser el mismo, en escritorio reaparecen las franjas oscuras a los lados.
+  const surface = code.slice(code.indexOf('data-testid="brief-surface"'), code.indexOf('data-testid="brief-content"'))
+  assert.ok(surface.includes("width: '100%'"), 'la capa de color ocupa todo el ancho')
+  assert.ok(surface.includes('background: C.bg'), 'y es la que lleva el fondo claro')
+  assert.ok(!surface.includes('maxWidth'), 'la capa de color NO limita el ancho')
+
+  const content = code.slice(code.indexOf('data-testid="brief-content"'))
+  assert.match(content, /maxWidth: 1180/, 'el contenido sigue centrado y acotado')
+})
+
+test('los estados del brief se leen en la cáscara clara', () => {
+  // Medido en el navegador ANTES: el detalle salía en blanco translúcido sobre
+  // el fondo claro con 1.07:1 — invisible. `StateScreen` ya aceptaba tokens;
+  // el brief simplemente no se los pasaba.
+  const src = readFileSync(new URL('../src/modules/brief/BriefEmbedScreen.jsx', import.meta.url), 'utf8')
+  assert.match(src, /const stateTokens = light \? BRAND_TOKENS : TOKENS/)
+  const usos = (src.match(/tokens=\{stateTokens\}/g) || []).length
+  const estados = (src.match(/<StateScreen/g) || []).length
+  assert.equal(usos, estados, `${estados} StateScreen y solo ${usos} reciben tokens`)
+})
+
+test('la portada clara pone el logo sobre superficie blanca, no sobre el gradiente', () => {
+  // El artwork oficial lleva la palabra en azul marino: sobre el gradiente
+  // institucional quedaba casi invisible (visto en pantalla). No se recolorea
+  // el logo — se le da el fondo que necesita.
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/brand/SupervisorVentasHome.jsx', import.meta.url), 'utf8')
+  const header = src.slice(src.indexOf('<header'), src.indexOf('</header>'))
+  const chip = header.slice(header.indexOf('<span'), header.indexOf('</span>'))
+  assert.ok(chip.includes('background: C.surface'), 'el logo va sobre blanco')
+  assert.ok(chip.includes('BRAND_LOGO'), 'y es el logo oficial')
+})

@@ -43,12 +43,16 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
     // ROL en tiempo de ejecución (la nav global es el caso: la ve todo mundo).
     // Importarlo a secas dejaría a producción/almacén con la paleta equivocada.
     const src = readFileSync(path.join(SRC, f), 'utf8')
+    // Vale preguntar por el rol directamente (`isBrandLightSession`) o a través
+    // de `resolvePalette(session, …)`, que es el helper que envuelve a esa misma
+    // función y devuelve además la paleta. Lo que NO vale es importar el tema
+    // claro a secas: eso dejaría a producción/almacén con la paleta equivocada.
     assert.match(
-      src, /isBrandLightSession/,
+      src, /isBrandLightSession|resolvePalette\(session/,
       `${f} es compartido y adopta el tema claro sin conmutar por rol`,
     )
     assert.match(
-      src, /DARK_TOKENS|TOKENS as DARK_TOKENS/,
+      src, /DARK_TOKENS|TOKENS as DARK_TOKENS|: TOKENS\b/,
       `${f} debe conservar el tema oscuro como la otra rama`,
     )
   }
@@ -56,7 +60,11 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
 
 test('la navegación global conmuta por rol, no por import fijo', () => {
   const nav = readFileSync(path.join(SRC, 'components/AppNav.jsx'), 'utf8')
-  assert.match(nav, /isBrandLightSession\(session\)\s*\?\s*BRAND_TOKENS\s*:\s*DARK_TOKENS/)
+  // La decisión sigue saliendo de `isBrandLightSession(session)`; lo que cambió
+  // es que ese booleano ahora se nombra (`light`) porque también decide el logo
+  // del rail. Se comprueba la CADENA, no una línea literal.
+  assert.match(nav, /const\s+light\s*=\s*isBrandLightSession\(session\)/)
+  assert.match(nav, /light\s*\?\s*BRAND_TOKENS\s*:\s*DARK_TOKENS/)
 })
 
 test('las navegaciones móviles de supervisión usan fondos del tema claro', () => {

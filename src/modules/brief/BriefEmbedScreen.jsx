@@ -28,6 +28,7 @@ import { logScreenError } from '../shared/logScreenError'
 import { fetchBriefHtml, isValidBriefDate, BRIEF_STATE } from './briefApi'
 import { getBriefById, briefSupportsDate } from './briefCatalog'
 import { resolvePalette } from '../../theme/useBrandPalette'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
 
 // Copy por estado: qué pasó y qué puede hacer quien lo lee. Sin jerga, sin
 // stack traces, sin "Unexpected token".
@@ -83,6 +84,10 @@ export default function BriefEmbedScreen({ briefId }) {
   // oscuro. Afecta al CONTENEDOR (fondo, título, controles): el documento del
   // brief va dentro del iframe con su propio estilo y NO se toca.
   const { light, c: C } = resolvePalette(session, TOKENS.colors)
+  // `StateScreen` ya acepta tokens y su default es el tema oscuro. Sin pasarlos,
+  // en la cáscara clara el mensaje quedaba en blanco translúcido sobre fondo
+  // claro: 1.07:1 medido, ilegible. Los demás roles no cambian.
+  const stateTokens = light ? BRAND_TOKENS : TOKENS
 
   const [status, setStatus] = useState('loading') // loading | ok | <BRIEF_STATE>
   const [html, setHtml] = useState('')
@@ -139,6 +144,7 @@ export default function BriefEmbedScreen({ briefId }) {
           title={STATE_COPY[BRIEF_STATE.UNAVAILABLE].title}
           detail={STATE_COPY[BRIEF_STATE.UNAVAILABLE].detail}
           tone="error"
+          tokens={stateTokens}
         />
       </div>
     )
@@ -147,12 +153,21 @@ export default function BriefEmbedScreen({ briefId }) {
   const copy = STATE_COPY[status] || STATE_COPY[BRIEF_STATE.UNAVAILABLE]
 
   return (
+    // FRANJAS NEGRAS EN ESCRITORIO: el fondo claro se pintaba en el MISMO nodo
+    // que limita el ancho a 1180, así que en pantallas anchas solo llegaba hasta
+    // ahí y a los lados asomaba el fondo oscuro de la app. Ahora el color va en
+    // una capa exterior de ancho completo y el contenido sigue centrado dentro.
     <div
       data-theme={light ? 'brand-light' : undefined}
+      data-testid="brief-surface"
       style={{
-        padding: '16px 14px 24px', maxWidth: 1180, margin: '0 auto',
+        width: '100%',
         ...(light ? { background: C.bg, minHeight: '100dvh' } : null),
       }}
+    >
+    <div
+      data-testid="brief-content"
+      style={{ padding: '16px 14px 24px', maxWidth: 1180, margin: '0 auto' }}
     >
       <header style={{
         display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
@@ -228,8 +243,10 @@ export default function BriefEmbedScreen({ briefId }) {
           tone={copy.tone}
           actionLabel={status === BRIEF_STATE.UNAVAILABLE ? 'Reintentar' : null}
           onAction={status === BRIEF_STATE.UNAVAILABLE ? reload : null}
+          tokens={stateTokens}
         />
       )}
+    </div>
     </div>
   )
 }

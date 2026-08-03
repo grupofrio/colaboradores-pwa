@@ -17,6 +17,7 @@ import { TOKENS as DARK_TOKENS } from '../tokens'
 // cualquier otro rol conserva exactamente la barra oscura de siempre.
 import { BRAND_TOKENS } from '../theme/brandTokens'
 import { isBrandLightSession } from '../theme/useBrandPalette'
+import { BRAND_LOGO_MARK } from '../theme/brandLight'
 import {
   buildMobileNav, buildDesktopNav, navLabel,
   DESKTOP_MIN, RAIL_FULL_MIN, DESKTOP_RAIL_WIDTH, DESKTOP_RAIL_WIDTH_COMPACT,
@@ -201,7 +202,7 @@ function MoreSheet({ items, activeId, onPick, onClose, t }) {
    compact=true (1024–1439px): solo iconos con title/aria-label — evita el
    triple panel comprimido en Admin/Gerente (rail 232 + sidebar 220 + feed 320
    dejaban ~252px de contenido a 1024px; compacto deja ≥408px).               */
-function DesktopRail({ nav, compact, onGo, t }) {
+function DesktopRail({ nav, compact, onGo, t, light }) {
   const items = [nav.home, ...nav.modules, nav.profile]
   const width = compact ? DESKTOP_RAIL_WIDTH_COMPACT : DESKTOP_RAIL_WIDTH
   return (
@@ -214,8 +215,21 @@ function DesktopRail({ nav, compact, onGo, t }) {
         padding: compact ? '18px 10px' : '18px 12px', gap: 4, zIndex: 100, overflowY: 'auto',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: 8, padding: compact ? '0 0 14px' : '0 8px 14px' }}>
-        <img src="/icons/icon-grupo-frio.svg" alt="Grupo Frío" style={{ width: 28, height: 28, borderRadius: 7 }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: 9, padding: compact ? '0 0 14px' : '0 8px 14px' }}>
+        {/* En la superficie clara el hexágono gris de `/icons/` se veía deslavado
+            y desentonaba con la portada: ahí se usa la marca oficial de
+            `brandLight`. El rail oscuro del resto de los roles conserva su icono
+            de siempre — el alcance de este cambio es la piel clara. */}
+        <img
+          src={light ? BRAND_LOGO_MARK : '/icons/icon-grupo-frio.svg'}
+          alt="Grupo Frío"
+          data-testid="rail-logo"
+          style={{
+            width: light ? 32 : 28, height: light ? 32 : 28,
+            borderRadius: light ? 0 : 7,
+            objectFit: 'contain', flexShrink: 0,
+          }}
+        />
         {!compact && (
           <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: t.colors.textLow }}>COLABORADORES</span>
         )}
@@ -252,7 +266,8 @@ function DesktopRail({ nav, compact, onGo, t }) {
 /* ── AppNav ───────────────────────────────────────────────────────────────── */
 export default function AppNav() {
   const { session } = useSession()
-  const t = isBrandLightSession(session) ? BRAND_TOKENS : DARK_TOKENS
+  const light = isBrandLightSession(session)
+  const t = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const location = useLocation()
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 375)
@@ -322,7 +337,7 @@ export default function AppNav() {
   if (w >= DESKTOP_MIN) {
     const nav = buildDesktopNav(session, location.pathname)
     if (nav.hidden) return null
-    return <DesktopRail nav={nav} compact={w < RAIL_FULL_MIN} onGo={go} t={t} />
+    return <DesktopRail nav={nav} compact={w < RAIL_FULL_MIN} onGo={go} t={t} light={light} />
   }
 
   const nav = buildMobileNav(session, location.pathname)
