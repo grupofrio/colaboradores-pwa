@@ -1,6 +1,6 @@
 // ─── Supervisor V2 · Radar (vista PURA — posiciones de la jornada) ────────────
-// Mapa SVG (PositionMap) + LISTA equivalente que SIEMPRE funciona aunque el mapa
-// esté vacío. Sin window/fetch/hooks ⇒ SSR-testeable. Reglas duras (heredadas del
+// Mapa vial (PositionMap) + LISTA equivalente que SIEMPRE funciona aunque el mapa
+// esté vacío. Reglas duras (heredadas del
 // contrato radar/1): null≠0; error≠0; unknown≠incumplimiento; sin señal≠detenido;
 // coordenadas NO se inventan (unidad sin posición no va al mapa, sí a la lista);
 // umbrales de frescura NO se hardcodean (se leen de radar.thresholds); JAMÁS se
@@ -8,6 +8,7 @@
 // Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
 // Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
 // invariante lo verifica tests/brandTokensScope.test.mjs.
+import { useEffect, useRef, useState } from 'react'
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import {
   orderRadarUnits, RADAR_ORDERS, safeSignalStatus, signalLabel, ageText,
@@ -15,6 +16,7 @@ import {
 } from '../presentation.js'
 import PositionMap from './PositionMap.jsx'
 import { buildRadarPlanOptions, buildSelectedPlanPoints, isPlanId, resolveActivePlanId } from './radarSelection.js'
+import { validPoints } from './mapProjection.js'
 
 const C = TOKENS.colors
 const S = TOKENS.state
@@ -27,10 +29,26 @@ const ORDER_LABELS = {
 }
 const SIGNAL_TONE = { recent: S.signal, delayed: S.risk, no_signal: S.no_evaluable, invalid: S.no_evaluable }
 const signalTone = (s) => SIGNAL_TONE[s] || S.no_evaluable
+const MAP_ACTION_STYLE = {
+  fontSize: 11.5, fontWeight: 700, color: C.blue3, background: C.surface,
+  minHeight: 44, border: `1px solid ${C.borderBlue}`, borderRadius: TOKENS.radius.pill, padding: '5px 11px', cursor: 'pointer',
+}
+const MAP_TRAIL_STYLE = { fontSize: 12, color: C.textMuted, marginBottom: 10 }
+const MAP_OVERLAY_STYLE = {
+  position: 'fixed', inset: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: 16, background: 'rgba(15,42,61,0.58)',
+}
+const MAP_DIALOG_STYLE = {
+  width: 'min(1040px, 100%)', maxHeight: 'calc(100dvh - 32px)', overflow: 'auto',
+  background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg, padding: 16,
+}
+const MAP_DIALOG_HEADER_STYLE = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }
+const MAP_DIALOG_TITLE_STYLE = { fontSize: 16, fontWeight: 800, color: C.text, margin: 0 }
+const DIALOG_FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-function Card({ children, testid }) {
+function Card({ children, testid, ...props }) {
   return (
-    <section data-testid={testid} style={{
+    <section data-testid={testid} {...props} style={{
       background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg,
       padding: '15px 17px', marginBottom: 13,
     }}>{children}</section>
@@ -99,6 +117,7 @@ function UnitRow({ unit, nowMs, selected, onSelectUnit, onOpenRoute }) {
 
 export default function RadarView({
   radar = null, dayControl = null, radarError = null, source = 'live', nowMs = null,
+  trail = [], trailStatus = 'idle',
   order = 'urgente', onSelectOrder, selectedId = null, onSelectUnit, onOpenRoute,
   testid = 'supervisor-v2-radar',
 }) {
@@ -110,6 +129,14 @@ export default function RadarView({
   const planOptions = buildRadarPlanOptions(units)
   const activePlanId = resolveActivePlanId(units, selectedId)
   const points = radar ? buildSelectedPlanPoints(radar, activePlanId, nowMs) : []
+  const normalizedTrail = Array.isArray(trail) ? trail : []
+  const normalizedTrailStatus = typeof trailStatus === 'string' ? trailStatus : 'idle'
+  const hasGpsTrail = validPoints(normalizedTrail).length >= 2
+  const [expandedMap, setExpandedMap] = useState(false)
+  const expandMapButtonRef = useRef(null)
+  const closeMapButtonRef = useRef(null)
+  const expandedMapRef = useRef(null)
+  const wasExpanded = useRef(false)
   const ordered = radar ? orderRadarUnits(units, currentOrder, nowMs) : []
   // Solo se rutan al mapa los puntos de UNIDAD (ids numéricos = plan_id); los
   // puntos de parada (ids 'stop:*') no seleccionan unidad.
@@ -118,6 +145,38 @@ export default function RadarView({
     const planId = Number(event.target.value)
     if (onSelectUnit && planOptions.some((option) => option.planId === planId)) onSelectUnit(planId)
   }
+  const closeExpandedMap = () => { setExpandedMap(false) }
+  const handleExpandedMapKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeExpandedMap()
+      return
+    }
+    if (event.key !== 'Tab') return
+
+    const focusable = Array.from(expandedMapRef.current?.querySelectorAll?.(DIALOG_FOCUSABLE) || [])
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable.at(-1)
+    const active = typeof document === 'undefined' ? null : document.activeElement
+    if ((!event.shiftKey && active === last) || (event.shiftKey && active === first)) {
+      event.preventDefault()
+      const target = event.shiftKey ? last : first
+      target.focus()
+    }
+  }
+
+  useEffect(() => {
+    if (expandedMap) {
+      wasExpanded.current = true
+      closeMapButtonRef.current?.focus()
+      return
+    }
+    if (wasExpanded.current) {
+      wasExpanded.current = false
+      expandMapButtonRef.current?.focus()
+    }
+  }, [expandedMap])
 
   return (
     <div data-testid={testid} data-source={source}>
@@ -158,8 +217,12 @@ export default function RadarView({
             </div>
           </Card>
 
-          <Card testid="radar-map">
-            <Title>Mapa de posiciones</Title>
+          <Card testid="radar-map" data-trail-status={normalizedTrailStatus} data-trail-points={normalizedTrail.length}>
+            <Title action={(
+              <button ref={expandMapButtonRef} data-testid="radar-expand-map" type="button" onClick={() => setExpandedMap(true)} style={MAP_ACTION_STYLE}>
+                Ampliar mapa
+              </button>
+            )}>Mapa de posiciones</Title>
             {activePlanId != null && (
               <label style={{ fontSize: 11.5, color: C.textMuted, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
                 Plan diario
@@ -169,8 +232,26 @@ export default function RadarView({
                 </select>
               </label>
             )}
-            <PositionMap points={points} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} />
+            <div data-testid="radar-gps-trail" style={MAP_TRAIL_STYLE}>
+              <strong>Rastro GPS de hoy</strong>{' · '}
+              {hasGpsTrail ? 'Recorrido GPS disponible para esta jornada.' : 'Sin recorrido GPS disponible para esta jornada.'}
+            </div>
+            <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} />
           </Card>
+
+          {expandedMap && (
+            <div data-testid="radar-expanded-map-overlay" style={MAP_OVERLAY_STYLE}>
+              <section ref={expandedMapRef} role="dialog" aria-modal="true" aria-label="Mapa ampliado de posiciones" onKeyDown={handleExpandedMapKeyDown} style={MAP_DIALOG_STYLE}>
+                <div style={MAP_DIALOG_HEADER_STYLE}>
+                  <h2 style={MAP_DIALOG_TITLE_STYLE}>Mapa ampliado</h2>
+                  <button ref={closeMapButtonRef} data-testid="radar-close-expanded-map" type="button" aria-label="Cerrar mapa ampliado" onClick={closeExpandedMap} style={MAP_ACTION_STYLE}>
+                    Cerrar
+                  </button>
+                </div>
+                <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} height={560} testid="radar-expanded-position-map" />
+              </section>
+            </div>
+          )}
 
           <Card testid="radar-list">
             <Title action={(
