@@ -1,10 +1,20 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import React from 'react'
+import TestRenderer, { act } from 'react-test-renderer'
 
 import { derivePendingStops, summarizePendingByRoute, hasStopPlan } from '../src/modules/supervisor-ventas/v2/desktop/pendingStops.js'
 import { isDesktopWidth } from '../src/modules/supervisor-ventas/v2/desktop/useDesktopBoard.js'
 import { DESKTOP_MIN } from '../src/lib/navModel.js'
+import { loadJsxDefault } from './helpers/renderJsx.mjs'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const RutasView = (await loadJsxDefault(fileURLToPath(
+  new URL('../src/modules/supervisor-ventas/v2/rutas/RutasView.jsx', import.meta.url),
+))).Component
 
 // Forma REAL medida en producción (radar/1, sucursal 29, recortada).
 const RADAR = {
@@ -150,6 +160,76 @@ test('RutasView mantiene compatibilidad: la selección es opcional', () => {
   assert.match(src, /selectedPlanId = null/, 'default null ⇒ móvil se ve igual')
   // La selección no se comunica SOLO por color.
   assert.match(src, /boxShadow: selected \?/, 'la fila seleccionada se marca con barra lateral, no solo con fondo')
+})
+
+test('RutasView de escritorio separa seleccionar la ruta de abrirla, sin anidar controles', async () => {
+  const dayControl = {
+    routes: [{
+      plan_id: 91,
+      route_name: 'Ruta Central',
+      driver: { name: 'Ana' },
+      vehicle: { name: 'U-91' },
+      departure: { status: 'on_time' },
+      stops: { done: 0, total: 2 },
+      sales: { available: false },
+      loads: { available: false },
+      position: { signal_status: 'recent' },
+      close: { stage: 'open' },
+    }],
+  }
+  const selected = []
+  const opened = []
+  let desktop
+  let mobile
+
+  try {
+    await act(async () => {
+      desktop = TestRenderer.create(React.createElement(RutasView, {
+        dayControl,
+        onSelectRoute: (planId) => selected.push(planId),
+        onOpenRoute: (planId) => opened.push(planId),
+      }))
+    })
+
+    const selection = desktop.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta Central' })
+    const open = desktop.root.findAll((node) => node.type === 'button' && node.props.children === 'Abrir ruta')
+
+    assert.equal(selection.type, 'button')
+    assert.equal(open.length, 1, 'la navegación tiene su propio botón')
+    assert.equal(selection.findAll((node) => node.props.children === 'Abrir ruta').length, 0, 'no anida Abrir ruta en la selección')
+
+    await act(async () => { open[0].props.onClick() })
+    assert.deepEqual(opened, [91])
+    assert.deepEqual(selected, [], 'abrir no altera la selección')
+
+    await act(async () => { selection.props.onClick() })
+    assert.deepEqual(selected, [91])
+    assert.deepEqual(opened, [91], 'seleccionar no navega')
+
+    await act(async () => {
+      mobile = TestRenderer.create(React.createElement(RutasView, {
+        dayControl,
+        onOpenRoute: (planId) => opened.push(planId),
+      }))
+    })
+    const mobileRows = mobile.root.findAllByProps({ 'data-testid': 'v2-ruta-row' })
+    assert.equal(mobileRows.length, 1, 'móvil conserva una sola fila-control')
+    assert.equal(mobileRows[0].type, 'button')
+    assert.equal(mobileRows[0].props['aria-label'], 'Abrir ruta Ruta Central')
+    assert.equal(mobile.root.findAll((node) => node.type === 'button' && node.props.children === 'Abrir ruta').length, 0, 'móvil no muestra acción extra')
+  } finally {
+    await act(async () => {
+      desktop?.unmount()
+      mobile?.unmount()
+    })
+  }
+})
+
+test('RutasView de escritorio conserva objetivo táctil de 44 px para Abrir ruta', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/rutas/RutasView.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /onSelectRoute = null/, 'la variante escritorio debe ser opt-in')
+  assert.match(src, /minHeight:\s*44/, 'Abrir ruta mantiene objetivo táctil mínimo')
 })
 
 test('la selección de unidades del radar del tablero funciona también con teclado', () => {
