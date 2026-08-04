@@ -37,6 +37,7 @@ const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente
 const ScreenKoldTowerE1 = lazy(() => import('./modules/torre/e1/ScreenKoldTowerE1'))
 // M1-D — Backlog M1 read-only (mismo gate TowerRoute; SIN menú, solo ruta directa)
 const ScreenM1Backlog = lazy(() => import('./modules/torre/m1/ScreenM1Backlog'))
+const ScreenTorreSupervisor = lazy(() => import('./modules/supervisor-ventas/torre/ScreenTorreSupervisor'))
 // KOLD OS · M2 — Planeación y readiness (observatorio read-only, gate propio M2PlaneacionRoute)
 const ScreenPlaneacionM2 = lazy(() => import('./modules/planeacion/ScreenPlaneacionM2'))
 // KOLD OS · M3 — Ejecución de rutas (observatorio read-only, gate propio M3EjecucionRoute)
@@ -258,8 +259,18 @@ function ScreenKoldTowerE1Mount() {
   return <ScreenKoldTowerE1 session={session} />
 }
 
+// RAMA POR PUESTO en la MISMA ruta /torre/backlog: el item de menu "Torre
+// operativa" no se duplica; lo que cambia es a que pantalla lleva.
+//   · supervisor_ventas => torre CURADA (envejecimiento + caja atada, claro).
+//   · admin_plataforma  => la pantalla CRUDA de siempre, byte a byte igual.
+// El rol sale del tower_status AUTORITATIVO (el mismo que ya usa TowerRoute
+// para dejar entrar), no de session.role: fail-closed, cualquier otro valor
+// cae en la cruda, que es la que ya estaba y no amplia nada.
 function ScreenM1BacklogMount() {
   const { session } = useSession()
+  if (readAuthoritativeTowerStatus(session) === 'supervisor_ventas') {
+    return <ScreenTorreSupervisor />
+  }
   return <ScreenM1Backlog session={session} />
 }
 
