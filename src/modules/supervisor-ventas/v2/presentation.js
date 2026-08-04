@@ -152,6 +152,73 @@ export function deriveRouteRows(dayControl) {
 // unknown = el contrato no lo acredita; not_available = capability apagada.
 // NUNCA se marca "incumplimiento" por ausencia. Reglas canónicas: cargas =
 // stock.picking; validated ≠ recepción física (se declara).
+// Kilometraje y checklist: el backend ya los acredita (bloques `odometer` y
+// `checklist` del contrato de day-control). Antes los tres hitos decían "No
+// expuesto por el contrato v1", que era cierto y ya no lo es.
+//
+// El backend manda `null` cuando NO hay captura — nunca 0 —, porque el campo de
+// Odoo es Float con default 0.0 y un 0 se leería como "salió con el odómetro en
+// cero". Aquí se respeta esa distinción: sin lectura no se pinta un número.
+export function formatKm(value) {
+  if (value == null) return ''
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  return `${n.toLocaleString('es-MX', { maximumFractionDigits: 1 })} km`
+}
+
+function kmStatus(value, available, esperado) {
+  if (!available) return 'not_available'
+  if (value != null) return 'done'
+  // Sin captura: "pendiente" solo cuando el momento de capturarlo YA pasó.
+  // Antes de salir no falta nada.
+  return esperado ? 'pending' : 'unknown'
+}
+
+function kmDetail(value, available, esperado, momento) {
+  if (!available) return 'Kilometraje no disponible'
+  const km = formatKm(value)
+  if (km) return km
+  return esperado ? `Sin captura ${momento}` : 'Aún no corresponde'
+}
+
+function kmFinalDetail(odo, available, closed) {
+  const base = kmDetail(odo.arrival_km, available, closed, 'al cerrar')
+  const recorrido = formatKm(odo.traveled_km)
+  // El recorrido solo aparece con las DOS lecturas; el backend ya lo deja en
+  // null si falta una o si el par es incoherente.
+  return recorrido ? `${base} · recorrido ${recorrido}` : base
+}
+
+const CHECKLIST_LABELS = {
+  completed: 'Completado',
+  in_progress: 'En progreso',
+  draft: 'Iniciado sin responder',
+  cancelled: 'Cancelado',
+}
+
+function checklistStatus(chk, available) {
+  if (!available) return 'not_available'
+  if (chk.state === 'completed') return 'done'
+  // Sin checklist ligado NO es incumplimiento: el flujo es de adopción reciente
+  // y la mayoría de las rutas todavía no lo usa. Se declara como desconocido.
+  if (!chk.state) return 'unknown'
+  return 'pending'
+}
+
+function checklistDetail(chk, available) {
+  if (!available) return 'Checklist no disponible'
+  if (!chk.state) return 'Sin checklist ligado a la ruta (no es "sin revisar")'
+  const label = CHECKLIST_LABELS[chk.state] || chk.state
+  const partes = [label]
+  if (chk.checks_answered != null && chk.checks_total != null) {
+    partes.push(`${chk.checks_answered}/${chk.checks_total} puntos`)
+  }
+  if (chk.checks_required_pending != null && chk.checks_required_pending > 0) {
+    partes.push(`${chk.checks_required_pending} obligatorio(s) pendiente(s)`)
+  }
+  return partes.join(' · ')
+}
+
 export function deriveRouteTimeline(route, capabilities = {}) {
   const r = route || {}
   const dep = r.departure || {}
@@ -164,11 +231,19 @@ export function deriveRouteTimeline(route, capabilities = {}) {
   const has = (v) => v != null
 
   const departed = dep.status === 'on_time' || dep.status === 'late'
+  const closed = stageIdx >= 1
   const step = (key, label, status, detail) => ({ key, label, status, detail: detail || '' })
 
+  const odo = r.odometer || {}
+  const chk = r.checklist || {}
+  const odoOn = capabilities.odometer_available !== false
+  const chkOn = capabilities.checklist_available !== false
+
   return [
-    step('checklist', 'Checklist de unidad', 'unknown', 'No expuesto por el contrato v1'),
-    step('km_inicial', 'Kilometraje inicial', 'unknown', 'No expuesto por el contrato v1'),
+    step('checklist', 'Checklist de unidad', checklistStatus(chk, chkOn), checklistDetail(chk, chkOn)),
+    step('km_inicial', 'Kilometraje inicial',
+      kmStatus(odo.departure_km, odoOn, departed),
+      kmDetail(odo.departure_km, odoOn, departed, 'al salir')),
     step('carga_preparada', 'Carga preparada', initialLoad ? 'done' : (loads.available === false ? 'not_available' : 'unknown'),
       initialLoad ? `picking ${initialLoad.picking_id}` : (loads.available === false ? 'Cargas no disponibles' : 'Sin carga inicial registrada')),
     step('carga_aceptada', 'Carga aceptada', initialLoad?.status === 'accepted' ? 'done' : (initialLoad ? 'pending' : 'unknown'),
@@ -184,7 +259,9 @@ export function deriveRouteTimeline(route, capabilities = {}) {
     step('refill', 'Refill', refillPending ? 'pending' : (loads.available === false ? 'not_available' : 'unknown'),
       refillPending ? 'Refill pendiente de aceptar' : ''),
     step('regreso', 'Regreso', stageIdx >= 1 ? 'done' : 'unknown', 'Derivado de la etapa de cierre'),
-    step('km_final', 'Kilometraje final', 'unknown', 'No expuesto por el contrato v1'),
+    step('km_final', 'Kilometraje final',
+      kmStatus(odo.arrival_km, odoOn, closed),
+      kmFinalDetail(odo, odoOn, closed)),
     step('cierre', 'Cierre', stageIdx >= 1 ? 'done' : (departed ? 'pending' : 'unknown'), `Etapa: ${closeStageLabel(stage)}`),
     step('corte', 'Corte', stageIdx >= 2 ? 'done' : (stageIdx >= 1 ? 'pending' : 'unknown'),
       has(r.close?.cash_pending_amount) && Number(r.close.cash_pending_amount) > 0 ? 'Con caja pendiente' : ''),
