@@ -165,6 +165,42 @@ test('RadarView entrega su modo de lista al mapa normal y ampliado', () => {
   assert.match(radarViewSource, /<PositionMap[^>]*height=\{560\}[^>]*showUnitList=\{showUnitList\}/)
 })
 
+test('RadarView ampliado conserva la guía desktop cuando no muestra lista de unidades', async () => {
+  const cases = [
+    {
+      name: 'sin posiciones ni rastro',
+      radar: { units: [{ plan_id: 41, route_name: 'Ruta sin señal', name: 'Ana', vehicle: { name: 'U-41' }, latitude: null, longitude: null, stops: { planned: [] } }] },
+      trail: [],
+    },
+    {
+      name: 'geometría transmeridiana',
+      radar: { units: [{ plan_id: 42, route_name: 'Ruta de fecha', name: 'Beto', vehicle: { name: 'U-42' }, latitude: 18.34, longitude: 179, stops: { planned: [] } }] },
+      trail: [{ lat: 18.35, lng: -179 }, { lat: 18.36, lng: -178.9 }],
+    },
+  ]
+
+  for (const scenario of cases) {
+    let renderer
+    try {
+      await act(async () => {
+        renderer = TestRenderer.create(createElement(RadarView, {
+          radar: scenario.radar, selectedId: scenario.radar.units[0].plan_id,
+          trail: scenario.trail, showUnitList: false,
+        }))
+      })
+      await act(async () => { renderer.root.findByProps({ 'data-testid': 'radar-expand-map' }).props.onClick() })
+
+      const expandedEmpty = renderer.root.findByProps({ 'data-testid': 'radar-expanded-position-map-empty' })
+      const expandedText = expandedEmpty.children.join('')
+      assert.match(expandedText, /Selecciona otra ruta en Rutas de hoy\./, scenario.name)
+      assert.doesNotMatch(expandedText, /lista de unidades/i, scenario.name)
+      assert.equal(renderer.root.findAllByProps({ 'data-testid': 'radar-list' }).length, 0, scenario.name)
+    } finally {
+      await act(async () => { renderer?.unmount() })
+    }
+  }
+})
+
 test('RadarView: abre mapa con el mismo rastro GPS y el diálogo atrapa Tab, cierra con Escape y devuelve foco', async () => {
   const priorWindow = globalThis.window
   const priorDocument = globalThis.document
