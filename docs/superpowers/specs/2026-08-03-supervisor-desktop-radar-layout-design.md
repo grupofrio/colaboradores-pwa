@@ -96,8 +96,10 @@ todos los callers actuales; el tablero de escritorio lo desactiva.
   respuesta tardía y error sin geometría.
 - Tablero desktop: dos columnas, ausencia de lista de unidades en el panel de
   mapa, y mapa/pendientes/ruta sincronizados por el mismo `effectivePlanId`.
-  Durante un cambio A→B con A pendiente, sólo el rastro B puede llegar al mapa;
-  no se solicita GPS para una selección nula, inválida o retirada.
+  Durante un cambio A→B con A pendiente, sólo el rastro B puede llegar al mapa.
+  La selección intencional nula usa la primera ruta válida mediante
+  `effectivePlanId`; no se solicita GPS únicamente cuando no existe ningún
+  `effectivePlanId` válido (sin unidades/planes válidos).
 - Regresión: móvil mantiene la lista y sus flujos existentes; polilínea,
   límites, antimeridiano y diálogo accesible continúan cubiertos.
 - Verificación final: `npm test`, `npm run lint`, `npm run build` y
