@@ -71,18 +71,38 @@ const apiGet = _apiGet;
 const apiPatch = _apiPatch;
 const apiPost = _apiPost;
 
+// Un many2one de Odoo llega como [id, nombre]; a veces como id suelto, false o
+// ausente. Se devuelve siempre el par que espera la pantalla, con el texto de
+// respaldo cuando no hay nombre que mostrar.
+function many2one(value, fallback) {
+  if (Array.isArray(value)) {
+    const nombre = typeof value[1] === "string" ? value[1].trim() : "";
+    return [Number(value[0]) || 0, nombre || fallback];
+  }
+  if (typeof value === "string" && value.trim()) return [0, value.trim()];
+  return [Number(value) || 0, fallback];
+}
+
 // Mapea response de /pwa-employee-profile al shape que usa la pantalla
 function mapOdooEmployee(d) {
   return {
     id: d.id,
     name: d.name || "Empleado",
-    job_id: [d.job_id || 0, d.job_title || "Grupo Frío"],
-    department_id: [d.department_id || 0, d.department || "—"],
-    work_location_id: [d.work_location_id || 0, d.work_location || "—"],
-    company_id: [d.company_id || 0, d.company || "Grupo Frío"],
+    // Odoo devuelve los many2one como [id, nombre]. El mapeo anterior los
+    // trataba como si fueran un id suelto mas un campo plano (`d.department`,
+    // `d.work_location`) que la respuesta NUNCA trae: por eso Departamento y
+    // Sucursal salian "—" aunque el empleado si los tuviera capturados.
+    job_id: many2one(d.job_id, d.job_title || "Grupo Frío"),
+    department_id: many2one(d.department_id, SIN_DATO),
+    work_location_id: many2one(d.work_location_id, SIN_DATO),
+    company_id: many2one(d.company_id, "Grupo Frío"),
     mobile_phone: d.mobile_phone || "",
     image_128: d.image_128 || null,
-    date_start: d.date_start || null,
+    // `date_start` NO existe en hr.employee y tampoco se pedia: el endpoint
+    // trae `first_contract_date`. Al leer una clave inexistente quedaba null y
+    // `new Date(null)` daba el epoch — de ahi el "31 de diciembre de 1969" y
+    // los "56 anos de antiguedad".
+    date_start: d.first_contract_date || d.date_start || null,
     remaining_leaves: d.remaining_leaves || 0,
     partner_id: [d.partner_id || 0, d.name || ""],
   };
@@ -100,8 +120,26 @@ function getInitials(name) {
     .toUpperCase();
 }
 
+// Lo que se muestra cuando el sistema no tiene el dato. NO es un error de la
+// pantalla: es informacion — significa que falta capturarlo en RH.
+const SIN_DATO = "Sin dato";
+
+// `new Date(null)` es el epoch: 1 de enero de 1970. Por eso el perfil decia
+// "Fecha de ingreso: 31 de diciembre de 1969" y "56 anos de antiguedad" cuando
+// `date_start` venia vacio. Un dato que falta tiene que verse como que falta,
+// no como un empleado con medio siglo en la empresa.
+function parseFechaValida(value) {
+  if (value === null || value === undefined || value === "" || value === false) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  // Cualquier cosa anterior a 1971 en este dominio es el epoch disfrazado.
+  if (d.getUTCFullYear() < 1971) return null;
+  return d;
+}
+
 function calcAntiguedad(dateStart) {
-  const start = new Date(dateStart);
+  const start = parseFechaValida(dateStart);
+  if (!start) return SIN_DATO;
   const now = new Date();
   let years = now.getFullYear() - start.getFullYear();
   let months = now.getMonth() - start.getMonth();
@@ -117,7 +155,9 @@ function calcAntiguedad(dateStart) {
 }
 
 function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleDateString("es-MX", {
+  const d = parseFechaValida(dateStr);
+  if (!d) return SIN_DATO;
+  return d.toLocaleDateString("es-MX", {
     day: "numeric",
     month: "long",
     year: "numeric",

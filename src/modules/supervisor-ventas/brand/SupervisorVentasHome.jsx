@@ -14,6 +14,7 @@ import {
   BRAND_HEADER_GRADIENT,
   BRAND_LOGO,
 } from '../../../theme/brandLight'
+import { orderSupervisorHomeModules } from './homeOrder'
 
 const ICON = {
   kpis: '📈', encuestas: '📝', logros: '🏅', equipo: '👥',
@@ -62,6 +63,9 @@ export default function SupervisorVentasHome({
   session, modules = [], onModule, onLogout,
 }) {
   const firstName = String(session?.name || '').split(' ')[0] || 'Colaborador'
+  // El orden es de PRESENTACIÓN: qué módulos hay y si se puede entrar lo sigue
+  // decidiendo quien arma la lista (getHomeModulesForSession + handleModule).
+  const ordered = orderSupervisorHomeModules(modules)
 
   return (
     <div
@@ -149,12 +153,12 @@ export default function SupervisorVentasHome({
         </h2>
 
         <div style={{ display: 'grid', gap: 10 }}>
-          {modules.map((module) => (
+          {ordered.map((module) => (
             <ModuleCard key={module.id} module={module} onClick={() => onModule?.(module)} />
           ))}
         </div>
 
-        {modules.length === 0 && (
+        {ordered.length === 0 && (
           <p style={{ fontSize: 13, color: C.textMuted }}>
             Todavía no tienes módulos asignados.
           </p>

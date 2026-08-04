@@ -7,6 +7,7 @@
 // invariante lo verifica tests/brandTokensScope.test.mjs.
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import { deriveRouteTimeline, departureLabel, closeStageLabel } from '../presentation.js'
+import { isVisited, noSaleReasonDisplay, stopResultLabel } from './stopLabels'
 
 const C = TOKENS.colors
 const S = TOKENS.state
@@ -17,12 +18,32 @@ const STATUS_TONE = {
 }
 
 function StopRow({ st }) {
-  const visited = st?.state === 'done' || st?.has_checkin || st?.actual_end_time
+  const visited = isVisited(st)
+  const motivo = noSaleReasonDisplay(st)
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '6px 0', borderTop: `1px solid ${C.border}` }}>
       <span style={{ fontSize: 11, color: C.textMuted, width: 22 }}>{st?.sequence ?? '·'}</span>
-      <span style={{ fontSize: 12.5, color: C.textSoft, flex: 1 }}>{st?.name || 'Cliente'}</span>
-      <span style={{ fontSize: 11, color: visited ? C.success : C.textMuted }}>{visited ? (st?.result_status || 'visitado') : 'pendiente'}</span>
+      <span style={{ fontSize: 12.5, color: C.textSoft, flex: 1, minWidth: 0 }}>{st?.name || 'Cliente'}</span>
+      {/* Motivo de no venta: solo cuando aplica, y diciendo si falta capturarlo.
+          "sin motivo capturado" NO es lo mismo que "no aplica". */}
+      {motivo.show && (
+        <span
+          data-testid="v2-stop-reason"
+          style={{
+            fontSize: 11, color: motivo.missing ? C.textMuted : C.textSoft,
+            fontStyle: motivo.missing ? 'italic' : 'normal',
+            maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+        >
+          {motivo.text}
+        </span>
+      )}
+      <span
+        data-testid="v2-stop-state"
+        style={{ fontSize: 11, color: visited ? C.success : C.textMuted, whiteSpace: 'nowrap' }}
+      >
+        {stopResultLabel(st)}
+      </span>
     </div>
   )
 }
