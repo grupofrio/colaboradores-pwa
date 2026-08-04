@@ -142,6 +142,11 @@ export default function SupervisorDesktopBoard({
     setSelectedPlanId((prev) => (prev === id ? null : id))
   }, [])
 
+  const selectPlan = useCallback((planId) => {
+    if (!Number.isSafeInteger(planId) || planId <= 0) return
+    setSelectedPlanId(planId)
+  }, [])
+
   const clear = useCallback(() => setSelectedPlanId(null), [])
 
   return (
@@ -177,7 +182,8 @@ export default function SupervisorDesktopBoard({
             dayControl={day?.dayControl}
             source={day?.source || 'live'}
             selectedPlanId={selectedPlanId}
-            onOpenRoute={toggle}
+            onSelectRoute={selectPlan}
+            onOpenRoute={onOpenRoute}
             title=""
             testid="v2-desktop-rutas"
           />

@@ -145,6 +145,17 @@ test('el tablero NO carga datos: los recibe ya resueltos', () => {
   }
 })
 
+test('el tablero conecta la selección de ruta con el filtro y conserva Abrir ruta para navegar', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+  const rutasView = src.match(/<RutasView[\s\S]*?\/>/)?.[0]
+
+  assert.match(src, /const selectPlan = useCallback\(\(planId\) => \{[\s\S]*?Number\.isSafeInteger\(planId\)[\s\S]*?planId <= 0[\s\S]*?setSelectedPlanId\(planId\)[\s\S]*?\}, \[\]\)/, 'solo selecciona IDs positivos y seguros')
+  assert.ok(rutasView, 'el tablero monta RutasView')
+  assert.match(rutasView, /onSelectRoute=\{selectPlan\}/, 'la tarjeta selecciona su plan sin navegar')
+  assert.match(rutasView, /onOpenRoute=\{onOpenRoute\}/, 'Abrir ruta conserva el callback del padre')
+  assert.doesNotMatch(rutasView, /onOpenRoute=\{toggle\}/, 'la selección no se reutiliza como navegación')
+})
+
 test('HoyTab conserva la vista móvil y solo cambia en escritorio', () => {
   const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/tabs/HoyTab.jsx', import.meta.url), 'utf8')
 
