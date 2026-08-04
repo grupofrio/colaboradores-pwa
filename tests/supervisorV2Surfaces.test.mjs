@@ -24,6 +24,7 @@ const RutaDetalle = await loadView('src/modules/supervisor-ventas/v2/rutas/RutaD
 const PendientesView = await loadView('src/modules/supervisor-ventas/v2/pendientes/PendientesView.jsx')
 const render = (C, props) => renderToStaticMarkup(createElement(C, props))
 const radarTabSource = readFileSync(fileURLToPath(new URL('../src/modules/supervisor-ventas/v2/tabs/RadarTab.jsx', import.meta.url)), 'utf8')
+const radarTrailHookSource = readFileSync(fileURLToPath(new URL('../src/modules/supervisor-ventas/v2/radar/useRadarTrail.js', import.meta.url)), 'utf8')
 
 const TWO_PLAN_RADAR = {
   ...RADAR_FIXTURE,
@@ -141,14 +142,15 @@ test('Radar no expone filas con plan_id inválido como seleccionables', () => {
 test('Radar carga el rastro con el plan resuelto y la fecha operativa del day-control', () => {
   assert.match(radarTabSource, /resolveActivePlanId\(day\.radar\?\.units, selectedId\)/)
   assert.match(radarTabSource, /const operationalDate = day\.dayControl\?\.date/)
-  assert.match(radarTabSource, /createRadarTrailRequest\(activePlanId, operationalDate\)/)
-  assert.match(radarTabSource, /getUnitTrack\(request\.planId, request\.operationalDate\)/)
+  assert.match(radarTabSource, /useRadarTrail\(activePlanId, operationalDate\)/)
+  assert.doesNotMatch(radarTabSource, /getUnitTrack/)
 })
 test('Radar limpia y protege el rastro al cambiar plan o fecha', () => {
-  assert.match(radarTabSource, /setTrailState\(request\)/)
-  assert.match(radarTabSource, /applyRadarTrailResponse\(state, request\.key, response\)/)
-  assert.match(radarTabSource, /applyRadarTrailError\(state, request\.key\)/)
-  assert.match(radarTabSource, /selectRadarTrail\(trailState, activePlanId, operationalDate\)/)
+  assert.match(radarTrailHookSource, /createRadarTrailRequest\(planId, operationalDate\)/)
+  assert.match(radarTrailHookSource, /loadTrack\(request\.planId, request\.operationalDate\)/)
+  assert.match(radarTrailHookSource, /applyRadarTrailResponse\(prev, request\.key, response\)/)
+  assert.match(radarTrailHookSource, /applyRadarTrailError\(prev, request\.key\)/)
+  assert.match(radarTrailHookSource, /selectRadarTrail\(state, planId, operationalDate\)/)
 })
 test('Radar conserva mapa y lista base si el rastro falla', () => {
   const html = render(RadarView, {
