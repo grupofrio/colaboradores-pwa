@@ -18,6 +18,8 @@ plan elegido.
 - Eliminar la lista de unidades que `RadarView` muestra debajo del mapa dentro
   del tablero de escritorio. No eliminarla de Radar móvil ni de otros callers.
 - Mantener **Rutas de hoy** como columna izquierda y fuente única de selección.
+- Mantener un botón explícito **Abrir ruta** en cada tarjeta de la columna
+  izquierda para navegar al detalle de esa ruta.
 - Fusionar las antiguas columnas de Radar y Clientes por visitar en un panel
   derecho vertical: mapa primero, pendientes después.
 - Incluir en el mapa escritorio la misma polilínea GPS real y el mismo modal de
@@ -70,11 +72,19 @@ tablero entrega ese mismo valor a `RutasView`, `RadarView`,
 `PendingStopsColumn` y al hook GPS; por tanto, mapa, rastro y pendientes nunca
 describen planes distintos al entrar o después de que una ruta desaparezca.
 
-Los eventos distinguen intención de ruta y selección idempotente: un clic en
-**Rutas de hoy** puede alternar el filtro (`toggleRoute`), mientras que el
-selector, marcador o fila del mapa siempre fija un plan válido
-(`selectPlan`) y no lo limpia al seleccionarlo otra vez. Si el plan elegido ya
-no existe, `effectivePlanId` cae a la primera ruta válida de manera uniforme.
+Todos los eventos de selección son idempotentes: un clic o teclado sobre la
+superficie de una tarjeta de **Rutas de hoy**, el selector, marcador o fila del
+mapa fija un plan válido (`selectPlan`) y no lo limpia al seleccionarlo otra
+vez. Si el plan elegido ya no existe, `effectivePlanId` cae a la primera ruta
+válida de manera uniforme. Como el tablero siempre representa un plan válido,
+no renderiza el control de “ver todas” de pendientes: ese control produciría
+una lista de todas las rutas mientras mapa y rastro muestran una sola.
+
+`RutasView` separa de forma explícita la selección y la navegación para el
+tablero desktop: la tarjeta selecciona y el botón hermano **Abrir ruta** navega
+a `/equipo/rutas?plan=<planId>`. La variante móvil conserva su interacción
+actual de tarjeta completa, sin controles anidados. El botón nuevo cumple el
+mínimo táctil de 44 px y no propaga la selección ni duplica la navegación.
 
 El tablero pasa el rastro normalizado a `RadarView`. Un prop explícito de
 presentación controla la lista de unidades, con valor por defecto que conserva
@@ -86,8 +96,8 @@ todos los callers actuales; el tablero de escritorio lo desactiva.
   el mapa de unidad/paradas sigue utilizable.
 - El modal conserva sus semánticas `dialog`, foco inicial, trampa Tab,
   Escape y retorno al botón invocador. Reutiliza datos y no hace otra consulta.
-- La selección de ruta mantiene sus controles por clic y teclado. El botón de
-  limpiar pendientes sigue disponible cuando hay filtro.
+- La selección de ruta mantiene sus controles por clic y teclado; el tablero
+  conserva un único plan válido en sus tres superficies.
 - Los controles nuevos o reubicados respetan el mínimo de 44 px táctiles.
 
 ## Pruebas
@@ -100,6 +110,9 @@ todos los callers actuales; el tablero de escritorio lo desactiva.
   La selección intencional nula usa la primera ruta válida mediante
   `effectivePlanId`; no se solicita GPS únicamente cuando no existe ningún
   `effectivePlanId` válido (sin unidades/planes válidos).
+- Rutas desktop: la superficie de tarjeta selecciona de forma idempotente y el
+  botón **Abrir ruta** navega al plan de esa tarjeta sin alterar la selección;
+  móvil conserva la tarjeta como control único.
 - Regresión: móvil mantiene la lista y sus flujos existentes; polilínea,
   límites, antimeridiano y diálogo accesible continúan cubiertos.
 - Verificación final: `npm test`, `npm run lint`, `npm run build` y
