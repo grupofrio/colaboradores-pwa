@@ -78,6 +78,9 @@ export function normalizeUnitTrack(payload = {}) {
     trail: trailAvailable ? asArray(trailSource).map(normalizePoint).filter(Boolean) : [],
     trail_available: trailAvailable,
     stops: asArray(source.stops ?? source.route_stops).map(normalizeStop).filter(Boolean),
+    // Zona del plan tal cual la manda el contrato. `null` cuando el plan no
+    // tiene polígono: entonces el mapa no dibuja ninguna zona.
+    zone: source.zone && typeof source.zone === 'object' ? source.zone : null,
   }
 }
 

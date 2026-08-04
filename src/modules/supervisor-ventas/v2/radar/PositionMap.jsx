@@ -1,10 +1,13 @@
 import { lazy, Suspense } from 'react'
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
+import { STOP_KINDS } from '../../radar/stopResultStyle.js'
 import { computeBounds, validPoints } from './mapProjection.js'
 
 const C = TOKENS.colors
 const LeafletPositionMap = lazy(() => import('./LeafletPositionMap.jsx'))
-const MAP_KINDS = new Set(['unit', 'unit_stale', 'stop_done', 'stop_pending'])
+// `stop_done`/`stop_pending` se conservan por compatibilidad con un backend que
+// todavía no mande `result_status`: sin ellos el mapa se quedaría sin paradas.
+const MAP_KINDS = new Set(['unit', 'unit_stale', 'stop_done', 'stop_pending', ...STOP_KINDS])
 
 function isMappablePoint(point) {
   return MAP_KINDS.has(point.kind)
@@ -31,7 +34,7 @@ function LoadingMap({ testid, height }) {
 // Límite SSR: valida geometría sin cargar Leaflet. En servidor no se intenta
 // representar cartografía; el navegador carga el mapa vial de manera diferida.
 export default function PositionMap({
-  points = [], trail = [], selectedId = null, onSelect, height = 300, backdropUrl = null, width = 640, testid = 'v2-position-map',
+  points = [], trail = [], zone = null, selectedId = null, onSelect, height = 300, backdropUrl = null, width = 640, testid = 'v2-position-map',
   showUnitList = true,
 }) {
   // CEDIS y otros puntos ajenos al plan seleccionado no forman parte de la
@@ -56,7 +59,7 @@ export default function PositionMap({
 
   return (
     <Suspense fallback={<LoadingMap testid={testid} height={height} />}>
-      <LeafletPositionMap points={plotted} trail={trailPoints} selectedId={selectedId} onSelect={onSelect} height={height} backdropUrl={backdropUrl} width={width} testid={testid} />
+      <LeafletPositionMap points={plotted} trail={trailPoints} zone={zone} selectedId={selectedId} onSelect={onSelect} height={height} backdropUrl={backdropUrl} width={width} testid={testid} />
     </Suspense>
   )
 }

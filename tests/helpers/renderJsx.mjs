@@ -54,7 +54,7 @@ const leafletSsrStub = {
       contents:
         "import { createElement } from 'react';\n"
         + 'const inert = ({ children }) => createElement(\'div\', null, children);\n'
-        + 'export const MapContainer = inert; export const TileLayer = inert; export const CircleMarker = inert; export const Marker = inert; export const Polyline = inert; export const Tooltip = inert;\n'
+        + 'export const MapContainer = inert; export const TileLayer = inert; export const CircleMarker = inert; export const Marker = inert; export const Polyline = inert; export const Polygon = inert; export const Tooltip = inert;\n'
         + 'export const useMap = () => ({ invalidateSize() {}, fitBounds() {}, setView() {} });\n',
       loader: 'js',
     }))

@@ -130,7 +130,7 @@ test('Radar conserva la selección diaria válida y recupera el primer plan crud
 test('Radar entrega al mapa exclusivamente la geometría del plan diario activo', () => {
   assert.deepEqual(buildSelectedPlanPoints(TWO_PLAN_RADAR, 901, NOW), [
     { id: 901, lat: 18.5, lng: -99.7, kind: 'unit', label: 'Ruta Costa' },
-    { id: 'stop:9011', lat: 18.51, lng: -99.71, kind: 'stop_done', label: 'Cliente Costa' },
+    { id: 'stop:9011', lat: 18.51, lng: -99.71, kind: 'stop_pending', label: 'Cliente Costa', result_status: null, done: true },
   ])
 })
 test('Radar no expone filas con plan_id inválido como seleccionables', () => {

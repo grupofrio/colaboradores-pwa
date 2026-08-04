@@ -106,7 +106,7 @@ test('PositionMap: conserva width y backdropUrl para los callers del SVG previo'
 test('PositionMap: wrapper carga Leaflet de forma diferida y el hijo define el contrato vial', () => {
   assert.doesNotMatch(positionMapSource, /^\s*import[\s\S]*?from\s+['"](?:react-leaflet|leaflet|leaflet\/dist\/leaflet\.css)['"]/m)
   assert.match(positionMapSource, /lazy\(\(\)\s*=>\s*import\(['"]\.\/LeafletPositionMap\.jsx['"]\)\)/)
-  assert.match(leafletPositionMapSource, /import\s*{\s*MapContainer,\s*TileLayer,\s*CircleMarker,\s*Marker,\s*Polyline,\s*Tooltip,\s*useMap\s*}\s*from\s*['"]react-leaflet['"]/) ;
+  assert.match(leafletPositionMapSource, /import\s*{\s*MapContainer,\s*TileLayer,\s*CircleMarker,\s*Marker,\s*Polygon,\s*Polyline,\s*Tooltip,\s*useMap\s*}\s*from\s*['"]react-leaflet['"]/) ;
   assert.match(leafletPositionMapSource, /import\s*{\s*divIcon\s*}\s*from\s*['"]leaflet['"]/) ;
   assert.match(leafletPositionMapSource, /import\s*['"]leaflet\/dist\/leaflet\.css['"]/) ;
   assert.match(leafletPositionMapSource, /https:\/\/\{s\}\.tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/)

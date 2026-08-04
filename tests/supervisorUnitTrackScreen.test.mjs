@@ -252,7 +252,7 @@ test('UnitTrackMap is a read-only Leaflet view with the required operational geo
   assert.equal(reactLeafletImports.length, 1)
   assert.deepEqual(
     reactLeafletImports[0][1].split(',').map((name) => name.trim()).filter(Boolean).sort(),
-    ['CircleMarker', 'MapContainer', 'Polyline', 'TileLayer', 'Tooltip', 'useMap'].sort(),
+    ['CircleMarker', 'MapContainer', 'Polygon', 'Polyline', 'TileLayer', 'Tooltip', 'useMap'].sort(),
   )
   assert.match(source, /import\s+['"]leaflet\/dist\/leaflet\.css['"]/)
   assert.match(source, /import\s*{\s*buildUnitTrackBounds\s*}\s*from\s*['"]\.\/unitTrackState\.js['"]/)
@@ -262,12 +262,19 @@ test('UnitTrackMap is a read-only Leaflet view with the required operational geo
   assert.equal((source.match(/<MapContainer\b/g) ?? []).length, 1)
   assert.ok(source.indexOf('if (bounds.length === 0) return null') < source.indexOf('<MapContainer'))
   assert.match(source, /<div\s+style=\{\{\s*height:\s*280,\s*minHeight:\s*280,\s*width:\s*['"]100%['"]/)
+  // La leyenda vive FUERA del contenedor del mapa, por eso ahora hay un div
+  // envolvente; el del mapa conserva sus 280px.
+  assert.match(source, /data-testid="unit-track-legend"/)
   assert.match(source, /<MapContainer[\s\S]*?style=\{\{\s*height:\s*['"]100%['"],\s*minHeight:\s*280/)
   assert.match(source, /url=['"]https:\/\/\{s\}\.tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png['"]/)
   assert.match(source, /attribution=/)
   assert.match(source, /\{trailPositions\.length >= 2 && \(\s*<Polyline\s+positions=\{trailPositions\}\s+color="#2563eb"/)
-  assert.match(source, /\{plannedPosition && \(\s*<CircleMarker\s+center=\{plannedPosition\}[^>]*color="#d97706"/)
-  assert.match(source, /\{checkinPosition && \(\s*<CircleMarker\s+center=\{checkinPosition\}[^>]*color="#15803d"/)
+  // El color de la parada YA NO sale del check-in sino del RESULTADO de venta:
+  // una parada visitada sin venta se pintaba igual de verde que una venta.
+  assert.match(source, /<CircleMarker\s+center=\{plannedPosition\}\s+radius=\{PLANNED_STYLE\.radius\}/)
+  assert.match(source, /center=\{checkinPosition \|\| plannedPosition\}\s+radius=\{style\.radius\}\s+pathOptions=\{pathOptionsForStop\(stop\)\}/)
+  assert.ok(!source.includes('#d97706') && !source.includes('#15803d'),
+    'los colores por visita ya no existen')
   assert.match(source, /\{currentPosition && \(\s*<CircleMarker\s+center=\{currentPosition\}[^>]*color="#2563eb"[\s\S]*?<Tooltip[^>]*>[\s\S]*?Hora:[\s\S]*?Velocidad:/)
   assert.match(source, /function MapViewport\(\{ bounds \}\)[\s\S]*?const map = useMap\(\)/)
   assert.match(source, /if \(bounds\.length >= 2\)[\s\S]*map\.fitBounds/)
