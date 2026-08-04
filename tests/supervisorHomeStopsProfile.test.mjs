@@ -142,3 +142,77 @@ test('los many2one del perfil se leen como [id, nombre]', () => {
     assert.ok(!src.includes(inventada), `sigue leyendo una clave inexistente: ${inventada}`)
   }
 })
+
+// ── 4b · Perfil en claro: el tema se elige por ROL, no por import ────────────
+
+test('el perfil conmuta el tema por rol y deja el oscuro como default', () => {
+  const src = PERFIL()
+  // Misma función que ya conmuta la navegación global: si un rol deja de ser
+  // claro allá, aquí cambia solo. No hay una segunda lista de roles.
+  assert.match(src, /isBrandLightSession\(session\)/, 'decide por rol en runtime')
+  assert.match(src, /const DARK_TOKENS = \{/, 'el tema oscuro sigue siendo un objeto propio')
+  // El default del contexto es OSCURO: montar un componente fuera del árbol no
+  // puede caer en claro por accidente.
+  assert.match(src, /createContext\(\{ t: DARK_TOKENS, s: SKINS\.dark, light: false \}\)/)
+  assert.match(src, /<ThemeCtx\.Provider value=\{theme\}>/, 'el árbol recibe el tema activo')
+})
+
+test('ningún componente del perfil lee un TOKENS de módulo', () => {
+  // Antes `TOKENS` era una constante global del archivo: cualquier componente
+  // la leía y el tema no podía cambiar. Ahora tiene que entrar por el hook.
+  const src = PERFIL()
+  assert.ok(!/^const TOKENS = /m.test(src), 'ya no existe el TOKENS global')
+  const cuerpo = src.slice(src.indexOf('function IceParticles'))
+  const usan = cuerpo.split(/\nfunction /).filter((f) => /\bTOKENS\./.test(f) || /\bSKIN\./.test(f))
+  for (const f of usan) {
+    const nombre = f.slice(0, f.indexOf('('))
+    assert.match(f, /useTheme\(\)|const TOKENS = theme\.t/, `${nombre} usa el tema sin pedirlo al contexto`)
+  }
+  assert.ok(usan.length >= 8, `se revisaron ${usan.length} componentes`)
+})
+
+test('las dos pieles tienen EXACTAMENTE las mismas llaves', async () => {
+  // Es la red que atrapa un literal oscuro sin contraparte clara: si alguien
+  // agrega una a la piel oscura y olvida la clara, truena aquí.
+  const src = PERFIL()
+  const bloque = src.slice(src.indexOf('const SKINS = {'), src.indexOf('const ThemeCtx'))
+  const llaves = (texto) => [...texto.matchAll(/^    (\w+):/gm)].map((m) => m[1]).sort()
+  const dark = llaves(bloque.slice(bloque.indexOf('dark: {'), bloque.indexOf('light: {')))
+  const light = llaves(bloque.slice(bloque.indexOf('light: {')))
+  assert.ok(dark.length >= 20, `la piel oscura declara ${dark.length} llaves`)
+  assert.deepEqual(light, dark, 'una piel tiene llaves que la otra no')
+})
+
+// Contraste AA sobre el hero, que es la única superficie OSCURA del tema claro.
+function lum(hex) {
+  const v = hex.replace('#', '')
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const c = parseInt(v.slice(i, i + 2), 16) / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+const ratio = (a, b) => {
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p)
+  return (x + 0.05) / (y + 0.05)
+}
+
+test('el texto del hero claro cumple AA en AMBOS extremos del degradado', () => {
+  const src = PERFIL()
+  const light = src.slice(src.indexOf('  light: {'), src.indexOf('const ThemeCtx'))
+  const grad = light.match(/heroBg: "linear-gradient\(135deg, (#\w{6}) 0%, (#\w{6}) 100%\)"/)
+  assert.ok(grad, 'el hero claro es un degradado de dos paradas explícitas')
+
+  const textos = ['heroText', 'heroTextMuted', 'heroOverline', 'heroAccent']
+    .map((k) => [k, light.match(new RegExp(k + ': "(#[0-9A-Fa-f]{6})"'))?.[1]])
+  for (const [nombre, color] of textos) {
+    assert.ok(color, `${nombre} debe ser un hex sólido: una transparencia sobre azul no se puede medir`)
+    for (const parada of [grad[1], grad[2]]) {
+      const r = ratio(color, parada)
+      assert.ok(r >= 4.5, `${nombre} sobre ${parada}: ${r.toFixed(2)}:1 (AA exige 4.5)`)
+    }
+  }
+  // El degradado institucional completo llega a #00B8D4: blanco encima da
+  // 2.38:1. Este es el guardia de que nadie lo vuelva a abrir hasta allá.
+  assert.ok(ratio('#FFFFFF', '#00B8D4') < 4.5, 'el cian sigue siendo ilegible con blanco')
+})

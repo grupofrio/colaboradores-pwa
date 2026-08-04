@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../App";
 import { apiGet as _apiGet, apiPost as _apiPost, apiPatch as _apiPatch } from "../lib/api";
 import { runLogout } from "../lib/logout";
+import { BRAND_TOKENS } from "../theme/brandTokens";
+import { isBrandLightSession } from "../theme/useBrandPalette";
 
 /* ============================================================================
    DESIGN TOKENS
+   "Yo" la ve TODO el mundo, así que el tema se elige por rol en tiempo de
+   ejecución: supervisor_ventas en claro, el resto exactamente como estaba.
+   El default del contexto es el oscuro, de modo que si alguien monta un
+   componente fuera del árbol no hay forma de que caiga en claro por accidente.
 ============================================================================ */
-const TOKENS = {
+const DARK_TOKENS = {
   colors: {
     bg0: "#030811",
     bg1: "#04101f",
@@ -50,6 +56,83 @@ const TOKENS = {
     spring: "380ms cubic-bezier(0.34,1.56,0.64,1)",
   },
 };
+
+// Lo que NO cabe en un token de color: degradados, sombras de vidrio, el
+// escarchado del fondo. Estaba escrito a mano dentro del JSX y todo asumía
+// fondo oscuro. Aquí queda la pareja explícita, para que cada literal tenga su
+// contraparte clara en lugar de sobrevivir por olvido.
+const SKINS = {
+  dark: {
+    page: "radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)",
+    gridOpacity: 0.032,
+    particles: true,
+    avatarBg: "linear-gradient(135deg, rgba(43,143,224,0.40), rgba(21,73,155,0.55))",
+    avatarBorder: "2px solid rgba(97,178,255,0.30)",
+    avatarShadow: "0 0 24px rgba(43,143,224,0.22), inset 0 1px 0 rgba(255,255,255,0.12)",
+    avatarFg: "#FFFFFF",
+    badgeBg: "linear-gradient(135deg, #2B8FE0, #15499B)",
+    badgeBorder: "2px solid #07162b",
+    // El hero oscuro es un panel translúcido: el texto va con los colores del tema.
+    heroBg: "linear-gradient(180deg, rgba(21,73,155,0.20), rgba(255,255,255,0.03))",
+    heroText: "#FFFFFF",
+    heroTextMuted: "rgba(255,255,255,0.60)",
+    heroOverline: "rgba(97,178,255,0.60)",
+    heroAccent: "#22c55e",
+    overline: "rgba(97,178,255,0.55)",
+    iconBg: "rgba(43,143,224,0.08)",
+    iconBorder: "rgba(43,143,224,0.14)",
+    inputBg: "rgba(255,255,255,0.06)",
+    inputRing: "0 0 0 2px rgba(97,178,255,0.14)",
+    leaveIconBg: "rgba(34,197,94,0.08)",
+    leaveIconBorder: "rgba(34,197,94,0.14)",
+    scrim: "3,8,17",
+    sheetBg: "linear-gradient(180deg, #07162b, #04101f)",
+    sheetHandle: "rgba(255,255,255,0.14)",
+    sheetShadow: "0 -20px 60px rgba(0,0,0,0.6)",
+    shimmer: "linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.05) 75%)",
+    cta: "linear-gradient(90deg,#15499B,#2B8FE0)",
+  },
+  light: {
+    page: BRAND_TOKENS.colors.bg0,
+    // Escarcha y retícula son efectos pensados para fondo oscuro: sobre claro
+    // no se ven o ensucian. No se "aclaran", se apagan.
+    gridOpacity: 0,
+    particles: false,
+    avatarBg: "linear-gradient(135deg, #005A8D, #00B8D4)",
+    avatarBorder: "2px solid #FFFFFF",
+    avatarShadow: "0 2px 10px rgba(15,42,61,0.16)",
+    avatarFg: "#FFFFFF",
+    badgeBg: "linear-gradient(135deg, #0077BB, #005A8D)",
+    badgeBorder: "2px solid #FFFFFF",
+    // El hero es la ÚNICA superficie oscura del tema claro: lleva el degradado
+    // institucional y su texto va en blanco (colors.text, #0F2A3D, ahí sería
+    // ilegible). Pero el degradado completo termina en cian #00B8D4, y blanco
+    // sobre ese extremo da 2.38:1 — medido. Se usa la MITAD MARINA del
+    // degradado: así el extremo más claro sigue por encima de AA. Si alguien lo
+    // vuelve a abrir hacia el cian, el test de contraste truena.
+    heroBg: "linear-gradient(135deg, #004E7A 0%, #005A8D 100%)",
+    heroText: "#FFFFFF",
+    heroTextMuted: "#D7EAF6",
+    heroOverline: "#BFDFF2",
+    heroAccent: "#FFFFFF",
+    overline: "#5B7285",
+    iconBg: "rgba(0,119,187,0.08)",
+    iconBorder: "rgba(0,119,187,0.16)",
+    inputBg: "#F7FCFF",
+    inputRing: "0 0 0 2px rgba(0,119,187,0.16)",
+    leaveIconBg: "rgba(22,101,52,0.08)",
+    leaveIconBorder: "rgba(22,101,52,0.16)",
+    scrim: "15,42,61",
+    sheetBg: "#FFFFFF",
+    sheetHandle: "#DBEFF9",
+    sheetShadow: "0 -8px 32px rgba(15,42,61,0.16)",
+    shimmer: "linear-gradient(90deg, #E8F4FB 25%, #F5FAFE 50%, #E8F4FB 75%)",
+    cta: BRAND_TOKENS.colors.ctaGradient,
+  },
+};
+
+const ThemeCtx = createContext({ t: DARK_TOKENS, s: SKINS.dark, light: false });
+const useTheme = () => useContext(ThemeCtx);
 
 function getTypo(sw) {
   const sm = sw < 340;
@@ -177,6 +260,7 @@ function isValidPhone(value) {
    SHARED
 ============================================================================ */
 function IceParticles() {
+  const { s: SKIN } = useTheme();
   const particles = useMemo(
     () => Array.from({ length: 10 }, (_, i) => ({
       id:i, x:(i*37+11)%100, y:(i*53+7)%100, size:(i%3)+1,
@@ -184,6 +268,7 @@ function IceParticles() {
     })),
     []
   );
+  if (!SKIN.particles) return null;
   return (
     <div style={{ position:"absolute", inset:0, overflow:"hidden", pointerEvents:"none" }}>
       {particles.map((p) => (
@@ -194,6 +279,7 @@ function IceParticles() {
 }
 
 function FadeIn({ children, delay = 0, y = 12 }) {
+  const { t: TOKENS } = useTheme();
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), delay);
@@ -207,6 +293,7 @@ function FadeIn({ children, delay = 0, y = 12 }) {
 }
 
 function Card({ children, style = {} }) {
+  const { t: TOKENS } = useTheme();
   return (
     <div style={{ background:TOKENS.glass.panel, border:`1px solid ${TOKENS.colors.border}`, borderRadius:TOKENS.radius.xl, boxShadow:`${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`, backdropFilter:"blur(12px)", ...style }}>
       {children}
@@ -218,6 +305,7 @@ function Card({ children, style = {} }) {
    AVATAR
 ============================================================================ */
 function Avatar({ employee, size = 80, editable = false, onEdit }) {
+  const { t: TOKENS, s: SKIN } = useTheme();
   const [pressed, setPressed] = useState(false);
   const initials = getInitials(employee.name);
 
@@ -232,11 +320,11 @@ function Avatar({ employee, size = 80, editable = false, onEdit }) {
         onClick={() => editable && onEdit?.()}
         style={{
           width:size, height:size, borderRadius:"50%",
-          background:"linear-gradient(135deg, rgba(43,143,224,0.40), rgba(21,73,155,0.55))",
-          border:"2px solid rgba(97,178,255,0.30)",
-          boxShadow:"0 0 24px rgba(43,143,224,0.22), inset 0 1px 0 rgba(255,255,255,0.12)",
+          background:SKIN.avatarBg,
+          border:SKIN.avatarBorder,
+          boxShadow:SKIN.avatarShadow,
           display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:size * 0.32, fontWeight:800, color:TOKENS.colors.text, letterSpacing:"-0.02em",
+          fontSize:size * 0.32, fontWeight:800, color:SKIN.avatarFg, letterSpacing:"-0.02em",
           cursor:editable?"pointer":"default",
           transform:pressed?"scale(0.96)":"scale(1)",
           transition:`transform ${TOKENS.motion.spring}`,
@@ -249,7 +337,7 @@ function Avatar({ employee, size = 80, editable = false, onEdit }) {
         }
       </div>
       {editable && (
-        <div style={{ position:"absolute", bottom:0, right:0, width:size * 0.32, height:size * 0.32, borderRadius:"50%", background:"linear-gradient(135deg, #2B8FE0, #15499B)", border:"2px solid #07162b", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:TOKENS.shadow.soft, cursor:"pointer" }}>
+        <div style={{ position:"absolute", bottom:0, right:0, width:size * 0.32, height:size * 0.32, borderRadius:"50%", background:SKIN.badgeBg, border:SKIN.badgeBorder, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:TOKENS.shadow.soft, cursor:"pointer" }}>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -264,24 +352,25 @@ function Avatar({ employee, size = 80, editable = false, onEdit }) {
    HERO CARD
 ============================================================================ */
 function HeroCard({ employee, sw, delay, onEditPhoto }) {
+  const { t: TOKENS, s: SKIN } = useTheme();
   const typo = getTypo(sw);
   const antiguedad = calcAntiguedad(employee.date_start);
   return (
     <FadeIn delay={delay}>
-      <Card style={{ padding: sw < 340 ? 16 : 20, background:TOKENS.glass.hero, border:`1px solid ${TOKENS.colors.borderBlue}`, boxShadow:`${TOKENS.shadow.lg}, ${TOKENS.shadow.inset}, ${TOKENS.shadow.blue}` }}>
+      <Card style={{ padding: sw < 340 ? 16 : 20, background:SKIN.heroBg, border:`1px solid ${TOKENS.colors.borderBlue}`, boxShadow:`${TOKENS.shadow.lg}, ${TOKENS.shadow.inset}, ${TOKENS.shadow.blue}` }}>
         <div style={{ display:"flex", alignItems:"center", gap: sw < 340 ? 14 : 18 }}>
           <Avatar employee={employee} size={sw < 340 ? 68 : 78} editable onEdit={onEditPhoto} />
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ ...typo.overline, color:"rgba(97,178,255,0.60)", marginBottom:4 }}>MI PERFIL</div>
-            <div style={{ ...typo.h2, color:TOKENS.colors.text, lineHeight:1.1, marginBottom:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            <div style={{ ...typo.overline, color:SKIN.heroOverline, marginBottom:4 }}>MI PERFIL</div>
+            <div style={{ ...typo.h2, color:SKIN.heroText, lineHeight:1.1, marginBottom:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
               {employee.name}
             </div>
-            <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, marginBottom:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            <div style={{ ...typo.caption, color:SKIN.heroTextMuted, marginBottom:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
               {employee.job_id[1]}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-              <div style={{ width:6, height:6, borderRadius:"50%", background:TOKENS.colors.success, boxShadow:`0 0 6px ${TOKENS.colors.success}` }} />
-              <span style={{ fontSize:9, color:TOKENS.colors.success, fontWeight:700 }}>{antiguedad} en Grupo Frío</span>
+              <div style={{ width:6, height:6, borderRadius:"50%", background:SKIN.heroAccent }} />
+              <span style={{ fontSize:9, color:SKIN.heroAccent, fontWeight:700 }}>{antiguedad} en Grupo Frío</span>
             </div>
           </div>
         </div>
@@ -294,24 +383,27 @@ function HeroCard({ employee, sw, delay, onEditPhoto }) {
    VACATION CARD
 ============================================================================ */
 function VacationCard({ days, sw, delay }) {
+  const { t: TOKENS, s: SKIN, light } = useTheme();
   const typo = getTypo(sw);
   const color = days >= 10 ? TOKENS.colors.success : days >= 5 ? TOKENS.colors.warning : TOKENS.colors.error;
-  const glowColor = days >= 10 ? "rgba(34,197,94,0.16)" : days >= 5 ? "rgba(245,158,11,0.16)" : "rgba(239,68,68,0.16)";
+  // El halo detrás del número es luz sobre fondo oscuro. En claro no se apaga
+  // por gusto: sobre blanco emborrona el dígito en vez de destacarlo.
+  const glow = light ? "none" : `0 0 20px ${days >= 10 ? "rgba(34,197,94,0.16)" : days >= 5 ? "rgba(245,158,11,0.16)" : "rgba(239,68,68,0.16)"}`;
   const label = days >= 10 ? "Buen saldo" : days >= 5 ? "Úsalos pronto" : "Quedan pocos";
   return (
     <FadeIn delay={delay}>
       <Card style={{ padding:`14px ${sw < 340 ? 14 : 18}px`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <div style={{ ...typo.overline, color:"rgba(97,178,255,0.55)", marginBottom:5 }}>VACACIONES DISPONIBLES</div>
+          <div style={{ ...typo.overline, color:SKIN.overline, marginBottom:5 }}>VACACIONES DISPONIBLES</div>
           <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-            <div style={{ fontSize: sw < 340 ? 32 : 38, fontWeight:800, color, letterSpacing:"-0.04em", lineHeight:1, textShadow:`0 0 20px ${glowColor}` }}>
+            <div style={{ fontSize: sw < 340 ? 32 : 38, fontWeight:800, color, letterSpacing:"-0.04em", lineHeight:1, textShadow:glow }}>
               {days}
             </div>
             <div style={{ fontSize:12, color:TOKENS.colors.textMuted, fontWeight:600, lineHeight:1.2 }}>días</div>
           </div>
           <div style={{ fontSize:9, color, fontWeight:700, marginTop:4 }}>{label}</div>
         </div>
-        <div style={{ width:52, height:52, borderRadius:16, background:`rgba(34,197,94,0.08)`, border:`1px solid rgba(34,197,94,0.14)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, flexShrink:0 }}>
+        <div style={{ width:52, height:52, borderRadius:16, background:SKIN.leaveIconBg, border:`1px solid ${SKIN.leaveIconBorder}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, flexShrink:0 }}>
           🏖️
         </div>
       </Card>
@@ -323,6 +415,7 @@ function VacationCard({ days, sw, delay }) {
    INFO ROW
 ============================================================================ */
 function InfoRow({ label, value, icon, editable = false, onEdit, isEditing = false, editValue, onEditChange, onEditSave, onEditCancel, saving = false, isLast = false, sw }) {
+  const { t: TOKENS, s: SKIN } = useTheme();
   const typo = getTypo(sw);
   const inputRef = useRef(null);
 
@@ -335,7 +428,7 @@ function InfoRow({ label, value, icon, editable = false, onEdit, isEditing = fal
 
   return (
     <div style={{ display:"flex", alignItems:"center", gap:12, padding:`12px 0`, borderBottom: isLast ? "none" : `1px solid ${TOKENS.colors.border}` }}>
-      <div style={{ width:32, height:32, borderRadius:10, background:"rgba(43,143,224,0.08)", border:`1px solid rgba(43,143,224,0.14)`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, color:TOKENS.colors.blue3 }}>
+      <div style={{ width:32, height:32, borderRadius:10, background:SKIN.iconBg, border:`1px solid ${SKIN.iconBorder}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, color:TOKENS.colors.blue3 }}>
         {icon}
       </div>
       <div style={{ flex:1, minWidth:0 }}>
@@ -350,7 +443,7 @@ function InfoRow({ label, value, icon, editable = false, onEdit, isEditing = fal
               if (e.key === "Escape") onEditCancel();
             }}
             disabled={saving}
-            style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:`1px solid ${TOKENS.colors.borderBlue}`, borderRadius:8, padding:"6px 8px", color:TOKENS.colors.text, fontSize:13, fontWeight:600, fontFamily:"inherit", outline:"none", boxShadow:`0 0 0 2px rgba(97,178,255,0.14)`, opacity:saving ? 0.7 : 1 }}
+            style={{ width:"100%", background:SKIN.inputBg, border:`1px solid ${TOKENS.colors.borderBlue}`, borderRadius:8, padding:"6px 8px", color:TOKENS.colors.text, fontSize:13, fontWeight:600, fontFamily:"inherit", outline:"none", boxShadow:SKIN.inputRing, opacity:saving ? 0.7 : 1 }}
           />
         ) : (
           <div style={{ ...typo.body, color:TOKENS.colors.textSoft, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -360,7 +453,7 @@ function InfoRow({ label, value, icon, editable = false, onEdit, isEditing = fal
       </div>
 
       {editable && !isEditing && (
-        <button onClick={onEdit} style={{ width:30, height:30, borderRadius:8, background:"rgba(43,143,224,0.08)", border:`1px solid rgba(43,143,224,0.14)`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0, color:TOKENS.colors.blue3 }}>
+        <button onClick={onEdit} style={{ width:30, height:30, borderRadius:8, background:SKIN.iconBg, border:`1px solid ${SKIN.iconBorder}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0, color:TOKENS.colors.blue3 }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -373,10 +466,10 @@ function InfoRow({ label, value, icon, editable = false, onEdit, isEditing = fal
           <button
             onClick={onEditSave}
             disabled={saving}
-            style={{ width:30, height:30, borderRadius:8, background:"rgba(34,197,94,0.12)", border:`1px solid rgba(34,197,94,0.24)`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:TOKENS.colors.success, opacity:saving?0.6:1 }}
+            style={{ width:30, height:30, borderRadius:8, background:TOKENS.colors.successSoft, border:`1px solid ${TOKENS.colors.success}44`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:TOKENS.colors.success, opacity:saving?0.6:1 }}
           >
             {saving ? (
-              <div style={{ width:10, height:10, borderRadius:"50%", border:"2px solid rgba(34,197,94,0.35)", borderTopColor:TOKENS.colors.success, animation:"spin 0.8s linear infinite" }} />
+              <div style={{ width:10, height:10, borderRadius:"50%", border:`2px solid ${TOKENS.colors.successSoft}`, borderTopColor:TOKENS.colors.success, animation:"spin 0.8s linear infinite" }} />
             ) : (
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             )}
@@ -384,7 +477,7 @@ function InfoRow({ label, value, icon, editable = false, onEdit, isEditing = fal
           <button
             onClick={onEditCancel}
             disabled={saving}
-            style={{ width:30, height:30, borderRadius:8, background:TOKENS.colors.errorSoft, border:`1px solid rgba(239,68,68,0.24)`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:TOKENS.colors.error, opacity:saving?0.6:1 }}
+            style={{ width:30, height:30, borderRadius:8, background:TOKENS.colors.errorSoft, border:`1px solid ${TOKENS.colors.error}44`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:TOKENS.colors.error, opacity:saving?0.6:1 }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -400,6 +493,7 @@ function InfoRow({ label, value, icon, editable = false, onEdit, isEditing = fal
    DIALOGS
 ============================================================================ */
 function EditPhotoSheet({ onClose, sw, employee, onPhotoUpdated }) {
+  const { t: TOKENS, s: SKIN } = useTheme();
   const [visible, setVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
@@ -468,16 +562,16 @@ function EditPhotoSheet({ onClose, sw, employee, onPhotoUpdated }) {
   ];
 
   return (
-    <div onClick={handleClose} style={{ position:"absolute", inset:0, zIndex:20, background:`rgba(3,8,17,${visible ? 0.72 : 0})`, transition:"background 220ms ease", display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+    <div onClick={handleClose} style={{ position:"absolute", inset:0, zIndex:20, background:`rgba(${SKIN.scrim},${visible ? 0.72 : 0})`, transition:"background 220ms ease", display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display:"none" }} />
       <input ref={galleryRef} type="file" accept="image/*" onChange={handleFile} style={{ display:"none" }} />
-      <div onClick={(e) => e.stopPropagation()} style={{ background:"linear-gradient(180deg, #07162b, #04101f)", borderRadius:"24px 24px 0 0", border:`1px solid ${TOKENS.colors.borderBlue}`, borderBottom:"none", padding:`22px ${sw < 340 ? 16 : 22}px 36px`, boxShadow:`0 -20px 60px rgba(0,0,0,0.6)`, transform:visible?"translateY(0)":"translateY(100%)", transition:`transform 280ms cubic-bezier(0.34,1.56,0.64,1)` }}>
-        <div style={{ width:36, height:4, borderRadius:2, background:"rgba(255,255,255,0.14)", margin:"0 auto 18px" }} />
+      <div onClick={(e) => e.stopPropagation()} style={{ background:SKIN.sheetBg, borderRadius:"24px 24px 0 0", border:`1px solid ${TOKENS.colors.borderBlue}`, borderBottom:"none", padding:`22px ${sw < 340 ? 16 : 22}px 36px`, boxShadow:SKIN.sheetShadow, transform:visible?"translateY(0)":"translateY(100%)", transition:`transform 280ms cubic-bezier(0.34,1.56,0.64,1)` }}>
+        <div style={{ width:36, height:4, borderRadius:2, background:SKIN.sheetHandle, margin:"0 auto 18px" }} />
         <div style={{ ...typo.title, color:TOKENS.colors.text, marginBottom:16, textAlign:"center" }}>
           {uploading ? "Subiendo foto..." : "Editar foto de perfil"}
         </div>
         {error && (
-          <div style={{ background:TOKENS.colors.errorSoft, border:`1px solid rgba(239,68,68,0.25)`, borderRadius:TOKENS.radius.sm, padding:"10px 14px", marginBottom:12, fontSize:12, color:TOKENS.colors.error, textAlign:"center" }}>
+          <div style={{ background:TOKENS.colors.errorSoft, border:`1px solid ${TOKENS.colors.error}44`, borderRadius:TOKENS.radius.sm, padding:"10px 14px", marginBottom:12, fontSize:12, color:TOKENS.colors.error, textAlign:"center" }}>
             {error}
           </div>
         )}
@@ -499,8 +593,9 @@ function EditPhotoSheet({ onClose, sw, employee, onPhotoUpdated }) {
    SKELETONS
 ============================================================================ */
 function SkeletonShimmer({ style = {} }) {
+  const { s: SKIN } = useTheme();
   return (
-    <div style={{ background:"linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.05) 75%)", backgroundSize:"200% 100%", animation:"shimmerMove 1.4s ease infinite", ...style }} />
+    <div style={{ background:SKIN.shimmer, backgroundSize:"200% 100%", animation:"shimmerMove 1.4s ease infinite", ...style }} />
   );
 }
 
@@ -534,6 +629,7 @@ function SkeletonVacation() {
 }
 
 function SkeletonInfoCard() {
+  const { t: TOKENS } = useTheme();
   return (
     <Card style={{ padding:"4px 18px 6px" }}>
       {Array.from({ length: 6 }).map((_, i) => (
@@ -557,7 +653,18 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
   const [winW, setWinW] = useState(window.innerWidth);
   const [winH, setWinH] = useState(window.innerHeight);
   const navigate = useNavigate();
-  const { logout } = useSession();
+  const { logout, session } = useSession();
+  // Único punto donde se decide el tema. `isBrandLightSession` es la MISMA
+  // función que ya conmuta la navegación global, así que "Yo" no puede quedar
+  // oscuro dentro de una app clara ni al revés: si un rol deja de ser claro
+  // allá, aquí cambia solo.
+  const light = isBrandLightSession(session);
+  const theme = useMemo(
+    () => ({ t: light ? BRAND_TOKENS : DARK_TOKENS, s: light ? SKINS.light : SKINS.dark, light }),
+    [light],
+  );
+  const TOKENS = theme.t;
+  const SKIN = theme.s;
   useEffect(() => {
     const handler = () => { setWinW(window.innerWidth); setWinH(window.innerHeight); };
     window.addEventListener('resize', handler);
@@ -699,9 +806,10 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
   ] : [];
 
   return (
-    <div style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
+   <ThemeCtx.Provider value={theme}>
+    <div data-testid="perfil-screen" data-theme={light ? "brand-light" : "dark"} style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:SKIN.page, fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
       <IceParticles />
-      <div style={{ position:"absolute", inset:0, opacity:0.032, backgroundImage:"linear-gradient(rgba(43,143,224,.45) 1px,transparent 1px),linear-gradient(90deg,rgba(43,143,224,.45) 1px,transparent 1px)", backgroundSize:"48px 48px" }} />
+      <div style={{ position:"absolute", inset:0, opacity:SKIN.gridOpacity, backgroundImage:"linear-gradient(rgba(43,143,224,.45) 1px,transparent 1px),linear-gradient(90deg,rgba(43,143,224,.45) 1px,transparent 1px)", backgroundSize:"48px 48px" }} />
 
       {/* SCROLL CONTAINER */}
       <div style={{ position:"absolute", top:0, left:0, right:0, bottom:scrollBottom, overflowY:"auto", zIndex:2, padding:`${topPad}px ${sidePad}px 20px`, display:"flex", flexDirection:"column", gap:14 }}>
@@ -715,7 +823,7 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
             <div style={{ fontSize:28 }}>📡</div>
             <div style={{ fontSize:14, fontWeight:500, color:TOKENS.colors.textMuted }}>No se pudo cargar el perfil</div>
-            <button onClick={()=>{ setIsLoading(true); apiGet("/pwa-employee-profile").then(r=>{ if(r.success&&r.data) setEmployee(mapOdooEmployee(r.data)); setIsLoading(false); }).catch(()=>setIsLoading(false)); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
+            <button onClick={()=>{ setIsLoading(true); apiGet("/pwa-employee-profile").then(r=>{ if(r.success&&r.data) setEmployee(mapOdooEmployee(r.data)); setIsLoading(false); }).catch(()=>setIsLoading(false)); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:SKIN.cta, color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
           </div>
         ) : (
           <>
@@ -727,8 +835,8 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
                 {/* Toast éxito */}
                 {phoneSaved && (
                   <div style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 0 6px", borderBottom:`1px solid ${TOKENS.colors.border}` }}>
-                    <div style={{ width:16, height:16, borderRadius:"50%", background:TOKENS.colors.successSoft, border:`1px solid rgba(34,197,94,0.28)`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    <div style={{ width:16, height:16, borderRadius:"50%", background:TOKENS.colors.successSoft, border:`1px solid ${TOKENS.colors.success}44`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.success} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </div>
                     <span style={{ fontSize:10, color:TOKENS.colors.success, fontWeight:700 }}>Celular actualizado</span>
                   </div>
@@ -736,7 +844,7 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
                 {/* Toast error validación */}
                 {phoneError && editingPhone && (
                   <div style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 0 6px", borderBottom:`1px solid ${TOKENS.colors.border}` }}>
-                    <div style={{ width:16, height:16, borderRadius:"50%", background:TOKENS.colors.errorSoft, border:`1px solid rgba(239,68,68,0.28)`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <div style={{ width:16, height:16, borderRadius:"50%", background:TOKENS.colors.errorSoft, border:`1px solid ${TOKENS.colors.error}44`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                       <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.error} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                     </div>
                     <span style={{ fontSize:10, color:TOKENS.colors.error, fontWeight:700 }}>{phoneError}</span>
@@ -774,7 +882,7 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
               <button
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                style={{ width:"100%", height:48, borderRadius:TOKENS.radius.md, background:TOKENS.colors.errorSoft, border:`1px solid rgba(239,68,68,0.22)`, color:TOKENS.colors.error, fontSize:14, fontWeight:700, cursor:isLoggingOut ? "wait" : "pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:TOKENS.shadow.soft, transition:`all ${TOKENS.motion.fast}`, opacity:isLoggingOut ? 0.7 : 1 }}
+                style={{ width:"100%", height:48, borderRadius:TOKENS.radius.md, background:TOKENS.colors.errorSoft, border:`1px solid ${TOKENS.colors.error}44`, color:TOKENS.colors.error, fontSize:14, fontWeight:700, cursor:isLoggingOut ? "wait" : "pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:TOKENS.shadow.soft, transition:`all ${TOKENS.motion.fast}`, opacity:isLoggingOut ? 0.7 : 1 }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -800,72 +908,14 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
       {showEditPhoto && <EditPhotoSheet onClose={() => setShowEditPhoto(false)} sw={sw} employee={employee} onPhotoUpdated={(img) => setEmployee(prev => ({ ...prev, image_128: img }))} />}
 
     </div>
+   </ThemeCtx.Provider>
   );
 }
 
-/* ============================================================================
-   PHONE FRAME
-============================================================================ */
-function PhoneFrame({ sw, sh, label, note }) {
-  const borderR = Math.min(46, sw * 0.12);
-  const notchW = Math.min(120, sw * 0.33);
-  return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}>
-      <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.6)", letterSpacing:"0.06em", textAlign:"center" }}>{label}</div>
-      <div style={{ position:"relative", borderRadius:borderR+4, border:"2px solid rgba(103,146,204,0.55)", boxShadow:"0 0 0 1px rgba(173,205,255,0.07), 0 28px 70px rgba(0,0,0,0.7), 0 0 30px rgba(43,143,224,0.12)", overflow:"hidden", background:"#071327", flexShrink:0 }}>
-        <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:notchW, height:22, background:"#0a1320", borderRadius:"0 0 14px 14px", zIndex:50 }} />
-        <div style={{ position:"absolute", left:-3, top:80, width:3, height:32, borderRadius:2, background:"rgba(103,146,204,0.55)" }} />
-        <div style={{ position:"absolute", left:-3, top:120, width:3, height:52, borderRadius:2, background:"rgba(103,146,204,0.55)" }} />
-        <div style={{ position:"absolute", right:-3, top:116, width:3, height:62, borderRadius:2, background:"rgba(103,146,204,0.55)" }} />
-        <PerfilScreen sw={sw} sh={sh} />
-      </div>
-      <div style={{ fontSize:10, color:"rgba(255,255,255,0.28)", textAlign:"center", lineHeight:1.5 }}>{sw}×{sh}px · {note}</div>
-    </div>
-  );
-}
-
-const DEVICES = [
-  { label:"iPhone SE 3",       sw:320, sh:568, note:"pantalla pequeña" },
-  { label:"iPhone 14 / 15",    sw:375, sh:812, note:"tamaño base" },
-  { label:"iPhone 14 Pro Max", sw:430, sh:932, note:"pantalla grande" },
-];
-
-/* ============================================================================
-   ROOT
-============================================================================ */
-export function MultiDevicePerfilPreview() {
-  return (
-    <div style={{ minHeight:"100vh", background:"radial-gradient(circle at center, #102a57 0%, #07183a 35%, #050d1a 75%, #030811 100%)", padding:"36px 20px 60px", fontFamily:"system-ui,sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
-        @keyframes float      { from{transform:translateY(0)scale(1)} to{transform:translateY(-16px)scale(1.3)} }
-        @keyframes shimmerMove { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-        @keyframes spin       { to{transform:rotate(360deg)} }
-        * { box-sizing:border-box }
-        ::-webkit-scrollbar { width:0 }
-        button { font-family:inherit }
-        input  { font-family:inherit }
-      `}</style>
-
-      <div style={{ textAlign:"center", marginBottom:36 }}>
-        <div style={{ fontSize:10, fontWeight:700, color:"rgba(97,178,255,0.55)", letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:6 }}>
-          PWA Trabajadores · Grupo Frío
-        </div>
-        <div style={{ fontSize:20, fontWeight:700, color:"white", letterSpacing:"-0.02em" }}>
-          Pantalla 6 — Mi Perfil
-        </div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:8 }}>
-          Avatar editable · Datos hr.employee · Vacaciones · Celular inline edit · isValidPhone · Logout directo
-        </div>
-      </div>
-
-      <div style={{ display:"flex", gap:28, alignItems:"flex-end", justifyContent:"center", flexWrap:"wrap" }}>
-        {DEVICES.map((d) => (
-          <PhoneFrame key={d.label} sw={d.sw} sh={d.sh} label={d.label} note={d.note} />
-        ))}
-      </div>
-    </div>
-  );
-}
+// La maqueta de tres telefonos (`PhoneFrame` + `MultiDevicePerfilPreview`) era
+// andamio de diseno: export muerto, no lo importaba nadie. Se retira al pasar la
+// pantalla a claro, porque era la unica parte del archivo escrita a proposito
+// sobre fondo oscuro y dejarla dentro de una vista clara solo confunde a quien
+// la lea despues. Queda el mismo andamio en ScreenBadges/ScreenKPIs/ScreenSurveys.
 
 export default PerfilScreen;
