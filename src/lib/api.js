@@ -8184,6 +8184,17 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  // KPIs nativos del supervisor (backend GrupoVeniu/GrupoFrio#250). El periodo
+  // va por NOMBRE (hoy|semana|mes): el backend resuelve el rango con la
+  // timezone de la sucursal. Mandar fechas desde aqui seria inutil -- las
+  // rechaza y las reporta en rejected_params.
+  if (cleanPath === '/pwa-supv/kpis' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/kpis', {
+      meta: supervisorMeta(),
+      data: { period: query.get('period') || 'hoy' },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/radar' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/radar', {
       meta: supervisorMeta(),
