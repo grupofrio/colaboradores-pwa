@@ -16,6 +16,9 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const RutasView = (await loadJsxDefault(fileURLToPath(
   new URL('../src/modules/supervisor-ventas/v2/rutas/RutasView.jsx', import.meta.url),
 ))).Component
+const SupervisorDesktopBoard = (await loadJsxDefault(fileURLToPath(
+  new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url),
+))).Component
 
 // Forma REAL medida en producción (radar/1, sucursal 29, recortada).
 const RADAR = {
@@ -163,6 +166,45 @@ test('el tablero rechaza un plan de forma válida que el radar resolvería a otr
 
   assert.equal(resolveActivePlanId(units, 93), 91, 'el radar cae en su primer plan válido')
   assert.match(src, /resolveActivePlanId\(radarUnits, planId\) !== planId\) return/, 'el tablero no conserva una selección que el radar sustituiría')
+})
+
+test('el tablero no conserva una ruta seleccionada ausente del radar', async () => {
+  const day = {
+    dayControl: {
+      routes: [{
+        plan_id: 93,
+        route_name: 'Ruta sin radar',
+        driver: { name: 'Ana' }, vehicle: { name: 'U-93' }, departure: { status: 'on_time' },
+        stops: { done: 0, total: 1 }, sales: { available: false }, loads: { available: false },
+        position: { signal_status: 'no_signal' }, close: { stage: 'open' },
+      }],
+    },
+    radar: {
+      units: [
+        { plan_id: 91, route_name: 'Ruta radar 91', name: 'Beto', vehicle: { name: 'U-91' }, signal_status: 'recent', stops: { planned: [] } },
+        { plan_id: 92, route_name: 'Ruta radar 92', name: 'Caro', vehicle: { name: 'U-92' }, signal_status: 'recent', stops: { planned: [] } },
+      ],
+    },
+  }
+  let renderer
+
+  try {
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(SupervisorDesktopBoard, { day }))
+    })
+
+    const selection = renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta sin radar' })
+    assert.equal(selection.props['aria-pressed'], false)
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91)
+
+    await act(async () => { selection.props.onClick() })
+
+    assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta sin radar' }).props['aria-pressed'], false, 'el plan 93 no queda seleccionado')
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91, 'el radar conserva su plan efectivo')
+    assert.equal(renderer.root.findAllByProps({ 'data-testid': 'v2-desktop-porvisitar-limpiar' }).length, 0, 'pendientes no queda filtrado por el plan ausente')
+  } finally {
+    await act(async () => { renderer?.unmount() })
+  }
 })
 
 test('HoyTab conserva la vista móvil y solo cambia en escritorio', () => {
