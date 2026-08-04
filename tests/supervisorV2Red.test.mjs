@@ -56,6 +56,28 @@ test('PositionMap: anti-meridiano ⇒ prefiere lista', () => {
   assert.match(html, /v2-position-map-empty/)
   assert.match(html, /línea de fecha/)
 })
+test('PositionMap: sin lista de unidades redirige los estados vacíos a Rutas de hoy', () => {
+  const noPositions = render(PositionMap, {
+    points: [{ id: 1, lat: NaN, lng: 0, kind: 'unit' }], height: 200, showUnitList: false,
+  })
+  const antiMeridian = render(PositionMap, {
+    points: [{ id: 1, lat: 0, lng: 179, kind: 'unit' }, { id: 2, lat: 0, lng: -179, kind: 'unit' }],
+    height: 200, showUnitList: false,
+  })
+  const mobileDefault = render(PositionMap, {
+    points: [{ id: 1, lat: NaN, lng: 0, kind: 'unit' }], height: 200,
+  })
+  const mobileAntiMeridian = render(PositionMap, {
+    points: [{ id: 1, lat: 0, lng: 179, kind: 'unit' }, { id: 2, lat: 0, lng: -179, kind: 'unit' }], height: 200,
+  })
+
+  for (const html of [noPositions, antiMeridian]) {
+    assert.match(html, /Selecciona otra ruta en Rutas de hoy\./)
+    assert.doesNotMatch(html, /Consulta la lista de unidades|usa la lista de unidades/)
+  }
+  assert.match(mobileDefault, /Consulta la lista de unidades\./)
+  assert.match(mobileAntiMeridian, /usa la lista de unidades \(vista geoespacial no fiable en este rango\)\./)
+})
 test('PositionMap: CEDIS se excluye antes de calcular geometría del mapa', () => {
   const cedisOnly = render(PositionMap, { points: [{ id: 'cedis:1', lat: 19.4, lng: -99.1, kind: 'cedis' }], height: 200 })
   assert.match(cedisOnly, /v2-position-map-empty/)
@@ -135,6 +157,13 @@ test('PositionMap: un solo punto GPS no cambia la elegibilidad ni el límite del
 })
 
 const RadarView = await loadView('src/modules/supervisor-ventas/v2/radar/RadarView.jsx')
+const radarViewSource = await readFile(fileURLToPath(new URL('../src/modules/supervisor-ventas/v2/radar/RadarView.jsx', import.meta.url)), 'utf8')
+
+test('RadarView entrega su modo de lista al mapa normal y ampliado', () => {
+  assert.match(positionMapSource, /showUnitList = true/)
+  assert.match(radarViewSource, /<PositionMap[^>]*showUnitList=\{showUnitList\}/)
+  assert.match(radarViewSource, /<PositionMap[^>]*height=\{560\}[^>]*showUnitList=\{showUnitList\}/)
+})
 
 test('RadarView: abre mapa con el mismo rastro GPS y el diálogo atrapa Tab, cierra con Escape y devuelve foco', async () => {
   const priorWindow = globalThis.window

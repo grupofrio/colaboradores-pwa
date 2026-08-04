@@ -237,7 +237,7 @@ export default function RadarView({
               <strong>Rastro GPS de hoy</strong>{' · '}
               {hasGpsTrail ? 'Recorrido GPS disponible para esta jornada.' : 'Sin recorrido GPS disponible para esta jornada.'}
             </div>
-            <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} />
+            <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} showUnitList={showUnitList} />
           </Card>
 
           {expandedMap && (
@@ -249,7 +249,7 @@ export default function RadarView({
                     Cerrar
                   </button>
                 </div>
-                <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} height={560} testid="radar-expanded-position-map" />
+                <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} height={560} showUnitList={showUnitList} testid="radar-expanded-position-map" />
               </section>
             </div>
           )}
