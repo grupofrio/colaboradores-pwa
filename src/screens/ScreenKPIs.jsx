@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiGet as _apiGet, getSession } from "../lib/api";
+import { isBrandLightSession } from "../theme/useBrandPalette";
+import PanelKpisSupervisor from "../modules/supervisor-ventas/kpis/PanelKpis";
 
 /* ============================================================================
    DESIGN TOKENS (mismo sistema que Pantalla 2)
@@ -350,7 +352,26 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
 /* ============================================================================
    KPI SCREEN PRINCIPAL
 ============================================================================ */
+// ── Rama por ROL ─────────────────────────────────────────────────────────────
+// `supervisor_ventas` ve un panel NATIVO con dato real. Todos los demás roles
+// siguen exactamente donde estaban: Metabase, y el mock oscuro cuando su puesto
+// no tiene dashboard. Es un early-return ANTES de cualquier estado, para que su
+// rama no pase por una sola línea nueva.
+//
+// Por qué el mock se retira solo para este rol: los números que pintaba (82% de
+// cumplimiento, 14 visitas, "31 clientes nuevos") están escritos a mano en el
+// archivo. Para un supervisor que decide con ellos eso no es una maqueta, es
+// información falsa. Para los demás roles el reemplazo requiere su propia
+// fuente y su propia decisión de dirección; quitarlo sin eso los dejaría sin
+// pantalla.
 function KPIScreen({ sw: propSw, sh: propSh }) {
+  if (isBrandLightSession(getSession())) {
+    return <PanelKpisSupervisor />;
+  }
+  return <KPIScreenLegacy sw={propSw} sh={propSh} />;
+}
+
+function KPIScreenLegacy({ sw: propSw, sh: propSh }) {
   const [winW, setWinW] = useState(window.innerWidth);
   const [winH, setWinH] = useState(window.innerHeight);
   useEffect(() => {

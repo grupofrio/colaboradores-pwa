@@ -41,6 +41,13 @@ export function getDayControl(date) {
   return api('GET', `/pwa-supv/day-control${qs}`)
 }
 
+/** KPIs de la sucursal para un periodo (hoy|semana|mes).
+ *  El backend resuelve el rango server-side; aqui solo viaja el NOMBRE del
+ *  periodo. Devuelve el contrato tal cual, sin transformar. */
+export function getSupervisorKpis(period) {
+  return api('GET', `/pwa-supv/kpis?period=${encodeURIComponent(period || 'hoy')}`)
+}
+
 /** Radar de posiciones read-only (no tiempo real; ver captured_at). */
 export function getRadar(date) {
   const qs = date ? `?date=${encodeURIComponent(date)}` : ''
