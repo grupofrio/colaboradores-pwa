@@ -166,6 +166,19 @@ test('Radar conserva mapa y lista base si el rastro falla', () => {
   assert.match(html, /data-testid="radar-list"/)
   assert.match(html, /Ruta Demo/)
 })
+test('Radar puede ocultar solo la lista de unidades para el panel desktop', () => {
+  const src = readFileSync(fileURLToPath(new URL('../src/modules/supervisor-ventas/v2/radar/RadarView.jsx', import.meta.url)), 'utf8')
+  const mobile = render(RadarView, { radar: RADAR_FIXTURE, dayControl: DAY_CONTROL_FIXTURE, source: 'live', nowMs: NOW })
+  const desktopMap = render(RadarView, { radar: RADAR_FIXTURE, dayControl: DAY_CONTROL_FIXTURE, source: 'live', nowMs: NOW, showUnitList: false })
+
+  assert.match(src, /showUnitList = true/)
+  assert.match(src, /\{showUnitList && \([\s\S]*?<Card testid="radar-list"/)
+  assert.match(mobile, /data-testid="radar-map"/)
+  assert.match(mobile, /data-testid="radar-list"/)
+  assert.match(desktopMap, /data-testid="radar-map"/)
+  assert.match(desktopMap, /data-testid="radar-gps-trail"/)
+  assert.doesNotMatch(desktopMap, /data-testid="radar-list"/)
+})
 
 // ── Rutas ────────────────────────────────────────────────────────────────────
 test('Rutas lista: N filas del golden', () => {

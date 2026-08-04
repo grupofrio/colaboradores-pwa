@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import React from 'react'
 import TestRenderer, { act } from 'react-test-renderer'
@@ -202,6 +202,79 @@ test('el tablero no conserva una ruta seleccionada ausente del radar', async () 
     assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta sin radar' }).props['aria-pressed'], false, 'el plan 93 no queda seleccionado')
     assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91, 'el radar conserva su plan efectivo')
     assert.equal(renderer.root.findAllByProps({ 'data-testid': 'v2-desktop-porvisitar-limpiar' }).length, 0, 'pendientes no queda filtrado por el plan ausente')
+  } finally {
+    await act(async () => { renderer?.unmount() })
+  }
+})
+
+test('el tablero de escritorio comparte un plan efectivo entre rutas, mapa, pendientes y rastro GPS', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /import \{ useRadarTrail \} from '\.\.\/radar\/useRadarTrail\.js'/)
+  assert.match(src, /const effectivePlanId = resolveActivePlanId\(day\?\.radar\?\.units, selectedPlanId\)/)
+  assert.match(src, /useRadarTrail\(effectivePlanId, day\?\.dayControl\?\.date\)/)
+
+  const rutasView = src.match(/<RutasView[\s\S]*?\/>/)?.[0]
+  const radarView = src.match(/<RadarView[\s\S]*?\/>/)?.[0]
+  assert.ok(rutasView, 'monta rutas a la izquierda')
+  assert.ok(radarView, 'monta el mapa en el panel de operaciones')
+  assert.match(rutasView, /selectedPlanId=\{effectivePlanId\}/)
+  assert.match(radarView, /selectedId=\{effectivePlanId\}/)
+  assert.match(radarView, /showUnitList=\{false\}/)
+  assert.match(radarView, /trail=\{trail\}/)
+  assert.match(radarView, /trailStatus=\{trailStatus\}/)
+  assert.match(src, /<PendingStopsColumn radar=\{day\?\.radar\} selectedPlanId=\{effectivePlanId\}\s*\/>/)
+})
+
+test('el tablero compone mapa y clientes en un panel de operaciones y no permite ver todas las rutas', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+  const cssUrl = new URL('../src/modules/supervisor-ventas/v2/desktop/supervisorDesktopBoard.css', import.meta.url)
+
+  assert.match(src, /import '\.\/supervisorDesktopBoard\.css'/)
+  assert.match(src, /className="supervisor-desktop-board-grid"/)
+  const rightColumn = src.match(/<Column testid="v2-desktop-col-operaciones"[\s\S]*?<\/Column>/)?.[0]
+  assert.ok(rightColumn, 'existe un solo panel derecho de operaciones')
+  assert.match(rightColumn, /<RadarView[\s\S]*?<section[^>]*>[\s\S]*?<h2[^>]*>\s*Clientes\s+sin visitar\s*<\/h2>[\s\S]*?<PendingStopsColumn/)
+  assert.doesNotMatch(src, /v2-desktop-porvisitar-limpiar|ver todas/)
+  assert.ok(existsSync(cssUrl), 'el grid responsive vive en una hoja de estilo hermana')
+  const css = readFileSync(cssUrl, 'utf8')
+  assert.match(css, /\.supervisor-desktop-board-grid\s*\{[\s\S]*grid-template-columns:\s*minmax\(320px,\s*1\.05fr\)\s+minmax\(0,\s*1\.75fr\)/)
+  assert.match(css, /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*?\.supervisor-desktop-board-grid\s*\{[\s\S]*grid-template-columns:\s*1fr[\s\S]*height:\s*auto/)
+})
+
+test('el plan efectivo sustituye una selección obsoleta en rutas, mapa y pendientes', async () => {
+  const staleDay = {
+    dayControl: {
+      date: '2026-08-03',
+      routes: [{
+        plan_id: 91, route_name: 'Ruta estable', driver: { name: 'Ana' }, vehicle: { name: 'U-91' },
+        departure: { status: 'on_time' }, stops: { done: 0, total: 1 }, sales: { available: false },
+        loads: { available: false }, position: { signal_status: 'recent' }, close: { stage: 'open' },
+      }, {
+        plan_id: 92, route_name: 'Ruta reemplazada', driver: { name: 'Beto' }, vehicle: { name: 'U-92' },
+        departure: { status: 'on_time' }, stops: { done: 0, total: 1 }, sales: { available: false },
+        loads: { available: false }, position: { signal_status: 'recent' }, close: { stage: 'open' },
+      }],
+    },
+    radar: { units: [
+      { plan_id: 91, route_name: 'Ruta estable', name: 'Ana', vehicle: { name: 'U-91' }, signal_status: 'recent', stops: { planned: [] } },
+      { plan_id: 92, route_name: 'Ruta reemplazada', name: 'Beto', vehicle: { name: 'U-92' }, signal_status: 'recent', stops: { planned: [{ stop_id: 1, name: 'Pendiente', done: false }] } },
+    ] },
+  }
+  const refreshedDay = { ...staleDay, radar: { units: [staleDay.radar.units[0]] } }
+  let renderer
+
+  try {
+    await act(async () => { renderer = TestRenderer.create(React.createElement(SupervisorDesktopBoard, { day: staleDay })) })
+    const selectReplacement = renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta reemplazada' })
+    await act(async () => { selectReplacement.props.onClick() })
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 92)
+    assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta reemplazada' }).props['aria-pressed'], true)
+
+    await act(async () => { renderer.update(React.createElement(SupervisorDesktopBoard, { day: refreshedDay })) })
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91)
+    assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta estable' }).props['aria-pressed'], true)
+    assert.equal(renderer.root.findAllByProps({ 'data-testid': 'v2-desktop-porvisitar-row' }).length, 0)
   } finally {
     await act(async () => { renderer?.unmount() })
   }

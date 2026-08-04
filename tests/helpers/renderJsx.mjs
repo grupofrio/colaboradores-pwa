@@ -44,6 +44,9 @@ const virtualDemoStub = {
 const leafletSsrStub = {
   name: 'leaflet-ssr-stub',
   setup(b) {
+    // Las hojas de estilo son efectos de Vite; el SSR de pruebas sólo necesita
+    // verificar la estructura React, no emitir un archivo CSS independiente.
+    b.onResolve({ filter: /\.css$/ }, (a) => ({ path: a.path, namespace: 'css-ssr' }))
     b.onResolve({ filter: /^react-leaflet$/ }, (a) => ({ path: a.path, namespace: 'leaflet-ssr' }))
     b.onResolve({ filter: /^leaflet$/ }, (a) => ({ path: a.path, namespace: 'leaflet-ssr' }))
     b.onResolve({ filter: /^leaflet\/dist\/leaflet\.css$/ }, (a) => ({ path: a.path, namespace: 'leaflet-ssr' }))
@@ -62,6 +65,7 @@ const leafletSsrStub = {
     b.onLoad({ filter: /^leaflet\/dist\/leaflet\.css$/, namespace: 'leaflet-ssr' }, () => ({
       contents: '', loader: 'js',
     }))
+    b.onLoad({ filter: /.*/, namespace: 'css-ssr' }, () => ({ contents: '', loader: 'js' }))
   },
 }
 
