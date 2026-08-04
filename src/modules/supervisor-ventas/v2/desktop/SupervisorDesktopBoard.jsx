@@ -26,6 +26,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import RutasView from '../rutas/RutasView'
 import RadarView from '../radar/RadarView'
+import { isPlanId, resolveActivePlanId } from '../radar/radarSelection.js'
 import { derivePendingStops } from './pendingStops.js'
 
 const C = TOKENS.colors
@@ -136,6 +137,7 @@ export default function SupervisorDesktopBoard({
   day, onOpenRoute, testid = 'supervisor-v2-desktop-board',
 }) {
   const [selectedPlanId, setSelectedPlanId] = useState(null)
+  const radarUnits = day?.radar?.units
 
   const toggle = useCallback((planId) => {
     const id = planId == null ? null : Number(planId)
@@ -143,9 +145,9 @@ export default function SupervisorDesktopBoard({
   }, [])
 
   const selectPlan = useCallback((planId) => {
-    if (!Number.isSafeInteger(planId) || planId <= 0) return
+    if (!isPlanId(planId) || resolveActivePlanId(radarUnits, planId) !== planId) return
     setSelectedPlanId(planId)
-  }, [])
+  }, [radarUnits])
 
   const clear = useCallback(() => setSelectedPlanId(null), [])
 

@@ -10,7 +10,7 @@ import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 
 const C = TOKENS.colors
 
-export default function RowButton({ onClick, children, testid, ariaLabel, style }) {
+export default function RowButton({ onClick, children, testid, ariaLabel, ariaPressed, style }) {
   const base = {
     display: 'block', width: '100%', textAlign: 'left', font: 'inherit', color: 'inherit',
     background: 'transparent', border: 'none', padding: 0, margin: 0, cursor: onClick ? 'pointer' : 'default',
@@ -24,6 +24,7 @@ export default function RowButton({ onClick, children, testid, ariaLabel, style 
       type="button"
       data-testid={testid}
       aria-label={ariaLabel}
+      aria-pressed={ariaPressed}
       onClick={onClick}
       style={base}
       onFocus={(e) => { e.currentTarget.style.outline = `2px solid ${C.blue3}`; e.currentTarget.style.outlineOffset = '2px' }}

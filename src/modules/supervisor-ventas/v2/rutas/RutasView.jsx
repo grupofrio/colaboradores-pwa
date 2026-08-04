@@ -59,6 +59,7 @@ function RouteRow({ row, onOpen, onSelect = null, selected = false }) {
         <RowButton
           testid="v2-ruta-row"
           ariaLabel={`Seleccionar ruta ${row.routeName}`}
+          ariaPressed={selected}
           onClick={() => onSelect(row.planId)}
           style={{ borderRadius: 0 }}
         >
@@ -67,6 +68,7 @@ function RouteRow({ row, onOpen, onSelect = null, selected = false }) {
         {onOpen && (
           <button
             type="button"
+            aria-label={`Abrir ruta ${row.routeName}`}
             onClick={() => onOpen(row.planId)}
             style={{
               width: '100%', minHeight: 44, cursor: 'pointer', font: 'inherit', fontSize: 12,

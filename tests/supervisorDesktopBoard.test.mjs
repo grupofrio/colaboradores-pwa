@@ -7,6 +7,7 @@ import TestRenderer, { act } from 'react-test-renderer'
 
 import { derivePendingStops, summarizePendingByRoute, hasStopPlan } from '../src/modules/supervisor-ventas/v2/desktop/pendingStops.js'
 import { isDesktopWidth } from '../src/modules/supervisor-ventas/v2/desktop/useDesktopBoard.js'
+import { resolveActivePlanId } from '../src/modules/supervisor-ventas/v2/radar/radarSelection.js'
 import { DESKTOP_MIN } from '../src/lib/navModel.js'
 import { loadJsxDefault } from './helpers/renderJsx.mjs'
 
@@ -149,11 +150,19 @@ test('el tablero conecta la selección de ruta con el filtro y conserva Abrir ru
   const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
   const rutasView = src.match(/<RutasView[\s\S]*?\/>/)?.[0]
 
-  assert.match(src, /const selectPlan = useCallback\(\(planId\) => \{[\s\S]*?Number\.isSafeInteger\(planId\)[\s\S]*?planId <= 0[\s\S]*?setSelectedPlanId\(planId\)[\s\S]*?\}, \[\]\)/, 'solo selecciona IDs positivos y seguros')
+  assert.match(src, /const selectPlan = useCallback\(\(planId\) => \{[\s\S]*?!isPlanId\(planId\)[\s\S]*?resolveActivePlanId\(radarUnits, planId\) !== planId[\s\S]*?setSelectedPlanId\(planId\)[\s\S]*?\}, \[radarUnits\]\)/, 'solo selecciona IDs presentes en el radar')
   assert.ok(rutasView, 'el tablero monta RutasView')
   assert.match(rutasView, /onSelectRoute=\{selectPlan\}/, 'la tarjeta selecciona su plan sin navegar')
   assert.match(rutasView, /onOpenRoute=\{onOpenRoute\}/, 'Abrir ruta conserva el callback del padre')
   assert.doesNotMatch(rutasView, /onOpenRoute=\{toggle\}/, 'la selección no se reutiliza como navegación')
+})
+
+test('el tablero rechaza un plan de forma válida que el radar resolvería a otra unidad', () => {
+  const units = [{ plan_id: 91 }, { plan_id: 92 }]
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+
+  assert.equal(resolveActivePlanId(units, 93), 91, 'el radar cae en su primer plan válido')
+  assert.match(src, /resolveActivePlanId\(radarUnits, planId\) !== planId\) return/, 'el tablero no conserva una selección que el radar sustituiría')
 })
 
 test('HoyTab conserva la vista móvil y solo cambia en escritorio', () => {
@@ -197,6 +206,7 @@ test('RutasView de escritorio separa seleccionar la ruta de abrirla, sin anidar 
     await act(async () => {
       desktop = TestRenderer.create(React.createElement(RutasView, {
         dayControl,
+        selectedPlanId: 91,
         onSelectRoute: (planId) => selected.push(planId),
         onOpenRoute: (planId) => opened.push(planId),
       }))
@@ -206,7 +216,9 @@ test('RutasView de escritorio separa seleccionar la ruta de abrirla, sin anidar 
     const open = desktop.root.findAll((node) => node.type === 'button' && node.props.children === 'Abrir ruta')
 
     assert.equal(selection.type, 'button')
+    assert.equal(selection.props['aria-pressed'], true, 'la ruta seleccionada comunica su estado')
     assert.equal(open.length, 1, 'la navegación tiene su propio botón')
+    assert.equal(open[0].props['aria-label'], 'Abrir ruta Ruta Central', 'Abrir ruta nombra su destino')
     assert.equal(selection.findAll((node) => node.props.children === 'Abrir ruta').length, 0, 'no anida Abrir ruta en la selección')
 
     await act(async () => { open[0].props.onClick() })
