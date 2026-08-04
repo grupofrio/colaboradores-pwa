@@ -63,11 +63,22 @@ No se duplica la lógica de petición. Tampoco se mueve tracking a
 `useOperationalDay`: así no se consulta GPS para rutas no seleccionadas ni para
 superficies que no muestran mapa.
 
-`SupervisorDesktopBoard` conserva `selectedPlanId` como única fuente de
-selección para `RutasView`, `RadarView` y `PendingStopsColumn`. Pasa el rastro
-normalizado a `RadarView`. Un prop explícito de presentación controla la lista
-de unidades, con valor por defecto que conserva todos los callers actuales;
-el tablero de escritorio lo desactiva.
+`SupervisorDesktopBoard` conserva `selectedPlanId` como intención de selección
+y deriva un único `effectivePlanId` validado con las unidades presentes. Si no
+hay una intención válida, toma la primera ruta válida, igual que Radar. El
+tablero entrega ese mismo valor a `RutasView`, `RadarView`,
+`PendingStopsColumn` y al hook GPS; por tanto, mapa, rastro y pendientes nunca
+describen planes distintos al entrar o después de que una ruta desaparezca.
+
+Los eventos distinguen intención de ruta y selección idempotente: un clic en
+**Rutas de hoy** puede alternar el filtro (`toggleRoute`), mientras que el
+selector, marcador o fila del mapa siempre fija un plan válido
+(`selectPlan`) y no lo limpia al seleccionarlo otra vez. Si el plan elegido ya
+no existe, `effectivePlanId` cae a la primera ruta válida de manera uniforme.
+
+El tablero pasa el rastro normalizado a `RadarView`. Un prop explícito de
+presentación controla la lista de unidades, con valor por defecto que conserva
+todos los callers actuales; el tablero de escritorio lo desactiva.
 
 ## Estados y accesibilidad
 
@@ -84,8 +95,9 @@ el tablero de escritorio lo desactiva.
 - Estado/hook: petición con plan y fecha operativa, reinicio, rechazo de
   respuesta tardía y error sin geometría.
 - Tablero desktop: dos columnas, ausencia de lista de unidades en el panel de
-  mapa, mapa/pendientes/ruta sincronizados por el mismo plan, y rastro pasado al
-  mapa sólo para el plan seleccionado.
+  mapa, y mapa/pendientes/ruta sincronizados por el mismo `effectivePlanId`.
+  Durante un cambio A→B con A pendiente, sólo el rastro B puede llegar al mapa;
+  no se solicita GPS para una selección nula, inválida o retirada.
 - Regresión: móvil mantiene la lista y sus flujos existentes; polilínea,
   límites, antimeridiano y diálogo accesible continúan cubiertos.
 - Verificación final: `npm test`, `npm run lint`, `npm run build` y
