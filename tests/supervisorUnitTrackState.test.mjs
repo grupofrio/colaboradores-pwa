@@ -61,6 +61,9 @@ test('normalizeUnitTrack returns an empty track for an empty payload', () => {
     trail: [],
     trail_available: false,
     stops: [],
+    // Sin zona no se dibuja ningún polígono: un cuadro inventado se leería
+    // como que la unidad se salió de su zona.
+    zone: null,
   })
 })
 

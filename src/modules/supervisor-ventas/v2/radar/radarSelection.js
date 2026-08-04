@@ -1,4 +1,5 @@
 import { safeSignalStatus } from '../presentation.js'
+import { stopKind } from '../../radar/stopResultStyle.js'
 import { isValidLatLng } from './mapProjection.js'
 
 export function isPlanId(value) {
@@ -52,9 +53,21 @@ export function buildSelectedPlanPoints(radar, activePlanId, nowMs) {
       id: `stop:${stop.stop_id}`,
       lat: stop.latitude,
       lng: stop.longitude,
-      kind: stop.done ? 'stop_done' : 'stop_pending',
+      // Por RESULTADO, no por visita: una parada donde llegaron y NO vendieron
+      // se pintaba igual de verde que una venta. `stop.done` sigue disponible
+      // en el contrato, pero ya no decide el color.
+      kind: stopKind(stop),
       label: stop.name || '',
+      result_status: stop.result_status ?? null,
+      done: stop.done,
     })
   }
   return points
+}
+
+/** Zona geográfica del plan seleccionado. `null` ⇒ no se dibuja nada. */
+export function selectedPlanZone(radar, activePlanId) {
+  const units = Array.isArray(radar?.units) ? radar.units : []
+  const unit = units.find((candidate) => candidate?.plan_id === activePlanId && isPlanId(candidate.plan_id))
+  return unit?.zone || null
 }

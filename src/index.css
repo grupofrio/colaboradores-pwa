@@ -26,6 +26,19 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Tema claro de marca a nivel DOCUMENTO.
+   La franja negra al hacer scroll no salía de ninguna pantalla: salía del
+   `body`, que pinta `--bg0` (#030811) y se asoma en el rebote del scroll y bajo
+   las áreas seguras. Arreglar cada pantalla no la habría quitado nunca.
+   El atributo lo pone App según el rol; los demás roles no ven ningún cambio. */
+:root[data-brand-light="1"] {
+  --bg0: #F0F9FF;
+  --bg1: #F0F9FF;
+  --bg2: #E0F3FC;
+  --text: #0F2A3D;
+}
+:root[data-brand-light="1"] ::-webkit-scrollbar-thumb { background: rgba(15,42,61,0.22); }
+
 html, body {
   height: 100%;
   width: 100%;

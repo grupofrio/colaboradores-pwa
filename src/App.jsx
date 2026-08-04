@@ -6,6 +6,7 @@ import AppShell from './components/AppShell'
 import { normalizeSessionRoleContext } from './lib/roleContext'
 import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervisor-ventas/v2/sessionScope'
 import { api } from './lib/api'
+import { isBrandLightSession } from './theme/useBrandPalette'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById, isModuleVisibleForRoles } from './modules/registry'
@@ -467,7 +468,7 @@ function ProductionOperatorRoute({ children, allowDelivered = false }) {
 function PageLoader() {
   return (
     <div style={{
-      minHeight: '100dvh', background: '#030811',
+      minHeight: '100dvh', background: 'var(--bg0)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
@@ -504,7 +505,7 @@ class ErrorBoundary extends Component {
       const msg = this.state.error?.message || ''
       return (
         <div style={{
-          minHeight: '100dvh', background: '#030811',
+          minHeight: '100dvh', background: 'var(--bg0)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '24px', gap: 16, fontFamily: "'DM Sans', system-ui, sans-serif",
         }}>
@@ -576,6 +577,19 @@ export default function App() {
     // pestaña NO disparan `storage`). Al cambiar la identidad, los hooks de datos
     // limpian su estado visible, invalidan caché y refetch.
     try { window.dispatchEvent(new Event('gf:session-changed')) } catch { /* noop */ }
+  }, [session])
+
+  // Fondo del DOCUMENTO según el rol. La franja negra al hacer scroll no salía
+  // de ninguna pantalla: salía del `body`, que pinta `--bg0` (#030811) y se
+  // asoma en el rebote del scroll y bajo las áreas seguras. Por eso se arregla
+  // aquí y no pantalla por pantalla: cubre brief, radar y todo lo demás de una
+  // vez. Al cerrar sesión o cambiar de rol el atributo se quita, así que ningún
+  // otro rol hereda el claro.
+  useEffect(() => {
+    const root = document.documentElement
+    if (isBrandLightSession(session)) root.setAttribute('data-brand-light', '1')
+    else root.removeAttribute('data-brand-light')
+    return () => root.removeAttribute('data-brand-light')
   }, [session])
 
   // Global listener: any api.js that detects expired/missing token fires this.

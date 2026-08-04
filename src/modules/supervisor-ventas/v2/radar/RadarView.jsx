@@ -15,7 +15,7 @@ import {
   radarSummary, operationalDateLabel, timezoneSourceLabel,
 } from '../presentation.js'
 import PositionMap from './PositionMap.jsx'
-import { buildRadarPlanOptions, buildSelectedPlanPoints, isPlanId, resolveActivePlanId } from './radarSelection.js'
+import { buildRadarPlanOptions, buildSelectedPlanPoints, isPlanId, resolveActivePlanId, selectedPlanZone } from './radarSelection.js'
 import { validPoints } from './mapProjection.js'
 
 const C = TOKENS.colors
@@ -130,6 +130,10 @@ export default function RadarView({
   const planOptions = buildRadarPlanOptions(units)
   const activePlanId = resolveActivePlanId(units, selectedId)
   const points = radar ? buildSelectedPlanPoints(radar, activePlanId, nowMs) : []
+  // Zona del plan seleccionado. `null` cuando el plan no tiene polígono
+  // asignado — hoy 2 de 5 planes de la sucursal piloto — y entonces el mapa no
+  // dibuja ninguna zona.
+  const zone = radar ? selectedPlanZone(radar, activePlanId) : null
   const normalizedTrail = Array.isArray(trail) ? trail : []
   const normalizedTrailStatus = typeof trailStatus === 'string' ? trailStatus : 'idle'
   const hasGpsTrail = validPoints(normalizedTrail).length >= 2
@@ -237,7 +241,7 @@ export default function RadarView({
               <strong>Rastro GPS de hoy</strong>{' · '}
               {hasGpsTrail ? 'Recorrido GPS disponible para esta jornada.' : 'Sin recorrido GPS disponible para esta jornada.'}
             </div>
-            <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} showUnitList={showUnitList} />
+            <PositionMap points={points} trail={normalizedTrail} zone={zone} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} showUnitList={showUnitList} />
           </Card>
 
           {expandedMap && (
@@ -249,7 +253,7 @@ export default function RadarView({
                     Cerrar
                   </button>
                 </div>
-                <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} height={560} showUnitList={showUnitList} testid="radar-expanded-position-map" />
+                <PositionMap points={points} trail={normalizedTrail} zone={zone} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} height={560} showUnitList={showUnitList} testid="radar-expanded-position-map" />
               </section>
             </div>
           )}

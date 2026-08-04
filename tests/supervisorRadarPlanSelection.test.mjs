@@ -72,7 +72,9 @@ test('selected-plan geometry contains only the active unit and its planned stops
   }, 32, NOW)
   assert.deepEqual(points, [
     { id: 32, lat: 18.44, lng: -99.63, kind: 'unit_stale', label: 'Ruta Norte' },
-    { id: 'stop:321', lat: 18.45, lng: -99.64, kind: 'stop_done', label: 'Cliente Norte' },
+    // El kind sale del RESULTADO de venta, no del check-in. Esta parada trae
+    // `done: true` sin `result_status`, así que no se puede afirmar la venta.
+    { id: 'stop:321', lat: 18.45, lng: -99.64, kind: 'stop_pending', label: 'Cliente Norte', result_status: null, done: true },
   ])
 })
 
@@ -90,21 +92,28 @@ test('selected-plan geometry rejects invalid, non-finite, out-of-range, and null
     },
   }] }, 71, NOW)
   assert.deepEqual(points, [
-    { id: 'stop:4', lat: 18.7, lng: -99.7, kind: 'stop_pending', label: 'Válida' },
+    { id: 'stop:4', lat: 18.7, lng: -99.7, kind: 'stop_pending', label: 'Válida', result_status: null, done: false },
   ])
 })
 
-test('planned and completed stop kinds stay distinct', () => {
+test('los kinds de parada distinguen VENDIÓ, no venta y pendiente', () => {
+  // Antes se distinguía visitada/no visitada, y una parada donde el vendedor
+  // llegó y NO vendió salía igual que una venta. Ahora manda el resultado.
   const points = buildSelectedPlanPoints({ units: [{
     plan_id: 81, latitude: 18.8, longitude: -99.8, signal_status: 'recent',
     stops: { planned: [
-      { stop_id: 811, latitude: 18.81, longitude: -99.81, done: true },
-      { stop_id: 812, latitude: 18.82, longitude: -99.82, done: false },
+      { stop_id: 811, latitude: 18.81, longitude: -99.81, done: true, result_status: 'con_venta' },
+      { stop_id: 812, latitude: 18.82, longitude: -99.82, done: true, result_status: 'no_sale' },
+      { stop_id: 813, latitude: 18.83, longitude: -99.83, done: false },
     ] },
   }] }, 81, NOW)
   assert.deepEqual(points.map(({ id, kind }) => ({ id, kind })), [
     { id: 81, kind: 'unit' },
-    { id: 'stop:811', kind: 'stop_done' },
-    { id: 'stop:812', kind: 'stop_pending' },
+    { id: 'stop:811', kind: 'stop_sold' },
+    { id: 'stop:812', kind: 'stop_no_sale' },
+    { id: 'stop:813', kind: 'stop_pending' },
   ])
+  // Las dos primeras están VISITADAS por igual; lo que las separa es la venta.
+  assert.equal(points[1].done, points[2].done, 'mismo done')
+  assert.notEqual(points[1].kind, points[2].kind, 'distinto resultado ⇒ distinto kind')
 })
