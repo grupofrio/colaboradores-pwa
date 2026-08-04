@@ -1,10 +1,24 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import React from 'react'
+import TestRenderer, { act } from 'react-test-renderer'
 
 import { derivePendingStops, summarizePendingByRoute, hasStopPlan } from '../src/modules/supervisor-ventas/v2/desktop/pendingStops.js'
 import { isDesktopWidth } from '../src/modules/supervisor-ventas/v2/desktop/useDesktopBoard.js'
+import { resolveActivePlanId } from '../src/modules/supervisor-ventas/v2/radar/radarSelection.js'
 import { DESKTOP_MIN } from '../src/lib/navModel.js'
+import { loadJsxDefault } from './helpers/renderJsx.mjs'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const RutasView = (await loadJsxDefault(fileURLToPath(
+  new URL('../src/modules/supervisor-ventas/v2/rutas/RutasView.jsx', import.meta.url),
+))).Component
+const SupervisorDesktopBoard = (await loadJsxDefault(fileURLToPath(
+  new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url),
+))).Component
 
 // Forma REAL medida en producción (radar/1, sucursal 29, recortada).
 const RADAR = {
@@ -135,6 +149,137 @@ test('el tablero NO carga datos: los recibe ya resueltos', () => {
   }
 })
 
+test('el tablero conecta la selección de ruta con el filtro y conserva Abrir ruta para navegar', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+  const rutasView = src.match(/<RutasView[\s\S]*?\/>/)?.[0]
+
+  assert.match(src, /const selectPlan = useCallback\(\(planId\) => \{[\s\S]*?!isPlanId\(planId\)[\s\S]*?resolveActivePlanId\(radarUnits, planId\) !== planId[\s\S]*?setSelectedPlanId\(planId\)[\s\S]*?\}, \[radarUnits\]\)/, 'solo selecciona IDs presentes en el radar')
+  assert.ok(rutasView, 'el tablero monta RutasView')
+  assert.match(rutasView, /onSelectRoute=\{selectPlan\}/, 'la tarjeta selecciona su plan sin navegar')
+  assert.match(rutasView, /onOpenRoute=\{onOpenRoute\}/, 'Abrir ruta conserva el callback del padre')
+  assert.doesNotMatch(rutasView, /onOpenRoute=\{toggle\}/, 'la selección no se reutiliza como navegación')
+})
+
+test('el tablero rechaza un plan de forma válida que el radar resolvería a otra unidad', () => {
+  const units = [{ plan_id: 91 }, { plan_id: 92 }]
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+
+  assert.equal(resolveActivePlanId(units, 93), 91, 'el radar cae en su primer plan válido')
+  assert.match(src, /resolveActivePlanId\(radarUnits, planId\) !== planId\) return/, 'el tablero no conserva una selección que el radar sustituiría')
+})
+
+test('el tablero no conserva una ruta seleccionada ausente del radar', async () => {
+  const day = {
+    dayControl: {
+      routes: [{
+        plan_id: 93,
+        route_name: 'Ruta sin radar',
+        driver: { name: 'Ana' }, vehicle: { name: 'U-93' }, departure: { status: 'on_time' },
+        stops: { done: 0, total: 1 }, sales: { available: false }, loads: { available: false },
+        position: { signal_status: 'no_signal' }, close: { stage: 'open' },
+      }],
+    },
+    radar: {
+      units: [
+        { plan_id: 91, route_name: 'Ruta radar 91', name: 'Beto', vehicle: { name: 'U-91' }, signal_status: 'recent', stops: { planned: [] } },
+        { plan_id: 92, route_name: 'Ruta radar 92', name: 'Caro', vehicle: { name: 'U-92' }, signal_status: 'recent', stops: { planned: [] } },
+      ],
+    },
+  }
+  let renderer
+
+  try {
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(SupervisorDesktopBoard, { day }))
+    })
+
+    const selection = renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta sin radar' })
+    assert.equal(selection.props['aria-pressed'], false)
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91)
+
+    await act(async () => { selection.props.onClick() })
+
+    assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta sin radar' }).props['aria-pressed'], false, 'el plan 93 no queda seleccionado')
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91, 'el radar conserva su plan efectivo')
+    assert.equal(renderer.root.findAllByProps({ 'data-testid': 'v2-desktop-porvisitar-limpiar' }).length, 0, 'pendientes no queda filtrado por el plan ausente')
+  } finally {
+    await act(async () => { renderer?.unmount() })
+  }
+})
+
+test('el tablero de escritorio comparte un plan efectivo entre rutas, mapa, pendientes y rastro GPS', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /import \{ useRadarTrail \} from '\.\.\/radar\/useRadarTrail\.js'/)
+  assert.match(src, /const effectivePlanId = resolveActivePlanId\(day\?\.radar\?\.units, selectedPlanId\)/)
+  assert.match(src, /useRadarTrail\(effectivePlanId, day\?\.dayControl\?\.date\)/)
+
+  const rutasView = src.match(/<RutasView[\s\S]*?\/>/)?.[0]
+  const radarView = src.match(/<RadarView[\s\S]*?\/>/)?.[0]
+  assert.ok(rutasView, 'monta rutas a la izquierda')
+  assert.ok(radarView, 'monta el mapa en el panel de operaciones')
+  assert.match(rutasView, /selectedPlanId=\{effectivePlanId\}/)
+  assert.match(radarView, /selectedId=\{effectivePlanId\}/)
+  assert.match(radarView, /showUnitList=\{false\}/)
+  assert.match(radarView, /trail=\{trail\}/)
+  assert.match(radarView, /trailStatus=\{trailStatus\}/)
+  assert.match(src, /<PendingStopsColumn radar=\{day\?\.radar\} selectedPlanId=\{effectivePlanId\}\s*\/>/)
+})
+
+test('el tablero compone mapa y clientes en un panel de operaciones y no permite ver todas las rutas', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+  const cssUrl = new URL('../src/modules/supervisor-ventas/v2/desktop/supervisorDesktopBoard.css', import.meta.url)
+
+  assert.match(src, /import '\.\/supervisorDesktopBoard\.css'/)
+  assert.match(src, /className="supervisor-desktop-board-grid"/)
+  const rightColumn = src.match(/<Column testid="v2-desktop-col-operaciones"[\s\S]*?<\/Column>/)?.[0]
+  assert.ok(rightColumn, 'existe un solo panel derecho de operaciones')
+  assert.match(rightColumn, /<RadarView[\s\S]*?<section[^>]*>[\s\S]*?<h2[^>]*>\s*Clientes\s+sin visitar\s*<\/h2>[\s\S]*?<PendingStopsColumn/)
+  assert.doesNotMatch(src, /v2-desktop-porvisitar-limpiar|ver todas/)
+  assert.ok(existsSync(cssUrl), 'el grid responsive vive en una hoja de estilo hermana')
+  const css = readFileSync(cssUrl, 'utf8')
+  assert.match(css, /\.supervisor-desktop-board-grid\s*\{[\s\S]*grid-template-columns:\s*minmax\(320px,\s*1\.05fr\)\s+minmax\(0,\s*1\.75fr\)/)
+  assert.match(css, /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*?\.supervisor-desktop-board-grid\s*\{[\s\S]*grid-template-columns:\s*1fr[\s\S]*height:\s*auto/)
+})
+
+test('el plan efectivo sustituye una selección obsoleta en rutas, mapa y pendientes', async () => {
+  const staleDay = {
+    dayControl: {
+      date: '2026-08-03',
+      routes: [{
+        plan_id: 91, route_name: 'Ruta estable', driver: { name: 'Ana' }, vehicle: { name: 'U-91' },
+        departure: { status: 'on_time' }, stops: { done: 0, total: 1 }, sales: { available: false },
+        loads: { available: false }, position: { signal_status: 'recent' }, close: { stage: 'open' },
+      }, {
+        plan_id: 92, route_name: 'Ruta reemplazada', driver: { name: 'Beto' }, vehicle: { name: 'U-92' },
+        departure: { status: 'on_time' }, stops: { done: 0, total: 1 }, sales: { available: false },
+        loads: { available: false }, position: { signal_status: 'recent' }, close: { stage: 'open' },
+      }],
+    },
+    radar: { units: [
+      { plan_id: 91, route_name: 'Ruta estable', name: 'Ana', vehicle: { name: 'U-91' }, signal_status: 'recent', stops: { planned: [] } },
+      { plan_id: 92, route_name: 'Ruta reemplazada', name: 'Beto', vehicle: { name: 'U-92' }, signal_status: 'recent', stops: { planned: [{ stop_id: 1, name: 'Pendiente', done: false }] } },
+    ] },
+  }
+  const refreshedDay = { ...staleDay, radar: { units: [staleDay.radar.units[0]] } }
+  let renderer
+
+  try {
+    await act(async () => { renderer = TestRenderer.create(React.createElement(SupervisorDesktopBoard, { day: staleDay })) })
+    const selectReplacement = renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta reemplazada' })
+    await act(async () => { selectReplacement.props.onClick() })
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 92)
+    assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta reemplazada' }).props['aria-pressed'], true)
+
+    await act(async () => { renderer.update(React.createElement(SupervisorDesktopBoard, { day: refreshedDay })) })
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91)
+    assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta estable' }).props['aria-pressed'], true)
+    assert.equal(renderer.root.findAllByProps({ 'data-testid': 'v2-desktop-porvisitar-row' }).length, 0)
+  } finally {
+    await act(async () => { renderer?.unmount() })
+  }
+})
+
 test('HoyTab conserva la vista móvil y solo cambia en escritorio', () => {
   const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/tabs/HoyTab.jsx', import.meta.url), 'utf8')
 
@@ -150,6 +295,79 @@ test('RutasView mantiene compatibilidad: la selección es opcional', () => {
   assert.match(src, /selectedPlanId = null/, 'default null ⇒ móvil se ve igual')
   // La selección no se comunica SOLO por color.
   assert.match(src, /boxShadow: selected \?/, 'la fila seleccionada se marca con barra lateral, no solo con fondo')
+})
+
+test('RutasView de escritorio separa seleccionar la ruta de abrirla, sin anidar controles', async () => {
+  const dayControl = {
+    routes: [{
+      plan_id: 91,
+      route_name: 'Ruta Central',
+      driver: { name: 'Ana' },
+      vehicle: { name: 'U-91' },
+      departure: { status: 'on_time' },
+      stops: { done: 0, total: 2 },
+      sales: { available: false },
+      loads: { available: false },
+      position: { signal_status: 'recent' },
+      close: { stage: 'open' },
+    }],
+  }
+  const selected = []
+  const opened = []
+  let desktop
+  let mobile
+
+  try {
+    await act(async () => {
+      desktop = TestRenderer.create(React.createElement(RutasView, {
+        dayControl,
+        selectedPlanId: 91,
+        onSelectRoute: (planId) => selected.push(planId),
+        onOpenRoute: (planId) => opened.push(planId),
+      }))
+    })
+
+    const selection = desktop.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta Central' })
+    const open = desktop.root.findAll((node) => node.type === 'button' && node.props.children === 'Abrir ruta')
+
+    assert.equal(selection.type, 'button')
+    assert.equal(selection.props['aria-pressed'], true, 'la ruta seleccionada comunica su estado')
+    assert.equal(open.length, 1, 'la navegación tiene su propio botón')
+    assert.equal(open[0].props['aria-label'], 'Abrir ruta Ruta Central', 'Abrir ruta nombra su destino')
+    assert.equal(selection.findAll((node) => node.props.children === 'Abrir ruta').length, 0, 'no anida Abrir ruta en la selección')
+
+    await act(async () => { open[0].props.onClick() })
+    assert.deepEqual(opened, [91])
+    assert.deepEqual(selected, [], 'abrir no altera la selección')
+
+    await act(async () => { selection.props.onClick() })
+    assert.deepEqual(selected, [91])
+    assert.deepEqual(opened, [91], 'seleccionar no navega')
+
+    await act(async () => {
+      mobile = TestRenderer.create(React.createElement(RutasView, {
+        dayControl,
+        onOpenRoute: (planId) => opened.push(planId),
+      }))
+    })
+    const mobileRows = mobile.root.findAllByProps({ 'data-testid': 'v2-ruta-row' })
+    assert.equal(mobileRows.length, 1, 'móvil conserva una sola fila-control')
+    assert.equal(mobileRows[0].type, 'button')
+    assert.equal(mobileRows[0].props['aria-label'], 'Abrir ruta Ruta Central')
+    assert.equal(mobile.root.findAll((node) => node.type === 'button' && node.props.children === 'Abrir ruta').length, 0, 'móvil no muestra acción extra')
+  } finally {
+    await act(async () => {
+      desktop?.unmount()
+      mobile?.unmount()
+    })
+  }
+})
+
+test('RutasView de escritorio conserva objetivo táctil de 44 px para Abrir ruta', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/rutas/RutasView.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /onSelectRoute = null/, 'la variante escritorio debe ser opt-in')
+  assert.match(src, /minHeight:\s*44/, 'Abrir ruta mantiene objetivo táctil mínimo')
 })
 
 test('la selección de unidades del radar del tablero funciona también con teclado', () => {

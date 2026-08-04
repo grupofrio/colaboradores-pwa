@@ -119,6 +119,7 @@ export default function RadarView({
   radar = null, dayControl = null, radarError = null, source = 'live', nowMs = null,
   trail = [], trailStatus = 'idle',
   order = 'urgente', onSelectOrder, selectedId = null, onSelectUnit, onOpenRoute,
+  showUnitList = true,
   testid = 'supervisor-v2-radar',
 }) {
   const isDemo = source === 'demo'
@@ -236,7 +237,7 @@ export default function RadarView({
               <strong>Rastro GPS de hoy</strong>{' · '}
               {hasGpsTrail ? 'Recorrido GPS disponible para esta jornada.' : 'Sin recorrido GPS disponible para esta jornada.'}
             </div>
-            <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} />
+            <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} showUnitList={showUnitList} />
           </Card>
 
           {expandedMap && (
@@ -248,32 +249,34 @@ export default function RadarView({
                     Cerrar
                   </button>
                 </div>
-                <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} height={560} testid="radar-expanded-position-map" />
+                <PositionMap points={points} trail={normalizedTrail} selectedId={activePlanId} onSelect={onSelectUnit ? handleMapSelect : undefined} height={560} showUnitList={showUnitList} testid="radar-expanded-position-map" />
               </section>
             </div>
           )}
 
-          <Card testid="radar-list">
-            <Title action={(
-              <label style={{ fontSize: 11.5, color: C.textMuted, display: 'flex', gap: 6, alignItems: 'center' }}>
-                Orden
-                <select data-testid="radar-order-select" value={currentOrder}
-                  onChange={(e) => { if (onSelectOrder) onSelectOrder(e.target.value) }}
-                  style={{ fontSize: 11.5, fontWeight: 700, color: C.textSoft, background: C.surfaceSoft, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.pill, padding: '4px 8px' }}>
-                  {RADAR_ORDERS.map((o) => <option key={o} value={o}>{ORDER_LABELS[o] || o}</option>)}
-                </select>
-              </label>
-            )}>Unidades</Title>
-            {ordered.length === 0 ? (
-              <div data-testid="radar-empty" style={{ fontSize: 13, color: C.textMuted }}>Sin unidades en la jornada operativa.</div>
-            ) : (
-              ordered.map((u) => (
-                <UnitRow key={u?.plan_id ?? `${u?.employee_id}-${u?.route_name}`} unit={u} nowMs={nowMs}
-                  selected={u?.plan_id != null && u.plan_id === activePlanId}
-                  onSelectUnit={onSelectUnit} onOpenRoute={onOpenRoute} />
-              ))
-            )}
-          </Card>
+          {showUnitList && (
+            <Card testid="radar-list">
+              <Title action={(
+                <label style={{ fontSize: 11.5, color: C.textMuted, display: 'flex', gap: 6, alignItems: 'center' }}>
+                  Orden
+                  <select data-testid="radar-order-select" value={currentOrder}
+                    onChange={(e) => { if (onSelectOrder) onSelectOrder(e.target.value) }}
+                    style={{ fontSize: 11.5, fontWeight: 700, color: C.textSoft, background: C.surfaceSoft, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.pill, padding: '4px 8px' }}>
+                    {RADAR_ORDERS.map((o) => <option key={o} value={o}>{ORDER_LABELS[o] || o}</option>)}
+                  </select>
+                </label>
+              )}>Unidades</Title>
+              {ordered.length === 0 ? (
+                <div data-testid="radar-empty" style={{ fontSize: 13, color: C.textMuted }}>Sin unidades en la jornada operativa.</div>
+              ) : (
+                ordered.map((u) => (
+                  <UnitRow key={u?.plan_id ?? `${u?.employee_id}-${u?.route_name}`} unit={u} nowMs={nowMs}
+                    selected={u?.plan_id != null && u.plan_id === activePlanId}
+                    onSelectUnit={onSelectUnit} onOpenRoute={onOpenRoute} />
+                ))
+              )}
+            </Card>
+          )}
         </>
       )}
     </div>

@@ -32,6 +32,7 @@ function LoadingMap({ testid, height }) {
 // representar cartografía; el navegador carga el mapa vial de manera diferida.
 export default function PositionMap({
   points = [], trail = [], selectedId = null, onSelect, height = 300, backdropUrl = null, width = 640, testid = 'v2-position-map',
+  showUnitList = true,
 }) {
   // CEDIS y otros puntos ajenos al plan seleccionado no forman parte de la
   // geometría del mapa: no se dibujan ni pueden modificar su encuadre.
@@ -41,12 +42,15 @@ export default function PositionMap({
   const validTrail = validPoints(trail)
   const trailPoints = validTrail.length >= 2 ? validTrail : []
   const bounds = computeBounds([...plotted, ...trailPoints])
+  const unavailableMapAction = showUnitList
+    ? 'Consulta la lista de unidades.'
+    : 'Selecciona otra ruta en Rutas de hoy.'
 
   if (!bounds || (plotted.length === 0 && trailPoints.length === 0)) {
-    return <EmptyMap testid={testid} height={height} note="Sin posiciones válidas para el mapa. Consulta la lista de unidades." />
+    return <EmptyMap testid={testid} height={height} note={`Sin posiciones válidas para el mapa. ${unavailableMapAction}`} />
   }
   if (bounds.antimeridian) {
-    return <EmptyMap testid={testid} height={height} note="Posiciones cruzan la línea de fecha; usa la lista de unidades (vista geoespacial no fiable en este rango)." />
+    return <EmptyMap testid={testid} height={height} note={`Posiciones cruzan la línea de fecha; ${showUnitList ? 'usa la lista de unidades (vista geoespacial no fiable en este rango).' : unavailableMapAction}`} />
   }
   if (typeof window === 'undefined') return <LoadingMap testid={testid} height={height} />
 
