@@ -11,7 +11,7 @@ import {
   NO_DATA, FUNNEL_MIN_D, FUNNEL_MAX_D,
   buildFunnel, funnelDiameter, deltaView, buildBars, hasSeries,
   buildQuality, qualityHighRatioNote, prospectionComingSoon,
-  fmtMoney, fmtInt, fmtPct,
+  fmtMoney, fmtInt, fmtPct, collectionPercentageLabels,
 } from '../src/modules/supervisor-ventas/kpis/kpisModel.js'
 
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8')
@@ -176,6 +176,25 @@ test('hasSeries distingue serie con dato de serie vacía o toda null', () => {
   assert.ok(!hasSeries([{ label: 'x', value: null }]))
 })
 
+// ── Etiquetas de porcentaje de cobranza ─────────────────────────────────────
+
+test('los porcentajes pequeños de cobranza salen de su segmento', () => {
+  assert.deepEqual(collectionPercentageLabels(10), {
+    cash: { inside: '', outside: 'Contado 10%' },
+    credit: { inside: '90%', outside: '' },
+  })
+  assert.equal(collectionPercentageLabels(17).cash.outside, 'Contado 17%')
+  assert.equal(collectionPercentageLabels(18).cash.inside, '18%')
+  assert.equal(collectionPercentageLabels(0).cash.outside, 'Contado 0%')
+  assert.equal(collectionPercentageLabels(100).credit.outside, 'Crédito 0%')
+})
+
+test('la colocación de porcentajes rechaza datos inválidos o fuera de rango', () => {
+  for (const value of [null, undefined, NaN, Infinity, -Infinity, -0.1, 100.1, '10']) {
+    assert.equal(collectionPercentageLabels(value), null, String(value))
+  }
+})
+
 // ── Calidad ──────────────────────────────────────────────────────────────────
 
 test('calidad: número, total, definición en español y chips de vendedores', () => {
@@ -262,4 +281,16 @@ test('estados honestos: error ofrece reintentar, vacío no', () => {
   const vacio = src.slice(src.indexOf('testid="kpis-empty"'))
   assert.ok(!/actionLabel/.test(vacio.slice(0, 400)), 'el vacío no reintenta')
   assert.match(vacio, /No es un error/)
+})
+
+test('el panel separa las etiquetas exteriores de los porcentajes interiores de cobranza', () => {
+  const src = PANEL()
+  assert.match(src, /const labels = collectionPercentageLabels\(cashPct\)/)
+  assert.match(src, /labels\.cash\.outside\s*&&[\s\S]{0,200}testid="collection-cash-outside-label"/)
+  assert.match(src, /labels\.credit\.outside\s*&&[\s\S]{0,200}testid="collection-credit-outside-label"/)
+
+  const collection = src.slice(src.indexOf('height: 22'), src.indexOf('Contado {fmtMoney'))
+  assert.match(collection, /\{labels\.cash\.inside\}/)
+  assert.match(collection, /\{labels\.credit\.inside\}/)
+  assert.doesNotMatch(collection, /\$\{cashPct\}%|\$\{creditPct\}%/, 'un porcentaje no puede salir tanto dentro como fuera')
 })
