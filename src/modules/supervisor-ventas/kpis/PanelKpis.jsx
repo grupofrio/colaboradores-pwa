@@ -1,10 +1,10 @@
 // ─── Panel de KPIs v2 (EMBUDO) del supervisor · tema claro ───────────────────
-// Rediseño v2 (mockup kpis_final_c_v2.html): el embudo Agendados → Visitados →
-// Compraron es el protagonista; abajo, venta del período, compradores por día
-// (barras ETIQUETADAS, no sparkline), calidad de ejecución en texto plano, y
-// prospección como "próximamente". Solo `supervisor_ventas`; otros roles no
-// pasan por aquí. Sin números escritos a mano: lo que no viene del backend dice
-// "Sin dato".
+// Rediseño v2 (mockup kpis_final_c_v2.html, Opción C): el embudo HORIZONTAL
+// Agendados → Visitados → Compraron es el protagonista; abajo, venta del período
+// (delta de "Hoy" etiquetado "parcial", no como caída), compradores por día
+// (barras ETIQUETADAS) y calidad de ejecución. Prospección se retira hasta la
+// fase 2. Solo `supervisor_ventas`; otros roles no pasan por aquí. Sin números
+// escritos a mano: lo que no viene del backend dice "Sin dato".
 import { useCallback, useEffect, useState } from 'react'
 
 import { BRAND_TOKENS as T } from '../../../theme/brandTokens'
@@ -13,7 +13,7 @@ import { getSupervisorKpis } from '../api'
 import {
   NO_DATA, PERIODS, fmtInt, fmtMoney,
   buildFunnel, deltaView, buildBars, hasSeries, buildQuality,
-  qualityHighRatioNote, prospectionComingSoon, periodLabel, periodRangeText,
+  qualityHighRatioNote, periodLabel, periodRangeText,
   collectionPercentageLabels,
 } from './kpisModel'
 
@@ -98,18 +98,20 @@ function FunnelCircle({ circle }) {
   )
 }
 
+// Conector entre círculos: flecha + pill (caída %, palabra de estado). La flecha
+// es → en fila (desktop/tablet) y ↓ al apilar (móvil angosto), vía CSS.
 function DropPill({ drop }) {
   const color = TONE_COLOR[drop.tone] || C.textMuted
   const pct = drop.pct == null ? NO_DATA : `${drop.pct}%`
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '2px 0' }}>
-      <span aria-hidden="true" style={{ color: C.textLow, fontSize: 16 }}>↓</span>
+    <div className="kpis-drop" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span aria-hidden="true" className="kpis-arrow" style={{ color: C.textLow, fontSize: 16 }} />
       <span
         data-testid={`funnel-drop-${drop.key}`}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700,
-          background: C.surface, border: `1px solid ${color}`, color: C.text,
+          background: C.surface, border: `1px solid ${color}`, color: C.text, whiteSpace: 'nowrap',
         }}
       >
         <span style={{ color: C.textMuted, fontWeight: 600 }}>{drop.label}</span>
@@ -121,34 +123,47 @@ function DropPill({ drop }) {
   )
 }
 
+// Embudo HORIZONTAL (mockup Opción C): Agendados → [Cobertura] → Visitados →
+// [Conversión] → Compraron, en fila con diámetros proporcionales. Apila en
+// columna solo en móvil angosto (<560px). Semáforo en palabra.
 function Funnel({ payload }) {
   const f = buildFunnel(payload)
   return (
     <Card testid="funnel">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <style>{`
+        .kpis-funnel{display:flex;flex-direction:row;align-items:center;justify-content:space-around;gap:6px;flex-wrap:wrap}
+        .kpis-arrow::before{content:"\\2192"}
+        @media (max-width:560px){
+          .kpis-funnel{flex-direction:column;gap:2px}
+          .kpis-arrow::before{content:"\\2193"}
+        }
+      `}</style>
+      <div className="kpis-funnel" data-testid="funnel-row">
         <FunnelCircle circle={f.circles[0]} />
         <DropPill drop={f.drops[0]} />
         <FunnelCircle circle={f.circles[1]} />
         <DropPill drop={f.drops[1]} />
         <FunnelCircle circle={f.circles[2]} />
-        <div data-testid="funnel-closing" style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: C.text, textAlign: 'center' }}>
-          {f.closing}
-        </div>
+      </div>
+      <div data-testid="funnel-closing" style={{ marginTop: 12, fontSize: 13, fontWeight: 700, color: C.text, textAlign: 'center' }}>
+        {f.closing}
       </div>
     </Card>
   )
 }
 
 // ── 2 · Venta del período (fila de 3) ────────────────────────────────────────
-function DeltaChip({ delta }) {
-  const v = deltaView(delta)
+function DeltaChip({ delta, period }) {
+  const v = deltaView(delta, period)
+  // En "Hoy" el comparativo es parcial: se muestra neutro, no como caída roja.
+  if (v.partial) return <span data-testid="delta-partial" style={{ fontSize: 11, fontWeight: 600, color: C.textLow }}>{v.text}</span>
   if (!v.show) return <span style={{ fontSize: 11, color: C.textLow }}>{v.text}</span>
   return (
     <span data-testid="delta-chip" style={{ fontSize: 11, fontWeight: 700, color: TONE_COLOR[v.tone] }}>{v.text}</span>
   )
 }
 
-function SalesRow({ payload }) {
+function SalesRow({ payload, period }) {
   const sales = payload?.kpis?.sales || {}
   const coll = payload?.kpis?.collection || {}
   const cur = sales.currency || coll.currency || null
@@ -163,7 +178,7 @@ function SalesRow({ payload }) {
         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
           {typeof sales.orders === 'number' ? `${fmtInt(sales.orders)} pedidos · ticket ${fmtMoney(sales.avg_ticket, cur)}` : 'Sin pedidos'}
         </div>
-        <div style={{ marginTop: 6 }}><DeltaChip delta={payload?.sales_delta} /></div>
+        <div style={{ marginTop: 6 }}><DeltaChip delta={payload?.sales_delta} period={period} /></div>
       </Card>
 
       <Card testid="sales-collection" style={{ padding: '14px' }}>
@@ -199,7 +214,7 @@ function SalesRow({ payload }) {
       <Card testid="sales-buyers" style={{ padding: '14px' }}>
         <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.textMuted }}>Compraron</div>
         <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginTop: 4 }}>{fmtInt(payload?.funnel?.compraron)}</div>
-        <div style={{ marginTop: 6 }}><DeltaChip delta={payload?.buyers_delta} /></div>
+        <div style={{ marginTop: 6 }}><DeltaChip delta={payload?.buyers_delta} period={period} /></div>
       </Card>
     </div>
   )
@@ -365,7 +380,7 @@ export default function PanelKpis() {
           <Funnel payload={payload} />
 
           <SectionTitle>Venta del período</SectionTitle>
-          <SalesRow payload={payload} />
+          <SalesRow payload={payload} period={period} />
 
           <SectionTitle>Compradores por día</SectionTitle>
           <Card testid="buyers-chart"><LabeledBars series={payload?.buyers_series} testid="buyers-bars" /></Card>
@@ -373,14 +388,8 @@ export default function PanelKpis() {
           <SectionTitle>Calidad de ejecución</SectionTitle>
           <QualitySection payload={payload} />
 
-          <SectionTitle>Prospección</SectionTitle>
-          <Card testid="prospection">
-            <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.5 }}>
-              {prospectionComingSoon(payload)
-                ? '🔜 Próximamente. Los leads a nuevos clientes viven en la captura B2B y aún no están escopados por supervisora — fase 2.'
-                : 'Prospección no disponible.'}
-            </div>
-          </Card>
+          {/* Prospección: retirada hasta fase 2 (fuente B2B no escopada por
+              supervisora). No se deja un cuadro vacío; se re-agrega al conectar. */}
         </>
       )}
     </>,
