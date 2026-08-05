@@ -163,6 +163,7 @@ const ScreenOperacionesHoy     = lazy(() => import('./modules/supervisor-ventas/
 const HoyTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/HoyTab'))
 const RadarTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RadarTab'))
 const RutasTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RutasTab'))
+const PlanearMananaTab = lazy(() => import('./modules/supervisor-ventas/v2/planear/PlanearMananaTab'))
 const ClientesTab   = lazy(() => import('./modules/supervisor-ventas/v2/tabs/ClientesTab'))
 const PendientesTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/PendientesTab'))
 const MasTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/MasTab'))
@@ -828,6 +829,9 @@ export default function App() {
             <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="hoy" legacy={<ScreenSupervisorOperationsEntry />}><HoyTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/radar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="radar" v2Only><RadarTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/rutas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="rutas" v2Only><RutasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            {/* "Planear mañana" (re-hogar del flujo de ScreenPronostico a V2 claro,
+                dentro de la superficie Rutas). Solo V2, con guard de rol. */}
+            <Route path="/equipo/rutas/planear" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="rutas" v2Only><PlanearMananaTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/pendientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="pendientes" v2Only><PendientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/mas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="mas" v2Only><MasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             {/* `/equipo/hoy` es una CAPACIDAD V2 (no una ruta legacy permitida):

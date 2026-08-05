@@ -8202,6 +8202,13 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/available-resources' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/available-resources', {
+      meta: supervisorMeta(),
+      data: { date: query.get('date') || undefined },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/customers/search' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/customers/search', {
       meta: supervisorMeta(),
@@ -8329,6 +8336,18 @@ async function directSupervisorVentas(method, path, body) {
         customer_id: Number(body?.customer_id || 0),
         notes: String(body?.notes || '').trim(),
       },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/route-plan-assign-resources' && method === 'POST') {
+    // WRITE seguro: solo se reenvían los recursos presentes (ausente = no tocar).
+    const data = { plan_id: Number(body?.plan_id || 0) }
+    if (body?.vehicle_id != null) data.vehicle_id = Number(body.vehicle_id)
+    if (body?.driver_employee_id != null) data.driver_employee_id = Number(body.driver_employee_id)
+    if (body?.salesperson_employee_id != null) data.salesperson_employee_id = Number(body.salesperson_employee_id)
+    return odooJson('/gf/salesops/supervisor/v2/route_plan/assign-resources', {
+      meta: supervisorMeta(),
+      data,
     })
   }
 
