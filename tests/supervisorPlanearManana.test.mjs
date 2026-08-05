@@ -205,6 +205,30 @@ test('guard: publicar exige readiness (no botón siempre activo)', () => {
   assert.ok(/readiness\?\.publishable|readiness\.publishable/.test(tab), 'publish gateado por readiness')
 })
 
+test('guard: publicar espera una cobertura vigente y ninguna asignación en vuelo', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/async function refreshResourceReadiness/.test(tab), 'refresca la validación autoritativa')
+  assert.ok(/await refreshResourceReadiness\(routePlanId\)/.test(tab), 'refresca después de cambiar clientes')
+  assert.ok(/publishing \|\| assignBusy \|\| rowBusy \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante una asignación')
+  assert.ok(/disabled=\{!readiness\.publishable \|\| Boolean\(assignBusy \|\| rowBusy\)\}/.test(tab), 'el botón queda deshabilitado durante una asignación')
+})
+
+test('guard: publicar espera que termine una modificación de clientes', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/assignBusy \|\| rowBusy \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante una modificación')
+  assert.ok(/Boolean\(assignBusy \|\| rowBusy\)/.test(tab), 'el botón queda deshabilitado durante una modificación')
+})
+
+test('guard: serializa la validación de recursos y falla cerrado sin readiness', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  const assignHandler = tab.slice(tab.indexOf('async function handleAssign'), tab.indexOf('// ── Render'))
+  assert.ok(/const resourceReq = useRef\(0\)/.test(tab), 'identifica la validación vigente')
+  assert.ok(/busy=\{Boolean\(busyField\)\}/.test(tab), 'bloquea todos los selectores durante una validación')
+  assert.ok(/if \(assignBusy \|\| !routePlanId \|\| !id\) return/.test(assignHandler), 'rechaza una asignación concurrente')
+  assert.match(assignHandler, /if \(!data\.readiness\)[\s\S]*coverage_state: 'blocked'/, 'sin readiness autoritativo falla cerrado')
+  assert.match(assignHandler, /catch \(e\) \{[\s\S]*coverage_state: 'blocked'/, 'un error de red al asignar falla cerrado')
+})
+
 // ── (c) Cableado de la asignación (write real) ───────────────────────────────
 
 test('wiring: write assign-resources tiene wrapper y mapping', () => {

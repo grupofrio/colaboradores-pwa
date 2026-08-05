@@ -268,19 +268,19 @@ function ResourcePicker({ resources, planId, assignment, coverage, onAssign, bus
       <ResourcePickerRow
         label="Unidad" testid="planear-asignar-unidad" withCapacity
         options={resourceOptions(vehicles, planId, assignment?.vehicle?.id)}
-        currentId={assignment?.vehicle?.id || ''} busy={busyField === 'vehicle_id'}
+        currentId={assignment?.vehicle?.id || ''} busy={Boolean(busyField)}
         onChange={(v) => onAssign('vehicle_id', v)}
       />
       <ResourcePickerRow
         label="Chofer" testid="planear-asignar-chofer"
         options={resourceOptions(drivers, planId, assignment?.driver?.id)}
-        currentId={assignment?.driver?.id || ''} busy={busyField === 'driver_employee_id'}
+        currentId={assignment?.driver?.id || ''} busy={Boolean(busyField)}
         onChange={(v) => onAssign('driver_employee_id', v)}
       />
       <ResourcePickerRow
         label="Vendedor" testid="planear-asignar-vendedor"
         options={resourceOptions(sellers, planId, assignment?.salesperson?.id)}
-        currentId={assignment?.salesperson?.id || ''} busy={busyField === 'salesperson_employee_id'}
+        currentId={assignment?.salesperson?.id || ''} busy={Boolean(busyField)}
         onChange={(v) => onAssign('salesperson_employee_id', v)}
       />
 
@@ -375,6 +375,7 @@ export default function PlanearMananaTab() {
 
   const msgTimer = useRef(null)
   const previewReq = useRef(0)
+  const resourceReq = useRef(0)
 
   const flash = useCallback((text, ms = 2600) => {
     setMsg(text)
@@ -453,6 +454,47 @@ export default function PlanearMananaTab() {
     }
   }
 
+  function invalidateResourceReadiness() {
+    resourceReq.current += 1
+    setAssignReadiness({
+      coverage_state: 'blocked',
+      blockers: ['Validando la cobertura de recursos antes de publicar.'],
+    })
+  }
+
+  async function refreshResourceReadiness(planId) {
+    if (!planId) return false
+    const reqId = ++resourceReq.current
+    setAssignBusy('validation')
+    try {
+      // Sin recursos en el payload, el endpoint no reasigna: sólo devuelve la
+      // readiness autoritativa del plan después de cambiar sus clientes.
+      const resp = await assignRoutePlanResources(planId)
+      const status = String(resp?.status || (resp?.ok === false ? 'error' : 'ok')).toLowerCase()
+      const data = resp?.data || resp || {}
+      if (reqId !== resourceReq.current) return false
+      if (status === 'error' || resp?.ok === false || !data.readiness) {
+        setAssignReadiness({
+          coverage_state: 'blocked',
+          blockers: [resp?.user_message || resp?.message || 'No se pudo validar la cobertura de recursos.'],
+        })
+        return false
+      }
+      setAssignReadiness(data.readiness)
+      return true
+    } catch (e) {
+      if (reqId !== resourceReq.current) return false
+      logScreenError('PlanearManana', 'refreshResourceReadiness', e)
+      setAssignReadiness({
+        coverage_state: 'blocked',
+        blockers: ['No se pudo validar la cobertura de recursos.'],
+      })
+      return false
+    } finally {
+      if (reqId === resourceReq.current) setAssignBusy(null)
+    }
+  }
+
   async function handlePrepare(route) {
     if (!route?.route_id) return
     setPreparing(route.route_id)
@@ -466,10 +508,13 @@ export default function PlanearMananaTab() {
       const planId = res?.route_plan_id || res?.plan_id || res?.id || route.plan_id || null
       setSelectedRouteId(route.route_id)
       setRoutePlanId(planId)
-      setAssignReadiness(null)  // readiness fresca por plan; se llena al primer write
+      invalidateResourceReadiness()
       setView('detail')
       await loadData()
-      if (planId) await loadPlanCustomers(planId)
+      if (planId) {
+        await loadPlanCustomers(planId)
+        await refreshResourceReadiness(planId)
+      }
     } catch (e) {
       logScreenError('PlanearManana', 'ensureDailyRoutePlan', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
@@ -482,6 +527,7 @@ export default function PlanearMananaTab() {
     if (!selectedRoute) { flash('Selecciona una ruta'); return }
     if (!polygonId) { flash('Elige un polígono para generar la propuesta'); return }
     const reqId = ++previewReq.current
+    invalidateResourceReadiness()
     setPreviewing(true)
     try {
       const payload = buildRoutePlanPreviewPayload({
@@ -495,10 +541,12 @@ export default function PlanearMananaTab() {
         flash(getSupervisorRouteErrorMessage(resp), 5000); return
       }
       const data = resp?.data || resp || {}
-      setRoutePlanId((cur) => data.route_plan_id || data.plan_id || cur || null)
+      const planId = data.route_plan_id || data.plan_id || routePlanId || null
+      setRoutePlanId(planId)
       const rows = Array.isArray(data) ? data : (data.customers || data.items || data.records || [])
       setPreviewCustomers(rows.map(normalizeRoutePlanCustomer))
       await loadData()
+      if (planId) await refreshResourceReadiness(planId)
       if (previewReq.current === reqId) flash('Propuesta generada')
     } catch (e) {
       if (previewReq.current !== reqId) return
@@ -512,6 +560,7 @@ export default function PlanearMananaTab() {
   async function handleAdd(customer) {
     if (!canEdit) { flash('Este plan no permite modificar clientes', 4000); return }
     if (!routePlanId) { flash('Genera primero la propuesta'); return }
+    invalidateResourceReadiness()
     setRowBusy(`add-${customer.id}`)
     try {
       const res = await addCustomerToRoutePlan(routePlanId, customer.id, '')
@@ -526,6 +575,7 @@ export default function PlanearMananaTab() {
         return [...cur, added]
       })
       setQuery(''); setResults([])
+      await refreshResourceReadiness(routePlanId)
     } catch (e) {
       logScreenError('PlanearManana', 'addCustomerToRoutePlan', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
@@ -534,6 +584,7 @@ export default function PlanearMananaTab() {
 
   async function handleRemove(customer) {
     if (!routePlanId || !canEdit) return
+    invalidateResourceReadiness()
     setRowBusy(`remove-${customer.stop_id || customer.id}`)
     try {
       const res = await removeCustomerFromRoutePlan(routePlanId, customer)
@@ -541,6 +592,7 @@ export default function PlanearMananaTab() {
       setPreviewCustomers((cur) => cur.filter((it) => customer.stop_id
         ? String(it.stop_id || '') !== String(customer.stop_id)
         : String(it.customer_id || it.id || '') !== String(customer.customer_id || customer.id || '')))
+      await refreshResourceReadiness(routePlanId)
     } catch (e) {
       logScreenError('PlanearManana', 'removeCustomerFromRoutePlan', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
@@ -548,7 +600,12 @@ export default function PlanearMananaTab() {
   }
 
   async function handlePublish() {
-    if (publishing || !routePlanId) { if (!routePlanId) flash('Genera primero la propuesta'); return }
+    if (publishing || assignBusy || rowBusy || !routePlanId) {
+      if (!routePlanId) flash('Genera primero la propuesta')
+      else if (assignBusy) flash('Espera la validación de recursos antes de publicar')
+      else if (rowBusy) flash('Espera que termine la modificación de clientes')
+      return
+    }
     if (!readiness?.publishable) { flash('Este plan no se puede publicar en su estado actual'); return }
     setPublishing(true)
     try {
@@ -573,23 +630,41 @@ export default function PlanearMananaTab() {
   // ocupación en las demás rutas). Un CONFLICT muestra el mensaje y no cambia.
   async function handleAssign(field, value) {
     const id = Number(value || 0)
-    if (!routePlanId || !id) return
+    if (assignBusy || !routePlanId || !id) return
+    const reqId = ++resourceReq.current
     setAssignBusy(field)
     try {
       const resp = await assignRoutePlanResources(routePlanId, { [field]: id })
       const status = String(resp?.status || (resp?.ok === false ? 'error' : 'ok')).toLowerCase()
+      if (reqId !== resourceReq.current) return
       if (status === 'error' || resp?.ok === false) {
         flash(resp?.user_message || resp?.message || getSupervisorRouteErrorMessage(resp), 5000)
         return
       }
       const data = resp?.data || resp || {}
-      if (data.readiness) setAssignReadiness(data.readiness)
+      if (!data.readiness) {
+        setAssignReadiness({
+          coverage_state: 'blocked',
+          blockers: ['No se pudo validar la cobertura de recursos.'],
+        })
+        flash('El servidor no confirmó la cobertura de recursos', 5000)
+        await loadData()
+        return
+      }
+      setAssignReadiness(data.readiness)
       flash('Recurso asignado')
       await loadData()  // refresca ocupación; assignment se re-deriva de resources
     } catch (e) {
+      if (reqId !== resourceReq.current) return
       logScreenError('PlanearManana', 'assignRoutePlanResources', e)
+      setAssignReadiness({
+        coverage_state: 'blocked',
+        blockers: ['No se pudo validar la cobertura de recursos.'],
+      })
       flash(getSupervisorRouteErrorMessage(e), 5000)
-    } finally { setAssignBusy(null) }
+    } finally {
+      if (reqId === resourceReq.current) setAssignBusy(null)
+    }
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -730,7 +805,7 @@ export default function PlanearMananaTab() {
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>{readiness.reasons[0] || 'Completa la preparación para publicar.'}</div>
           )}
           {!readiness.published && (
-            <PrimaryButton testid="planear-publicar" tone="green" onClick={handlePublish} busy={publishing} disabled={!readiness.publishable}>
+            <PrimaryButton testid="planear-publicar" tone="green" onClick={handlePublish} busy={publishing} disabled={!readiness.publishable || Boolean(assignBusy || rowBusy)}>
               Publicar ruta de mañana
             </PrimaryButton>
           )}
