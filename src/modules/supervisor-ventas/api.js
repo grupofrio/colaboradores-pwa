@@ -54,6 +54,25 @@ export function getRadar(date) {
   return api('GET', `/pwa-supv/radar${qs}`)
 }
 
+/** Recursos disponibles para "Planear mañana" (read-only): unidades y personas
+ *  con las que armar las rutas del día, marcando lo ya asignado en esa fecha.
+ *  Escopado server-side a sucursal/compañía; el cliente NO decide el alcance. */
+export function getAvailableResources(date) {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : ''
+  return api('GET', `/pwa-supv/available-resources${qs}`)
+}
+
+/** Asignar/reasignar recursos de un plan del día (Planear mañana). WRITE seguro:
+ *  fija/override chofer, vendedor y/o unidad. Solo se envían los campos presentes
+ *  (ausente = no se toca). Devuelve el plan con la readiness recomputada. */
+export function assignRoutePlanResources(planId, resources = {}) {
+  const payload = { plan_id: Number(planId || 0) }
+  if (resources.vehicle_id != null) payload.vehicle_id = Number(resources.vehicle_id)
+  if (resources.driver_employee_id != null) payload.driver_employee_id = Number(resources.driver_employee_id)
+  if (resources.salesperson_employee_id != null) payload.salesperson_employee_id = Number(resources.salesperson_employee_id)
+  return api('POST', '/pwa-supv/route-plan-assign-resources', payload)
+}
+
 /** Supervisor V2: paradas de una ruta vía DTO read-only guardado (#223), sin
  *  ORM/sudo en el cliente. Devuelve el envelope {status,data:{stops,...}}. */
 export function getRouteStopsV2(planId) {

@@ -71,5 +71,23 @@ export default function RutasTab() {
     )
   }
 
-  return <RutasView dayControl={day.dayControl} source={day.source} onOpenRoute={(pid) => setParams({ plan: String(pid) })} />
+  return (
+    <>
+      {/* Acceso a "Planear mañana": armar y publicar las rutas del día siguiente
+          (superficie V2 clara; re-hogar del flujo antes oculto). */}
+      <button
+        type="button"
+        data-testid="rutas-planear-manana"
+        onClick={() => navigate('/equipo/rutas/planear')}
+        style={{
+          width: '100%', minHeight: 46, marginBottom: 12, borderRadius: 14,
+          border: '1px solid rgba(0,119,187,0.24)', background: 'rgba(0,119,187,0.08)',
+          color: '#005A8D', fontSize: 14, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
+        }}
+      >
+        Planear mañana →
+      </button>
+      <RutasView dayControl={day.dayControl} source={day.source} onOpenRoute={(pid) => setParams({ plan: String(pid) })} />
+    </>
+  )
 }
