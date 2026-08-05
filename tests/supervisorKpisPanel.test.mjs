@@ -183,10 +183,22 @@ test('los porcentajes pequeños de cobranza salen de su segmento', () => {
     cash: { inside: '', outside: 'Contado 10%' },
     credit: { inside: '90%', outside: '' },
   })
-  assert.equal(collectionPercentageLabels(17).cash.outside, 'Contado 17%')
-  assert.equal(collectionPercentageLabels(18).cash.inside, '18%')
-  assert.equal(collectionPercentageLabels(0).cash.outside, 'Contado 0%')
-  assert.equal(collectionPercentageLabels(100).credit.outside, 'Crédito 0%')
+  assert.deepEqual(collectionPercentageLabels(17), {
+    cash: { inside: '', outside: 'Contado 17%' },
+    credit: { inside: '83%', outside: '' },
+  })
+  assert.deepEqual(collectionPercentageLabels(18), {
+    cash: { inside: '18%', outside: '' },
+    credit: { inside: '82%', outside: '' },
+  })
+  assert.deepEqual(collectionPercentageLabels(0), {
+    cash: { inside: '', outside: 'Contado 0%' },
+    credit: { inside: '100%', outside: '' },
+  })
+  assert.deepEqual(collectionPercentageLabels(100), {
+    cash: { inside: '100%', outside: '' },
+    credit: { inside: '', outside: 'Crédito 0%' },
+  })
 })
 
 test('la colocación de porcentajes rechaza datos inválidos o fuera de rango', () => {
@@ -286,11 +298,10 @@ test('estados honestos: error ofrece reintentar, vacío no', () => {
 test('el panel separa las etiquetas exteriores de los porcentajes interiores de cobranza', () => {
   const src = PANEL()
   assert.match(src, /const labels = collectionPercentageLabels\(cashPct\)/)
-  assert.match(src, /labels\.cash\.outside\s*&&[\s\S]{0,200}testid="collection-cash-outside-label"/)
-  assert.match(src, /labels\.credit\.outside\s*&&[\s\S]{0,200}testid="collection-credit-outside-label"/)
+  assert.match(src, /labels\.cash\.outside\s*\?\s*\([\s\S]{0,100}testid="collection-cash-outside-label"[\s\S]{0,100}\{labels\.cash\.outside\}/)
+  assert.match(src, /labels\.credit\.outside\s*\?\s*\([\s\S]{0,100}testid="collection-credit-outside-label"[\s\S]{0,100}\{labels\.credit\.outside\}/)
 
   const collection = src.slice(src.indexOf('height: 22'), src.indexOf('Contado {fmtMoney'))
-  assert.match(collection, /\{labels\.cash\.inside\}/)
-  assert.match(collection, /\{labels\.credit\.inside\}/)
-  assert.doesNotMatch(collection, /\$\{cashPct\}%|\$\{creditPct\}%/, 'un porcentaje no puede salir tanto dentro como fuera')
+  assert.match(collection, /\{labels\.cash\.outside\s*\?\s*''\s*:\s*labels\.cash\.inside\}/)
+  assert.match(collection, /\{labels\.credit\.outside\s*\?\s*''\s*:\s*labels\.credit\.inside\}/)
 })
