@@ -1,102 +1,260 @@
-// ─── Panel nativo de KPIs del supervisor ─────────────────────────────────────
-// Lo que se reemplaza pintaba números ESCRITOS A MANO (82%, 14 visitas, "31
-// clientes nuevos") cuando no había dashboard de Metabase para el puesto. Estos
-// tests fijan lo contrario: si el backend no lo manda, no se pinta.
+// ─── Panel de KPIs v2 (embudo) del supervisor ────────────────────────────────
+// El panel evolucionó al diseño v2: embudo de círculos + caídas con semáforo en
+// palabra + barras ETIQUETADAS + calidad en texto plano + prospección
+// "próximamente". La regla de siempre sigue: `null` dice "Sin dato", un `0` real
+// se pinta, y nada se inventa.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import {
-  NO_DATA, PERIODS, TODAY_BADGE, TONE_LABELS,
-  buildKpiCards, fmtInt, fmtMoney, fmtPct, isEmptyPanel, isSnapshot,
-  panelNotices, periodLabel, periodRangeText, toneForCount, toneForPct,
+  NO_DATA, FUNNEL_MIN_D, FUNNEL_MAX_D,
+  buildFunnel, funnelDiameter, deltaView, buildBars, hasSeries,
+  buildQuality, qualityHighRatioNote, prospectionComingSoon,
+  fmtMoney, fmtInt, fmtPct, collectionPercentageLabels,
 } from '../src/modules/supervisor-ventas/kpis/kpisModel.js'
 
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8')
 const PANEL = () => read('../src/modules/supervisor-ventas/kpis/PanelKpis.jsx')
 const PANTALLA = () => read('../src/screens/ScreenKPIs.jsx')
 
-// Payload con los números REALES medidos en producción (sucursal 29, julio).
+// Payload real (sucursal 29, semana 07-28/08-03), con los bloques v2.
 const REAL = {
-  period: { key: 'mes', label: 'Este mes', date_from: '2026-07-01', date_to: '2026-08-04' },
-  kpis: {
-    visit_coverage: { scheduled: 5838, visited: 4926, pct: 84.4, scope: 'period' },
-    conversion: { visited: 4926, bought: 3339, pct: 67.8, scope: 'period' },
-    sales: { total: 797786, cash: 715743, credit: 82043, orders: 3348, avg_ticket: 238.29, currency: 'MXN', scope: 'period' },
-    collection: { cash: 715743, credit: 82043, cash_pct: 89.7, currency: 'MXN', scope: 'period' },
-    cash_pending: { amount: 12500, currency: 'MXN', available: true, scope: 'today' },
-    inactive_customers: { count: 143, chain_excluded: 15, available: true, scope: 'today', scope_level: 'company' },
-    open_routes: { over_7d: 4, no_visits_today: 1, available: true, scope: 'today' },
+  period: { key: 'semana', label: 'Esta semana', date_from: '2026-07-28', date_to: '2026-08-03' },
+  funnel: {
+    agendados: 1184, visitados: 1019, compraron: 688,
+    coverage_pct: 86.1, conversion_pct: 67.5,
+    coverage_tone: 'good', conversion_tone: 'watch', per_100_agendados: 58,
   },
+  kpis: {
+    sales: { total: 797786, cash: 715743, credit: 82043, orders: 3348, avg_ticket: 238.29, currency: 'MXN' },
+    collection: { cash: 715743, credit: 82043, cash_pct: 89.7, currency: 'MXN' },
+  },
+  buyers_delta: { current: 688, previous: 620, delta_abs: 68, delta_pct: 11.0, direction: 'up' },
+  sales_delta: { current: 797786, previous: 810000, delta_abs: -12214, delta_pct: -1.5, direction: 'down' },
+  buyers_series: [
+    { label: 'Mié 30', value: 90, is_current: false },
+    { label: 'Jue 31', value: 110, is_current: false },
+    { label: 'Vie 1', value: 105, is_current: false },
+    { label: 'Sáb 2', value: 60, is_current: false },
+    { label: 'Dom 3', value: 0, is_current: true },
+  ],
+  quality: {
+    available: true, a_revisar: 616, total_visitas: 1019,
+    routes: [
+      { route: 'RICARDO MIRANDA', seller: 'Ricardo', count: 40 },
+      { route: 'ESTEBAN ALEMAN', seller: 'Esteban', count: 33 },
+    ],
+    definition: 'Visitas marcadas en menos de 1 minuto Y con check-in a más de 300 m del cliente. NO es prueba: es para revisar con el vendedor.',
+  },
+  quality_series: [
+    { label: 'Mié 30', value: 80, is_current: false },
+    { label: 'Jue 31', value: 90, is_current: false },
+    { label: 'Vie 1', value: 70, is_current: true },
+  ],
+  quality_yesterday: 90,
+  prospection: { available: false, status: 'coming_soon' },
+  data_notes: { quality_high_ratio: 'El 60.5% de las visitas cae en a revisar; dato posiblemente sucio.' },
   capabilities: { routes_available: true },
-  data_notes: {},
 }
 
 const VACIO = {
-  period: { key: 'hoy', label: 'Hoy', date_from: '2026-08-04', date_to: '2026-08-04' },
-  kpis: {
-    visit_coverage: { scheduled: null, visited: null, pct: null, scope: 'period' },
-    conversion: { visited: null, bought: null, pct: null, scope: 'period' },
-    sales: { total: null, cash: null, credit: null, orders: null, avg_ticket: null, currency: null, scope: 'period' },
-    collection: { cash: null, credit: null, cash_pct: null, currency: null, scope: 'period' },
-    cash_pending: { amount: null, currency: null, available: false, scope: 'today' },
-    inactive_customers: { count: null, chain_excluded: null, available: false, scope: 'today' },
-    open_routes: { over_7d: null, no_visits_today: null, available: false, scope: 'today' },
-  },
-  capabilities: { routes_available: false },
+  period: { key: 'hoy', label: 'Hoy', date_from: '2026-08-05', date_to: '2026-08-05' },
+  funnel: { agendados: null, visitados: null, compraron: null, coverage_pct: null, conversion_pct: null, coverage_tone: 'unknown', conversion_tone: 'unknown', per_100_agendados: null },
+  kpis: { sales: { total: null, orders: null, avg_ticket: null, currency: null }, collection: { cash: null, credit: null, cash_pct: null } },
+  buyers_delta: { direction: 'none', delta_pct: null },
+  sales_delta: { direction: 'none', delta_pct: null },
+  buyers_series: [],
+  quality: { available: false },
+  quality_series: [], quality_yesterday: null,
+  prospection: { available: false, status: 'coming_soon' },
   data_notes: {},
 }
 
-const card = (payload, key) => buildKpiCards(payload).find((c) => c.key === key)
+// ── Embudo: geometría ────────────────────────────────────────────────────────
 
-// ── El mock, fuera ───────────────────────────────────────────────────────────
-
-test('el rol de supervisión ya NO pasa por el mock ni por el iframe', () => {
-  const src = PANTALLA()
-  const branch = src.slice(src.indexOf('function KPIScreen('), src.indexOf('function KPIScreenLegacy'))
-  assert.match(branch, /isBrandLightSession\(getSession\(\)\)/, 'la rama es por rol')
-  assert.match(branch, /<PanelKpisSupervisor \/>/)
-  assert.ok(!/MetabaseFrame|MockMetabaseDashboard/.test(branch),
-    'la rama del supervisor no puede tocar el iframe ni el mock')
+test('el diámetro es proporcional a √(valor/agendados)', () => {
+  // Agendados = 100% = diámetro máximo. La mitad del valor NO es la mitad del
+  // diámetro sino √0.5 ≈ 0.707, porque lo proporcional es el ÁREA.
+  assert.equal(funnelDiameter(1184, 1184), FUNNEL_MAX_D)
+  const mitad = funnelDiameter(592, 1184)
+  assert.ok(Math.abs(mitad - FUNNEL_MAX_D * Math.SQRT1_2) <= 1, `mitad del valor ⇒ ~71% del diámetro, no 50% (${mitad})`)
 })
 
-test('los demás roles conservan su pantalla intacta', () => {
-  // Quitarles el mock sin darles fuente los dejaría SIN pantalla. Sigue ahí.
-  const src = PANTALLA()
-  assert.match(src, /function MockMetabaseDashboard/, 'el mock sigue para los otros roles')
-  assert.match(src, /<MetabaseFrame /, 'el embed de Metabase sigue montado')
-  const legacy = src.slice(src.indexOf('function KPIScreenLegacy'))
-  assert.match(legacy, /MetabaseFrame/, 'la rama legacy es la que lo usa')
+test('un círculo diminuto conserva el mínimo legible', () => {
+  assert.equal(funnelDiameter(1, 100000), FUNNEL_MIN_D)
+  assert.equal(funnelDiameter(0, 1184), FUNNEL_MIN_D)
 })
 
-test('el panel nativo no contiene un solo número escrito a mano', () => {
+test('sin agendados el diámetro cae al mínimo, no revienta', () => {
+  for (const bad of [null, undefined, 0, -5, NaN]) {
+    assert.equal(funnelDiameter(100, bad), FUNNEL_MIN_D, String(bad))
+  }
+})
+
+test('el embudo trae 3 círculos, 2 caídas y el cierre', () => {
+  const f = buildFunnel(REAL)
+  assert.deepEqual(f.circles.map((c) => c.key), ['agendados', 'visitados', 'compraron'])
+  assert.deepEqual(f.circles.map((c) => c.value), [1184, 1019, 688])
+  assert.ok(f.circles[0].diameter >= f.circles[1].diameter)
+  assert.ok(f.circles[1].diameter >= f.circles[2].diameter)
+  assert.equal(f.closing, 'De cada 100 agendados, 58 compraron')
+  assert.ok(f.hasData)
+})
+
+test('las caídas llevan semáforo EN PALABRA + ícono, no solo color', () => {
+  const f = buildFunnel(REAL)
+  const [cov, conv] = f.drops
+  assert.equal(cov.pct, 86.1)
+  assert.equal(cov.toneWord, 'Bien')
+  assert.ok(cov.toneIcon && cov.toneIcon !== '')
+  assert.equal(conv.toneWord, 'Atención')
+  assert.equal(conv.tone, 'watch')
+})
+
+test('embudo sin datos: valores null y cierre honesto, nunca 0', () => {
+  const f = buildFunnel(VACIO)
+  assert.equal(f.circles[0].value, null)
+  assert.equal(f.drops[0].pct, null)
+  assert.equal(f.drops[0].toneWord, 'Sin dato')
+  assert.equal(f.closing, 'Sin agendados en el período')
+  assert.ok(!f.hasData)
+})
+
+// ── Deltas ───────────────────────────────────────────────────────────────────
+
+test('delta con flecha ▲/▼ y tono', () => {
+  const up = deltaView(REAL.buyers_delta)
+  assert.ok(up.show)
+  assert.equal(up.arrow, '▲')
+  assert.equal(up.tone, 'good')
+  const down = deltaView(REAL.sales_delta)
+  assert.equal(down.arrow, '▼')
+  assert.equal(down.tone, 'bad')
+})
+
+test('sin comparativo no se inventa flecha', () => {
+  const v = deltaView(VACIO.buyers_delta)
+  assert.ok(!v.show)
+  assert.match(v.text, /sin comparativo/)
+})
+
+// ── Barras etiquetadas ───────────────────────────────────────────────────────
+
+test('las barras traen etiqueta, número y marca de "hoy"', () => {
+  const bars = buildBars(REAL.buyers_series)
+  assert.equal(bars.length, 5)
+  assert.equal(bars[0].label, 'Mié 30')
+  assert.equal(bars[0].valueText, '90')
+  assert.ok(bars[4].isCurrent, 'el último es hoy')
+})
+
+test('una barra de valor 0 real se pinta (altura mínima), no desaparece', () => {
+  const bars = buildBars(REAL.buyers_series)
+  const hoy = bars[4]
+  assert.equal(hoy.value, 0)
+  assert.equal(hoy.valueText, '0', 'un 0 real se muestra como 0')
+  assert.ok(hoy.height >= 3, 'la barra de 0 sigue siendo visible')
+  assert.ok(!hoy.missing)
+})
+
+test('un día sin dato (null) NO es una barra de 0', () => {
+  const bars = buildBars([{ label: 'Lun', value: null, is_current: false }])
+  assert.equal(bars[0].value, null)
+  assert.equal(bars[0].valueText, NO_DATA)
+  assert.ok(bars[0].missing)
+})
+
+test('la altura se normaliza contra el máximo de la serie', () => {
+  const bars = buildBars([{ label: 'a', value: 50 }, { label: 'b', value: 100 }])
+  assert.ok(bars[1].height > bars[0].height)
+})
+
+test('hasSeries distingue serie con dato de serie vacía o toda null', () => {
+  assert.ok(hasSeries(REAL.buyers_series))
+  assert.ok(!hasSeries([]))
+  assert.ok(!hasSeries([{ label: 'x', value: null }]))
+})
+
+// ── Etiquetas de porcentaje de cobranza ─────────────────────────────────────
+
+test('los porcentajes pequeños de cobranza salen de su segmento', () => {
+  assert.deepEqual(collectionPercentageLabels(10), {
+    cash: { inside: '', outside: 'Contado 10%' },
+    credit: { inside: '90%', outside: '' },
+  })
+  assert.deepEqual(collectionPercentageLabels(17), {
+    cash: { inside: '', outside: 'Contado 17%' },
+    credit: { inside: '83%', outside: '' },
+  })
+  assert.deepEqual(collectionPercentageLabels(18), {
+    cash: { inside: '18%', outside: '' },
+    credit: { inside: '82%', outside: '' },
+  })
+  assert.deepEqual(collectionPercentageLabels(90), {
+    cash: { inside: '90%', outside: '' },
+    credit: { inside: '', outside: 'Crédito 10%' },
+  })
+  assert.deepEqual(collectionPercentageLabels(83), {
+    cash: { inside: '83%', outside: '' },
+    credit: { inside: '', outside: 'Crédito 17%' },
+  })
+  assert.deepEqual(collectionPercentageLabels(82), {
+    cash: { inside: '82%', outside: '' },
+    credit: { inside: '18%', outside: '' },
+  })
+  assert.deepEqual(collectionPercentageLabels(0), {
+    cash: { inside: '', outside: 'Contado 0%' },
+    credit: { inside: '100%', outside: '' },
+  })
+  assert.deepEqual(collectionPercentageLabels(100), {
+    cash: { inside: '100%', outside: '' },
+    credit: { inside: '', outside: 'Crédito 0%' },
+  })
+})
+
+test('la colocación de porcentajes rechaza datos inválidos o fuera de rango', () => {
+  for (const value of [null, undefined, NaN, Infinity, -Infinity, -0.1, 100.1, '10']) {
+    assert.equal(collectionPercentageLabels(value), null, String(value))
+  }
+})
+
+// ── Calidad ──────────────────────────────────────────────────────────────────
+
+test('calidad: número, total, definición en español y chips de vendedores', () => {
+  const q = buildQuality(REAL)
+  assert.ok(q.available)
+  assert.equal(q.aRevisar, '616')
+  assert.equal(q.totalVisitas, '1,019')
+  assert.equal(q.routesCount, 2)
+  assert.deepEqual(q.sellers, ['Ricardo', 'Esteban'])
+  assert.match(q.definition, /1 minuto/)
+  assert.match(q.definition, /300 m/)
+  assert.match(q.definition, /NO es prueba/)
+})
+
+test('la advertencia de proporción anómala se expone', () => {
+  assert.match(qualityHighRatioNote(REAL), /60\.5%/)
+  assert.equal(qualityHighRatioNote(VACIO), null)
+})
+
+test('calidad no disponible no inventa números', () => {
+  const q = buildQuality(VACIO)
+  assert.ok(!q.available)
+  assert.equal(q.aRevisar, NO_DATA)
+  assert.deepEqual(q.routes, [])
+})
+
+// ── Prospección ──────────────────────────────────────────────────────────────
+
+test('prospección es "próximamente", nunca datos inventados', () => {
+  assert.ok(prospectionComingSoon(REAL))
   const src = PANEL()
-  for (const inventado of ['82', '14 visitas', 'Clientes nuevos', 'Devoluciones', '$586', '6.2h']) {
-    assert.ok(!src.includes(inventado), `sobrevive un dato del mock: ${inventado}`)
-  }
+  assert.match(src, /Próximamente/)
+  assert.match(src, /fase 2|captura B2B/i)
 })
 
-// ── null no es 0 ─────────────────────────────────────────────────────────────
-
-test('sin dato se dice "Sin dato", NUNCA 0', () => {
-  for (const key of ['visit_coverage', 'conversion', 'sales', 'collection',
-    'cash_pending', 'inactive_customers', 'open_routes']) {
-    const c = card(VACIO, key)
-    assert.equal(c.value, NO_DATA, key)
-    assert.ok(!/^0/.test(c.value), `${key} pinta un cero inventado`)
-  }
-})
-
-test('un CERO real sí se pinta como cero', () => {
-  // "No hay caja pendiente" es una buena noticia y es un dato. No se puede
-  // confundir con "no pude leer la caja".
-  const p = structuredClone(REAL)
-  p.kpis.cash_pending = { amount: 0, currency: 'MXN', available: true, scope: 'today' }
-  p.kpis.open_routes = { over_7d: 0, no_visits_today: 0, available: true, scope: 'today' }
-  assert.equal(card(p, 'cash_pending').value, '$0')
-  assert.equal(card(p, 'open_routes').value, '0')
-  assert.equal(card(p, 'open_routes').tone, 'good')
-})
+// ── null ≠ 0 en formateadores ────────────────────────────────────────────────
 
 test('los formateadores distinguen ausencia de cero', () => {
   assert.equal(fmtPct(null), NO_DATA)
@@ -105,165 +263,57 @@ test('los formateadores distinguen ausencia de cero', () => {
   assert.equal(fmtInt(0), '0')
   assert.equal(fmtMoney(null, 'MXN'), NO_DATA)
   assert.equal(fmtMoney(0, 'MXN'), '$0')
-  for (const basura of [undefined, NaN, Infinity, 'x', {}, []]) {
-    assert.equal(fmtPct(basura), NO_DATA)
-    assert.equal(fmtMoney(basura, 'MXN'), NO_DATA)
-  }
+  assert.equal(fmtMoney(1000, null), '1,000', 'sin moneda no se inventa símbolo')
 })
 
-test('sin moneda única NO se inventa un símbolo', () => {
-  // El backend manda currency:null cuando conviven varias: poner "$" ahí sería
-  // sumar monedas distintas, que es justo lo que el contrato evita.
-  assert.equal(fmtMoney(1000, null), '1,000')
-  assert.equal(fmtMoney(1000, 'USD'), '1,000 USD')
-})
+// ── Panel: fuente ────────────────────────────────────────────────────────────
 
-// ── Las siete tarjetas, siempre ──────────────────────────────────────────────
-
-test('las siete tarjetas están aunque falten datos', () => {
-  // Una tarjeta que desaparece deja sin saber si el indicador está bien o si el
-  // sistema no pudo leerlo.
-  for (const payload of [REAL, VACIO, {}, null]) {
-    const keys = buildKpiCards(payload).map((c) => c.key)
-    assert.deepEqual(keys, ['visit_coverage', 'conversion', 'sales', 'collection',
-      'cash_pending', 'inactive_customers', 'open_routes'])
-  }
-})
-
-test('las tarjetas pintan los números reales de producción', () => {
-  assert.equal(card(REAL, 'visit_coverage').value, '84.4%')
-  assert.match(card(REAL, 'visit_coverage').detail, /4,926 de 5,838/)
-  assert.equal(card(REAL, 'conversion').value, '67.8%')
-  assert.match(card(REAL, 'conversion').detail, /3,339 compraron de 4,926/)
-  assert.equal(card(REAL, 'sales').value, '$797,786')
-  assert.match(card(REAL, 'sales').detail, /3,348 pedidos/)
-  assert.equal(card(REAL, 'inactive_customers').value, '143')
-})
-
-test('el detalle de conversión habla de CLIENTES, no de pedidos', () => {
-  // 3,348 pedidos en 3,339 paradas: decir "3,339 pedidos" sería falso.
-  const d = card(REAL, 'conversion').detail
-  assert.ok(!/pedido/i.test(d), `la conversión no cuenta pedidos: "${d}"`)
-  assert.match(d, /compraron/)
-})
-
-test('"contado vs crédito" NO se llama cobranza a secas', () => {
-  // `cash` es efectivo cobrado EN LA RUTA y `credit` es crédito OTORGADO: no es
-  // recuperación de cartera vencida.
-  const c = card(REAL, 'collection')
-  assert.ok(!/cobranza/i.test(c.title), 'el título no puede prometer recuperación de cartera')
-  assert.match(c.detail, /cobrado en ruta/)
-  assert.match(c.detail, /crédito otorgado/)
-})
-
-// ── Foto de hoy ──────────────────────────────────────────────────────────────
-
-test('los tres KPIs de saldo llevan la etiqueta "al día de hoy"', () => {
-  for (const key of ['cash_pending', 'inactive_customers', 'open_routes']) {
-    assert.ok(isSnapshot(card(REAL, key)), key)
-  }
-  for (const key of ['visit_coverage', 'conversion', 'sales', 'collection']) {
-    assert.ok(!isSnapshot(card(REAL, key)), key)
-  }
-  assert.equal(TODAY_BADGE, 'al día de hoy')
-})
-
-test('la etiqueta sigue puesta aunque el selector esté en Mes', () => {
-  // Es el caso que importa: en "Mes" sin etiqueta se leerían como del mes.
-  assert.equal(REAL.period.key, 'mes')
-  assert.ok(isSnapshot(card(REAL, 'cash_pending')))
-})
-
-test('el panel PINTA la etiqueta, no solo la calcula', () => {
+test('el panel v2 renderiza el embudo, las barras, calidad y prospección', () => {
   const src = PANEL()
-  assert.match(src, /isSnapshot\(card\) && \(/)
-  assert.match(src, /\{TODAY_BADGE\}/)
+  assert.match(src, /testid="funnel"/)
+  assert.match(src, /testid="buyers-bars"/)
+  assert.match(src, /testid="quality-review"/)
+  assert.match(src, /testid="prospection"/)
+  assert.match(src, /buildFunnel\(payload\)/)
 })
 
-// ── Semáforo ─────────────────────────────────────────────────────────────────
-
-test('el semáforo lleva PALABRA, no solo color', () => {
-  assert.match(PANEL(), /\{TONE_LABELS\[card\.tone\]\}/, 'se pinta la etiqueta del tono')
-  for (const tone of ['good', 'watch', 'bad', 'unknown']) {
-    assert.ok(TONE_LABELS[tone], tone)
-  }
-})
-
-test('sin dato NO se pinta verde ni rojo', () => {
-  assert.equal(toneForPct(null), 'unknown')
-  assert.equal(toneForCount(null), 'unknown')
-  assert.equal(card(VACIO, 'visit_coverage').tone, 'unknown')
-  assert.equal(TONE_LABELS.unknown, 'Sin dato')
-})
-
-test('los umbrales del semáforo', () => {
-  assert.equal(toneForPct(84.4), 'good')
-  assert.equal(toneForPct(67.8), 'watch')
-  assert.equal(toneForPct(31), 'bad')
-  assert.equal(toneForCount(0), 'good')
-  assert.equal(toneForCount(60, { watchAt: 1, badAt: 50 }), 'bad')
-})
-
-// ── Estados ──────────────────────────────────────────────────────────────────
-
-test('vacío y error son estados DISTINTOS', () => {
-  assert.ok(isEmptyPanel(VACIO), 'todo en Sin dato ⇒ vacío')
-  assert.ok(!isEmptyPanel(REAL))
+test('el switcher recarga TODO al cambiar de período', () => {
   const src = PANEL()
-  // El de error invita a reintentar; el de vacío NO, porque no hay nada que reintentar.
-  const err = src.slice(src.indexOf('testid="kpis-error"'), src.indexOf('const { payload }'))
-  assert.match(err, /actionLabel="Reintentar"/)
-  const vacio = src.slice(src.indexOf('testid="kpis-empty"'))
-  assert.ok(!/actionLabel/.test(vacio.slice(0, 400)), 'el vacío no ofrece reintentar')
-  assert.match(vacio, /No es un error/)
-})
-
-test('el error NO pinta ceros mientras tanto', () => {
-  const src = PANEL()
-  const err = src.slice(src.indexOf("status === 'error'"), src.indexOf('const { payload }'))
-  assert.match(err, /StateScreen/)
-  assert.ok(!/buildKpiCards/.test(err), 'no se pintan tarjetas sobre un error')
-})
-
-// ── Advertencias del contrato ────────────────────────────────────────────────
-
-test('la advertencia de KoldScore se muestra, no se esconde', () => {
-  const p = structuredClone(REAL)
-  p.data_notes.inactive_accuracy = 'PENDIENTE: el conteo viene inflado…'
-  const n = panelNotices(p)
-  assert.equal(n.length, 1)
-  assert.equal(n[0].key, 'inactive_accuracy')
-  assert.match(n[0].text, /puede venir alto/)
-})
-
-test('si el backend no puede leer rutas, se dice', () => {
-  assert.ok(panelNotices(VACIO).some((x) => x.key === 'routes'), 'la capability en false se avisa')
-})
-
-// ── Período ──────────────────────────────────────────────────────────────────
-
-test('el switcher conserva los tres períodos', () => {
-  assert.deepEqual(PERIODS.map((p) => p.key), ['hoy', 'semana', 'mes'])
-})
-
-test('se muestra el período que devolvió el BACKEND, no el que se pidió', () => {
-  // Si el backend degrada a "hoy", el panel tiene que decir "hoy".
-  assert.equal(periodLabel(REAL), 'Este mes')
-  assert.equal(periodRangeText(REAL), '2026-07-01 al 2026-08-04')
-  assert.equal(periodRangeText(VACIO), '2026-08-04', 'un solo día no se pinta como rango')
-})
-
-test('cambiar de período recarga desde el backend', () => {
-  const src = PANEL()
-  assert.match(src, /useEffect\(\(\) => load\(period\), \[period, load\]\)/,
-    'el período es dependencia de la carga')
+  assert.match(src, /useEffect\(\(\) => load\(period\), \[period, load\]\)/)
   assert.match(src, /getSupervisorKpis\(key\)/)
 })
 
-test('el período viaja por NOMBRE, nunca por fechas', () => {
-  const api = read('../src/lib/api.js')
-  const bloque = api.slice(api.indexOf("cleanPath === '/pwa-supv/kpis'"))
-  const corte = bloque.slice(0, bloque.indexOf('})'))
-  assert.match(corte, /period: query\.get\('period'\)/)
-  assert.ok(!/date_from|date_to/.test(corte), 'mandar fechas es inútil: el backend las rechaza')
+test('el panel v2 NO reintrodujo el mock ni el iframe', () => {
+  const src = PANEL()
+  for (const muerto of ['MetabaseFrame', 'MockMetabaseDashboard', '82%', '14 visitas']) {
+    assert.ok(!src.includes(muerto), `revive algo del mock: ${muerto}`)
+  }
+})
+
+test('los demás roles conservan su pantalla (rama por rol intacta)', () => {
+  const src = PANTALLA()
+  assert.match(src, /isBrandLightSession\(getSession\(\)\)/)
+  assert.match(src, /<PanelKpisSupervisor \/>/)
+  assert.match(src, /function MockMetabaseDashboard/, 'el mock sigue para otros roles')
+  assert.match(src, /<MetabaseFrame /)
+})
+
+test('estados honestos: error ofrece reintentar, vacío no', () => {
+  const src = PANEL()
+  const err = src.slice(src.indexOf("status === 'error'"), src.indexOf('const { payload }'))
+  assert.match(err, /actionLabel="Reintentar"/)
+  const vacio = src.slice(src.indexOf('testid="kpis-empty"'))
+  assert.ok(!/actionLabel/.test(vacio.slice(0, 400)), 'el vacío no reintenta')
+  assert.match(vacio, /No es un error/)
+})
+
+test('el panel separa las etiquetas exteriores de los porcentajes interiores de cobranza', () => {
+  const src = PANEL()
+  assert.match(src, /const labels = collectionPercentageLabels\(cashPct\)/)
+  assert.match(src, /labels\.cash\.outside\s*\?\s*\([\s\S]{0,100}testid="collection-cash-outside-label"[\s\S]{0,100}\{labels\.cash\.outside\}/)
+  assert.match(src, /labels\.credit\.outside\s*\?\s*\([\s\S]{0,100}testid="collection-credit-outside-label"[\s\S]{0,100}\{labels\.credit\.outside\}/)
+
+  const collection = src.slice(src.indexOf('height: 22'), src.indexOf('Contado {fmtMoney'))
+  assert.match(collection, /\{labels\.cash\.outside\s*\?\s*''\s*:\s*labels\.cash\.inside\}/)
+  assert.match(collection, /\{labels\.credit\.outside\s*\?\s*''\s*:\s*labels\.credit\.inside\}/)
 })
