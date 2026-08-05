@@ -191,6 +191,14 @@ test('los porcentajes pequeños de cobranza salen de su segmento', () => {
     cash: { inside: '18%', outside: '' },
     credit: { inside: '82%', outside: '' },
   })
+  assert.deepEqual(collectionPercentageLabels(90), {
+    cash: { inside: '90%', outside: '' },
+    credit: { inside: '', outside: 'Crédito 10%' },
+  })
+  assert.deepEqual(collectionPercentageLabels(83), {
+    cash: { inside: '83%', outside: '' },
+    credit: { inside: '', outside: 'Crédito 17%' },
+  })
   assert.deepEqual(collectionPercentageLabels(0), {
     cash: { inside: '', outside: 'Contado 0%' },
     credit: { inside: '100%', outside: '' },
