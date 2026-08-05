@@ -28,6 +28,23 @@ export function fmtPct(value) {
   return isNum(value) ? `${Math.round(value * 10) / 10}%` : NO_DATA
 }
 
+export const COLLECTION_INLINE_LABEL_MIN_PCT = 18
+
+/** Decide si cada porcentaje de cobranza cabe dentro de su segmento. */
+export function collectionPercentageLabels(cashPct) {
+  if (!isNum(cashPct) || cashPct < 0 || cashPct > 100) return null
+
+  const creditPct = Math.round((100 - cashPct) * 10) / 10
+  const labelFor = (kind, pct) => (pct >= COLLECTION_INLINE_LABEL_MIN_PCT
+    ? { inside: `${pct}%`, outside: '' }
+    : { inside: '', outside: `${kind} ${pct}%` })
+
+  return {
+    cash: labelFor('Contado', cashPct),
+    credit: labelFor('Crédito', creditPct),
+  }
+}
+
 /** Entero legible con separadores. */
 export function fmtInt(value) {
   return isNum(value) ? Math.round(value).toLocaleString('es-MX') : NO_DATA

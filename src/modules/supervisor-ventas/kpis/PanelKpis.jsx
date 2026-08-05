@@ -14,6 +14,7 @@ import {
   NO_DATA, PERIODS, fmtInt, fmtMoney,
   buildFunnel, deltaView, buildBars, hasSeries, buildQuality,
   qualityHighRatioNote, prospectionComingSoon, periodLabel, periodRangeText,
+  collectionPercentageLabels,
 } from './kpisModel'
 
 const C = T.colors
@@ -152,7 +153,8 @@ function SalesRow({ payload }) {
   const coll = payload?.kpis?.collection || {}
   const cur = sales.currency || coll.currency || null
   const cashPct = typeof coll.cash_pct === 'number' ? coll.cash_pct : null
-  const creditPct = cashPct == null ? null : Math.round((100 - cashPct) * 10) / 10
+  const labels = collectionPercentageLabels(cashPct)
+  const creditPct = labels == null ? null : Math.round((100 - cashPct) * 10) / 10
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
       <Card testid="sales-total" style={{ padding: '14px' }}>
@@ -166,16 +168,24 @@ function SalesRow({ payload }) {
 
       <Card testid="sales-collection" style={{ padding: '14px' }}>
         <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.textMuted }}>Cómo se cobró</div>
-        {cashPct == null ? (
+        {labels == null ? (
           <div style={{ fontSize: 14, color: C.textMuted, marginTop: 8 }}>{NO_DATA}</div>
         ) : (
           <>
-            <div style={{ display: 'flex', height: 22, borderRadius: 6, overflow: 'hidden', marginTop: 8, border: `1px solid ${C.border}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, minHeight: 12, fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+              {labels.cash.outside ? (
+                <span data-testid="collection-cash-outside-label">{labels.cash.outside}</span>
+              ) : <span />}
+              {labels.credit.outside ? (
+                <span data-testid="collection-credit-outside-label">{labels.credit.outside}</span>
+              ) : <span />}
+            </div>
+            <div style={{ display: 'flex', height: 22, borderRadius: 6, overflow: 'hidden', marginTop: 4, border: `1px solid ${C.border}` }}>
               <div style={{ width: `${cashPct}%`, background: C.success, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>
-                {cashPct >= 18 ? `${cashPct}%` : ''}
+                {labels.cash.outside ? '' : labels.cash.inside}
               </div>
               <div style={{ width: `${creditPct}%`, background: C.warning, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>
-                {creditPct >= 18 ? `${creditPct}%` : ''}
+                {labels.credit.outside ? '' : labels.credit.inside}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 10, color: C.textMuted, flexWrap: 'wrap' }}>
