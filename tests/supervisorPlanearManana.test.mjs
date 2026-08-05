@@ -28,6 +28,26 @@ test('routeReadiness: borrador con clientes ⇒ publicable', () => {
   assert.equal(r.customersCount, 3)
 })
 
+test('routeReadiness: recursos incompletos bloquean la publicación', () => {
+  const r = routeReadiness(
+    { plan_id: 10, plan_state: 'draft' },
+    3,
+    { coverage_state: 'incomplete', missing_driver: true },
+  )
+  assert.equal(r.publishable, false)
+  assert.match(r.reasons[0], /chofer/i)
+})
+
+test('routeReadiness: un bloqueo autoritativo del backend impide publicar', () => {
+  const r = routeReadiness(
+    { plan_id: 10, plan_state: 'draft' },
+    3,
+    { coverage_state: 'ready', blockers: ['La carga excede la capacidad de la unidad.'] },
+  )
+  assert.equal(r.publishable, false)
+  assert.match(r.reasons[0], /excede la capacidad/i)
+})
+
 test('routeReadiness: borrador SIN clientes ⇒ no publicable (0 no es válido)', () => {
   const r = routeReadiness({ plan_id: 10, plan_state: 'draft' }, 0)
   assert.equal(r.publishable, false)
@@ -171,13 +191,13 @@ test('guard: la pestaña es tema CLARO y reusa reglas puras (no reinventa guards
   assert.ok(/canPublishRoutePlan/.test(model), 'readiness delega en canPublishRoutePlan')
 })
 
-test('guard: solo writes del contrato; sin ORM/sudo en cliente', () => {
+test('guard: solo usa writes contractuales; sin ORM/sudo en cliente', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
-  // Los ÚNICOS writes permitidos son los del contrato existente.
+  // Los writes de preparación/publicación y el wrapper dedicado son los únicos permitidos.
   assert.ok(/ensureDailyRoutePlan|previewRoutePlanCustomers|publishRoutePlan/.test(tab), 'usa los writes del contrato')
   assert.ok(!/readModelSorted|createUpdate|get_records|sudo:\s*1/.test(tab), 'sin ORM/sudo directo')
-  // No hay endpoint de asignación de unidad/chofer: no debe inventarse uno.
-  assert.ok(!/assignVehicle|assignDriver|route[_-]?plan[_-]?assign/i.test(tab), 'no inventa write de asignación')
+  assert.ok(/assignRoutePlanResources/.test(tab), 'usa el wrapper contractual de asignación')
+  assert.ok(!/assignVehicle|assignDriver/.test(tab), 'no inventa writes alternos de asignación')
 })
 
 test('guard: publicar exige readiness (no botón siempre activo)', () => {

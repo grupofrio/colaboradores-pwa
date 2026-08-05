@@ -2,11 +2,8 @@
 // Toda la lógica de forma/derivación vive aquí para poder probarla sin runtime.
 // La pestaña (PlanearMananaTab) solo orquesta red + estado y delega el render.
 //
-// CONTRATO DE ESCRITURA (respetado, no inventado):
-//   El único write es el que ya existe: ensure → preview → add/remove → publish.
-//   NO existe endpoint para asignar unidad/chofer/vendedor al plan desde la PWA:
-//   esos vienen del route master al hacer ensure. Por eso "Recursos del día" es
-//   READ-ONLY: informa disponibilidad y dobles asignaciones; no las escribe.
+// CONTRATO DE ESCRITURA: ensure → preview → add/remove → assign-resources →
+// publish. La asignación se valida en backend y su readiness es autoritativa.
 //
 // null ≠ 0: la ausencia de un dato se dice "Sin dato" / —, nunca un 0 inventado.
 
@@ -34,15 +31,33 @@ export function planStateLabel(row = {}) {
 // ── Readiness de UNA ruta para publicarse ────────────────────────────────────
 // Devuelve el veredicto de publicación con RAZONES en palabra, para que la
 // supervisora sepa qué falta, no solo que "no se puede".
-export function routeReadiness(route = {}, customersCount = 0) {
+function resourceBlockerReason(coverage = {}) {
+  const blockers = Array.isArray(coverage.blockers) ? coverage.blockers.filter(Boolean) : []
+  if (blockers.length > 0) return String(blockers[0])
+  if (coverage.missing_vehicle) return 'Falta asignar una unidad a la ruta.'
+  if (coverage.missing_driver) return 'Falta asignar un chofer a la ruta.'
+  if (coverage.missing_salesperson) return 'Falta asignar un vendedor a la ruta.'
+  return 'Completa la asignación de recursos antes de publicar.'
+}
+
+function coverageBlocksPublishing(coverage) {
+  if (!coverage) return false
+  const state = String(coverage.coverage_state || '').toLowerCase()
+  const blockers = Array.isArray(coverage.blockers) ? coverage.blockers.filter(Boolean) : []
+  return blockers.length > 0 || state === 'blocked' || state === 'incomplete'
+}
+
+export function routeReadiness(route = {}, customersCount = 0, coverage = null) {
   const editable = canEditRoutePlanCustomers(route)
-  const publishable = canPublishRoutePlan({
+  const planPublishable = canPublishRoutePlan({
     state: route.state,
     plan_state: route.plan_state,
     customersCount,
     load_sealed: route.load_sealed,
     load_picking_id: route.load_picking_id,
   })
+  const resourceBlocked = coverageBlocksPublishing(coverage)
+  const publishable = planPublishable && !resourceBlocked
   const reasons = []
   const st = getRoutePlanningState(route)
   if (st === 'sin_plan' || !route.plan_id) {
@@ -53,6 +68,8 @@ export function routeReadiness(route = {}, customersCount = 0) {
     reasons.push('La carga ya está lista o sellada: no admite cambios.')
   } else if (Number(customersCount || 0) <= 0) {
     reasons.push('No tiene clientes; genera la propuesta primero.')
+  } else if (resourceBlocked) {
+    reasons.push(resourceBlockerReason(coverage))
   }
   return {
     state: st,
@@ -61,6 +78,7 @@ export function routeReadiness(route = {}, customersCount = 0) {
     publishable,
     published: st === 'published',
     customersCount: Number(customersCount || 0),
+    resourceBlocked,
     reasons,
   }
 }

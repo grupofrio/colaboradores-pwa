@@ -10,10 +10,9 @@
 //   · Reglas puras: routePlanning.js (guards canEdit/canPublish, normalizadores,
 //     fecha de mañana) y planearModel.js (readiness, resumen de recursos).
 //
-// NET-NEW: /available-resources (unidades + equipo del día, marcando dobles
-//   asignaciones). Es READ-ONLY: no existe write para asignar unidad/chofer al
-//   plan desde la PWA (vienen del route master en ensure); por eso aquí se
-//   INFORMAN, no se escriben. Los únicos writes son los del contrato de arriba.
+// NET-NEW: /available-resources y /route-plan-assign-resources. La supervisora
+//   puede asignar recursos del día; el backend devuelve la readiness
+//   autoritativa, que también bloquea la publicación cuando corresponde.
 //
 // null ≠ 0: lo que no viene del backend dice "Sin dato"/—, nunca un 0 inventado.
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -175,7 +174,7 @@ function ResourcesSummary({ resources }) {
       )}
       <div style={{ fontSize: 11, color: C.textLow, marginTop: 9, lineHeight: 1.5 }}>
         Disponibilidad de referencia: una unidad/persona es “libre” si no está en otra ruta de esta fecha.
-        La asignación se hace donde ya se hace hoy (no desde aquí).
+        Puedes asignar recursos al abrir una ruta; los ocupados en otra ruta no se pueden doblar.
       </div>
     </Card>
   )
@@ -385,13 +384,13 @@ export default function PlanearMananaTab() {
 
   const selectedRoute = routes.find((r) => Number(r.route_id) === Number(selectedRouteId)) || null
   const canEdit = canEditRoutePlanCustomers(selectedRoute || {})
-  const readiness = selectedRoute ? routeReadiness(selectedRoute, previewCustomers.length) : null
   // Asignación actual del plan: derivada de available-resources (marca qué recurso
   // trae ESTE plan). Tras cada write se recarga resources ⇒ se re-deriva sola.
   const assignment = routePlanId ? derivePlanAssignment(resources || {}, routePlanId) : { vehicle: null, driver: null, salesperson: null }
   // Readiness a mostrar: la del backend (con sobrecapacidad) si ya hubo un write;
   // si no, la de presencia (falta unidad/chofer/vendedor) derivada localmente.
   const coverage = assignReadiness || resourceReadiness(assignment)
+  const readiness = selectedRoute ? routeReadiness(selectedRoute, previewCustomers.length, coverage) : null
 
   const loadData = useCallback(async () => {
     setPhase((p) => (p === 'ready' ? 'ready' : 'loading'))
