@@ -36,11 +36,20 @@ export function tomorrowSummary(tomorrow) {
   return { assigned: true, text: parts.join(' · ') || 'Asignada' }
 }
 
-/** Nombre de la fila: SIEMPRE el subpolígono (o "Sin subpolígono asignado" para el
- * hueco de datos). NUNCA el nombre de la ruta/vendedor. El backend ya entrega
- * display_name resuelto; aquí solo caemos a subpolígono como red de seguridad. */
+/** Nombre de la fila = el PLAN OPERATIVO (segmento/subpolígono/polígono). El backend
+ * entrega `name` ya resuelto; nunca es un nombre de vendedor. */
 export function rowName(row) {
-  return (row?.display_name) || (row?.subpolygon?.name) || 'Sin subpolígono asignado'
+  return (row?.name) || (row?.subpolygon?.name) || '—'
+}
+
+/** Tipo del plan operativo en palabra (el chip; el color/letra solo no basta). */
+export const TYPE_LABEL = Object.freeze({
+  SO: 'Segmento operativo', SP: 'Subpolígono', P: 'Polígono',
+})
+export const TYPE_SHORT = Object.freeze({ SO: 'Segmento', SP: 'Subpolígono', P: 'Polígono' })
+
+export function typeLabel(tipo) {
+  return TYPE_LABEL[tipo] || 'Plan'
 }
 
 /** route_id de la fila para el flujo de asignar (tomorrow plan o la ruta base). */
@@ -48,11 +57,19 @@ export function rowRouteId(row) {
   return Number(row?.route?.id || 0) || 0
 }
 
-/** Zona que se hereda al armar la propuesta desde esta fila (polígono + subpolígono
- * del backend). La fila "Sin subpolígono asignado" no hereda subpolígono. */
+/** Zona/segmento que se hereda al armar desde esta fila, según el tipo:
+ *  SP → subpolígono (+ su polígono); P → polígono; SO → segmento. */
 export function rowZone(row) {
-  return {
-    polygonId: Number(row?.polygon?.id || 0) || 0,
-    subpolygonId: Number(row?.subpolygon?.id || 0) || 0,
+  const tipo = row?.tipo
+  const id = Number(row?.id || 0) || 0
+  if (tipo === 'SP') {
+    return { subpolygonId: id, polygonId: Number(row?.polygon?.id || 0) || 0, segmentId: 0 }
   }
+  if (tipo === 'P') {
+    return { subpolygonId: 0, polygonId: id, segmentId: 0 }
+  }
+  if (tipo === 'SO') {
+    return { subpolygonId: 0, polygonId: 0, segmentId: id }
+  }
+  return { subpolygonId: 0, polygonId: 0, segmentId: 0 }
 }

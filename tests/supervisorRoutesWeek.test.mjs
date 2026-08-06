@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
-  weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId, rowZone,
+  weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId, rowZone, typeLabel,
 } from '../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -40,21 +40,27 @@ test('tomorrowSummary: asignada arma unidad·chofer·vendedor; sin asignar lo di
   assert.match(b.text, /sin asignar/i)
 })
 
-test('rowName: SIEMPRE subpolígono; NUNCA nombre de ruta/vendedor', () => {
-  // backend entrega display_name resuelto (subpolígono o "Sin subpolígono asignado")
-  assert.equal(rowName({ display_name: 'Iguala NORTE A', subpolygon: { name: 'Iguala NORTE A' }, route: { name: 'MANUEL CRUZ ARMENTA' } }), 'Iguala NORTE A')
-  // sin subpolígono NO cae al nombre del vendedor: fila honesta del hueco de datos
-  assert.equal(rowName({ display_name: 'Sin subpolígono asignado', subpolygon: null, route: { name: 'MANUEL CRUZ ARMENTA' } }), 'Sin subpolígono asignado')
-  // red de seguridad si faltara display_name: subpolígono, jamás la ruta
-  assert.equal(rowName({ subpolygon: { name: 'Sub A' }, route: { name: 'R7' } }), 'Sub A')
-  assert.equal(rowName({ subpolygon: null, route: { name: 'R7' } }), 'Sin subpolígono asignado')
+test('rowName: el PLAN OPERATIVO (name del backend); NUNCA nombre de vendedor', () => {
+  assert.equal(rowName({ tipo: 'SP', name: 'Iguala NORTE A', route: { name: 'MANUEL CRUZ ARMENTA' } }), 'Iguala NORTE A')
+  assert.equal(rowName({ tipo: 'SO', name: 'Pozolerias' }), 'Pozolerias')
+  assert.equal(rowName({ tipo: 'P', name: 'Taxco' }), 'Taxco')
 })
 
-test('rowRouteId / rowZone: ruta para asignar + zona heredada', () => {
+test('typeLabel: tipo en palabra', () => {
+  assert.equal(typeLabel('SO'), 'Segmento operativo')
+  assert.equal(typeLabel('SP'), 'Subpolígono')
+  assert.equal(typeLabel('P'), 'Polígono')
+})
+
+test('rowRouteId / rowZone: ruta para asignar + herencia por tipo', () => {
   assert.equal(rowRouteId({ route: { id: 7 } }), 7)
   assert.equal(rowRouteId({}), 0)
-  assert.deepEqual(rowZone({ polygon: { id: 50 }, subpolygon: { id: 3 } }), { polygonId: 50, subpolygonId: 3 })
-  assert.deepEqual(rowZone({ subpolygon: null }), { polygonId: 0, subpolygonId: 0 })
+  // SP hereda subpolígono + su polígono
+  assert.deepEqual(rowZone({ tipo: 'SP', id: 39, polygon: { id: 26 } }), { subpolygonId: 39, polygonId: 26, segmentId: 0 })
+  // P hereda polígono
+  assert.deepEqual(rowZone({ tipo: 'P', id: 26 }), { subpolygonId: 0, polygonId: 26, segmentId: 0 })
+  // SO hereda segmento
+  assert.deepEqual(rowZone({ tipo: 'SO', id: 15 }), { subpolygonId: 0, polygonId: 0, segmentId: 15 })
 })
 
 // ── (b) cableado ─────────────────────────────────────────────────────────────
@@ -72,6 +78,22 @@ test('wiring: la matriz pinta 7 días + columna Mañana con Asignar/Reasignar', 
   assert.ok(/rw-table/.test(m) && /rw-cell/.test(m) && /rw-tomorrow/.test(m))
   assert.ok(/rw-asignar/.test(m) && /rw-reasignar/.test(m))
   assert.ok(/data\.week\.days/.test(m), 'usa los 7 días del contrato')
+})
+
+test('rename: "Mis planes de mañana" + columna "Plan operativo" + chip de tipo', () => {
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.ok(/Mis planes de mañana/.test(m), 'encabezado renombrado')
+  assert.ok(/Plan operativo/i.test(m), 'header de columna renombrado')
+  assert.ok(/rw-tipo/.test(m) && /TypeChip/.test(m), 'chip de tipo por fila')
+  const reg = src('modules/registry.js')
+  assert.ok(/Mis planes de mañana/.test(reg) && /shortLabel: 'Planes'/.test(reg), 'registry renombrado')
+})
+
+test('wiring: SO hereda el segmento (query param seg) al armar', () => {
+  const cont = src('modules/supervisor-ventas/v2/planear/MisRutasManana.jsx')
+  assert.ok(/seg/.test(cont) && /initialSegmentId/.test(cont), 'thread del segmento')
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/initialSegmentId/.test(tab), 'el tab acepta el segmento heredado')
 })
 
 test('wiring: Asignar navega al flujo de la ruta de mañana (armar+route)', () => {

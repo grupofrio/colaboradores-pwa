@@ -20,6 +20,7 @@ export default function MisRutasManana() {
         initialRouteId={routeId}
         initialPolygonId={Number(params.get('poly') || 0) || 0}
         initialSubpolygonId={Number(params.get('sub') || 0) || 0}
+        initialSegmentId={Number(params.get('seg') || 0) || 0}
         onExit={() => setParams({}, { replace: true })}
       />
     )
@@ -28,12 +29,13 @@ export default function MisRutasManana() {
   return (
     <RutasMananaMatriz
       onOpenRoute={(routeId, zone) => {
-        // Hereda la zona (polígono/subpolígono) de la fila para preseleccionarla
-        // al armar la propuesta; así la supervisora no re-elige la zona a mano.
+        // Hereda la zona/segmento del plan operativo (según su tipo) para
+        // preseleccionar al armar; así la supervisora no re-elige a mano.
         const next = { armar: '1' }
         if (routeId) next.route = String(routeId)
         if (zone?.polygonId) next.poly = String(zone.polygonId)
         if (zone?.subpolygonId) next.sub = String(zone.subpolygonId)
+        if (zone?.segmentId) next.seg = String(zone.segmentId)
         setParams(next)
       }}
     />

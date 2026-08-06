@@ -344,7 +344,7 @@ function CustomerRow({ customer, onRemove, canEdit, removing }) {
 
 // ── Contenedor ───────────────────────────────────────────────────────────────
 
-export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId = 0, initialSubpolygonId = 0, onExit = null }) {
+export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId = 0, initialSubpolygonId = 0, initialSegmentId = 0, onExit = null }) {
   const navigate = useNavigate()
   const dateTarget = getTomorrowDateString()
 
@@ -353,9 +353,10 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const autoOpenedRef = useRef(false)
   // Herencia de zona: si vino de la matriz con polígono/subpolígono, se preselecciona
   // y se muestra como DATO (no como pregunta). "Cambiar zona" revela los selectores.
-  const zoneInherited = Boolean(initialPolygonId || initialSubpolygonId)
+  const zoneInherited = Boolean(initialPolygonId || initialSubpolygonId || initialSegmentId)
   const [showZoneEditor, setShowZoneEditor] = useState(false)
   const zoneSubAppliedRef = useRef(false)
+  const zoneSegAppliedRef = useRef(false)
   const [routes, setRoutes] = useState([])
   const [polygons, setPolygons] = useState([])
   const [subpolygons, setSubpolygons] = useState([])
@@ -409,6 +410,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   // Etiquetas de la zona heredada (para mostrarla como dato, no como pregunta).
   const currentPolyLabel = optionLabel(polygons.find((p) => optionId(p) === String(polygonId)) || {})
   const currentSubLabel = subpolygonId ? optionLabel(subpolygons.find((s) => optionId(s) === String(subpolygonId)) || {}) : ''
+  const currentSegLabel = segmentId ? optionLabel(segments.find((s) => optionId(s) === String(segmentId)) || {}) : ''
   const showZoneSelectors = !zoneInherited || showZoneEditor
 
   const loadData = useCallback(async () => {
@@ -479,11 +481,18 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       .then((res) => {
         if (cancelled) return
         const payload = res?.segments ? res : (res?.data || {})
-        setSegments(Array.isArray(payload.segments) ? payload.segments : [])
+        const list = Array.isArray(payload.segments) ? payload.segments : []
+        setSegments(list)
+        // Preselección ÚNICA del segmento heredado (plan operativo tipo SO).
+        if (!zoneSegAppliedRef.current && initialSegmentId
+          && list.some((s) => Number(s?.id) === Number(initialSegmentId))) {
+          zoneSegAppliedRef.current = true
+          setSegmentId((cur) => cur || String(initialSegmentId))
+        }
       })
       .catch((e) => { logScreenError('PlanearManana', 'getPlanningSegments', e); if (!cancelled) setSegments([]) })
     return () => { cancelled = true }
-  }, [polygonId, subpolygonId])
+  }, [polygonId, subpolygonId, initialSegmentId])
 
   // Búsqueda de clientes (debounce), solo en detalle y con plan editable.
   useEffect(() => {
@@ -810,10 +819,10 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
           {!showZoneSelectors ? (
             <div data-testid="planear-zona-heredada" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div>
-                <div style={{ fontSize: 11, color: C.textMuted }}>Zona</div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>{currentSegLabel ? 'Segmento' : 'Zona'}</div>
                 <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>
-                  {currentSubLabel ? `${currentSubLabel}` : currentPolyLabel || 'Sin zona'}
-                  {currentSubLabel && currentPolyLabel ? <span style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted }}> · {currentPolyLabel}</span> : null}
+                  {currentSegLabel || (currentSubLabel || currentPolyLabel || 'Sin zona')}
+                  {!currentSegLabel && currentSubLabel && currentPolyLabel ? <span style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted }}> · {currentPolyLabel}</span> : null}
                 </div>
               </div>
               <GhostButton testid="planear-cambiar-zona" onClick={() => setShowZoneEditor(true)}>Cambiar zona</GhostButton>

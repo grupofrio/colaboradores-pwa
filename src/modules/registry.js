@@ -37,8 +37,8 @@ export const MODULES = [
   // (30) y Encuestas (40) tanto en el home (orden de declaración) como en la barra.
   {
     id:     'supervisor_rutas_manana',
-    label:  'Mis rutas de mañana',
-    shortLabel: 'Mañana',
+    label:  'Mis planes de mañana',
+    shortLabel: 'Planes',
     route:  '/equipo/rutas/planear',
     tone:   'blue',
     roles:  ['supervisor_ventas'],
