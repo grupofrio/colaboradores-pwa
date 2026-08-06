@@ -295,14 +295,15 @@ test('el panel v2 renderiza el embudo (horizontal), las barras y calidad', () =>
   assert.match(src, /buildFunnel\(payload\)/)
 })
 
-test('el embudo es HORIZONTAL (fila), apila solo en móvil angosto', () => {
+test('el embudo horizontal nunca se parte: apila antes del ancho intermedio', () => {
   const src = PANEL()
-  // clase de fila con flex-direction:row (desktop/tablet)
+  // Fila sin wrap: el flujo no puede terminar en zigzag con flechas horizontales.
   assert.match(src, /\.kpis-funnel\{[^}]*flex-direction:row/)
-  // media query de móvil angosto que apila en columna
-  assert.match(src, /max-width:560px/)
+  assert.match(src, /\.kpis-funnel\{[^}]*flex-wrap:nowrap/)
+  // La columna empieza antes de que cinco elementos anchos puedan envolver.
+  assert.match(src, /max-width:900px/)
   assert.match(src, /\.kpis-funnel\{[^}]*flex-direction:column/)
-  // conector con flecha → (horizontal) que cambia a ↓ en móvil (\\2192 / \\2193 en fuente)
+  // Conector → en fila y ↓ al apilar (\\2192 / \\2193 en fuente).
   assert.match(src, /\.kpis-arrow::before\{content:"\\\\2192"\}/)
   assert.match(src, /content:"\\\\2193"/)
 })

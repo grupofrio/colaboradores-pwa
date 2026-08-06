@@ -99,7 +99,7 @@ function FunnelCircle({ circle }) {
 }
 
 // Conector entre círculos: flecha + pill (caída %, palabra de estado). La flecha
-// es → en fila (desktop/tablet) y ↓ al apilar (móvil angosto), vía CSS.
+// es → en fila (pantalla amplia) y ↓ al apilar, vía CSS.
 function DropPill({ drop }) {
   const color = TONE_COLOR[drop.tone] || C.textMuted
   const pct = drop.pct == null ? NO_DATA : `${drop.pct}%`
@@ -124,16 +124,16 @@ function DropPill({ drop }) {
 }
 
 // Embudo HORIZONTAL (mockup Opción C): Agendados → [Cobertura] → Visitados →
-// [Conversión] → Compraron, en fila con diámetros proporcionales. Apila en
-// columna solo en móvil angosto (<560px). Semáforo en palabra.
+// [Conversión] → Compraron, en fila con diámetros proporcionales. Se apila antes
+// de que el contenido pueda envolverse en dos filas. Semáforo en palabra.
 function Funnel({ payload }) {
   const f = buildFunnel(payload)
   return (
     <Card testid="funnel">
       <style>{`
-        .kpis-funnel{display:flex;flex-direction:row;align-items:center;justify-content:space-around;gap:6px;flex-wrap:wrap}
+        .kpis-funnel{display:flex;flex-direction:row;align-items:center;justify-content:space-around;gap:6px;flex-wrap:nowrap}
         .kpis-arrow::before{content:"\\2192"}
-        @media (max-width:560px){
+        @media (max-width:900px){
           .kpis-funnel{flex-direction:column;gap:2px}
           .kpis-arrow::before{content:"\\2193"}
         }
