@@ -19,6 +19,8 @@ import ScreenProfile from './screens/ScreenProfile'
 
 // ─── Módulos operativos (lazy — solo descarga si el rol lo necesita) ─────────
 const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente'))
+// Talento GF — ruta pública, sin sesión (P2.8B.1)
+const ScreenTalentUpload = lazy(() => import('./modules/talent/ScreenTalentUpload'))
 // Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
@@ -412,6 +414,9 @@ export default function App() {
           <Routes>
             {/* Auth */}
             <Route path="/login" element={session ? <Navigate to="/" replace /> : <ScreenLogin />} />
+
+            {/* Talento GF — pública, sin sesión (candidato anónimo vía WhatsApp) */}
+            <Route path="/talent/upload/:token" element={<ScreenTalentUpload />} />
 
             {/* Generales */}
             <Route path="/" element={<PrivateRoute><ScreenHome /></PrivateRoute>} />
