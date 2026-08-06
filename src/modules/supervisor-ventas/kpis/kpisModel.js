@@ -158,15 +158,21 @@ export function buildFunnel(payload) {
 }
 
 // ── Deltas (flechas ▲/▼ del período anterior) ────────────────────────────────
-export function deltaView(delta) {
+// En "Hoy" el delta compara un día A LA MITAD contra un día completo: a media
+// mañana grita ▼80% sin que pase nada. Para ese período NO se pinta el % como
+// alarma: se etiqueta "parcial". Semana/Mes comparan período completo vs completo.
+export function deltaView(delta, period) {
+  if (period === 'hoy') {
+    return { show: true, partial: true, arrow: '', tone: 'unknown', dir: 'none', text: 'parcial · el día va a la mitad' }
+  }
   const d = delta || {}
   const dir = d.direction || 'none'
   if (dir === 'none' || !isNum(d.delta_pct)) {
-    return { show: false, arrow: '', text: 'sin comparativo', tone: 'unknown', dir }
+    return { show: false, partial: false, arrow: '', text: 'sin comparativo', tone: 'unknown', dir }
   }
   const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '='
   const tone = dir === 'up' ? 'good' : dir === 'down' ? 'bad' : 'watch'
-  return { show: true, arrow, tone, dir, text: `${arrow} ${Math.abs(d.delta_pct)}% vs período anterior` }
+  return { show: true, partial: false, arrow, tone, dir, text: `${arrow} ${Math.abs(d.delta_pct)}% vs período anterior` }
 }
 
 // ── Gráfica de barras ETIQUETADA (compradores/día, calidad/día) ──────────────

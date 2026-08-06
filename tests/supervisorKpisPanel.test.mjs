@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import {
   NO_DATA, FUNNEL_MIN_D, FUNNEL_MAX_D,
   buildFunnel, funnelDiameter, deltaView, buildBars, hasSeries,
-  buildQuality, qualityHighRatioNote, prospectionComingSoon,
+  buildQuality, qualityHighRatioNote,
   fmtMoney, fmtInt, fmtPct, collectionPercentageLabels,
 } from '../src/modules/supervisor-ventas/kpis/kpisModel.js'
 
@@ -245,13 +245,31 @@ test('calidad no disponible no inventa números', () => {
   assert.deepEqual(q.routes, [])
 })
 
-// ── Prospección ──────────────────────────────────────────────────────────────
+// ── Prospección: RETIRADA hasta fase 2 ───────────────────────────────────────
 
-test('prospección es "próximamente", nunca datos inventados', () => {
-  assert.ok(prospectionComingSoon(REAL))
+test('prospección ya NO se renderiza en el panel (retirada hasta fase 2)', () => {
   const src = PANEL()
-  assert.match(src, /Próximamente/)
-  assert.match(src, /fase 2|captura B2B/i)
+  assert.ok(!src.includes('testid="prospection"'), 'no debe quedar la card de prospección')
+  assert.ok(!/Próximamente/.test(src), 'no debe quedar el texto "Próximamente"')
+  assert.ok(!/prospectionComingSoon/.test(src), 'no debe importar/usar prospectionComingSoon')
+})
+
+// ── Delta de "Hoy": parcial, no alarma ───────────────────────────────────────
+
+test('en "Hoy" el delta se etiqueta parcial (no ▼% que asusta)', () => {
+  const v = deltaView(REAL.sales_delta, 'hoy')
+  assert.ok(v.partial, 'hoy => partial')
+  assert.match(v.text, /parcial/i)
+  assert.ok(!/%/.test(v.text), 'no muestra % en hoy')
+})
+
+test('en Semana/Mes el delta sigue mostrando ▲/▼ completo', () => {
+  const wk = deltaView(REAL.sales_delta, 'semana')
+  assert.ok(!wk.partial)
+  assert.equal(wk.arrow, '▼')
+  const mo = deltaView(REAL.buyers_delta, 'mes')
+  assert.ok(!mo.partial)
+  assert.equal(mo.arrow, '▲')
 })
 
 // ── null ≠ 0 en formateadores ────────────────────────────────────────────────
@@ -268,13 +286,26 @@ test('los formateadores distinguen ausencia de cero', () => {
 
 // ── Panel: fuente ────────────────────────────────────────────────────────────
 
-test('el panel v2 renderiza el embudo, las barras, calidad y prospección', () => {
+test('el panel v2 renderiza el embudo (horizontal), las barras y calidad', () => {
   const src = PANEL()
   assert.match(src, /testid="funnel"/)
+  assert.match(src, /testid="funnel-row"/)
   assert.match(src, /testid="buyers-bars"/)
   assert.match(src, /testid="quality-review"/)
-  assert.match(src, /testid="prospection"/)
   assert.match(src, /buildFunnel\(payload\)/)
+})
+
+test('el embudo horizontal nunca se parte: apila antes del ancho intermedio', () => {
+  const src = PANEL()
+  // Fila sin wrap: el flujo no puede terminar en zigzag con flechas horizontales.
+  assert.match(src, /\.kpis-funnel\{[^}]*flex-direction:row/)
+  assert.match(src, /\.kpis-funnel\{[^}]*flex-wrap:nowrap/)
+  // La columna empieza antes de que cinco elementos anchos puedan envolver.
+  assert.match(src, /max-width:900px/)
+  assert.match(src, /\.kpis-funnel\{[^}]*flex-direction:column/)
+  // Conector → en fila y ↓ al apilar (\\2192 / \\2193 en fuente).
+  assert.match(src, /\.kpis-arrow::before\{content:"\\\\2192"\}/)
+  assert.match(src, /content:"\\\\2193"/)
 })
 
 test('el switcher recarga TODO al cambiar de período', () => {
