@@ -8212,6 +8212,13 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/routes-week' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/routes-week', {
+      meta: supervisorMeta(),
+      data: { week: query.get('week') || undefined },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/radar' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/radar', {
       meta: supervisorMeta(),
