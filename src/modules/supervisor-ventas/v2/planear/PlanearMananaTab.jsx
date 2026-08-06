@@ -344,13 +344,18 @@ function CustomerRow({ customer, onRemove, canEdit, removing }) {
 
 // ── Contenedor ───────────────────────────────────────────────────────────────
 
-export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) {
+export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId = 0, initialSubpolygonId = 0, onExit = null }) {
   const navigate = useNavigate()
   const dateTarget = getTomorrowDateString()
 
   const [phase, setPhase] = useState('loading') // loading | ready | error
   const [loadError, setLoadError] = useState(null)
   const autoOpenedRef = useRef(false)
+  // Herencia de zona: si vino de la matriz con polígono/subpolígono, se preselecciona
+  // y se muestra como DATO (no como pregunta). "Cambiar zona" revela los selectores.
+  const zoneInherited = Boolean(initialPolygonId || initialSubpolygonId)
+  const [showZoneEditor, setShowZoneEditor] = useState(false)
+  const zoneSubAppliedRef = useRef(false)
   const [routes, setRoutes] = useState([])
   const [polygons, setPolygons] = useState([])
   const [subpolygons, setSubpolygons] = useState([])
@@ -396,6 +401,15 @@ export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) 
   // si no, la de presencia (falta unidad/chofer/vendedor) derivada localmente.
   const coverage = assignReadiness || resourceReadiness(assignment)
   const readiness = selectedRoute ? routeReadiness(selectedRoute, previewCustomers.length, coverage) : null
+  // Recursos "vacíos" = no llegó ninguna unidad NI persona de la sucursal. Estado
+  // honesto: no se oculta el bloque de asignar; se muestra error + reintento.
+  const resourcesEmpty = !resources
+    || ((!Array.isArray(resources.vehicles) || resources.vehicles.length === 0)
+        && (!Array.isArray(resources.people) || resources.people.length === 0))
+  // Etiquetas de la zona heredada (para mostrarla como dato, no como pregunta).
+  const currentPolyLabel = optionLabel(polygons.find((p) => optionId(p) === String(polygonId)) || {})
+  const currentSubLabel = subpolygonId ? optionLabel(subpolygons.find((s) => optionId(s) === String(subpolygonId)) || {}) : ''
+  const showZoneSelectors = !zoneInherited || showZoneEditor
 
   const loadData = useCallback(async () => {
     setPhase((p) => (p === 'ready' ? 'ready' : 'loading'))
@@ -410,7 +424,12 @@ export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) 
       setRoutes(normRoutes)
       setPolygons(normPolys)
       setResources(resRows?.data ?? resRows ?? null)
-      setPolygonId((cur) => (cur && normPolys.some((p) => optionId(p) === cur)) ? cur : (normPolys[0] ? optionId(normPolys[0]) : ''))
+      // La zona heredada de la fila gana la preselección del polígono; si no vino
+      // (o ya no existe), se conserva la actual o se cae al primero.
+      setPolygonId((cur) => {
+        if (initialPolygonId && normPolys.some((p) => Number(optionId(p)) === Number(initialPolygonId))) return String(initialPolygonId)
+        return (cur && normPolys.some((p) => optionId(p) === cur)) ? cur : (normPolys[0] ? optionId(normPolys[0]) : '')
+      })
       setPhase('ready')
       setLoadError(null)
     } catch (e) {
@@ -418,7 +437,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) 
       setLoadError(getSupervisorRouteErrorMessage(e))
       setPhase('error')
     }
-  }, [dateTarget])
+  }, [dateTarget, initialPolygonId])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -436,10 +455,21 @@ export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) 
     if (!polygonId) { setSubpolygons([]); setSubpolygonId(''); return undefined }
     let cancelled = false
     getPlanningSubpolygons(polygonId)
-      .then((rows) => { if (!cancelled) setSubpolygons(unwrapList(rows)) })
+      .then((rows) => {
+        if (cancelled) return
+        const list = unwrapList(rows)
+        setSubpolygons(list)
+        // Preselección ÚNICA del subpolígono heredado de la fila (si existe en el
+        // polígono cargado). No pisa una elección manual posterior.
+        if (!zoneSubAppliedRef.current && initialSubpolygonId
+          && list.some((s) => Number(optionId(s)) === Number(initialSubpolygonId))) {
+          zoneSubAppliedRef.current = true
+          setSubpolygonId((cur) => cur || String(initialSubpolygonId))
+        }
+      })
       .catch((e) => { logScreenError('PlanearManana', 'getPlanningSubpolygons', e); if (!cancelled) setSubpolygons([]) })
     return () => { cancelled = true }
-  }, [polygonId])
+  }, [polygonId, initialSubpolygonId])
 
   // Segmentos operativos de la sucursal (escopo server-side por token); se
   // afinan por polígono/subpolígono elegido. Estado honesto: sin segmentos → aviso.
@@ -745,27 +775,67 @@ export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) 
             <Chip text={readiness.stateLabel} tone={readiness.published ? 'ok' : 'info'} />
           </div>
           <div style={{ fontSize: 12, color: C.textMuted, marginTop: 3 }}>
-            {selectedRoute.employee_name ? `Vendedor: ${selectedRoute.employee_name}` : 'Sin vendedor asignado'}
+            Asigna abajo la <strong>unidad</strong>, el <strong>chofer</strong> y el <strong>vendedor</strong> de esta ruta; luego arma la lista de clientes y publica.
           </div>
         </Card>
 
-        {/* Criterios de la propuesta */}
+        {/* Recursos ACCIONABLES — PROTAGONISTA: asignar/reasignar unidad, chofer y
+            vendedor va PRIMERO (antes se enterraba bajo la lista de clientes). Estado
+            honesto: si no llegaron recursos de la sucursal, no se oculta el bloque. */}
+        {routePlanId && (
+          resourcesEmpty ? (
+            <StateScreen tokens={T} tone="error" testid="planear-recursos-error"
+              title="No se pudieron cargar los recursos de la sucursal"
+              detail="Sin unidades ni equipo para asignar en esta fecha. Reintenta o avisa al administrador."
+              actionLabel="Reintentar" onAction={loadData} />
+          ) : (
+            <ResourcePicker
+              resources={resources}
+              planId={routePlanId}
+              assignment={assignment}
+              coverage={coverage}
+              onAssign={handleAssign}
+              busyField={assignBusy}
+            />
+          )
+        )}
+
+        {/* ¿De qué zona propongo los clientes? (antes "Criterios de la propuesta") */}
         <Card testid="planear-criterios">
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 10 }}>Criterios de la propuesta</div>
-          <label style={{ display: 'block', fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Polígono</label>
-          <select data-testid="planear-poligono" value={polygonId} onChange={(e) => setPolygonId(e.target.value)}
-            style={{ width: '100%', minHeight: 44, borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 14, padding: '0 10px', marginBottom: 10 }}>
-            {polygons.length === 0 && <option value="">Sin polígonos disponibles</option>}
-            {polygons.map((p) => <option key={optionId(p)} value={optionId(p)}>{optionLabel(p)}</option>)}
-          </select>
-          {subpolygons.length > 0 && (
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>¿De qué zona propongo los clientes?</div>
+          <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 10, lineHeight: 1.5 }}>
+            La zona geográfica de donde se arma la lista sugerida de clientes.
+          </div>
+          {/* Zona heredada de la fila: se muestra como DATO, no como pregunta. */}
+          {!showZoneSelectors ? (
+            <div data-testid="planear-zona-heredada" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>Zona</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>
+                  {currentSubLabel ? `${currentSubLabel}` : currentPolyLabel || 'Sin zona'}
+                  {currentSubLabel && currentPolyLabel ? <span style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted }}> · {currentPolyLabel}</span> : null}
+                </div>
+              </div>
+              <GhostButton testid="planear-cambiar-zona" onClick={() => setShowZoneEditor(true)}>Cambiar zona</GhostButton>
+            </div>
+          ) : (
             <>
-              <label style={{ display: 'block', fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Subpolígono (opcional)</label>
-              <select data-testid="planear-subpoligono" value={subpolygonId} onChange={(e) => setSubpolygonId(e.target.value)}
+              <label style={{ display: 'block', fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Zona (polígono)</label>
+              <select data-testid="planear-poligono" value={polygonId} onChange={(e) => setPolygonId(e.target.value)}
                 style={{ width: '100%', minHeight: 44, borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 14, padding: '0 10px', marginBottom: 10 }}>
-                <option value="">Todos</option>
-                {subpolygons.map((s) => <option key={optionId(s)} value={optionId(s)}>{optionLabel(s)}</option>)}
+                {polygons.length === 0 && <option value="">Sin polígonos disponibles</option>}
+                {polygons.map((p) => <option key={optionId(p)} value={optionId(p)}>{optionLabel(p)}</option>)}
               </select>
+              {subpolygons.length > 0 && (
+                <>
+                  <label style={{ display: 'block', fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Sub-zona (opcional)</label>
+                  <select data-testid="planear-subpoligono" value={subpolygonId} onChange={(e) => setSubpolygonId(e.target.value)}
+                    style={{ width: '100%', minHeight: 44, borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 14, padding: '0 10px', marginBottom: 10 }}>
+                    <option value="">Todas</option>
+                    {subpolygons.map((s) => <option key={optionId(s)} value={optionId(s)}>{optionLabel(s)}</option>)}
+                  </select>
+                </>
+              )}
             </>
           )}
           {/* Segmento operativo de la sucursal (lista curada). Escopado server-side. */}
@@ -781,7 +851,10 @@ export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) 
               {segments.map((s) => <option key={optionId(s)} value={optionId(s)}>{optionLabel(s)}</option>)}
             </select>
           )}
-          <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 6 }}>Clase de demanda (opcional)</div>
+          <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 2 }}>Clase de demanda (opcional)</div>
+          <div style={{ fontSize: 11, color: C.textLow, marginBottom: 8, lineHeight: 1.5 }}>
+            Filtra por importancia del cliente (AA/A/B/C). Déjalo vacío para incluir todas.
+          </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
             {DEMAND_CLASSES.map((cls) => {
               const on = demandClasses.includes(cls)
@@ -792,7 +865,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) 
             })}
           </div>
           <PrimaryButton testid="planear-generar" onClick={handlePreview} busy={previewing} disabled={!polygonId}>
-            {previewCustomers.length > 0 ? 'Regenerar propuesta' : 'Generar propuesta'}
+            {previewCustomers.length > 0 ? 'Volver a sugerir clientes' : 'Sugerir clientes de la zona'}
           </PrimaryButton>
         </Card>
 
@@ -829,18 +902,6 @@ export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) 
             ))}</div>
           )}
         </Card>
-
-        {/* Recursos ACCIONABLES: asignar/reasignar unidad, chofer y vendedor */}
-        {resources && routePlanId && (
-          <ResourcePicker
-            resources={resources}
-            planId={routePlanId}
-            assignment={assignment}
-            coverage={coverage}
-            onAssign={handleAssign}
-            busyField={assignBusy}
-          />
-        )}
 
         {/* Readiness + publicar */}
         <Card testid="planear-readiness">

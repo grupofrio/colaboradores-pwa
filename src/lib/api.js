@@ -8398,22 +8398,34 @@ async function directSupervisorVentas(method, path, body) {
     const routePlanId = Number(ensureData.route_plan_id || ensureData.plan_id || 0)
     if (!routePlanId) return ensureResponse
 
-    const stopsResult = await readModelSorted('gf.route.stop', {
-      fields: [
-        'id', 'route_plan_id', 'customer_id', 'state', 'result_status',
-        'route_sequence', 'not_visited_reason_id', 'actual_start_time',
-        'actual_end_time', 'comments',
-      ],
-      domain: [['route_plan_id', '=', routePlanId]],
-      sort_column: 'route_sequence',
-      sort_desc: false,
-      limit: 500,
-      sudo: 1,
+    // Clientes del plan con NOMBRE + DIRECCIÓN desde el endpoint seguro de
+    // planeación (token-only, escopo sucursal), en vez de un read ORM genérico con
+    // sudo desde el navegador. Así la propuesta muestra el nombre del cliente (no
+    // "Cliente #id") y comparte la MISMA forma que la lista guardada/búsqueda.
+    let customers = []
+    const previewStops = await odooJson('/gf/salesops/supervisor/v2/route_plan/stops_preview', {
+      meta: supervisorMeta(),
+      data: { route_plan_id: routePlanId },
     })
-    const customers = pickListResponse(stopsResult).map((row) => ({
-      ...row,
-      stop_id: row.id,
-    }))
+    if (previewStops?.ok !== false && Array.isArray(previewStops?.data?.stops)) {
+      customers = previewStops.data.stops.map((row) => ({ ...row, stop_id: row.stop_id || row.id }))
+    } else {
+      // Fallback defensivo (sucursal sin day-control, endpoint no disponible): read
+      // acotado al plan. Mantiene el flujo aunque sin dirección enriquecida.
+      const stopsResult = await readModelSorted('gf.route.stop', {
+        fields: [
+          'id', 'route_plan_id', 'customer_id', 'state', 'result_status',
+          'route_sequence', 'not_visited_reason_id', 'actual_start_time',
+          'actual_end_time', 'comments',
+        ],
+        domain: [['route_plan_id', '=', routePlanId]],
+        sort_column: 'route_sequence',
+        sort_desc: false,
+        limit: 500,
+        sudo: 1,
+      })
+      customers = pickListResponse(stopsResult).map((row) => ({ ...row, stop_id: row.id }))
+    }
 
     return {
       ...ensureResponse,

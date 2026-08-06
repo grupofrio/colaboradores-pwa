@@ -36,12 +36,23 @@ export function tomorrowSummary(tomorrow) {
   return { assigned: true, text: parts.join(' · ') || 'Asignada' }
 }
 
-/** Nombre de la fila: subpolígono si lo hay; si no, la ruta. */
+/** Nombre de la fila: SIEMPRE el subpolígono (o "Sin subpolígono asignado" para el
+ * hueco de datos). NUNCA el nombre de la ruta/vendedor. El backend ya entrega
+ * display_name resuelto; aquí solo caemos a subpolígono como red de seguridad. */
 export function rowName(row) {
-  return (row?.subpolygon?.name) || (row?.route?.name) || 'Sin subpolígono'
+  return (row?.display_name) || (row?.subpolygon?.name) || 'Sin subpolígono asignado'
 }
 
 /** route_id de la fila para el flujo de asignar (tomorrow plan o la ruta base). */
 export function rowRouteId(row) {
   return Number(row?.route?.id || 0) || 0
+}
+
+/** Zona que se hereda al armar la propuesta desde esta fila (polígono + subpolígono
+ * del backend). La fila "Sin subpolígono asignado" no hereda subpolígono. */
+export function rowZone(row) {
+  return {
+    polygonId: Number(row?.polygon?.id || 0) || 0,
+    subpolygonId: Number(row?.subpolygon?.id || 0) || 0,
+  }
 }

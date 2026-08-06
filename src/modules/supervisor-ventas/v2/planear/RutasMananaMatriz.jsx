@@ -10,7 +10,7 @@ import { BRAND_TOKENS as T } from '../../../../theme/brandTokens'
 import StateScreen from '../../../../components/kold/StateScreen'
 import { logScreenError } from '../../../shared/logScreenError'
 import { getRoutesWeek } from '../../api'
-import { weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId } from './routesWeekModel'
+import { weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId, rowZone } from './routesWeekModel'
 
 const C = T.colors
 const R = T.radius
@@ -83,7 +83,7 @@ export default function RutasMananaMatriz({ onOpenRoute }) {
 
   useEffect(() => load(), [load])
 
-  const open = (row) => onOpenRoute && onOpenRoute(rowRouteId(row), row)
+  const open = (row) => onOpenRoute && onOpenRoute(rowRouteId(row), rowZone(row))
 
   const shell = (children) => (
     <div data-testid="rutas-manana-matriz" data-theme="brand-light" style={{ display: 'grid', gap: 12 }}>
