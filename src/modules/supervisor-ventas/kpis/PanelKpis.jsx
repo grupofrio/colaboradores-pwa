@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { BRAND_TOKENS as T } from '../../../theme/brandTokens'
 import StateScreen from '../../../components/kold/StateScreen'
-import { getSupervisorKpis } from '../api'
+import { getSupervisorKpis, getProductsSold } from '../api'
 import {
   NO_DATA, PERIODS, fmtInt, fmtMoney,
   buildFunnel, deltaView, buildBars, hasSeries, buildQuality,
@@ -296,6 +296,91 @@ function QualitySection({ payload }) {
   )
 }
 
+// ── 5 · Productos vendidos (empuja el portafolio completo) ────────────────────
+function ProductDelta({ row }) {
+  if (row.direction === 'new') return <span data-testid="product-delta" style={{ fontSize: 10, fontWeight: 700, color: C.blue3 }}>nuevo</span>
+  if (row.amount_delta_pct == null) return <span data-testid="product-delta" style={{ fontSize: 10, color: C.textLow }}>—</span>
+  const up = row.amount_delta_pct >= 0
+  return <span data-testid="product-delta" style={{ fontSize: 10, fontWeight: 700, color: up ? C.success : C.error }}>{up ? '▲' : '▼'} {Math.abs(row.amount_delta_pct)}%</span>
+}
+
+function ProductsSection({ period }) {
+  const [st, setState] = useState({ status: 'loading', data: null, error: null })
+  useEffect(() => {
+    let cancelled = false
+    setState((s) => ({ ...s, status: s.data ? 'refreshing' : 'loading' }))
+    getProductsSold(period)
+      .then((res) => {
+        if (cancelled) return
+        const d = res?.products ? res : (res?.data || null)
+        if (!d || !Array.isArray(d.products)) { setState({ status: 'error', data: null, error: String(res?.code || 'RESPUESTA_SIN_PRODUCTOS') }); return }
+        setState({ status: 'ready', data: d, error: null })
+      })
+      .catch((e) => { if (!cancelled) setState({ status: 'error', data: null, error: String(e?.code || e?.message || e) }) })
+    return () => { cancelled = true }
+  }, [period])
+
+  if (st.status === 'loading') {
+    return <Card testid="products-loading"><div style={{ fontSize: 12, color: C.textMuted }}>Cargando productos…</div></Card>
+  }
+  if (st.status === 'error') {
+    return <Card testid="products-error"><div style={{ fontSize: 12, color: C.textMuted }}>No se pudieron cargar los productos ({st.error}).</div></Card>
+  }
+  const d = st.data
+  const cur = d.currency || null
+  const cov = d.coverage || {}
+  return (
+    <div data-testid="products-panel" style={{ display: 'grid', gap: 10 }}>
+      <Card testid="products-totals" style={{ padding: '14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.textMuted }}>SKUs vendidos</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>{fmtInt(d.totals?.skus_sold)}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.textMuted }}>Importe</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>{fmtMoney(d.totals?.amount, cur)}</div>
+          </div>
+        </div>
+        {cov.available && (
+          <div data-testid="products-coverage" style={{ fontSize: 12, color: C.textMuted, marginTop: 8 }}>
+            Portafolio de la sucursal: <b style={{ color: C.text }}>{cov.sold_count}/{cov.portfolio_total}</b> vendidos ({cov.pct_covered}%) ·
+            <span style={{ color: cov.not_sold_count ? C.warning : C.success, fontWeight: 700 }}> {cov.not_sold_count} sin vender</span>
+          </div>
+        )}
+      </Card>
+
+      {d.products.length === 0 ? (
+        <Card testid="products-empty"><div style={{ fontSize: 12.5, color: C.textMuted }}>Sin ventas de productos en este período.</div></Card>
+      ) : (
+        <Card testid="products-list" style={{ padding: '8px 12px' }}>
+          {d.products.map((row) => (
+            <div key={row.product_id} data-testid="product-row" style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '7px 0', borderTop: `1px solid ${C.border}` }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, minWidth: 54 }}>{row.sku || '—'}</span>
+              <span style={{ fontSize: 12.5, color: C.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name || `#${row.product_id}`}</span>
+              <span style={{ fontSize: 11, color: C.textMuted, minWidth: 40, textAlign: 'right' }}>{fmtInt(row.qty)}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.text, minWidth: 76, textAlign: 'right' }}>{fmtMoney(row.amount, cur)}</span>
+              <span style={{ minWidth: 52, textAlign: 'right' }}><ProductDelta row={row} /></span>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {cov.available && cov.not_sold_count > 0 && (
+        <Card testid="products-not-sold">
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.textMuted, marginBottom: 6 }}>Del portafolio, sin vender ({cov.not_sold_count})</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {cov.not_sold.slice(0, 40).map((p) => (
+              <span key={p.product_id} data-testid="product-not-sold-chip" style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: C.warningSoft, color: C.warning, border: '1px solid rgba(180,83,9,0.28)' }}>{p.sku ? `${p.sku} · ` : ''}{p.name}</span>
+            ))}
+            {cov.not_sold.length > 40 && <span style={{ fontSize: 10, color: C.textMuted }}>+{cov.not_sold.length - 40} más</span>}
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 function BarSkeleton() {
   return (
     <div data-testid="kpi-skeleton" style={{ display: 'grid', gap: 12 }}>
@@ -361,6 +446,12 @@ export default function PanelKpis() {
   }
 
   const { payload } = state
+  const productsSection = (
+    <>
+      <SectionTitle>Productos vendidos</SectionTitle>
+      <ProductsSection key={period} period={period} />
+    </>
+  )
 
   return shell(
     <>
@@ -392,6 +483,7 @@ export default function PanelKpis() {
               supervisora). No se deja un cuadro vacío; se re-agrega al conectar. */}
         </>
       )}
+      {productsSection}
     </>,
   )
 }
