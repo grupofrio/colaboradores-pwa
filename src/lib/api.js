@@ -8152,6 +8152,16 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/segments' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/segments', {
+      meta: supervisorMeta(),
+      data: {
+        polygon_id: Number(query.get('polygon_id') || 0) || undefined,
+        subpolygon_id: Number(query.get('subpolygon_id') || 0) || undefined,
+      },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/customer-channels' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/customer_channels', {
       meta: supervisorMeta(),
