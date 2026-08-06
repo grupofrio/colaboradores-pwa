@@ -161,11 +161,14 @@ test('resourceReadiness: presencia — sin unidad bloquea; sin chofer/vendedor a
 
 // ── (b) Cableado de fuente ───────────────────────────────────────────────────
 
-test('wiring: /equipo/rutas/planear va bajo el shell V2, superficie rutas, con guard', () => {
+test('wiring: /equipo/rutas/planear monta la portada MisRutasManana bajo el guard V2', () => {
   const s = src('App.jsx')
-  const re = /path="\/equipo\/rutas\/planear"[^\n]*SupervisorV2Gate active="rutas"[^\n]*v2Only[^\n]*PlanearMananaTab/
-  assert.ok(re.test(s), 'la ruta debe montar PlanearMananaTab bajo SupervisorV2Gate rutas/v2Only')
-  assert.ok(/PlanearMananaTab = lazy\(/.test(s), 'PlanearMananaTab importado lazy')
+  const re = /path="\/equipo\/rutas\/planear"[^\n]*SupervisorV2Gate active="rutas"[^\n]*v2Only[^\n]*MisRutasManana/
+  assert.ok(re.test(s), 'la ruta debe montar MisRutasManana bajo SupervisorV2Gate rutas/v2Only')
+  assert.ok(/MisRutasManana = lazy\(/.test(s), 'MisRutasManana importado lazy')
+  // el contenedor sigue usando el flujo existente como detalle
+  const cont = src('modules/supervisor-ventas/v2/planear/MisRutasManana.jsx')
+  assert.ok(/RutasMananaMatriz/.test(cont) && /PlanearMananaTab/.test(cont), 'matriz como portada + flujo como detalle')
 })
 
 test('wiring: Rutas ofrece el acceso a Planear mañana', () => {

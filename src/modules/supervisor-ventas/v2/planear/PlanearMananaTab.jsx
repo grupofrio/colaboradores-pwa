@@ -344,12 +344,13 @@ function CustomerRow({ customer, onRemove, canEdit, removing }) {
 
 // ── Contenedor ───────────────────────────────────────────────────────────────
 
-export default function PlanearMananaTab() {
+export default function PlanearMananaTab({ initialRouteId = 0, onExit = null }) {
   const navigate = useNavigate()
   const dateTarget = getTomorrowDateString()
 
   const [phase, setPhase] = useState('loading') // loading | ready | error
   const [loadError, setLoadError] = useState(null)
+  const autoOpenedRef = useRef(false)
   const [routes, setRoutes] = useState([])
   const [polygons, setPolygons] = useState([])
   const [subpolygons, setSubpolygons] = useState([])
@@ -420,6 +421,15 @@ export default function PlanearMananaTab() {
   }, [dateTarget])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Apertura directa desde la matriz semanal: si llega initialRouteId, entra al
+  // detalle de esa ruta apenas cargan las rutas (una sola vez).
+  useEffect(() => {
+    if (autoOpenedRef.current || !initialRouteId || phase !== 'ready') return
+    const route = routes.find((r) => Number(r.route_id) === Number(initialRouteId))
+    if (route) { autoOpenedRef.current = true; handlePrepare(route) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRouteId, phase, routes])
 
   // Subpolígonos del polígono elegido.
   useEffect(() => {
@@ -688,9 +698,14 @@ export default function PlanearMananaTab() {
 
   const header = (
     <div data-testid="planear-header" style={{ marginBottom: 12 }}>
+      {/* Vino de la matriz semanal: puerta de regreso a la portada. */}
+      {onExit && view !== 'detail' && (
+        <button type="button" data-testid="planear-a-semana" onClick={() => onExit()}
+          style={{ marginBottom: 8, minHeight: 32, padding: '0 12px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.blue3, fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}>← Semana</button>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {view === 'detail' && (
-          <button type="button" data-testid="planear-volver" aria-label="Volver a rutas" onClick={() => { setView('list'); setQuery(''); setResults([]) }}
+          <button type="button" data-testid="planear-volver" aria-label="Volver" onClick={() => { if (onExit) { onExit(); return } setView('list'); setQuery(''); setResults([]) }}
             style={{ minHeight: 36, minWidth: 36, borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.blue3, fontSize: 16, fontWeight: 800, cursor: 'pointer' }}>‹</button>
         )}
         <div>

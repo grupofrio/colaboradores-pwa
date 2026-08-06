@@ -54,6 +54,13 @@ export function getProductsSold(period) {
   return api('GET', `/pwa-supv/products-sold?period=${encodeURIComponent(period || 'hoy')}`)
 }
 
+/** Matriz semanal de cumplimiento por subpolígono (portada de Mis rutas de
+ *  mañana). Read-only, escopado server-side. `week` = 'YYYY-Www' opcional. */
+export function getRoutesWeek(week) {
+  const qs = week ? `?week=${encodeURIComponent(week)}` : ''
+  return api('GET', `/pwa-supv/routes-week${qs}`)
+}
+
 /** Radar de posiciones read-only (no tiempo real; ver captured_at). */
 export function getRadar(date) {
   const qs = date ? `?date=${encodeURIComponent(date)}` : ''
