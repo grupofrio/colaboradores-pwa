@@ -322,6 +322,27 @@ export function createExpense(data) {
   return api('POST', '/pwa-admin/expense-create', data)
 }
 
+/** Rutas (abiertas o cerradas) de la sucursal autenticada para gasolina. */
+export function getFuelRoutes(date) {
+  return api('GET', `/pwa-admin/fuel-routes?date=${encodeURIComponent(date)}`)
+}
+
+/** Gasto de gasolina. El backend deriva empleado, compañía y sucursal. */
+export function createFuelExpense(data) {
+  const {
+    company_id,
+    companyId,
+    warehouse_id,
+    warehouseId,
+    employee_id,
+    employeeId,
+    sucursal_code,
+    sucursalCode,
+    ...functionalFields
+  } = data || {}
+  return api('POST', '/pwa-admin/fuel-expense-create', functionalFields)
+}
+
 /** Gastos del día. Acepta filtros { companyId, warehouseId }. */
 export function getTodayExpenses(filters = {}) {
   const { companyId, warehouseId } = filters
