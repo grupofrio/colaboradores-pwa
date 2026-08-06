@@ -48,6 +48,12 @@ export function getSupervisorKpis(period) {
   return api('GET', `/pwa-supv/kpis?period=${encodeURIComponent(period || 'hoy')}`)
 }
 
+/** Productos vendidos del período (SKU/cantidad/importe + delta + cobertura de
+ *  portafolio), read-only, escopado server-side a la sucursal. */
+export function getProductsSold(period) {
+  return api('GET', `/pwa-supv/products-sold?period=${encodeURIComponent(period || 'hoy')}`)
+}
+
 /** Radar de posiciones read-only (no tiempo real; ver captured_at). */
 export function getRadar(date) {
   const qs = date ? `?date=${encodeURIComponent(date)}` : ''

@@ -8195,6 +8195,13 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/products-sold' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/products-sold', {
+      meta: supervisorMeta(),
+      data: { period: query.get('period') || 'hoy' },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/radar' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/radar', {
       meta: supervisorMeta(),

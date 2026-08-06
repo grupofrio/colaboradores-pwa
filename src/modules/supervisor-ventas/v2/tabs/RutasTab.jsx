@@ -30,7 +30,7 @@ export default function RutasTab() {
   const [params, setParams] = useSearchParams()
   const planId = Number(params.get('plan') || 0)
   const day = useOperationalDay({ demoEnabled: DEMO })
-  const [stops, setStops] = useState({ status: 'idle', stops: null, error: null, phase: null })
+  const [stops, setStops] = useState({ status: 'idle', stops: null, planSummary: null, error: null, phase: null })
   const reqIdRef = useRef(0)
   const dayVersion = sourceVersion(day.dayControl, day.scopeKey)
 
@@ -38,9 +38,9 @@ export default function RutasTab() {
     // §6: request-id monotónico ⇒ una respuesta vieja NUNCA pisa la nueva; el
     // efecto se re-dispara al cambiar plan o versión de fuente (fecha/branch/
     // generated_at). Cambiar de plan/fecha limpia los datos previos.
-    if (!planId) { setStops({ status: 'idle', stops: null, error: null, phase: null }); return undefined }
+    if (!planId) { setStops({ status: 'idle', stops: null, planSummary: null, error: null, phase: null }); return undefined }
     const myId = ++reqIdRef.current
-    setStops({ status: 'loading', stops: null, error: null, phase: null })
+    setStops({ status: 'loading', stops: null, planSummary: null, error: null, phase: null })
     ;(async () => {
       let res = await loadRouteStops(planId)
       if (res.phase !== PHASE.OK && res.phase !== PHASE.EMPTY && day.source === 'demo') {
@@ -49,7 +49,7 @@ export default function RutasTab() {
       }
       if (myId !== reqIdRef.current) return // respuesta obsoleta ⇒ ignorar
       const okPhase = res.phase === PHASE.OK || res.phase === PHASE.EMPTY
-      setStops({ status: 'done', stops: okPhase ? res.stops : (res.stops || null), error: okPhase ? null : (res.error || 'Paradas no disponibles.'), phase: res.phase })
+      setStops({ status: 'done', stops: okPhase ? res.stops : (res.stops || null), planSummary: res.planSummary || null, error: okPhase ? null : (res.error || 'Paradas no disponibles.'), phase: res.phase })
     })()
     return () => { reqIdRef.current += 1 } // unmount/cambio ⇒ invalida en curso
   }, [planId, day.source, dayVersion])
@@ -64,6 +64,7 @@ export default function RutasTab() {
         route={route}
         capabilities={day.dayControl?.capabilities || {}}
         stops={stops.stops}
+        planSummary={stops.planSummary}
         stopsError={stops.error}
         source={day.source}
         onBack={() => navigate('/equipo/rutas')}

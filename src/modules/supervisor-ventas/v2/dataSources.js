@@ -112,10 +112,12 @@ export async function loadRouteStops(planId, { fetch = null } = {}) {
   if (rows === undefined || rows === null || !Array.isArray(rows)) {
     return { phase: PHASE.MALFORMED, stops: null, dataAsOf: norm.dataAsOf, partial: false, error: 'DTO de paradas con forma inesperada.' }
   }
+  // Resumen de actividades del plan (entrada/primera visita), si el DTO lo trae.
+  const planSummary = (!Array.isArray(d) && d.plan_summary) ? d.plan_summary : null
   const valid = rows.filter(isValidStop)
   if (rows.length > 0 && valid.length !== rows.length) {
     // Algunas paradas malformadas ⇒ INVALID (no falso vacío); conserva las válidas.
-    return { phase: PHASE.MALFORMED, stops: valid, dataAsOf: norm.dataAsOf, partial: true, error: 'Algunas paradas llegaron malformadas.' }
+    return { phase: PHASE.MALFORMED, stops: valid, planSummary, dataAsOf: norm.dataAsOf, partial: true, error: 'Algunas paradas llegaron malformadas.' }
   }
-  return { phase: rows.length === 0 ? PHASE.EMPTY : PHASE.OK, stops: rows, dataAsOf: norm.dataAsOf, partial: false, error: null }
+  return { phase: rows.length === 0 ? PHASE.EMPTY : PHASE.OK, stops: rows, planSummary, dataAsOf: norm.dataAsOf, partial: false, error: null }
 }
