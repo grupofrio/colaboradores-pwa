@@ -19,9 +19,9 @@ export function centerTime(iso) {
   return d ? _hm.format(d) : '—'
 }
 
-/** Duración en min (float) → "Xm Ys" legible. null/0-sin-dato → "—". */
+/** Duración en min (float) → "Xm Ys" legible. null o inválido → "—". */
 export function durationLabel(minutes) {
-  if (minutes == null || !(Number(minutes) >= 0) || Number(minutes) === 0) return '—'
+  if (minutes == null || !(Number(minutes) >= 0)) return '—'
   const total = Math.round(Number(minutes) * 60)
   const m = Math.floor(total / 60)
   const s = total % 60

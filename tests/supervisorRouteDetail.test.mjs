@@ -18,12 +18,12 @@ test('centerTime: UTC → hora centro (−6), o "—"', () => {
   assert.equal(centerTime('basura'), '—')
 })
 
-test('durationLabel: min→"Xm Ys"; null/0 → "—"', () => {
+test('durationLabel: min→"Xm Ys"; null → "—" y cero real conserva su valor', () => {
   assert.equal(durationLabel(0.5), '30s')
   assert.equal(durationLabel(2), '2m')
   assert.equal(durationLabel(2.5), '2m 30s')
   assert.equal(durationLabel(null), '—')
-  assert.equal(durationLabel(0), '—')
+  assert.equal(durationLabel(0), '0s')
 })
 
 test('gapLabel: minutos legibles; null → "—"', () => {
@@ -99,4 +99,9 @@ test('wiring: KPIs monta la sección Productos', () => {
   assert.ok(/getProductsSold/.test(s) && /ProductsSection/.test(s))
   assert.ok(/products-panel/.test(s) && /product-row/.test(s) && /products-coverage/.test(s))
   assert.ok(/product-not-sold-chip/.test(s), 'muestra los no vendidos del portafolio')
+})
+
+test('Productos vendidos se reinicia al cambiar el período', () => {
+  const s = src('modules/supervisor-ventas/kpis/PanelKpis.jsx')
+  assert.match(s, /<ProductsSection key=\{period\} period=\{period\} \/>/)
 })

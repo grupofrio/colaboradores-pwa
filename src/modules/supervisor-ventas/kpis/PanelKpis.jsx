@@ -474,7 +474,7 @@ export default function PanelKpis() {
           <QualitySection payload={payload} />
 
           <SectionTitle>Productos vendidos</SectionTitle>
-          <ProductsSection period={period} />
+          <ProductsSection key={period} period={period} />
 
           {/* Prospección: retirada hasta fase 2 (fuente B2B no escopada por
               supervisora). No se deja un cuadro vacío; se re-agrega al conectar. */}
