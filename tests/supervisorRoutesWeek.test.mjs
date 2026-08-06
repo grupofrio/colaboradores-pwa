@@ -89,6 +89,19 @@ test('rename: "Mis planes de mañana" + columna "Plan operativo" + chip de tipo'
   assert.ok(/Mis planes de mañana/.test(reg) && /shortLabel: 'Planes'/.test(reg), 'registry renombrado')
 })
 
+test('P1-2: el preview del plan usa stops_preview y NO cae a sudo', () => {
+  const lib = src('lib/api.js')
+  const start = lib.indexOf("/pwa-supv/route-plan-preview-customers")
+  assert.ok(start > 0, 'existe el shim de preview')
+  // Bloque hasta el siguiente handler (route-plan-save-draft).
+  const end = lib.indexOf('/pwa-supv/route-plan-save-draft', start)
+  const block = lib.slice(start, end > 0 ? end : start + 4000)
+  assert.ok(/route_plan\/stops_preview/.test(block), 'usa el endpoint seguro stops_preview')
+  assert.ok(!/sudo:\s*1/.test(block), 'sin fallback sudo:1 en el preview (P1-2)')
+  assert.ok(!/readModelSorted\('gf\.route\.stop'/.test(block), 'sin read ORM directo de paradas')
+  assert.ok(/ok: false/.test(block) && /No se pudieron cargar las paradas/.test(block), 'degrada a error honesto')
+})
+
 test('wiring: SO hereda el segmento (query param seg) al armar', () => {
   const cont = src('modules/supervisor-ventas/v2/planear/MisRutasManana.jsx')
   assert.ok(/seg/.test(cont) && /initialSegmentId/.test(cont), 'thread del segmento')
