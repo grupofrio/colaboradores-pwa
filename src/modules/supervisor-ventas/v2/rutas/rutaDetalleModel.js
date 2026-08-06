@@ -54,8 +54,8 @@ export function travelGaps(stops) {
     }
     out[st?.stop_id ?? `i${Object.keys(out).length}`] = gap
     const end = _date(st?.actual_end_time)
-    // solo avanza el "fin previo" si esta parada tiene fin real.
-    if (end) prevEnd = end
+    // Solo el fin de la parada inmediatamente anterior puede formar un trayecto.
+    prevEnd = end
   }
   return out
 }

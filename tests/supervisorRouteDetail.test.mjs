@@ -38,11 +38,13 @@ test('travelGaps: inicio(n) − fin(n−1); faltantes → null', () => {
     { stop_id: 1, actual_start_time: '2026-08-05T14:00:00Z', actual_end_time: '2026-08-05T14:10:00Z' },
     { stop_id: 2, actual_start_time: '2026-08-05T14:25:00Z', actual_end_time: '2026-08-05T14:35:00Z' }, // 15 min tras la 1
     { stop_id: 3, actual_start_time: null, actual_end_time: null }, // sin datos
+    { stop_id: 4, actual_start_time: '2026-08-05T15:00:00Z', actual_end_time: '2026-08-05T15:10:00Z' },
   ]
   const g = travelGaps(stops)
   assert.equal(g[1], null, 'la primera no tiene previa')
   assert.equal(g[2], 15)
   assert.equal(g[3], null)
+  assert.equal(g[4], null, 'sin fin inmediato previo no se inventa un trayecto')
 })
 
 test('visitsByHour: agrupa por hora centro, orden ascendente', () => {
@@ -104,4 +106,10 @@ test('wiring: KPIs monta la sección Productos', () => {
 test('Productos vendidos se reinicia al cambiar el período', () => {
   const s = src('modules/supervisor-ventas/kpis/PanelKpis.jsx')
   assert.match(s, /<ProductsSection key=\{period\} period=\{period\} \/>/)
+})
+
+test('Productos vendidos se mantiene disponible cuando el resumen KPI está vacío', () => {
+  const s = src('modules/supervisor-ventas/kpis/PanelKpis.jsx')
+  assert.match(s, /const productsSection = \(/)
+  assert.match(s, /\{productsSection\}/)
 })

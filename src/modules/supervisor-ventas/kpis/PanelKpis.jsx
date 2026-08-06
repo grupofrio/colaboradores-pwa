@@ -446,6 +446,12 @@ export default function PanelKpis() {
   }
 
   const { payload } = state
+  const productsSection = (
+    <>
+      <SectionTitle>Productos vendidos</SectionTitle>
+      <ProductsSection key={period} period={period} />
+    </>
+  )
 
   return shell(
     <>
@@ -473,13 +479,11 @@ export default function PanelKpis() {
           <SectionTitle>Calidad de ejecución</SectionTitle>
           <QualitySection payload={payload} />
 
-          <SectionTitle>Productos vendidos</SectionTitle>
-          <ProductsSection key={period} period={period} />
-
           {/* Prospección: retirada hasta fase 2 (fuente B2B no escopada por
               supervisora). No se deja un cuadro vacío; se re-agrega al conectar. */}
         </>
       )}
+      {productsSection}
     </>,
   )
 }
