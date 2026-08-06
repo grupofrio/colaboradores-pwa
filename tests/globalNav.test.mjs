@@ -20,11 +20,11 @@ test('supervisor_ventas (Aida): Equipo y Brief prioritarios y directos; universa
   assert.equal(nav[1].id, 'brief_dia', 'Brief del día enseguida (navPriority 16, sin Torre en esta sesión)')
   assert.ok(ids(nav).includes('kpis') && ids(nav).includes('encuestas') && ids(nav).includes('logros'))
 
-  // Con 5 módulos y 3 ranuras, la barra muestra 2 directos + "Más": el brief
-  // entra a la barra y KPIs baja a "Más" (decisión de producto, no accidente).
+  // Con 6 módulos y 3 ranuras, la barra muestra 2 directos + "Más". "Mis rutas
+  // de mañana" (navPriority 35) cae a "Más", entre KPIs (30) y Encuestas (40).
   const m = buildMobileNav(session, '/')
   assert.deepEqual(ids(m.primary), ['supervisor_ventas', 'brief_dia'])
-  assert.deepEqual(ids(m.overflow), ['kpis', 'encuestas', 'logros'])
+  assert.deepEqual(ids(m.overflow), ['kpis', 'supervisor_rutas_manana', 'encuestas', 'logros'])
   assert.equal(m.hasMore, true)
   // No ve módulos de gestión que no le corresponden
   assert.ok(!ids(nav).includes('admin_sucursal'))
