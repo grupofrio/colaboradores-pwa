@@ -168,20 +168,26 @@ export default function AdminGastosForm() {
       // el attachment_id antes de crear el gasto (guía §2c). Backend rechaza
       // expense-create si monto > threshold y no viene attachment_id.
       let uploadedAttachmentId = null
+      let uploadedFuelEvidenceToken = null
       let uploadError = null
       if (attachment && BACKEND_CAPS.evidenceUpload) {
         try {
           const payload = await fileToPayload(attachment)
-          const uploadRes = await api('POST', '/pwa/evidence/upload', {
+          const uploadRes = await api('POST', expenseMode === 'fuel'
+            ? '/pwa-admin/fuel-evidence-upload'
+            : '/pwa/evidence/upload', {
             filename:    payload.filename,
             file_base64: payload.base64,
             mime_type:   payload.mime,
-            linked_model: 'hr.expense', // backend lo vinculará al expense tras crear
+            ...(expenseMode === 'fuel' ? {} : { linked_model: 'hr.expense' }),
           })
           const uploaded = uploadRes?.data ?? uploadRes ?? {}
           uploadedAttachmentId = uploaded.attachment_id || null
+          uploadedFuelEvidenceToken = uploaded.evidence_token || null
           if (!uploadedAttachmentId) {
-            uploadError = 'No se pudo subir el comprobante (backend no devolvió attachment_id)'
+            if (!uploadedFuelEvidenceToken) {
+              uploadError = 'No se pudo subir el comprobante (backend no devolvió credencial)'
+            }
           }
         } catch (upErr) {
           uploadError = upErr?.message || 'Error subiendo comprobante'
@@ -189,7 +195,7 @@ export default function AdminGastosForm() {
       }
 
       // Si monto requiere attachment y la subida falló → no crear gasto
-      if (requiresAttach && !uploadedAttachmentId) {
+      if (requiresAttach && !(expenseMode === 'fuel' ? uploadedFuelEvidenceToken : uploadedAttachmentId)) {
         setError(uploadError || 'Sube el comprobante antes de enviar el gasto.')
         setSubmitting(false)
         return
@@ -209,6 +215,7 @@ export default function AdminGastosForm() {
         analytic_distribution: analyticDistribution,
         // Attachment pre-subido (guía §2c). Backend lo vincula al expense.
         attachment_id: uploadedAttachmentId || undefined,
+        evidence_token: uploadedFuelEvidenceToken || undefined,
       }
       const res = expenseMode === 'fuel'
         ? await createFuelExpense({ ...functionalPayload, route_plan_id: Number(fuelRouteId) })
@@ -225,8 +232,8 @@ export default function AdminGastosForm() {
       // el attachment es opcional pero el usuario lo subió.
       const created = res?.data ?? res
       const expenseId = created?.id ?? created?.expense_id ?? created?.data?.id
-      let attachedMsg = uploadedAttachmentId ? ' (con comprobante)' : ''
-      if (attachment && !uploadedAttachmentId && BACKEND_CAPS.expenseAttachments && expenseId) {
+      let attachedMsg = (uploadedAttachmentId || uploadedFuelEvidenceToken) ? ' (con comprobante)' : ''
+      if (attachment && expenseMode !== 'fuel' && !uploadedAttachmentId && BACKEND_CAPS.expenseAttachments && expenseId) {
         try {
           const payload = await fileToPayload(attachment)
           await attachExpense({ expenseId, ...payload })
@@ -415,6 +422,11 @@ export default function AdminGastosForm() {
                   </option>
                 ))}
               </select>
+              {!fuelRoutesLoading && fuelRoutes.length === 0 && (
+                <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
+                  No hay rutas elegibles con vehículo y operador para esta fecha.
+                </p>
+              )}
             </div>
           )}
 

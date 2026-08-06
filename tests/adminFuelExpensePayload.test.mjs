@@ -9,4 +9,7 @@ test('gasoline form keeps generic expense flow and resets mode and route only af
   assert.match(source, /setExpenseMode\('general'\)/)
   assert.match(source, /setFuelRouteId\(''\)/)
   assert.match(source, /route_plan_id: Number\(fuelRouteId\)/)
+  assert.match(source, /\/pwa-admin\/fuel-evidence-upload/)
+  assert.match(source, /evidence_token: uploadedFuelEvidenceToken/)
+  assert.match(source, /No hay rutas elegibles con vehículo y operador/)
 })

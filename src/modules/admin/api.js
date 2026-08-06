@@ -336,6 +336,8 @@ export function createFuelExpense(data) {
     warehouseId,
     employee_id,
     employeeId,
+    attachment_id,
+    attachmentId,
     sucursal_code,
     sucursalCode,
     ...functionalFields
