@@ -158,15 +158,23 @@ export function buildFunnel(payload) {
 }
 
 // ── Deltas (flechas ▲/▼ del período anterior) ────────────────────────────────
+// En "Hoy" el backend marca `partial`: la comparación es un día que aún corre
+// contra el día COMPLETO de ayer, así que un ▼ no significa una caída real. Se
+// muestra el número (no se oculta ni se inventa), pero en tono neutro y con la
+// etiqueta "parcial", para no leerse como alarma. Semana/mes nunca son parciales.
 export function deltaView(delta) {
   const d = delta || {}
   const dir = d.direction || 'none'
+  const partial = Boolean(d.partial)
   if (dir === 'none' || !isNum(d.delta_pct)) {
-    return { show: false, arrow: '', text: 'sin comparativo', tone: 'unknown', dir }
+    return { show: false, arrow: '', text: 'sin comparativo', tone: 'unknown', dir, partial }
   }
   const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '='
-  const tone = dir === 'up' ? 'good' : dir === 'down' ? 'bad' : 'watch'
-  return { show: true, arrow, tone, dir, text: `${arrow} ${Math.abs(d.delta_pct)}% vs período anterior` }
+  const tone = partial ? 'unknown' : (dir === 'up' ? 'good' : dir === 'down' ? 'bad' : 'watch')
+  const text = partial
+    ? `${arrow} ${Math.abs(d.delta_pct)}% vs ayer · parcial`
+    : `${arrow} ${Math.abs(d.delta_pct)}% vs período anterior`
+  return { show: true, arrow, tone, dir, partial, text }
 }
 
 // ── Gráfica de barras ETIQUETADA (compradores/día, calidad/día) ──────────────

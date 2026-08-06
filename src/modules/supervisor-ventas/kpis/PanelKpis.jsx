@@ -143,8 +143,11 @@ function Funnel({ payload }) {
 function DeltaChip({ delta }) {
   const v = deltaView(delta)
   if (!v.show) return <span style={{ fontSize: 11, color: C.textLow }}>{v.text}</span>
+  // La comparación de "Hoy" es parcial (día en curso vs día completo de ayer):
+  // se explica en el tooltip para que el número no se malinterprete como caída.
+  const title = v.partial ? 'El día aún corre: se compara con el día completo de ayer, no es una caída real' : undefined
   return (
-    <span data-testid="delta-chip" style={{ fontSize: 11, fontWeight: 700, color: TONE_COLOR[v.tone] }}>{v.text}</span>
+    <span data-testid="delta-chip" title={title} style={{ fontSize: 11, fontWeight: 700, color: TONE_COLOR[v.tone] }}>{v.text}</span>
   )
 }
 
