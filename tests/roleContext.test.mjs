@@ -64,7 +64,7 @@ test('getModulesForRoles returns one module card per module across effective rol
   const modules = getModulesForRoles(['almacenista_pt', 'supervisor_ventas', 'almacenista_pt'])
   assert.deepEqual(
     modules.map((module) => module.id),
-    ['kpis', 'encuestas', 'logros', 'almacen_pt', 'supervisor_ventas', 'brief_dia'],
+    ['kpis', 'supervisor_rutas_manana', 'encuestas', 'logros', 'almacen_pt', 'supervisor_ventas', 'brief_dia'],
   )
 })
 

@@ -30,6 +30,22 @@ export const MODULES = [
     icon:   'kpis',
     navPriority: 30,
   },
+  // Puerta directa a "Planear mañana" (arma y publica las rutas del día
+  // siguiente). Reusa la ruta EXISTENTE /equipo/rutas/planear — no duplica la
+  // pantalla; el gate (ModuleRoleRoute supervisor_ventas + SupervisorV2Gate)
+  // sigue mandando. Declarada aquí y con navPriority 35 para quedar entre KPIs
+  // (30) y Encuestas (40) tanto en el home (orden de declaración) como en la barra.
+  {
+    id:     'supervisor_rutas_manana',
+    label:  'Mis rutas de mañana',
+    shortLabel: 'Mañana',
+    route:  '/equipo/rutas/planear',
+    tone:   'blue',
+    roles:  ['supervisor_ventas'],
+    status: 'live',
+    icon:   'ruta',
+    navPriority: 35,
+  },
   {
     id:     'encuestas',
     label:  'Encuestas',

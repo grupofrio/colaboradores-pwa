@@ -73,7 +73,11 @@ test('las navegaciones móviles de supervisión usan fondos del tema claro', () 
 
   assert.match(nav, /background: t\.colors\.moreSheetBg/)
   assert.doesNotMatch(nav, /background: 'rgba\(6,12,22,0\.98\)'/)
-  assert.match(shell, /background: C\.navBg/)
+  // El shell ya no usa barra inferior propia (chocaba con AppNav); el rail
+  // superior toma sus fondos de tokens del tema claro: pastilla activa
+  // C.surfaceStrong y el degradado del contenedor C.bg0. Nada hardcodeado oscuro.
+  assert.match(shell, /background: on \? C\.surfaceStrong/)
+  assert.match(shell, /\$\{C\.bg0\}/)
   assert.doesNotMatch(shell, /background: 'rgba\(3,8,17,0\.92\)'/)
 })
 
