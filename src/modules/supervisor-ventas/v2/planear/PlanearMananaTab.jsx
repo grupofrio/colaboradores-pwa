@@ -25,6 +25,7 @@ import {
   getRouteTemplatesForPlanning,
   getPlanningPolygons,
   getPlanningSubpolygons,
+  getPlanningSegments,
   ensureDailyRoutePlan,
   previewRoutePlanCustomers,
   addCustomerToRoutePlan,
@@ -352,6 +353,7 @@ export default function PlanearMananaTab() {
   const [routes, setRoutes] = useState([])
   const [polygons, setPolygons] = useState([])
   const [subpolygons, setSubpolygons] = useState([])
+  const [segments, setSegments] = useState([])
   const [resources, setResources] = useState(null)
 
   const [view, setView] = useState('list') // list | detail
@@ -361,6 +363,7 @@ export default function PlanearMananaTab() {
 
   const [polygonId, setPolygonId] = useState('')
   const [subpolygonId, setSubpolygonId] = useState('')
+  const [segmentId, setSegmentId] = useState('')
   const [demandClasses, setDemandClasses] = useState([])
 
   const [preparing, setPreparing] = useState(null)   // route_id en preparación
@@ -427,6 +430,20 @@ export default function PlanearMananaTab() {
       .catch((e) => { logScreenError('PlanearManana', 'getPlanningSubpolygons', e); if (!cancelled) setSubpolygons([]) })
     return () => { cancelled = true }
   }, [polygonId])
+
+  // Segmentos operativos de la sucursal (escopo server-side por token); se
+  // afinan por polígono/subpolígono elegido. Estado honesto: sin segmentos → aviso.
+  useEffect(() => {
+    let cancelled = false
+    getPlanningSegments(polygonId || undefined, subpolygonId || undefined)
+      .then((res) => {
+        if (cancelled) return
+        const payload = res?.segments ? res : (res?.data || {})
+        setSegments(Array.isArray(payload.segments) ? payload.segments : [])
+      })
+      .catch((e) => { logScreenError('PlanearManana', 'getPlanningSegments', e); if (!cancelled) setSegments([]) })
+    return () => { cancelled = true }
+  }, [polygonId, subpolygonId])
 
   // Búsqueda de clientes (debounce), solo en detalle y con plan editable.
   useEffect(() => {
@@ -500,7 +517,7 @@ export default function PlanearMananaTab() {
     setPreparing(route.route_id)
     try {
       const criteria = buildRoutePlanCriteriaPayload({
-        routeId: route.route_id, dateTarget, polygonId, subpolygonId,
+        routeId: route.route_id, dateTarget, polygonId, subpolygonId, segmentId,
         channelIds: [], visitDays: [], timeWindowId: null, demandClasses,
       })
       const res = await ensureDailyRoutePlan(route.route_id, dateTarget, criteria)
@@ -532,7 +549,7 @@ export default function PlanearMananaTab() {
     try {
       const payload = buildRoutePlanPreviewPayload({
         routeId: selectedRoute.route_id, dateTarget, polygonId,
-        subpolygonIds: subpolygonId ? [subpolygonId] : [],
+        subpolygonIds: subpolygonId ? [subpolygonId] : [], segmentId,
         channelIds: [], visitDays: [], timeWindowId: null, demandClasses,
       })
       const resp = await previewRoutePlanCustomers(payload)
@@ -735,6 +752,19 @@ export default function PlanearMananaTab() {
                 {subpolygons.map((s) => <option key={optionId(s)} value={optionId(s)}>{optionLabel(s)}</option>)}
               </select>
             </>
+          )}
+          {/* Segmento operativo de la sucursal (lista curada). Escopado server-side. */}
+          <label style={{ display: 'block', fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Segmento operativo (opcional)</label>
+          {segments.length === 0 ? (
+            <div data-testid="planear-segmentos-vacio" style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
+              Sin segmentos operativos para esta sucursal.
+            </div>
+          ) : (
+            <select data-testid="planear-segmento" value={segmentId} onChange={(e) => setSegmentId(e.target.value)}
+              style={{ width: '100%', minHeight: 44, borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 14, padding: '0 10px', marginBottom: 10 }}>
+              <option value="">Todos</option>
+              {segments.map((s) => <option key={optionId(s)} value={optionId(s)}>{optionLabel(s)}</option>)}
+            </select>
           )}
           <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 6 }}>Clase de demanda (opcional)</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>

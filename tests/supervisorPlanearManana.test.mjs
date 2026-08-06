@@ -260,3 +260,26 @@ test('guard: solo se envían los recursos presentes (ausente = no tocar)', () =>
   assert.ok(/resources\.driver_employee_id != null/.test(api), 'driver condicional')
   assert.ok(/resources\.salesperson_employee_id != null/.test(api), 'salesperson condicional')
 })
+
+// ── (d) Segmentos operativos: escopo por sucursal + selector ─────────────────
+
+test('wiring: getPlanningSegments + mapping /pwa-supv/segments → v2/segments', () => {
+  const api = src('modules/supervisor-ventas/api.js')
+  assert.ok(/export function getPlanningSegments/.test(api))
+  assert.ok(/\/pwa-supv\/segments/.test(api))
+  const lib = src('lib/api.js')
+  assert.ok(/\/pwa-supv\/segments/.test(lib) && /supervisor\/v2\/segments/.test(lib), 'lib mapea al endpoint v2')
+})
+
+test('wiring: la pestaña carga segmentos y monta el selector (con estado vacío honesto)', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/getPlanningSegments/.test(tab), 'la pestaña llama al endpoint de segmentos')
+  assert.ok(/planear-segmento/.test(tab), 'monta el selector')
+  assert.ok(/planear-segmentos-vacio/.test(tab), 'estado honesto: sin segmentos → aviso')
+})
+
+test('wiring: la selección de segmento viaja en el criterio del plan', () => {
+  const rp = src('modules/supervisor-ventas/routePlanning.js')
+  assert.ok(/segment_id: segmentId \? Number\(segmentId\)/.test(rp), 'criteria payload envía segment_id')
+  assert.ok(/segment_id: segmentId \? toNumber\(segmentId\)/.test(rp), 'preview payload envía segment_id')
+})

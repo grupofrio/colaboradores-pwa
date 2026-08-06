@@ -129,6 +129,15 @@ export function getPlanningSubpolygons(polygonId) {
   return api('GET', `/pwa-supv/subpolygons${qs}`)
 }
 
+/** Segmentos operativos de la sucursal (read-only, escopado server-side por el
+ *  token). Filtro opcional por poligono/subpoligono (referencia del segmento). */
+export function getPlanningSegments(polygonId, subpolygonId) {
+  const parts = []
+  if (polygonId) parts.push(`polygon_id=${encodeURIComponent(polygonId)}`)
+  if (subpolygonId) parts.push(`subpolygon_id=${encodeURIComponent(subpolygonId)}`)
+  return api('GET', `/pwa-supv/segments${parts.length ? `?${parts.join('&')}` : ''}`)
+}
+
 /** Canales comerciales disponibles para filtrar clientes */
 export function getPlanningChannels() {
   return api('GET', '/pwa-supv/customer-channels')
