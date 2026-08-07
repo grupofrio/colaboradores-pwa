@@ -18,7 +18,7 @@ import {
 } from './kpisModel'
 
 const C = T.colors
-const TONE_COLOR = { good: C.success, watch: C.warning, bad: C.error, unknown: C.textMuted }
+const TONE_COLOR = { good: C.success, watch: C.warning, bad: C.error, unknown: C.textMuted, partial: C.blue3 }
 
 function PeriodSwitcher({ value, onChange, busy }) {
   return (
@@ -118,6 +118,7 @@ function DropPill({ drop }) {
         <b>{pct}</b>
         {/* Semáforo con PALABRA + ícono, nunca color solo. */}
         <span style={{ color, fontWeight: 700 }}>{drop.toneIcon} {drop.toneWord}</span>
+        {drop.note && <span style={{ color: C.textMuted, fontWeight: 600 }}>· {drop.note}</span>}
       </span>
     </div>
   )
@@ -126,8 +127,8 @@ function DropPill({ drop }) {
 // Embudo HORIZONTAL (mockup Opción C): Agendados → [Cobertura] → Visitados →
 // [Conversión] → Compraron, en fila con diámetros proporcionales. Se apila antes
 // de que el contenido pueda envolverse en dos filas. Semáforo en palabra.
-function Funnel({ payload }) {
-  const f = buildFunnel(payload)
+function Funnel({ payload, period }) {
+  const f = buildFunnel(payload, period)
   return (
     <Card testid="funnel">
       <style>{`
@@ -468,7 +469,7 @@ export default function PanelKpis() {
         />
       ) : (
         <>
-          <Funnel payload={payload} />
+          <Funnel payload={payload} period={period} />
 
           <SectionTitle>Venta del período</SectionTitle>
           <SalesRow payload={payload} period={period} />

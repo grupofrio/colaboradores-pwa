@@ -276,19 +276,52 @@ export function deriveRouteTimeline(route, capabilities = {}) {
 // ── Segmentación de clientes (desde route-stops de una o varias rutas) ────────
 // Segmentos honestos por resultado de parada; sin fuente ⇒ el segmento no aparece.
 export const CUSTOMER_SEGMENTS = Object.freeze([
-  'planeados', 'visitados', 'pendientes', 'no_venta', 'con_venta', 'visita_tardia', 'incidencia', 'fuera_secuencia', 'sin_actividad',
+  'planeados', 'visitados', 'pendientes', 'no_venta', 'con_venta', 'visita_tardia', 'incidencia', 'fuera_secuencia', 'sin_actividad', 'sin_cliente', 'prospectos',
 ])
 export const CUSTOMER_SEGMENT_LABELS = Object.freeze({
   planeados: 'Planeados', visitados: 'Visitados', pendientes: 'Pendientes', no_venta: 'No venta',
   con_venta: 'Con venta', visita_tardia: 'Visita tardía', incidencia: 'Incidencia',
   fuera_secuencia: 'Fuera de secuencia', sin_actividad: 'Sin actividad', recuperacion: 'Recuperación',
+  sin_cliente: 'Sin cliente ni prospecto', prospectos: 'Prospectos',
 })
+
+const hasId = (v) => {
+  if (v === null || v === undefined || v === false || v === '') return false
+  if (Array.isArray(v)) return Number(v[0]) > 0        // forma m2o [id, name]
+  return Number(v) > 0
+}
+
+/** Parada de PROSPECCIÓN: no hay cliente de cartera, hay un lead (crm.lead). Es
+ *  una visita real y con nombre — solo que a un prospecto, no a un cliente. El
+ *  backend lo declara con is_prospect/stop_kind='lead'. */
+export function isProspectStop(stop) {
+  // El CLIENTE manda: una parada con cliente NUNCA es prospecto, aunque el
+  // backend traiga is_prospect/stop_kind='lead' de un lead convertido.
+  if (hasId(stop?.customer_id)) return false
+  if (stop?.is_prospect === true) return true
+  if (String(stop?.stop_kind || '') === 'lead') return true
+  return hasId(stop?.lead_id)
+}
+
+/** Anomalía real: la parada no tiene NI cliente NI prospecto ⇒ no es visitable
+ *  ni verificable. Hoy en la sucursal 29 son CERO; el segmento existe para que,
+ *  si aparece una, se vea en vez de esconderse entre las pendientes. */
+export function isStopWithoutCustomer(stop) {
+  return !hasId(stop?.customer_id) && !isProspectStop(stop)
+}
 
 export function segmentCustomers(stops) {
   const rows = Array.isArray(stops) ? stops : []
-  const seg = { planeados: [], visitados: [], pendientes: [], no_venta: [], con_venta: [], incidencia: [], fuera_secuencia: [] }
+  const seg = { planeados: [], visitados: [], pendientes: [], no_venta: [], con_venta: [], incidencia: [], fuera_secuencia: [], sin_cliente: [], prospectos: [] }
   for (const st of rows) {
+    // planeados = TODAS las paradas del plan (incluidas las que no tienen
+    // cliente): es el total real de lo planeado, no se maquilla.
     seg.planeados.push(st)
+    // Anomalía (ni cliente ni prospecto) y prospección: ambas siguen contando en
+    // visitados/pendientes —son paradas reales del plan— y ADEMÁS se agrupan en su
+    // propio chip. Así el chip nuevo no altera en silencio los conteos existentes.
+    if (isStopWithoutCustomer(st)) seg.sin_cliente.push(st)
+    else if (isProspectStop(st)) seg.prospectos.push(st)
     const state = String(st?.state || '').toLowerCase()
     const result = String(st?.result_status || '').toLowerCase()
     const visited = state === 'done' || state === 'visited' || !!st?.actual_end_time || !!st?.has_checkin

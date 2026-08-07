@@ -10,11 +10,11 @@ import { BRAND_TOKENS as T } from '../../../../theme/brandTokens'
 import StateScreen from '../../../../components/kold/StateScreen'
 import { logScreenError } from '../../../shared/logScreenError'
 import { getRoutesWeek } from '../../api'
-import { weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId, rowZone, TYPE_SHORT } from './routesWeekModel'
+import { weekdayLabel, toneWord, cellLabel, cellTone, isCurrentDay, todayFromTomorrow, tomorrowSummary, rowName, rowRouteId, rowZone, TYPE_SHORT } from './routesWeekModel'
 
 const C = T.colors
 const R = T.radius
-const TONE_COLOR = { ok: C.success, watch: C.warning, bad: C.error, none: C.textMuted }
+const TONE_COLOR = { ok: C.success, watch: C.warning, bad: C.error, none: C.textMuted, today: C.blue3, planned: C.textSoft }
 // Chip de tipo de plan operativo (color + palabra; el color solo no basta, AA).
 const TYPE_TONE = { SO: C.blue3, SP: C.text, P: '#7c3aed' }
 
@@ -28,12 +28,14 @@ function TypeChip({ tipo }) {
   )
 }
 
-function DayCell({ cell }) {
-  const tone = cell?.coverage_tone || 'none'
+function DayCell({ cell, todayIso }) {
+  // El día EN CURSO no emite veredicto: la jornada no ha terminado.
+  const tone = cellTone(cell, todayIso)
   const color = TONE_COLOR[tone] || C.textMuted
   const has = cell?.has_plan
   return (
-    <td data-testid="rw-cell" data-tone={tone} style={{ textAlign: 'center', padding: '6px 4px', borderTop: `1px solid ${C.border}` }}>
+    <td data-testid="rw-cell" data-tone={tone} data-today={isCurrentDay(cell, todayIso) ? '1' : undefined}
+      style={{ textAlign: 'center', padding: '6px 4px', borderTop: `1px solid ${C.border}` }}>
       <div
         title={toneWord(tone)}
         style={{
@@ -129,6 +131,9 @@ export default function RutasMananaMatriz({ onOpenRoute }) {
   }
 
   const days = data.week.days || []
+  // Jornada EN CURSO derivada del servidor (tomorrow − 1 día, tz de la sucursal),
+  // nunca del reloj del navegador. Su celda no emite veredicto.
+  const todayIso = todayFromTomorrow(data.tomorrow)
   return shell(
     <div style={{ overflowX: 'auto', border: `1px solid ${C.border}`, borderRadius: R.lg, background: C.surface }}>
       <table data-testid="rw-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
@@ -151,7 +156,7 @@ export default function RutasMananaMatriz({ onOpenRoute }) {
                   <div style={{ fontSize: 10.5, color: C.textMuted }}>Semana: {row.weekly_coverage_pct}%</div>
                 )}
               </td>
-              {(row.days || []).map((cell) => <DayCell key={cell.date} cell={cell} />)}
+              {(row.days || []).map((cell) => <DayCell key={cell.date} cell={cell} todayIso={todayIso} />)}
               <TomorrowCell row={row} onOpen={open} />
             </tr>
           ))}

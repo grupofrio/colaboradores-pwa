@@ -8464,31 +8464,15 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'route_plan_id requerido' }
     }
 
-    const scope = await supervisorAnalyticScope()
-    if (!scope.analyticAccountId) {
-      return { ok: false, status: 'error', code: 'missing_x_analytic_account_id', message: 'Tu usuario no tiene analitica CEDIS asignada.' }
-    }
-
-    const planEmployeeFields = await getSupportedFields('gf.route.plan', SUPV_ROUTE_EMPLOYEE_FIELDS)
-    const planRows = pickListResponse(await readModelSorted('gf.route.plan', {
-      fields: ['id', 'state', 'stops_total', 'load_picking_id', 'load_sealed', ...planEmployeeFields],
-      domain: [['id', '=', routePlanId]],
-      sort_column: 'id',
-      sort_desc: false,
-      limit: 1,
-      sudo: 1,
-    }))
-    const plan = planRows[0] || null
-    if (!plan || !employeeInScope(plan, scope)) {
-      return { ok: false, status: 'error', code: 'NOT_FOUND', message: 'Plan no existe o esta fuera de tu alcance.' }
-    }
-    const loadPickingId = Number(plan.load_picking_id?.[0] || plan.load_picking_id || 0) || 0
-    if (String(plan.state || '').toLowerCase() !== 'draft' || plan.load_sealed || loadPickingId > 0) {
-      return { ok: false, status: 'error', code: 'plan_not_editable', message: 'Este plan no se puede publicar en su estado actual.', data: { state: plan.state || '' } }
-    }
-    if (Number(plan.stops_total || 0) <= 0) {
-      return { ok: false, status: 'error', code: 'no_customers_found', message: 'No hay clientes para publicar.' }
-    }
+    // ALCANCE: lo decide el SERVIDOR, no el cliente. Aquí vivía un pre-chequeo que
+    // leía gf.route.plan con privilegios elevados desde el navegador y exigía que
+    // el plan tuviera un empleado dentro de un conjunto derivado en el cliente.
+    // Rechazaba la publicación ANTES de que corriera el guard real — falso
+    // negativo reproducido con la sesión de Aida sobre un plan que SÍ era de su
+    // sucursal. El controller /route_plan/publish ya aplica guard token-only +
+    // sucursal canónica + doble flag de escritura, y devuelve el motivo REAL
+    // (NOT_FOUND / FORBIDDEN / DATE_NOT_ALLOWED / plan_not_editable /
+    // no_customers_found / LOCKED), así que este pre-chequeo sobraba y mentía.
 
     // SEGURIDAD (B8): publicación por controller DEDICADO con guard #220
     // (rol + scope server-side + transición permitida), NO por función ORM

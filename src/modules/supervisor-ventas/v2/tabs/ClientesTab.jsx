@@ -20,11 +20,26 @@ import { segmentCustomers } from '../presentation.js'
 
 const DEMO = (() => { try { return import.meta.env?.DEV === true } catch { return false } })()
 
-const planIdsOf = (dayControl) => {
+// Planes del día CON su nombre de ruta. El DTO de paradas es por-plan y NO trae
+// el nombre de la ruta, así que se adjunta aquí desde day-control (única fuente
+// que lo tiene). Sin esto, la lista pintaba "Ruta sin nombre" en TODAS las filas.
+const planRoutesOf = (dayControl) => {
   const routes = Array.isArray(dayControl?.routes) ? dayControl.routes : []
   return routes
-    .map((r) => Number(r?.plan_id))
-    .filter((id) => Number.isFinite(id) && id > 0)
+    .map((r) => ({ planId: Number(r?.plan_id), routeName: r?.route_name || '' }))
+    .filter((r) => Number.isFinite(r.planId) && r.planId > 0)
+}
+
+// Orden de EJECUCIÓN: por ruta y, dentro de la ruta, por secuencia planeada. Sin
+// secuencia ⇒ al final de su ruta (null ≠ 0). Estable para lectura de la lista.
+const bySequence = (a, b) => {
+  const ra = String(a?.route_name || '')
+  const rb = String(b?.route_name || '')
+  if (ra !== rb) return ra.localeCompare(rb, 'es')
+  const sa = Number.isFinite(Number(a?.sequence)) ? Number(a.sequence) : Number.POSITIVE_INFINITY
+  const sb = Number.isFinite(Number(b?.sequence)) ? Number(b.sequence) : Number.POSITIVE_INFINITY
+  if (sa !== sb) return sa - sb
+  return Number(a?.stop_id || 0) - Number(b?.stop_id || 0)
 }
 
 // DEMO: paradas sintéticas del módulo virtual (aliaseado a stub en prod ⇒ fuera
@@ -47,22 +62,25 @@ async function loadDemoStops() {
 // FALLIDA solo una ruta realmente fallida (§5): phase OK/EMPTY = éxito; una ruta
 // parcial (malformed con algunas válidas) conserva sus válidas y cuenta como fallo
 // declarado; cualquier otra fase (unauthorized/network/…) cuenta como fallo.
-async function loadLiveStops(planIds) {
-  if (planIds.length === 0) return { stops: [], failures: 0 }
-  const results = await Promise.allSettled(planIds.map((id) => loadRouteStops(id)))
+async function loadLiveStops(planRoutes) {
+  if (planRoutes.length === 0) return { stops: [], failures: 0 }
+  const results = await Promise.allSettled(planRoutes.map((r) => loadRouteStops(r.planId)))
   const stops = []
   let failures = 0
-  for (const res of results) {
+  results.forEach((res, i) => {
+    const { planId, routeName } = planRoutes[i]
+    // Cada parada se marca con SU ruta y plan (el DTO por-plan no los trae).
+    const tag = (list) => { for (const st of list || []) stops.push({ ...st, route_name: routeName, plan_id: planId }) }
     const v = res.status === 'fulfilled' ? res.value : null
     if (v && (v.phase === PHASE.OK || v.phase === PHASE.EMPTY)) {
-      for (const st of v.stops || []) stops.push(st)
+      tag(v.stops)
     } else {
       failures += 1
       // partial: conserva las paradas válidas que sí llegaron.
-      if (v && v.partial) for (const st of v.stops || []) stops.push(st)
+      if (v && v.partial) tag(v.stops)
     }
-  }
-  return { stops, failures }
+  })
+  return { stops: stops.sort(bySequence), failures }
 }
 
 export default function ClientesTab() {
@@ -86,7 +104,7 @@ export default function ClientesTab() {
     ;(async () => {
       const out = daySource === 'demo'
         ? await loadDemoStops()
-        : await loadLiveStops(planIdsOf(dayControl))
+        : await loadLiveStops(planRoutesOf(dayControl))
       if (myId !== reqIdRef.current) return // respuesta obsoleta ⇒ ignorar
       setStopsState({ status: 'ready', stops: out.stops, failures: out.failures })
     })()
