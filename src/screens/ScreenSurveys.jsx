@@ -452,11 +452,15 @@ function SurveyFlow({ survey, onClose, onComplete, sw }) {
             <div style={{ fontSize:9, fontWeight:700, color:"rgba(97,178,255,0.6)", letterSpacing:"0.18em", marginBottom:2 }}>ENCUESTA</div>
             <div style={{ fontSize:12, fontWeight:500, color:TOKENS.colors.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{survey.title}</div>
           </div>
+          {/* Este botón NO puede saber si la persona contestó: la encuesta vive
+              dentro del iframe de Odoo y no nos avisa. El botón anterior daba por
+              enviada una respuesta que podía no existir. Ahora solo RECONSULTA al
+              servidor y muestra lo que el servidor diga. */}
           <button
-            onClick={() => onComplete(survey.id)}
-            style={{ border:"none", cursor:"pointer", padding:"8px 14px", minHeight:36, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:11, fontWeight:700, fontFamily:"inherit", flexShrink:0 }}
+            onClick={() => onComplete()}
+            style={{ border:`1px solid ${TOKENS.colors.border}`, cursor:"pointer", padding:"8px 14px", minHeight:36, borderRadius:TOKENS.radius.pill, background:"transparent", color:TOKENS.colors.textSoft, fontSize:11, fontWeight:700, fontFamily:"inherit", flexShrink:0 }}
           >
-            Completar ✓
+            Ya terminé
           </button>
         </div>
       </div>
@@ -562,8 +566,10 @@ function DoneState({ survey, onBack, sw }) {
         <FadeIn delay={320}>
           <Card style={{ padding:"16px 20px", border:`1px solid ${TOKENS.colors.borderBlue}`, background:TOKENS.glass.hero, width:"100%", textAlign:"center", boxShadow:`${TOKENS.shadow.md}, ${TOKENS.shadow.inset}, ${TOKENS.shadow.blue}` }}>
             <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, marginBottom:4 }}>Gracias</div>
-            <div style={{ fontSize:22, fontWeight:700, color:TOKENS.colors.blue3, letterSpacing:"-0.02em" }}>Respuesta enviada</div>
-            <div style={{ ...typo.caption, color:"rgba(255,255,255,0.40)", marginTop:2 }}>Se revisa en conjunto para mejorar la app</div>
+            <div style={{ fontSize:22, fontWeight:700, color:TOKENS.colors.blue3, letterSpacing:"-0.02em" }}>Listo</div>
+            <div style={{ ...typo.caption, color:"rgba(255,255,255,0.40)", marginTop:2 }}>
+              Si contestaste, tu respuesta ya quedó en el sistema. Revisa la lista: ahí verás su estado real.
+            </div>
           </Card>
         </FadeIn>
 
@@ -619,7 +625,8 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
     apiGet("/pwa-surveys")
       .then(res => {
         if (cancelled) return;
-        if (res.success && Array.isArray(res.data)) {
+        if (!res.success) { setLoadState("error"); return; }   // error ≠ vacío
+        if (Array.isArray(res.data)) {
           const mapped = res.data.map(mapOdooSurvey);
           setSurveys(mapped);
           setLoadState(mapped.length > 0 ? "ready" : "empty");
@@ -698,7 +705,7 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
             <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
               <div style={{ fontSize:28 }}>📡</div>
               <div style={{ ...typo.body, color:TOKENS.colors.textMuted }}>No se pudieron cargar las encuestas</div>
-              <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-surveys").then(r=>{ if(r.success&&Array.isArray(r.data)){const m=r.data.map(mapOdooSurvey);setSurveys(m);setLoadState(m.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
+              <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-surveys").then(r=>{ if(!r.success){setLoadState("error");return;} if(Array.isArray(r.data)){const m=r.data.map(mapOdooSurvey);setSurveys(m);setLoadState(m.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
             </div>
           </FadeIn>
         )}

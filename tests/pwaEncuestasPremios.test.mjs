@@ -31,12 +31,18 @@ test('el shim traduce el envelope de Odoo al que espera la pantalla', () => {
   const s = src('lib/api.js')
   const i = s.indexOf("cleanPath === '/pwa-surveys'")
   const block = s.slice(i, i + 1400)
-  // Las pantallas leen `success`, el backend responde `ok`.
-  assert.match(block, /success: res\?\.ok !== false/)
-  // Forma defensiva: nunca se devuelve undefined donde la pantalla espera lista.
-  assert.match(block, /Array\.isArray\(res\?\.data\) \? res\.data : \[\]/)
+  // Las pantallas leen `success`, el backend responde `ok`. Y se exige ok===true:
+  // `ok !== false` daba por bueno un envelope ausente o malformado y convertía un
+  // 401/403 en "no tienes encuestas". (Mi test anterior fijaba esa condición
+  // defectuosa: lo señaló Codex y aquí se prueba justo lo contrario.)
+  assert.match(block, /res\?\.ok !== true/)
+  assert.doesNotMatch(block, /ok !== false/, 'el envelope manda: nada de éxito por omisión')
+  assert.match(block, /success: false/, 'el fallo se propaga con su motivo')
+  // Forma defensiva: incluso al fallar se devuelve la forma que la pantalla
+  // espera (lista vacía / bloque de logros), nunca undefined.
+  assert.match(block, /data: \[\],/)
+  assert.match(block, /earned: \[\], locked: \[\], total_points: 0/)
   assert.match(block, /earned: Array\.isArray\(d\.earned\)/)
-  assert.match(block, /total_points: Number\(d\.total_points \|\| 0\)/)
 })
 
 // ── La pantalla de Encuestas ya no finge ────────────────────────────────────
@@ -57,4 +63,29 @@ test('no se prometen puntos que nadie otorga', () => {
   assert.doesNotMatch(s, /Puntos ganados/, 'el acuse ya no anuncia puntos')
   assert.doesNotMatch(s, /reflejarán en tu balance/, 'ni promete un balance')
   assert.doesNotMatch(s, /acumular puntos/, 'ni invita a acumularlos')
+})
+
+// ── Un fallo NO se disfraza de "no tienes nada" (Codex P1-3) ────────────────
+
+test('las pantallas distinguen error de vacío', () => {
+  for (const f of ['screens/ScreenSurveys.jsx', 'screens/ScreenBadges.jsx']) {
+    const s = src(f)
+    assert.match(s, /if \(!res\.success\) \{ setLoadState\("error"\); return; \}/,
+      `${f}: un envelope fallido pinta error, no lista vacía`)
+    assert.doesNotMatch(s, /res\.success && Array\.isArray/, `${f}: sin la condición que fundía error y vacío`)
+  }
+})
+
+test('ya no hay botón que dé por contestada una encuesta (Codex P1-4)', () => {
+  const s = src('screens/ScreenSurveys.jsx')
+  assert.doesNotMatch(s, /Completar ✓/, 'el botón que fingía el envío se retiró')
+  assert.match(s, /Ya terminé/, 'ahora solo reconsulta al servidor')
+  assert.doesNotMatch(s, /Respuesta enviada/, 'el acuse ya no afirma un envío que no puede conocer')
+  assert.match(s, /onComplete\(\)/, 'sin id: no marca nada, solo recarga')
+})
+
+test('Premios no promete una mecánica que no existe (Codex P2-2)', () => {
+  const s = src('screens/ScreenBadges.jsx')
+  assert.doesNotMatch(s, /Completa encuestas y metas para ganar logros/)
+  assert.match(s, /aparecerán aquí/, 'texto neutral mientras no haya motor que otorgue')
 })

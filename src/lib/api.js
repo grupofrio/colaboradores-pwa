@@ -1375,17 +1375,36 @@ async function directAdmin(method, path, body) {
   // W16 está desactivado: por eso ambas pantallas mostraban "Error al cargar".
   // Ahora van DIRECTO a Odoo con la credencial real (X-GF-Employee-Token que ya
   // adjunta odooJson). Las pantallas esperan `success`, no `ok`: se mapea aquí.
+  // El envelope MANDA. `ok !== false` daba por bueno un envelope ausente o
+  // malformado, y convertía un 401/403/error interno en "no tienes encuestas":
+  // exactamente la confusión entre vacío y error que este arreglo venía a quitar.
   if (cleanPath === '/pwa-surveys' && (method === 'GET' || method === 'POST')) {
     const res = await odooJson('/pwa-surveys', {})
-    return { success: res?.ok !== false, message: res?.message || '', data: Array.isArray(res?.data) ? res.data : [] }
+    if (res?.ok !== true || !Array.isArray(res?.data)) {
+      return {
+        success: false,
+        code: res?.code || res?.data?.code || 'surveys_unavailable',
+        message: res?.user_message || res?.message || 'No se pudieron cargar las encuestas.',
+        data: [],
+      }
+    }
+    return { success: true, message: res.message || '', data: res.data }
   }
 
   if (cleanPath === '/pwa-badges' && (method === 'GET' || method === 'POST')) {
     const res = await odooJson('/pwa-badges', {})
-    const d = res?.data && typeof res.data === 'object' ? res.data : {}
+    const d = res?.data && typeof res.data === 'object' ? res.data : null
+    if (res?.ok !== true || !d) {
+      return {
+        success: false,
+        code: res?.code || 'badges_unavailable',
+        message: res?.user_message || res?.message || 'No se pudieron cargar tus logros.',
+        data: { earned: [], locked: [], total_points: 0 },
+      }
+    }
     return {
-      success: res?.ok !== false,
-      message: res?.message || '',
+      success: true,
+      message: res.message || '',
       data: {
         earned: Array.isArray(d.earned) ? d.earned : [],
         locked: Array.isArray(d.locked) ? d.locked : [],
