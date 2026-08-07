@@ -295,9 +295,12 @@ const hasId = (v) => {
  *  una visita real y con nombre — solo que a un prospecto, no a un cliente. El
  *  backend lo declara con is_prospect/stop_kind='lead'. */
 export function isProspectStop(stop) {
+  // El CLIENTE manda: una parada con cliente NUNCA es prospecto, aunque el
+  // backend traiga is_prospect/stop_kind='lead' de un lead convertido.
+  if (hasId(stop?.customer_id)) return false
   if (stop?.is_prospect === true) return true
   if (String(stop?.stop_kind || '') === 'lead') return true
-  return !hasId(stop?.customer_id) && hasId(stop?.lead_id)
+  return hasId(stop?.lead_id)
 }
 
 /** Anomalía real: la parada no tiene NI cliente NI prospecto ⇒ no es visitable
@@ -314,11 +317,11 @@ export function segmentCustomers(stops) {
     // planeados = TODAS las paradas del plan (incluidas las que no tienen
     // cliente): es el total real de lo planeado, no se maquilla.
     seg.planeados.push(st)
-    // Anomalía (ni cliente ni prospecto): a su propio segmento, nunca mezclada.
-    if (isStopWithoutCustomer(st)) { seg.sin_cliente.push(st); continue }
-    // Prospección: es visita real, así que SÍ cuenta en visitados/pendientes,
-    // pero además se agrupa aparte (no es cliente de cartera).
-    if (isProspectStop(st)) seg.prospectos.push(st)
+    // Anomalía (ni cliente ni prospecto) y prospección: ambas siguen contando en
+    // visitados/pendientes —son paradas reales del plan— y ADEMÁS se agrupan en su
+    // propio chip. Así el chip nuevo no altera en silencio los conteos existentes.
+    if (isStopWithoutCustomer(st)) seg.sin_cliente.push(st)
+    else if (isProspectStop(st)) seg.prospectos.push(st)
     const state = String(st?.state || '').toLowerCase()
     const result = String(st?.result_status || '').toLowerCase()
     const visited = state === 'done' || state === 'visited' || !!st?.actual_end_time || !!st?.has_checkin

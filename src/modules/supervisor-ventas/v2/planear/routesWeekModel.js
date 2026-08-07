@@ -18,6 +18,7 @@ export function weekdayLabel(iso) {
  *  todavía no es veredicto, así que nunca se pinta "Bajo". */
 export const TONE_WORD = Object.freeze({
   ok: 'Bien', watch: 'Parcial', bad: 'Bajo', none: 'Sin ruta', today: 'En curso',
+  planned: 'Planeado',
 })
 
 export function toneWord(tone) {
@@ -45,6 +46,9 @@ export function cellTone(cell, todayIso) {
   const base = cell?.coverage_tone || 'none'
   if (!cell?.has_plan) return 'none'
   if (isCurrentDay(cell, todayIso)) return 'today'
+  // Día FUTURO con plan: la jornada ni siquiera empezó, así que su cobertura de 0%
+  // no es un "Bajo" — es un plan por ejecutar. (Codex P2)
+  if (todayIso && cell?.date && String(cell.date) > String(todayIso)) return 'planned'
   return base
 }
 

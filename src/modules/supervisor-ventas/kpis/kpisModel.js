@@ -137,6 +137,7 @@ export function buildFunnel(payload, period) {
   // La cifra se conserva (avance real), pero no se emite veredicto: "En curso".
   const partialDay = period === 'hoy'
   const coverageTone = partialDay ? 'partial' : (f.coverage_tone || 'unknown')
+  const conversionTone = partialDay ? 'partial' : (f.conversion_tone || 'unknown')
   const circles = [
     { key: 'agendados', label: 'Agendados', value: ag, diameter: funnelDiameter(ag, ag) },
     { key: 'visitados', label: 'Visitados', value: f.visitados, diameter: funnelDiameter(f.visitados, ag) },
@@ -151,10 +152,13 @@ export function buildFunnel(payload, period) {
       note: partialDay ? 'la jornada no ha terminado' : null,
     },
     {
+      // Conversión también es INTRADÍA en "Hoy": a media jornada las ventas del
+      // día aún no están capturadas y salía "Crítico" sin que pasara nada.
       key: 'conversion', label: 'Conversión', from: 'visitados', to: 'compraron',
-      pct: f.conversion_pct, tone: f.conversion_tone || 'unknown',
-      toneWord: FUNNEL_TONE_LABEL[f.conversion_tone] || FUNNEL_TONE_LABEL.unknown,
-      toneIcon: FUNNEL_TONE_ICON[f.conversion_tone] || FUNNEL_TONE_ICON.unknown,
+      pct: f.conversion_pct, tone: conversionTone, partial: partialDay,
+      toneWord: FUNNEL_TONE_LABEL[conversionTone] || FUNNEL_TONE_LABEL.unknown,
+      toneIcon: FUNNEL_TONE_ICON[conversionTone] || FUNNEL_TONE_ICON.unknown,
+      note: partialDay ? 'la jornada no ha terminado' : null,
     },
   ]
   const per100 = f.per_100_agendados

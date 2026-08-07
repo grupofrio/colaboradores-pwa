@@ -14,7 +14,7 @@ import { weekdayLabel, toneWord, cellLabel, cellTone, isCurrentDay, todayFromTom
 
 const C = T.colors
 const R = T.radius
-const TONE_COLOR = { ok: C.success, watch: C.warning, bad: C.error, none: C.textMuted, today: C.blue3 }
+const TONE_COLOR = { ok: C.success, watch: C.warning, bad: C.error, none: C.textMuted, today: C.blue3, planned: C.textSoft }
 // Chip de tipo de plan operativo (color + palabra; el color solo no basta, AA).
 const TYPE_TONE = { SO: C.blue3, SP: C.text, P: '#7c3aed' }
 

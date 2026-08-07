@@ -347,6 +347,9 @@ function CustomerRow({ customer, onRemove, canEdit, removing }) {
 export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId = 0, initialSubpolygonId = 0, initialSegmentId = 0, onExit = null }) {
   const navigate = useNavigate()
   const dateTarget = getTomorrowDateString()
+  // Se entró desde una fila de SEGMENTO operativo (sin zona geográfica heredada):
+  // la propuesta debería salir SOLO de la lista curada del segmento.
+  const segmentOnlyPlan = Boolean(initialSegmentId) && !initialPolygonId
 
   const [phase, setPhase] = useState('loading') // loading | ready | error
   const [loadError, setLoadError] = useState(null)
@@ -428,8 +431,13 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       setResources(resRows?.data ?? resRows ?? null)
       // La zona heredada de la fila gana la preselección del polígono; si no vino
       // (o ya no existe), se conserva la actual o se cae al primero.
+      // EXCEPCIÓN (Codex P1-3): si se entró por un SEGMENTO operativo, NO se elige
+      // un polígono arbitrario. El backend SUMA (no intersecta) los clientes del
+      // polígono con los del segmento, así que preseleccionar "el primero" metería
+      // clientes ajenos al segmento en la propuesta.
       setPolygonId((cur) => {
         if (initialPolygonId && normPolys.some((p) => Number(optionId(p)) === Number(initialPolygonId))) return String(initialPolygonId)
+        if (segmentOnlyPlan) return ''
         return (cur && normPolys.some((p) => optionId(p) === cur)) ? cur : (normPolys[0] ? optionId(normPolys[0]) : '')
       })
       setPhase('ready')
@@ -439,7 +447,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       setLoadError(getSupervisorRouteErrorMessage(e))
       setPhase('error')
     }
-  }, [dateTarget, initialPolygonId])
+  }, [dateTarget, initialPolygonId, segmentOnlyPlan])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -594,7 +602,15 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
 
   async function handlePreview() {
     if (!selectedRoute) { flash('Selecciona una ruta'); return }
-    if (!polygonId) { flash('Elige un polígono para generar la propuesta'); return }
+    // Codex P1-3: planear SOLO por segmento todavía no existe server-side, y el
+    // backend SUMA los clientes del polígono con los del segmento. Elegir una zona
+    // aquí traería clientes que NO son del segmento, en silencio. Se bloquea con
+    // motivo en vez de armar una propuesta contaminada.
+    if (segmentOnlyPlan && !polygonId) {
+      flash('Este plan es un segmento (lista curada). Sugerir por zona traería clientes ajenos al segmento: agrega los clientes a mano por ahora.', 7000)
+      return
+    }
+    if (!polygonId) { flash('Elige una zona para generar la propuesta'); return }
     const reqId = ++previewReq.current
     invalidateResourceReadiness()
     setPreviewing(true)

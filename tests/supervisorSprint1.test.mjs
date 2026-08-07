@@ -44,8 +44,9 @@ test('los prospectos cuentan como visita y además se agrupan aparte', () => {
   const seg = segmentCustomers(stops)
   assert.equal(seg.prospectos.length, 2, 'los 2 leads en su grupo')
   assert.equal(seg.sin_cliente.length, 1, 'solo la anomalía real')
-  // La prospección es trabajo de calle: cuenta en pendientes/visitados.
-  assert.equal(seg.pendientes.length, 2, 'cliente pendiente + prospecto pendiente')
+  // Toda parada del plan cuenta en pendientes/visitados (Codex P2: el chip nuevo
+  // no debe sacar filas de los conteos ya existentes).
+  assert.equal(seg.pendientes.length, 3, 'cliente + prospecto + anomalía, pendientes')
   assert.equal(seg.visitados.length, 2, 'cliente visitado + prospecto visitado')
   // planeados NO se maquilla: total real del plan.
   assert.equal(seg.planeados.length, 5)
@@ -154,4 +155,57 @@ test('P0: publicar NO se pre-bloquea en el cliente (el alcance lo decide el serv
   assert.ok(!/employeeInScope/.test(block), 'sin gate de alcance en el cliente')
   assert.ok(!/sudo:\s*1/.test(block), 'sin lectura privilegiada desde el navegador')
   assert.ok(!/Plan no existe o esta fuera de tu alcance/.test(block), 'sin el falso negativo')
+})
+
+// ── (5) Remediación de la auditoría de Codex sobre #152 ──────────────────────
+
+test('P1-2: un stop con cliente NUNCA es prospecto (el cliente es la autoridad)', () => {
+  // El modelo backend permite cliente + lead + stop_kind='lead' (lead convertido)
+  // y su constraint no lo prohíbe: el frontend no puede fiarse de esas banderas.
+  const convertido = { customer_id: 51198, lead_id: 3791, stop_kind: 'lead', is_prospect: true }
+  assert.equal(isProspectStop(convertido), false, 'gana customer_id')
+  assert.equal(isStopWithoutCustomer(convertido), false)
+  const seg = segmentCustomers([convertido])
+  assert.equal(seg.prospectos.length, 0, 'sin chip Prospecto en una fila de cliente')
+  assert.equal(seg.pendientes.length, 1)
+})
+
+test('P1-4: la conversión de "Hoy" tampoco emite veredicto', () => {
+  const payload = { funnel: { agendados: 165, visitados: 12, compraron: 11, conversion_pct: 91.7, conversion_tone: 'bad' } }
+  const hoy = buildFunnel(payload, 'hoy').drops.find((d) => d.key === 'conversion')
+  assert.equal(hoy.tone, 'partial')
+  assert.equal(hoy.toneWord, 'En curso')
+  assert.equal(hoy.pct, 91.7, 'la cifra real se conserva')
+  const semana = buildFunnel(payload, 'semana').drops.find((d) => d.key === 'conversion')
+  assert.equal(semana.tone, 'bad', 'período cerrado sí emite veredicto')
+})
+
+test('P2: un día FUTURO con plan es "Planeado", no "Bajo"', () => {
+  const manana = { date: '2026-08-08', has_plan: true, coverage_pct: 0, coverage_tone: 'bad' }
+  assert.equal(cellTone(manana, '2026-08-07'), 'planned')
+  assert.equal(toneWord('planned'), 'Planeado')
+})
+
+test('P2: el chip nuevo no cambia en silencio los conteos existentes', () => {
+  const stops = [
+    { stop_id: 1, customer_id: 51198, state: 'pending' },
+    { stop_id: 2, customer_id: false, lead_id: 3791, stop_kind: 'lead', state: 'pending' },
+    { stop_id: 3 },                                   // anomalía sin identidad
+    { stop_id: 4, customer_id: 51408, state: 'done' },
+  ]
+  const seg = segmentCustomers(stops)
+  // Toda parada del plan sigue contando como pendiente o visitada.
+  assert.equal(seg.pendientes.length + seg.visitados.length, stops.length)
+  assert.equal(seg.planeados.length, stops.length)
+  // Y además se agrupan aparte, sin sacarlas de los conteos.
+  assert.equal(seg.prospectos.length, 1)
+  assert.equal(seg.sin_cliente.length, 1)
+})
+
+test('P1-3: un plan de SEGMENTO no elige zona arbitraria ni sugiere mezclando', () => {
+  const s = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.match(s, /segmentOnlyPlan/, 'distingue el plan por segmento')
+  assert.match(s, /if \(segmentOnlyPlan\) return ''/, 'no preselecciona un polígono cualquiera')
+  assert.match(s, /segmentOnlyPlan && !polygonId/, 'bloquea la sugerencia en vez de mezclar')
+  assert.match(s, /clientes ajenos al segmento/, 'explica el motivo a la supervisora')
 })
