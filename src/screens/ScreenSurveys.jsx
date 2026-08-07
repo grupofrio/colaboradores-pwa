@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet as _apiGet } from "../lib/api";
+import { apiGet as _apiGet, apiPost as _apiPost } from "../lib/api";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -67,6 +67,7 @@ function getTypo(sw) {
 ============================================================================ */
 const ODOO_BASE = import.meta.env.VITE_ODOO_URL;
 const apiGet = _apiGet;
+const apiPost = _apiPost;
 
 // Transforma datos de Odoo al formato que espera SurveyCard
 function mapOdooSurvey(s) {
@@ -86,7 +87,11 @@ function mapOdooSurvey(s) {
     is_overdue: s.is_overdue,
     completedDate: s.state === "done" ? "Completada" : null,
     // URL de Odoo para abrir la encuesta real
-    survey_url: `${ODOO_BASE}/survey/start/${s.access_token}`,
+    // La URL solo existe si YA hay respuesta propia con token. Cuando la encuesta
+    // aún no se inicia (needs_start), el token se pide al servidor al abrirla:
+    // construirla aquí con un token vacío daba una URL rota.
+    needs_start: !!s.needs_start,
+    survey_url: s.access_token ? `${ODOO_BASE}/survey/start/${s.access_token}` : null,
   };
 }
 
@@ -644,8 +649,20 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
 
   const pendingCount = displaySurveys.filter(s => s.status === "pending").length;
 
-  const handleStart = (survey) => {
-    setActiveSurvey(survey);
+  const [startError, setStartError] = useState(null);
+
+  const handleStart = async (survey) => {
+    setStartError(null);
+    // Ya tiene respuesta propia: se abre directo.
+    if (survey.survey_url) { setActiveSurvey(survey); setView("survey"); return; }
+    // No la ha empezado: el SERVIDOR crea la respuesta ligada a este empleado y
+    // devuelve el token real. Si falla, se dice — no se abre una URL inventada.
+    const res = await apiPost("/pwa-survey-start", { survey_id: survey.survey_id });
+    if (!res?.success || !res?.data?.access_token) {
+      setStartError(res?.message || "No se pudo abrir la encuesta.");
+      return;
+    }
+    setActiveSurvey({ ...survey, survey_url: `${ODOO_BASE}/survey/start/${res.data.access_token}` });
     setView("survey");
   };
 
@@ -710,6 +727,11 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
           </FadeIn>
         )}
 
+        {startError && (
+          <div role="alert" style={{ margin:"0 0 12px", padding:"10px 12px", borderRadius:TOKENS.radius.md, background:"rgba(220,38,38,0.10)", border:"1px solid rgba(220,38,38,0.35)", color:"#fca5a5", fontSize:12, fontWeight:600 }}>
+            {startError}
+          </div>
+        )}
         {loadState === "empty" && (
           <FadeIn delay={100}>
             <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>

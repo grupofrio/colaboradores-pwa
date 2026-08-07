@@ -1391,6 +1391,23 @@ async function directAdmin(method, path, body) {
     return { success: true, message: res.message || '', data: res.data }
   }
 
+  // Crear-o-recuperar la respuesta del empleado ANTES de abrir la encuesta: el
+  // /survey/start público de Odoo ata la respuesta a la sesión web, no a nuestro
+  // token, así que sin este paso la respuesta no vuelve a asociarse con la persona.
+  if (cleanPath === '/pwa-survey-start' && method === 'POST') {
+    const res = await odooJson('/pwa-survey-start', { survey_id: Number(body?.survey_id || 0) })
+    const d = res?.data && typeof res.data === 'object' ? res.data : null
+    if (res?.ok !== true || !d?.access_token) {
+      return {
+        success: false,
+        code: res?.code || 'survey_start_unavailable',
+        message: res?.user_message || res?.message || 'No se pudo abrir la encuesta.',
+        data: null,
+      }
+    }
+    return { success: true, message: res.message || '', data: d }
+  }
+
   if (cleanPath === '/pwa-badges' && (method === 'GET' || method === 'POST')) {
     const res = await odooJson('/pwa-badges', {})
     const d = res?.data && typeof res.data === 'object' ? res.data : null

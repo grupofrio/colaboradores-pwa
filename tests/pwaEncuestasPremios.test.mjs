@@ -19,10 +19,14 @@ test('encuestas y premios se resuelven en Odoo, no en n8n', () => {
   const s = src('lib/api.js')
   assert.match(s, /cleanPath === '\/pwa-surveys'/, 'hay handler propio de encuestas')
   assert.match(s, /cleanPath === '\/pwa-badges'/, 'hay handler propio de premios')
+  // Se inspecciona el tramo que va del primer handler al final del de premios,
+  // porque entre ambos vive ahora el de iniciar encuesta.
   const i = s.indexOf("cleanPath === '/pwa-surveys'")
-  const block = s.slice(i, i + 1400)
+  const j = s.indexOf("cleanPath === '/pwa-admin/pos-products'", i)
+  const block = s.slice(i, j)
   assert.match(block, /odooJson\('\/pwa-surveys'/, 'va directo a Odoo')
   assert.match(block, /odooJson\('\/pwa-badges'/)
+  assert.match(block, /odooJson\('\/pwa-survey-start'/)
   assert.doesNotMatch(block, /api-n8n/, 'sin fallback a n8n')
   assert.doesNotMatch(block, /sudo:\s*1/, 'sin lectura privilegiada desde el cliente')
 })
@@ -30,7 +34,8 @@ test('encuestas y premios se resuelven en Odoo, no en n8n', () => {
 test('el shim traduce el envelope de Odoo al que espera la pantalla', () => {
   const s = src('lib/api.js')
   const i = s.indexOf("cleanPath === '/pwa-surveys'")
-  const block = s.slice(i, i + 1400)
+  const j = s.indexOf("cleanPath === '/pwa-admin/pos-products'", i)
+  const block = s.slice(i, j)
   // Las pantallas leen `success`, el backend responde `ok`. Y se exige ok===true:
   // `ok !== false` daba por bueno un envelope ausente o malformado y convertía un
   // 401/403 en "no tienes encuestas". (Mi test anterior fijaba esa condición
@@ -88,4 +93,26 @@ test('Premios no promete una mecánica que no existe (Codex P2-2)', () => {
   const s = src('screens/ScreenBadges.jsx')
   assert.doesNotMatch(s, /Completa encuestas y metas para ganar logros/)
   assert.match(s, /aparecerán aquí/, 'texto neutral mientras no haya motor que otorgue')
+})
+
+// ── El flujo funciona de punta a punta (Codex P1-2) ────────────────────────
+
+test('la encuesta se abre con un token REAL pedido al servidor', () => {
+  const s = src('screens/ScreenSurveys.jsx')
+  assert.match(s, /apiPost\("\/pwa-survey-start", \{ survey_id: survey\.survey_id \}\)/,
+    'el servidor crea/recupera la respuesta ligada al empleado del token')
+  assert.match(s, /survey_url: s\.access_token \? /,
+    'sin token no se fabrica una URL: antes salía /survey/start/ vacío')
+  assert.match(s, /needs_start/, 'el DTO declara si hay que iniciarla')
+  assert.match(s, /setStartError/, 'si no se puede abrir, se dice')
+})
+
+test('el shim de inicio exige token usable, no éxito por omisión', () => {
+  const s = src('lib/api.js')
+  const i = s.indexOf("cleanPath === '/pwa-survey-start'")
+  assert.ok(i > 0, 'existe el shim')
+  const block = s.slice(i, i + 800)
+  assert.match(block, /res\?\.ok !== true \|\| !d\?\.access_token/,
+    'sin token no hay éxito: abrir una URL rota es peor que fallar')
+  assert.match(block, /success: false/)
 })
