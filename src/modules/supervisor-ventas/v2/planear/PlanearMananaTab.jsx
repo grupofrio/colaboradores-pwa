@@ -473,11 +473,14 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     return () => { cancelled = true }
   }, [polygonId, initialSubpolygonId])
 
-  // Segmentos operativos de la sucursal (escopo server-side por token); se
-  // afinan por polígono/subpolígono elegido. Estado honesto: sin segmentos → aviso.
+  // Segmentos operativos de la sucursal (escopo server-side por token). NO se
+  // filtran por polígono/subpolígono: un segmento es una LISTA CURADA de clientes
+  // (partner_ids) y su polígono es solo referencia — en la sucursal 29, 4 de 5
+  // segmentos no tienen polígono, así que filtrar por la zona heredada los
+  // borraba todos y la pantalla mentía con "Sin segmentos operativos".
   useEffect(() => {
     let cancelled = false
-    getPlanningSegments(polygonId || undefined, subpolygonId || undefined)
+    getPlanningSegments()
       .then((res) => {
         if (cancelled) return
         const payload = res?.segments ? res : (res?.data || {})
@@ -492,7 +495,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       })
       .catch((e) => { logScreenError('PlanearManana', 'getPlanningSegments', e); if (!cancelled) setSegments([]) })
     return () => { cancelled = true }
-  }, [polygonId, subpolygonId, initialSegmentId])
+  }, [initialSegmentId])
 
   // Búsqueda de clientes (debounce), solo en detalle y con plan editable.
   useEffect(() => {

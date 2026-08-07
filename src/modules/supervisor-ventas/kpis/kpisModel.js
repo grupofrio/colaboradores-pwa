@@ -104,11 +104,12 @@ export function periodRangeText(payload) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 // Semáforo del embudo, con palabra + ícono (nunca color solo).
+// `partial` = la jornada NO ha terminado: hay avance, pero todavía no veredicto.
 export const FUNNEL_TONE_LABEL = Object.freeze({
-  good: 'Bien', watch: 'Atención', bad: 'Crítico', unknown: 'Sin dato',
+  good: 'Bien', watch: 'Atención', bad: 'Crítico', unknown: 'Sin dato', partial: 'En curso',
 })
 export const FUNNEL_TONE_ICON = Object.freeze({
-  good: '✓', watch: '!', bad: '✕', unknown: '—',
+  good: '✓', watch: '!', bad: '✕', unknown: '—', partial: '◔',
 })
 
 // Diámetro ∝ √(valor/agendados), con mínimo legible. El área (no el diámetro)
@@ -128,9 +129,14 @@ export function funnelDiameter(value, agendados) {
  * diámetro; cada caída su % , tono, palabra e ícono. `per_100` cierra el embudo.
  * Sin datos ⇒ value null (se pinta "sin dato"), no 0.
  */
-export function buildFunnel(payload) {
+export function buildFunnel(payload, period) {
   const f = payload?.funnel || {}
   const ag = f.agendados
+  // COBERTURA INTRADÍA: en "Hoy" los agendados son de TODO el día y los visitados
+  // van a media jornada ⇒ el % siempre sale bajo y gritaba "Crítico" a las 10am.
+  // La cifra se conserva (avance real), pero no se emite veredicto: "En curso".
+  const partialDay = period === 'hoy'
+  const coverageTone = partialDay ? 'partial' : (f.coverage_tone || 'unknown')
   const circles = [
     { key: 'agendados', label: 'Agendados', value: ag, diameter: funnelDiameter(ag, ag) },
     { key: 'visitados', label: 'Visitados', value: f.visitados, diameter: funnelDiameter(f.visitados, ag) },
@@ -139,9 +145,10 @@ export function buildFunnel(payload) {
   const drops = [
     {
       key: 'coverage', label: 'Cobertura', from: 'agendados', to: 'visitados',
-      pct: f.coverage_pct, tone: f.coverage_tone || 'unknown',
-      toneWord: FUNNEL_TONE_LABEL[f.coverage_tone] || FUNNEL_TONE_LABEL.unknown,
-      toneIcon: FUNNEL_TONE_ICON[f.coverage_tone] || FUNNEL_TONE_ICON.unknown,
+      pct: f.coverage_pct, tone: coverageTone, partial: partialDay,
+      toneWord: FUNNEL_TONE_LABEL[coverageTone] || FUNNEL_TONE_LABEL.unknown,
+      toneIcon: FUNNEL_TONE_ICON[coverageTone] || FUNNEL_TONE_ICON.unknown,
+      note: partialDay ? 'la jornada no ha terminado' : null,
     },
     {
       key: 'conversion', label: 'Conversión', from: 'visitados', to: 'compraron',

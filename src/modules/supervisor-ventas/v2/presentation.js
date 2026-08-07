@@ -276,19 +276,35 @@ export function deriveRouteTimeline(route, capabilities = {}) {
 // ── Segmentación de clientes (desde route-stops de una o varias rutas) ────────
 // Segmentos honestos por resultado de parada; sin fuente ⇒ el segmento no aparece.
 export const CUSTOMER_SEGMENTS = Object.freeze([
-  'planeados', 'visitados', 'pendientes', 'no_venta', 'con_venta', 'visita_tardia', 'incidencia', 'fuera_secuencia', 'sin_actividad',
+  'planeados', 'visitados', 'pendientes', 'no_venta', 'con_venta', 'visita_tardia', 'incidencia', 'fuera_secuencia', 'sin_actividad', 'sin_cliente',
 ])
 export const CUSTOMER_SEGMENT_LABELS = Object.freeze({
   planeados: 'Planeados', visitados: 'Visitados', pendientes: 'Pendientes', no_venta: 'No venta',
   con_venta: 'Con venta', visita_tardia: 'Visita tardía', incidencia: 'Incidencia',
   fuera_secuencia: 'Fuera de secuencia', sin_actividad: 'Sin actividad', recuperacion: 'Recuperación',
+  sin_cliente: 'Sin cliente',
 })
+
+/** Una parada SIN cliente asignado (customer_id vacío) no es gestionable como
+ *  cliente: no tiene nombre, no se puede visitar ni verificar. Es un HUECO DE
+ *  DATOS del plan, no una visita pendiente. */
+export function isStopWithoutCustomer(stop) {
+  const id = stop?.customer_id
+  if (id === null || id === undefined || id === false || id === '') return true
+  if (Array.isArray(id)) return !(Number(id[0]) > 0)   // forma m2o [id, name]
+  return !(Number(id) > 0)
+}
 
 export function segmentCustomers(stops) {
   const rows = Array.isArray(stops) ? stops : []
-  const seg = { planeados: [], visitados: [], pendientes: [], no_venta: [], con_venta: [], incidencia: [], fuera_secuencia: [] }
+  const seg = { planeados: [], visitados: [], pendientes: [], no_venta: [], con_venta: [], incidencia: [], fuera_secuencia: [], sin_cliente: [] }
   for (const st of rows) {
+    // planeados = TODAS las paradas del plan (incluidas las que no tienen
+    // cliente): es el total real de lo planeado, no se maquilla.
     seg.planeados.push(st)
+    // Hueco de datos: va a su propio segmento y NO contamina los segmentos de
+    // gestión de clientes (antes encabezaba "Pendientes" como "Cliente sin nombre").
+    if (isStopWithoutCustomer(st)) { seg.sin_cliente.push(st); continue }
     const state = String(st?.state || '').toLowerCase()
     const result = String(st?.result_status || '').toLowerCase()
     const visited = state === 'done' || state === 'visited' || !!st?.actual_end_time || !!st?.has_checkin

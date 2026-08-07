@@ -292,7 +292,9 @@ test('el panel v2 renderiza el embudo (horizontal), las barras y calidad', () =>
   assert.match(src, /testid="funnel-row"/)
   assert.match(src, /testid="buyers-bars"/)
   assert.match(src, /testid="quality-review"/)
-  assert.match(src, /buildFunnel\(payload\)/)
+  // El embudo recibe el período: la cobertura de "Hoy" es intradía (parcial), no
+  // un veredicto "Crítico" a media mañana.
+  assert.match(src, /buildFunnel\(payload, period\)/)
 })
 
 test('el embudo horizontal nunca se parte: apila antes del ancho intermedio', () => {

@@ -15,7 +15,7 @@
 // Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
 // invariante lo verifica tests/brandTokensScope.test.mjs.
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
-import { CUSTOMER_SEGMENT_LABELS } from '../presentation.js'
+import { CUSTOMER_SEGMENT_LABELS, isStopWithoutCustomer } from '../presentation.js'
 
 const C = TOKENS.colors
 const S = TOKENS.state
@@ -27,7 +27,7 @@ const GREEN = { fg: C.success, bg: C.successSoft, border: 'rgba(34,197,94,0.34)'
 // segmentCustomers() realmente puebla; 'fuera_secuencia' se declara aunque hoy
 // quede en 0 (honestidad: no se oculta un segmento por estar vacío).
 const SEGMENT_ORDER = Object.freeze([
-  'planeados', 'visitados', 'pendientes', 'no_venta', 'con_venta', 'incidencia', 'fuera_secuencia',
+  'planeados', 'visitados', 'pendientes', 'no_venta', 'con_venta', 'incidencia', 'fuera_secuencia', 'sin_cliente',
 ])
 const SEGMENT_TONES = {
   planeados: S.info,
@@ -37,6 +37,15 @@ const SEGMENT_TONES = {
   con_venta: GREEN,
   incidencia: S.incumplimiento,
   fuera_secuencia: S.no_evaluable,
+  // hueco de DATOS (no es una visita pendiente): se marca como incumplimiento
+  // para que se vea que hay que arreglarlo en el plan, no visitarlo.
+  sin_cliente: S.incumplimiento,
+}
+
+// Nota explicativa por segmento (solo donde el nombre no basta).
+const SEGMENT_NOTES = {
+  sin_cliente: 'Paradas del plan de hoy SIN cliente asignado. No son visitas pendientes: '
+    + 'son un hueco de datos del plan — no se pueden visitar ni verificar. Repórtalas para corregir el plan.',
 }
 
 const RESULT_LABELS = { con_venta: 'Con venta', no_venta: 'No venta' }
@@ -115,17 +124,23 @@ function SegmentChips({ activeSegment, onSelectSegment, countFor }) {
 }
 
 function CustomerRow({ stop, onOpenCustomer }) {
-  const customerId = stop?.customer_id ?? null
+  const noCustomer = isStopWithoutCustomer(stop)
+  const customerId = noCustomer ? null : (stop?.customer_id ?? null)
   const clickable = !!onOpenCustomer && customerId != null
   const result = resultLabel(stop)
   const sales = num(stop?.sale_order_count)
   const noVenta = isNoVenta(stop)
   const reason = noVenta && stop?.not_visited_reason ? String(stop.not_visited_reason) : null
+  const seq = Number.isFinite(Number(stop?.sequence)) ? Number(stop.sequence) : null
+  // La ruta SÍ se conoce (se adjunta desde day-control). Si aun así falta, se
+  // nombra la ausencia en vez de inventar.
+  const routeName = stop?.route_name ? String(stop.route_name) : 'Ruta sin identificar'
 
   return (
     <div
       data-testid="clientes-row"
       data-customer-id={customerId ?? undefined}
+      data-sin-cliente={noCustomer ? '1' : undefined}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
       onClick={clickable ? () => onOpenCustomer(customerId) : undefined}
@@ -135,18 +150,29 @@ function CustomerRow({ stop, onOpenCustomer }) {
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{stop?.name || 'Cliente sin nombre'}</span>
+        {noCustomer ? (
+          <span style={{ fontSize: 14, fontWeight: 700, color: S.incumplimiento.fg }}>
+            ⛔ Parada sin cliente asignado
+          </span>
+        ) : (
+          <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{stop?.name || `Cliente #${customerId}`}</span>
+        )}
         {clickable && <span aria-hidden style={{ color: C.blue3, fontSize: 14 }}>›</span>}
       </div>
-      <div style={{ fontSize: 12, color: C.textMuted }}>{stop?.route_name || 'Ruta sin nombre'}</div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {result
-          ? <Chip text={`Resultado: ${result}`} tone={resultTone(stop)} />
-          : <Chip text="Sin resultado" muted />}
-        {sales != null && sales > 0 && <Chip text={`Con venta · ${sales}`} tone={GREEN} />}
-        {reason && <Chip text={`Motivo: ${reason}`} tone={S.no_evaluable} />}
-        {stop?.has_checkin ? <Chip text="Check-in" tone={S.signal} /> : <Chip text="Sin check-in" muted />}
+      <div style={{ fontSize: 12, color: C.textMuted }}>
+        {routeName}{seq != null ? ` · parada ${seq}` : ''}
+        {noCustomer && stop?.stop_id ? ` · id ${stop.stop_id}` : ''}
       </div>
+      {!noCustomer && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {result
+            ? <Chip text={`Resultado: ${result}`} tone={resultTone(stop)} />
+            : <Chip text="Sin resultado" muted />}
+          {sales != null && sales > 0 && <Chip text={`Con venta · ${sales}`} tone={GREEN} />}
+          {reason && <Chip text={`Motivo: ${reason}`} tone={S.no_evaluable} />}
+          {stop?.has_checkin ? <Chip text="Check-in" tone={S.signal} /> : <Chip text="Sin check-in" muted />}
+        </div>
+      )}
     </div>
   )
 }
@@ -191,6 +217,13 @@ export default function ClientesView({
             {list.length} cliente{list.length === 1 ? '' : 's'}
           </span>
         </div>
+        {SEGMENT_NOTES[active] && list.length > 0 && (
+          <p data-testid="clientes-segment-note" style={{
+            fontSize: 12, lineHeight: 1.5, color: S.incumplimiento.fg, background: S.incumplimiento.bg,
+            border: `1px solid ${S.incumplimiento.border}`, borderRadius: TOKENS.radius.md,
+            padding: '9px 11px', margin: '4px 0 10px',
+          }}>{SEGMENT_NOTES[active]}</p>
+        )}
         {list.length === 0 ? (
           <div data-testid="clientes-empty" style={{ fontSize: 13, color: C.textMuted, padding: '14px 0' }}>
             Sin clientes en el segmento «{activeLabel}» con los datos de hoy.

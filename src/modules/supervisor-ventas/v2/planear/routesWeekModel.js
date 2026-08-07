@@ -14,14 +14,42 @@ export function weekdayLabel(iso) {
   return WD.format(new Date(Date.UTC(y, m - 1, d, 12)))
 }
 
-/** Semáforo EN PALABRA (el color solo no basta). */
-export const TONE_WORD = Object.freeze({ ok: 'Bien', watch: 'Parcial', bad: 'Bajo', none: 'Sin ruta' })
+/** Semáforo EN PALABRA (el color solo no basta). `today` = jornada EN CURSO:
+ *  todavía no es veredicto, así que nunca se pinta "Bajo". */
+export const TONE_WORD = Object.freeze({
+  ok: 'Bien', watch: 'Parcial', bad: 'Bajo', none: 'Sin ruta', today: 'En curso',
+})
 
 export function toneWord(tone) {
   return TONE_WORD[tone] || TONE_WORD.none
 }
 
-/** Texto de una celda de día. has_plan=false ⇒ "Sin ruta" (nunca 0%). */
+/** Jornada operativa de HOY derivada del servidor: `tomorrow` (autoritativa, tz
+ *  de la sucursal) menos un día. NUNCA del reloj del navegador. */
+export function todayFromTomorrow(tomorrowIso) {
+  const [y, m, d] = String(tomorrowIso || '').split('-').map(Number)
+  if (!y || !m || !d) return null
+  const t = new Date(Date.UTC(y, m - 1, d, 12))
+  t.setUTCDate(t.getUTCDate() - 1)
+  return t.toISOString().slice(0, 10)
+}
+
+export function isCurrentDay(cell, todayIso) {
+  return !!(todayIso && cell?.date && String(cell.date) === String(todayIso))
+}
+
+/** Tono de la celda. El día EN CURSO no emite veredicto (la jornada no terminó):
+ *  con plan ⇒ 'today'; sin plan ⇒ 'none' (sigue siendo "sin ruta", eso ya es un
+ *  hecho cerrado). Los días pasados/futuros conservan el tono del backend. */
+export function cellTone(cell, todayIso) {
+  const base = cell?.coverage_tone || 'none'
+  if (!cell?.has_plan) return 'none'
+  if (isCurrentDay(cell, todayIso)) return 'today'
+  return base
+}
+
+/** Texto de una celda de día. has_plan=false ⇒ "Sin ruta" (nunca 0%). El día en
+ *  curso muestra su avance real, pero etiquetado como parcial (ver cellTone). */
 export function cellLabel(cell) {
   if (!cell || !cell.has_plan) return 'Sin ruta'
   if (cell.coverage_pct == null) return 'Sin dato'
