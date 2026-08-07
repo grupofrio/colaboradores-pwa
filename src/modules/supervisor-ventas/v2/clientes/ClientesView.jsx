@@ -15,7 +15,7 @@
 // Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
 // invariante lo verifica tests/brandTokensScope.test.mjs.
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
-import { CUSTOMER_SEGMENT_LABELS, isStopWithoutCustomer } from '../presentation.js'
+import { CUSTOMER_SEGMENT_LABELS, isStopWithoutCustomer, isProspectStop } from '../presentation.js'
 
 const C = TOKENS.colors
 const S = TOKENS.state
@@ -27,7 +27,7 @@ const GREEN = { fg: C.success, bg: C.successSoft, border: 'rgba(34,197,94,0.34)'
 // segmentCustomers() realmente puebla; 'fuera_secuencia' se declara aunque hoy
 // quede en 0 (honestidad: no se oculta un segmento por estar vacío).
 const SEGMENT_ORDER = Object.freeze([
-  'planeados', 'visitados', 'pendientes', 'no_venta', 'con_venta', 'incidencia', 'fuera_secuencia', 'sin_cliente',
+  'planeados', 'visitados', 'pendientes', 'no_venta', 'con_venta', 'incidencia', 'fuera_secuencia', 'prospectos', 'sin_cliente',
 ])
 const SEGMENT_TONES = {
   planeados: S.info,
@@ -37,15 +37,18 @@ const SEGMENT_TONES = {
   con_venta: GREEN,
   incidencia: S.incumplimiento,
   fuera_secuencia: S.no_evaluable,
-  // hueco de DATOS (no es una visita pendiente): se marca como incumplimiento
-  // para que se vea que hay que arreglarlo en el plan, no visitarlo.
+  // Prospección: visita real a un lead (no es cliente de cartera).
+  prospectos: S.signal,
+  // Anomalía real: ni cliente ni prospecto (hoy son CERO). Si aparece, se ve.
   sin_cliente: S.incumplimiento,
 }
 
 // Nota explicativa por segmento (solo donde el nombre no basta).
 const SEGMENT_NOTES = {
-  sin_cliente: 'Paradas del plan de hoy SIN cliente asignado. No son visitas pendientes: '
-    + 'son un hueco de datos del plan — no se pueden visitar ni verificar. Repórtalas para corregir el plan.',
+  prospectos: 'Visitas de PROSPECCIÓN: clientes potenciales (leads), todavía no son clientes de cartera. '
+    + 'Cuentan en visitados/pendientes como cualquier parada, pero su venta no es recompra.',
+  sin_cliente: 'Paradas sin cliente NI prospecto: no se pueden visitar ni verificar. '
+    + 'Es un hueco de datos del plan — repórtalo para corregirlo.',
 }
 
 const RESULT_LABELS = { con_venta: 'Con venta', no_venta: 'No venta' }
@@ -125,6 +128,7 @@ function SegmentChips({ activeSegment, onSelectSegment, countFor }) {
 
 function CustomerRow({ stop, onOpenCustomer }) {
   const noCustomer = isStopWithoutCustomer(stop)
+  const prospect = isProspectStop(stop)
   const customerId = noCustomer ? null : (stop?.customer_id ?? null)
   const clickable = !!onOpenCustomer && customerId != null
   const result = resultLabel(stop)
@@ -152,15 +156,21 @@ function CustomerRow({ stop, onOpenCustomer }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
         {noCustomer ? (
           <span style={{ fontSize: 14, fontWeight: 700, color: S.incumplimiento.fg }}>
-            ⛔ Parada sin cliente asignado
+            ⛔ Parada sin cliente ni prospecto
           </span>
         ) : (
-          <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{stop?.name || `Cliente #${customerId}`}</span>
+          <span style={{ display: 'flex', gap: 7, alignItems: 'baseline', minWidth: 0 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
+              {stop?.name || (prospect ? 'Prospecto sin nombre' : `Cliente #${customerId}`)}
+            </span>
+            {prospect && <Chip text="Prospecto" tone={S.signal} />}
+          </span>
         )}
         {clickable && <span aria-hidden style={{ color: C.blue3, fontSize: 14 }}>›</span>}
       </div>
       <div style={{ fontSize: 12, color: C.textMuted }}>
         {routeName}{seq != null ? ` · parada ${seq}` : ''}
+        {stop?.address ? ` · ${stop.address}` : ''}
         {noCustomer && stop?.stop_id ? ` · id ${stop.stop_id}` : ''}
       </div>
       {!noCustomer && (
