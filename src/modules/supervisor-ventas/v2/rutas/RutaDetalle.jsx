@@ -8,6 +8,7 @@ import { deriveRouteTimeline, departureLabel, closeStageLabel } from '../present
 import { isVisited, noSaleReasonDisplay, stopResultLabel } from './stopLabels'
 import {
   centerTime, durationLabel, gapLabel, travelGaps, visitsByHour, isSuspicious, isSale,
+  sortStopsByExecution, outOfSequenceStopIds, checkinDistanceLabel,
 } from './rutaDetalleModel'
 import { buildBars, hasSeries, fmtMoney } from '../../kpis/kpisModel'
 
@@ -38,15 +39,28 @@ function HourBars({ stops }) {
   )
 }
 
-function ResumenActividades({ planSummary, stops }) {
+function ResumenActividades({ planSummary, stops, departureRealAt }) {
   const ps = planSummary || {}
   const entrada = centerTime(ps.seller_check_in)
   const primera = centerTime(ps.first_visit)
   const brecha = gapLabel(ps.start_gap_min)
+  // La ausencia se NOMBRA. Antes salía "—" tanto si no hay checador en el
+  // entorno como si el vendedor no registró entrada: dos cosas distintas, y
+  // contradecía al timeline, que sí mostraba la salida.
+  const entradaText = entrada !== '—' ? entrada
+    : (ps.attendance_available === false ? 'Sin checador' : 'Sin registro')
+  // ARRANQUE: brecha entrada→1ª visita. Sin registro de entrada, se usa la
+  // SALIDA REAL del day-control (la misma que ya pinta el timeline) en vez de
+  // dejar un guion que parecía "sin datos" con la ruta ya en la calle.
+  let arranque = brecha === '—' ? null : { text: `tardó ${brecha}`, from: 'entrada' }
+  if (!arranque && departureRealAt && ps.first_visit) {
+    const mins = Math.round((Date.parse(ps.first_visit) - Date.parse(departureRealAt)) / 60000)
+    if (Number.isFinite(mins) && mins >= 0) arranque = { text: `${gapLabel(mins)} tras salir`, from: 'salida' }
+  }
   const cards = [
-    ['Entrada (checador)', entrada],
+    ['Entrada (checador)', entradaText],
     ['Primera visita', primera],
-    ['Arranque', brecha === '—' ? '—' : `tardó ${brecha}`],
+    ['Arranque', arranque ? arranque.text : 'Sin dato'],
   ]
   return (
     <section data-testid="ruta-resumen" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg, padding: '14px 16px', marginBottom: 14 }}>
@@ -68,7 +82,7 @@ function ResumenActividades({ planSummary, stops }) {
   )
 }
 
-function StopRow({ st, gap }) {
+function StopRow({ st, gap, outOfSequence }) {
   const visited = isVisited(st)
   const motivo = noSaleReasonDisplay(st)
   const suspicious = isSuspicious(st)
@@ -81,6 +95,9 @@ function StopRow({ st, gap }) {
       <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
         <span style={{ fontSize: 11, color: C.textMuted, width: 22 }}>{st?.sequence ?? '·'}</span>
         <span style={{ fontSize: 12.5, color: C.textSoft, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st?.name || 'Cliente'}</span>
+        {outOfSequence && (
+          <span data-testid="ruta-stop-fuera-secuencia" title="Visitada fuera del orden planeado" style={{ fontSize: 10, fontWeight: 700, color: C.blue3, border: `1px solid ${C.borderBlue}`, borderRadius: TOKENS.radius.pill, padding: '1px 7px', whiteSpace: 'nowrap' }}>↪ fuera de orden</span>
+        )}
         {suspicious && (
           <span data-testid="ruta-stop-suspect" title="Visita <1 min y check-in lejos" style={{ fontSize: 10, fontWeight: 700, color: C.warning, background: C.warningSoft, border: '1px solid rgba(180,83,9,0.3)', borderRadius: TOKENS.radius.pill, padding: '1px 7px', whiteSpace: 'nowrap' }}>⚠ revisar</span>
         )}
@@ -90,6 +107,9 @@ function StopRow({ st, gap }) {
         {start !== '—' && <span data-testid="ruta-stop-start">🕒 {start}</span>}
         <span data-testid="ruta-stop-duration">Visita: {dur}</span>
         <span data-testid="ruta-stop-travel">Trayecto: {travel}</span>
+        {checkinDistanceLabel(st?.checkin_distance_m) && (
+          <span data-testid="ruta-stop-checkin-dist">Check-in: {checkinDistanceLabel(st.checkin_distance_m)}</span>
+        )}
         {showSale && <span data-testid="ruta-stop-sale" style={{ color: C.success, fontWeight: 700 }}>Venta: {fmtMoney(st.sale_amount, 'MXN')}</span>}
         {motivo.show && (
           <span data-testid="v2-stop-reason" style={{ fontStyle: motivo.missing ? 'italic' : 'normal', color: motivo.missing ? C.textMuted : C.textSoft }}>
@@ -107,7 +127,11 @@ export default function RutaDetalle({
   const r = route || {}
   const timeline = deriveRouteTimeline(r, capabilities)
   const isDemo = source === 'demo'
-  const gaps = travelGaps(stops)
+  // Paradas en orden de EJECUCIÓN real (visitadas por hora, luego pendientes por
+  // secuencia). El # de secuencia sigue visible ⇒ el salto de orden se VE.
+  const ordered = stops ? sortStopsByExecution(stops) : null
+  const outOfSeq = outOfSequenceStopIds(ordered || [])
+  const gaps = travelGaps(ordered)
   return (
     <div data-testid={testid} data-source={source}>
       {isDemo && <div data-testid="v2-demo-banner" role="note" style={{ fontSize: 12, fontWeight: 700, color: '#6d28d9', background: 'rgba(109,40,217,0.08)', border: '1px solid rgba(109,40,217,0.32)', borderRadius: TOKENS.radius.md, padding: '9px 12px', marginBottom: 13 }}>◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.</div>}
@@ -121,7 +145,7 @@ export default function RutaDetalle({
       </div>
 
       {/* Resumen de actividades — la "primera parte" de abrir ruta. */}
-      <ResumenActividades planSummary={planSummary} stops={stops || []} />
+      <ResumenActividades planSummary={planSummary} stops={ordered || []} departureRealAt={r.departure?.real_at} />
 
       <section style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: TOKENS.radius.lg, padding: '14px 16px', marginBottom: 14 }}>
         <h2 style={{ fontSize: 13, fontWeight: 800, color: C.textSoft, margin: '0 0 10px' }}>Línea de tiempo de la ruta</h2>
@@ -145,7 +169,10 @@ export default function RutaDetalle({
         {stopsError ? <div data-testid="v2-ruta-stops-error" style={{ fontSize: 13, color: C.textMuted }}>Paradas no disponibles: {stopsError}</div>
           : stops == null ? <div style={{ fontSize: 13, color: C.textMuted }}>Paradas no cargadas.</div>
           : stops.length === 0 ? <div style={{ fontSize: 13, color: C.textMuted }}>Sin paradas registradas.</div>
-          : stops.map((st, i) => <StopRow key={st?.stop_id ?? i} st={st} gap={gaps[st?.stop_id ?? `i${i}`]} />)}
+          : ordered.map((st, i) => (
+            <StopRow key={st?.stop_id ?? i} st={st} gap={gaps[st?.stop_id ?? `i${i}`]}
+              outOfSequence={outOfSeq.has(st?.stop_id)} />
+          ))}
       </section>
     </div>
   )

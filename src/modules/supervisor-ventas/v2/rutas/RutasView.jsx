@@ -8,9 +8,11 @@ import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import RowButton from '../components/RowButton'
 import {
   deriveRouteRows, departureLabel, departureTone, deviationText, closeStageLabel,
+  routeAttention, sortRoutesByAttention,
   moneyText, signalLabel,
 } from '../presentation.js'
 
+const OP_TYPE_LABEL = { SO: 'Segmento', SP: 'Subpolígono', P: 'Polígono' }
 const C = TOKENS.colors
 const S = TOKENS.state
 const TONE = { ok: { fg: C.success, bg: C.successSoft, border: 'rgba(34,197,94,0.34)' }, risk: S.risk, neutral: S.no_evaluable }
@@ -33,8 +35,22 @@ function RouteRow({ row, onOpen, onSelect = null, selected = false }) {
     boxShadow: selected ? `inset 4px 0 0 ${C.blue}` : 'none',
     borderRadius: TOKENS.radius.lg,
   }
+  const attention = routeAttention(row)
+  const op = row.operationalPlan
   const routeSummary = (
     <div style={{ padding: '12px 14px' }}>
+    {/* QUÉ se ejecuta: el plan operativo manda; el vendedor es el subtítulo. */}
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 3 }}>
+      {op
+        ? <Chip text={`${OP_TYPE_LABEL[op.tipo] || 'Plan'}: ${op.name}`} tone={S.info} />
+        : <Chip text="Sin plan operativo" tone={S.no_evaluable} />}
+      {attention.reason && (
+        <span data-testid="v2-ruta-atencion" style={{
+          fontSize: 10.5, fontWeight: 800, whiteSpace: 'nowrap',
+          color: attention.level === 'bad' ? C.error : C.warning,
+        }}>⚑ {attention.reason}</span>
+      )}
+    </div>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
       <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{row.routeName}</div>
       <Chip text={departureLabel(row.departureStatus)} tone={depTone} />
@@ -95,7 +111,8 @@ function RouteRow({ row, onOpen, onSelect = null, selected = false }) {
 // `selectedPlanId` es OPCIONAL: en móvil no se pasa y la lista se ve igual que
 // siempre. Solo el tablero de escritorio lo usa para el cruce entre columnas.
 export default function RutasView({ dayControl, source = 'live', onOpenRoute, onSelectRoute = null, selectedPlanId = null, title = 'Rutas', testid = 'supervisor-v2-rutas' }) {
-  const rows = deriveRouteRows(dayControl)
+  // Orden por ATENCIÓN: lo que la supervisora puede corregir ahora, primero.
+  const rows = sortRoutesByAttention(deriveRouteRows(dayControl))
   const isDemo = source === 'demo'
   return (
     <div data-testid={testid} data-source={source}>

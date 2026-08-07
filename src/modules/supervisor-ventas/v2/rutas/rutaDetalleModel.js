@@ -89,3 +89,52 @@ export function isSale(stop) {
   const rs = String(stop?.result_status || '').toLowerCase()
   return rs === 'sale' || rs === 'venta' || (Number(stop?.sale_order_count || 0) > 0)
 }
+
+// ── Orden de EJECUCIÓN (Sprint 2) ───────────────────────────────────────────
+// Las paradas venían en orden de SECUENCIA PLANEADA, así que un salto de
+// secuencia no se veía: había que compararlo mentalmente con las horas. Ahora
+// mandan las visitadas por hora real (el recorrido tal como ocurrió) y después
+// las pendientes en su secuencia planeada. El número de secuencia sigue visible
+// en cada fila, así que ver "10, 50, 20" ES la señal de fuera de orden.
+export function sortStopsByExecution(stops) {
+  const rows = Array.isArray(stops) ? stops : []
+  const key = (st) => (st?.actual_start_time ? String(st.actual_start_time) : null)
+  return [...rows]
+    .map((st, i) => ({ st, i }))
+    .sort((a, b) => {
+      const ka = key(a.st)
+      const kb = key(b.st)
+      if (ka && kb) return ka < kb ? -1 : ka > kb ? 1 : a.i - b.i
+      if (ka) return -1            // visitada antes que pendiente
+      if (kb) return 1
+      const sa = Number.isFinite(Number(a.st?.sequence)) ? Number(a.st.sequence) : Number.POSITIVE_INFINITY
+      const sb = Number.isFinite(Number(b.st?.sequence)) ? Number(b.st.sequence) : Number.POSITIVE_INFINITY
+      return (sa - sb) || (a.i - b.i)
+    })
+    .map((x) => x.st)
+}
+
+/** ¿Esta parada se visitó FUERA de la secuencia planeada? Se calcula sobre la
+ *  lista ya ordenada por ejecución: si su secuencia es menor que la de alguna
+ *  visitada antes, se saltó el orden. Devuelve un Set de stop_id. */
+export function outOfSequenceStopIds(stopsInExecutionOrder) {
+  const out = new Set()
+  let maxSeq = null
+  for (const st of (Array.isArray(stopsInExecutionOrder) ? stopsInExecutionOrder : [])) {
+    if (!st?.actual_start_time) continue
+    const seq = Number.isFinite(Number(st?.sequence)) ? Number(st.sequence) : null
+    if (seq == null) continue
+    if (maxSeq != null && seq < maxSeq) out.add(st?.stop_id)
+    else maxSeq = seq
+  }
+  return out
+}
+
+/** Distancia del check-in en texto honesto (0 m es válido: "en sitio"). */
+export function checkinDistanceLabel(meters) {
+  const m = Number(meters)
+  if (!Number.isFinite(m) || meters == null) return null
+  if (m < 1) return 'en sitio'
+  if (m < 1000) return `a ${Math.round(m)} m`
+  return `a ${(m / 1000).toFixed(1)} km`
+}
