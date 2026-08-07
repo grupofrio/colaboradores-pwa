@@ -15,7 +15,7 @@ import {
   filterByCompany,
   BACKEND_CAPS,
 } from '../adminService'
-import { attachExpense } from '../api'
+import { attachExpense, createFuelExpense, getFuelRoutes } from '../api'
 import { api, todayLocal } from '../../../lib/api'
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
 
@@ -54,6 +54,10 @@ export default function AdminGastosForm() {
   const [paymentMode, setPaymentMode] = useState('company')
   const [reference, setReference] = useState('')
   const [description, setDescription] = useState('')
+  const [expenseMode, setExpenseMode] = useState('general')
+  const [fuelRoutes, setFuelRoutes] = useState([])
+  const [fuelRoutesLoading, setFuelRoutesLoading] = useState(false)
+  const [fuelRouteId, setFuelRouteId] = useState('')
   // Analítica Odoo 18: dict { account_id: pct } o null
   const [analyticDistribution, setAnalyticDistribution] = useState(null)
 
@@ -101,6 +105,26 @@ export default function AdminGastosForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, warehouseId])
 
+  useEffect(() => {
+    if (expenseMode !== 'fuel') return
+    let alive = true
+    setFuelRoutesLoading(true)
+    setFuelRouteId('')
+    getFuelRoutes(date)
+      .then(result => {
+        if (!alive) return
+        const data = result?.data ?? result ?? {}
+        setFuelRoutes(Array.isArray(data.routes) ? data.routes : [])
+      })
+      .catch(() => {
+        if (alive) setFuelRoutes([])
+      })
+      .finally(() => {
+        if (alive) setFuelRoutesLoading(false)
+      })
+    return () => { alive = false }
+  }, [expenseMode, date])
+
   async function loadExpenses() {
     setLoading(true)
     try {
@@ -117,7 +141,8 @@ export default function AdminGastosForm() {
   async function handleSubmit() {
     if (!name.trim()) { setError('Ingresa una descripción'); return }
     if (!amount || Number(amount) <= 0) { setError('Ingresa un monto válido'); return }
-    if (!companyId) { setError('Selecciona una razón social'); return }
+    if (expenseMode === 'general' && !companyId) { setError('Selecciona una razón social'); return }
+    if (expenseMode === 'fuel' && !fuelRouteId) { setError('Selecciona la ruta de gasolina'); return }
     if (BACKEND_CAPS.expenseAnalytics && !analyticDistribution) {
       setError('Selecciona la cuenta analítica del gasto')
       return
@@ -143,20 +168,26 @@ export default function AdminGastosForm() {
       // el attachment_id antes de crear el gasto (guía §2c). Backend rechaza
       // expense-create si monto > threshold y no viene attachment_id.
       let uploadedAttachmentId = null
+      let uploadedFuelEvidenceToken = null
       let uploadError = null
       if (attachment && BACKEND_CAPS.evidenceUpload) {
         try {
           const payload = await fileToPayload(attachment)
-          const uploadRes = await api('POST', '/pwa/evidence/upload', {
+          const uploadRes = await api('POST', expenseMode === 'fuel'
+            ? '/pwa-admin/fuel-evidence-upload'
+            : '/pwa/evidence/upload', {
             filename:    payload.filename,
             file_base64: payload.base64,
             mime_type:   payload.mime,
-            linked_model: 'hr.expense', // backend lo vinculará al expense tras crear
+            ...(expenseMode === 'fuel' ? {} : { linked_model: 'hr.expense' }),
           })
           const uploaded = uploadRes?.data ?? uploadRes ?? {}
           uploadedAttachmentId = uploaded.attachment_id || null
+          uploadedFuelEvidenceToken = uploaded.evidence_token || null
           if (!uploadedAttachmentId) {
-            uploadError = 'No se pudo subir el comprobante (backend no devolvió attachment_id)'
+            if (!uploadedFuelEvidenceToken) {
+              uploadError = 'No se pudo subir el comprobante (backend no devolvió credencial)'
+            }
           }
         } catch (upErr) {
           uploadError = upErr?.message || 'Error subiendo comprobante'
@@ -164,13 +195,13 @@ export default function AdminGastosForm() {
       }
 
       // Si monto requiere attachment y la subida falló → no crear gasto
-      if (requiresAttach && !uploadedAttachmentId) {
+      if (requiresAttach && !(expenseMode === 'fuel' ? uploadedFuelEvidenceToken : uploadedAttachmentId)) {
         setError(uploadError || 'Sube el comprobante antes de enviar el gasto.')
         setSubmitting(false)
         return
       }
 
-      const res = await createExpense({
+      const functionalPayload = {
         name: name.trim(),
         total_amount: Number(amount),
         quantity: 1.0,
@@ -184,15 +215,24 @@ export default function AdminGastosForm() {
         analytic_distribution: analyticDistribution,
         // Attachment pre-subido (guía §2c). Backend lo vincula al expense.
         attachment_id: uploadedAttachmentId || undefined,
-      })
+        evidence_token: uploadedFuelEvidenceToken || undefined,
+      }
+      const res = expenseMode === 'fuel'
+        ? await createFuelExpense({ ...functionalPayload, route_plan_id: Number(fuelRouteId) })
+        : await createExpense({
+          ...functionalPayload,
+          company_id: companyId,
+          warehouse_id: warehouseId || undefined,
+          sucursal_code: sucursal || undefined,
+        })
 
       // Fallback legacy: si el evidence/upload no funcionó pero expense-attach
       // sí, intentamos adjuntar por separado. Solo para montos bajos donde
       // el attachment es opcional pero el usuario lo subió.
       const created = res?.data ?? res
       const expenseId = created?.id ?? created?.expense_id ?? created?.data?.id
-      let attachedMsg = uploadedAttachmentId ? ' (con comprobante)' : ''
-      if (attachment && !uploadedAttachmentId && BACKEND_CAPS.expenseAttachments && expenseId) {
+      let attachedMsg = (uploadedAttachmentId || uploadedFuelEvidenceToken) ? ' (con comprobante)' : ''
+      if (attachment && expenseMode !== 'fuel' && !uploadedAttachmentId && BACKEND_CAPS.expenseAttachments && expenseId) {
         try {
           const payload = await fileToPayload(attachment)
           await attachExpense({ expenseId, ...payload })
@@ -209,6 +249,10 @@ export default function AdminGastosForm() {
       setDescription('')
       setPaymentMode('company')
       setAnalyticDistribution(null)
+      if (expenseMode === 'fuel') {
+        setExpenseMode('general')
+        setFuelRouteId('')
+      }
       clearAttachment()
       await loadExpenses()
       setTimeout(() => setSuccess(''), 3500)
@@ -330,6 +374,60 @@ export default function AdminGastosForm() {
               />
             </div>
           </div>
+
+          <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
+            Tipo de gasto
+          </label>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <button
+              type="button"
+              onClick={() => setExpenseMode('general')}
+              style={{
+                flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
+                background: expenseMode === 'general' ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
+                border: `1px solid ${expenseMode === 'general' ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                color: expenseMode === 'general' ? TOKENS.colors.blue3 : TOKENS.colors.textMuted,
+                fontSize: 12, fontWeight: 600,
+              }}
+            >General</button>
+            <button
+              type="button"
+              onClick={() => setExpenseMode('fuel')}
+              style={{
+                flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
+                background: expenseMode === 'fuel' ? `${TOKENS.colors.warning}22` : TOKENS.colors.surface,
+                border: `1px solid ${expenseMode === 'fuel' ? TOKENS.colors.warning : TOKENS.colors.border}`,
+                color: expenseMode === 'fuel' ? TOKENS.colors.warning : TOKENS.colors.textMuted,
+                fontSize: 12, fontWeight: 600,
+              }}
+            >Gasolina</button>
+          </div>
+
+          {expenseMode === 'fuel' && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
+                Ruta de la sucursal *
+              </label>
+              <select
+                value={fuelRouteId}
+                onChange={e => setFuelRouteId(e.target.value)}
+                disabled={fuelRoutesLoading}
+                style={inputStyle}
+              >
+                <option value="">{fuelRoutesLoading ? 'Cargando rutas…' : 'Selecciona una ruta'}</option>
+                {fuelRoutes.map(route => (
+                  <option key={route.id} value={route.id}>
+                    {route.name} · {route.vehicle || 'Sin vehículo'} · {route.state}
+                  </option>
+                ))}
+              </select>
+              {!fuelRoutesLoading && fuelRoutes.length === 0 && (
+                <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
+                  No hay rutas elegibles con vehículo y operador para esta fecha.
+                </p>
+              )}
+            </div>
+          )}
 
           <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
             Modo de pago
