@@ -8,7 +8,7 @@ import { deriveRouteTimeline, departureLabel, closeStageLabel } from '../present
 import { isVisited, noSaleReasonDisplay, stopResultLabel } from './stopLabels'
 import {
   centerTime, durationLabel, gapLabel, travelGaps, visitsByHour, isSuspicious, isSale,
-  sortStopsByExecution, outOfSequenceStopIds, checkinDistanceLabel,
+  sortStopsByExecution, outOfSequenceStopIds, checkinDistanceLabel, serverGapMinutes,
 } from './rutaDetalleModel'
 import { buildBars, hasSeries, fmtMoney } from '../../kpis/kpisModel'
 
@@ -54,8 +54,10 @@ function ResumenActividades({ planSummary, stops, departureRealAt }) {
   // dejar un guion que parecía "sin datos" con la ruta ya en la calle.
   let arranque = brecha === '—' ? null : { text: `tardó ${brecha}`, from: 'entrada' }
   if (!arranque && departureRealAt && ps.first_visit) {
-    const mins = Math.round((Date.parse(ps.first_visit) - Date.parse(departureRealAt)) / 60000)
-    if (Number.isFinite(mins) && mins >= 0) arranque = { text: `${gapLabel(mins)} tras salir`, from: 'salida' }
+    // Ambas marcas se interpretan como UTC aunque el backend mande una sin zona.
+    const gap = serverGapMinutes(departureRealAt, ps.first_visit)
+    if (gap?.anomaly === 'anterior') arranque = { text: 'Antes de la salida', from: 'anomalia' }
+    else if (gap && gap.minutes != null) arranque = { text: `${gapLabel(gap.minutes)} tras salir`, from: 'salida' }
   }
   const cards = [
     ['Entrada (checador)', entradaText],
@@ -96,7 +98,7 @@ function StopRow({ st, gap, outOfSequence }) {
         <span style={{ fontSize: 11, color: C.textMuted, width: 22 }}>{st?.sequence ?? '·'}</span>
         <span style={{ fontSize: 12.5, color: C.textSoft, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st?.name || 'Cliente'}</span>
         {outOfSequence && (
-          <span data-testid="ruta-stop-fuera-secuencia" title="Visitada fuera del orden planeado" style={{ fontSize: 10, fontWeight: 700, color: C.blue3, border: `1px solid ${C.borderBlue}`, borderRadius: TOKENS.radius.pill, padding: '1px 7px', whiteSpace: 'nowrap' }}>↪ fuera de orden</span>
+          <span data-testid="ruta-stop-fuera-secuencia" title="Aquí la ejecución bajó en la secuencia planeada (puede ser un reordenamiento legítimo)" style={{ fontSize: 10, fontWeight: 700, color: C.blue3, border: `1px solid ${C.borderBlue}`, borderRadius: TOKENS.radius.pill, padding: '1px 7px', whiteSpace: 'nowrap' }}>↓ bajó en secuencia</span>
         )}
         {suspicious && (
           <span data-testid="ruta-stop-suspect" title="Visita <1 min y check-in lejos" style={{ fontSize: 10, fontWeight: 700, color: C.warning, background: C.warningSoft, border: '1px solid rgba(180,83,9,0.3)', borderRadius: TOKENS.radius.pill, padding: '1px 7px', whiteSpace: 'nowrap' }}>⚠ revisar</span>

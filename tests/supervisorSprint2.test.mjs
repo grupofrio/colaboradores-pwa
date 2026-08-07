@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { deriveRouteRows, routeAttention, sortRoutesByAttention } from '../src/modules/supervisor-ventas/v2/presentation.js'
 import {
   sortStopsByExecution, outOfSequenceStopIds, checkinDistanceLabel,
+  stopSequence, parseServerTime, serverGapMinutes,
 } from '../src/modules/supervisor-ventas/v2/rutas/rutaDetalleModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -121,4 +122,87 @@ test('el detalle pinta el orden de ejecución, el fuera de orden y la distancia'
   assert.match(s, /ruta-stop-fuera-secuencia/)
   assert.match(s, /ruta-stop-checkin-dist/)
   assert.doesNotMatch(s, /stops\.map\(\(st, i\)/, 'ya no se renderiza en orden de secuencia cruda')
+})
+
+// ── (4) Remediación de la auditoría de Codex sobre #154 ─────────────────────
+
+test('P1-1: una marca SIN zona se lee como UTC, no como hora local', () => {
+  // day-control emite departure.real_at como "YYYY-MM-DD HH:mm:ss" (sin Z).
+  // Con Date.parse crudo, en tz México eso daba -330 min y la UI decía "Sin dato".
+  assert.equal(parseServerTime('2026-08-07 14:00:00'), Date.parse('2026-08-07T14:00:00Z'))
+  assert.equal(parseServerTime('2026-08-07T14:00:00Z'), Date.parse('2026-08-07T14:00:00Z'))
+  assert.equal(parseServerTime(null), null)
+  assert.equal(parseServerTime('no es fecha'), null)
+  // El caso exacto que reportó Codex: salida 14:00 naïve, 1ª visita 14:30Z.
+  const gap = serverGapMinutes('2026-08-07 14:00:00', '2026-08-07T14:30:00Z')
+  assert.equal(gap.minutes, 30, 'la brecha real es 30 min, no negativa')
+  assert.equal(gap.anomaly, null)
+})
+
+test('P1-1: una primera visita ANTERIOR a la salida se declara, no se esconde', () => {
+  const gap = serverGapMinutes('2026-08-07T15:00:00Z', '2026-08-07T14:00:00Z')
+  assert.equal(gap.minutes, null)
+  assert.equal(gap.anomaly, 'anterior', 'dato imposible ⇒ se nombra')
+  assert.equal(serverGapMinutes(null, '2026-08-07T14:00:00Z'), null)
+})
+
+test('P1-2: una parada SIN secuencia no es "la parada 0"', () => {
+  assert.equal(stopSequence({ sequence: 10 }), 10)
+  assert.equal(stopSequence({ sequence: null }), null, 'Number(null)=0 era la trampa')
+  assert.equal(stopSequence({ sequence: 0 }), null, 'Odoo usa 0 para "sin secuencia"')
+  assert.equal(stopSequence({}), null)
+  assert.equal(stopSequence({ sequence: false }), null)
+})
+
+test('P1-2: la parada sin secuencia no se acusa ni se ordena primero', () => {
+  const stops = sortStopsByExecution([
+    { stop_id: 1, sequence: 50, actual_start_time: '2026-08-07T15:00:00Z' },
+    { stop_id: 2, sequence: null, actual_start_time: '2026-08-07T15:20:00Z' },
+    { stop_id: 3, sequence: 60, actual_start_time: '2026-08-07T15:40:00Z' },
+  ])
+  const fuera = outOfSequenceStopIds(stops)
+  assert.equal(fuera.has(2), false, 'sin secuencia = no evaluable, nunca marcada')
+  assert.equal(fuera.has(3), false, 'la ausencia tampoco rompe la comparación 50→60')
+  // Y en el orden de pendientes, la sin secuencia va al final.
+  const pend = sortStopsByExecution([
+    { stop_id: 8, sequence: null }, { stop_id: 9, sequence: 20 },
+  ]).map((s) => s.stop_id)
+  assert.deepEqual(pend, [9, 8])
+})
+
+test('P2-5: se marca el DESCENSO, no la recuperación', () => {
+  const stops = sortStopsByExecution([
+    { stop_id: 1, sequence: 50, actual_start_time: '2026-08-07T15:00:00Z' },
+    { stop_id: 2, sequence: 10, actual_start_time: '2026-08-07T15:20:00Z' },
+    { stop_id: 3, sequence: 20, actual_start_time: '2026-08-07T15:40:00Z' },
+  ])
+  const fuera = outOfSequenceStopIds(stops)
+  assert.equal(fuera.has(2), true, 'aquí bajó el orden (50 → 10)')
+  assert.equal(fuera.has(3), false, '20 ya va subiendo: no se imputa la recuperación')
+  assert.equal(fuera.size, 1)
+})
+
+test('P1-3: la caja pendiente pesa más que cualquier aviso informativo', () => {
+  const rows = [
+    { routeName: 'Sin señal', departureStatus: 'on_time', signalStatus: 'no_signal' },
+    { routeName: 'Caja', departureStatus: 'on_time', closeStage: 'closed', cashPending: { amount: 7735 } },
+    { routeName: 'Tarde', departureStatus: 'late' },
+    { routeName: 'No salió', departureStatus: 'not_departed' },
+  ]
+  const orden = sortRoutesByAttention(rows).map((r) => r.routeName)
+  assert.deepEqual(orden, ['No salió', 'Caja', 'Tarde', 'Sin señal'])
+  assert.equal(routeAttention(rows[1]).reason, 'Caja pendiente')
+  assert.equal(routeAttention(rows[1]).level, 'bad', 'es dinero sin validar')
+  // Cierre sin validar SIN monto conocido también se ve, un escalón abajo.
+  assert.equal(routeAttention({ closeStage: 'corte_done' }).reason, 'Cierre sin validar')
+  // Una ruta cerrada y validada no inventa alarma.
+  assert.equal(routeAttention({ departureStatus: 'on_time', closeStage: 'validated' }).reason, null)
+})
+
+test('P2-4: "Sin visitas aún" es informativo, no alarma', () => {
+  const a = routeAttention({ departureStatus: 'on_time', stopsDone: 0, stopsTotal: 12 })
+  assert.equal(a.reason, 'Sin visitas aún')
+  assert.equal(a.level, 'info', 'a primera hora es normal: no se pinta como riesgo')
+  // Y nunca aplica a una ruta que ni ha salido (esa ya tiene su propio motivo).
+  assert.equal(routeAttention({ departureStatus: 'not_departed', stopsDone: 0, stopsTotal: 12 }).reason, 'No ha salido')
 })

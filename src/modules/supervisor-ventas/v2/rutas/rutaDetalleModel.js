@@ -96,6 +96,16 @@ export function isSale(stop) {
 // mandan las visitadas por hora real (el recorrido tal como ocurrió) y después
 // las pendientes en su secuencia planeada. El número de secuencia sigue visible
 // en cada fila, así que ver "10, 50, 20" ES la señal de fuera de orden.
+/** Secuencia planeada, o null si NO hay. `Number(null)` es 0 —y 0 es finito—, así
+ *  que la ausencia se colaba como "parada 0": se ordenaba primero y se acusaba de
+ *  fuera de orden tras cualquier parada real. Ausencia ≠ cero. */
+export function stopSequence(st) {
+  const raw = st?.sequence
+  if (raw === null || raw === undefined || raw === '' || raw === false) return null
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 export function sortStopsByExecution(stops) {
   const rows = Array.isArray(stops) ? stops : []
   const key = (st) => (st?.actual_start_time ? String(st.actual_start_time) : null)
@@ -107,25 +117,31 @@ export function sortStopsByExecution(stops) {
       if (ka && kb) return ka < kb ? -1 : ka > kb ? 1 : a.i - b.i
       if (ka) return -1            // visitada antes que pendiente
       if (kb) return 1
-      const sa = Number.isFinite(Number(a.st?.sequence)) ? Number(a.st.sequence) : Number.POSITIVE_INFINITY
-      const sb = Number.isFinite(Number(b.st?.sequence)) ? Number(b.st.sequence) : Number.POSITIVE_INFINITY
+      const sa = stopSequence(a.st) ?? Number.POSITIVE_INFINITY   // sin secuencia ⇒ al final
+      const sb = stopSequence(b.st) ?? Number.POSITIVE_INFINITY
       return (sa - sb) || (a.i - b.i)
     })
     .map((x) => x.st)
 }
 
-/** ¿Esta parada se visitó FUERA de la secuencia planeada? Se calcula sobre la
- *  lista ya ordenada por ejecución: si su secuencia es menor que la de alguna
- *  visitada antes, se saltó el orden. Devuelve un Set de stop_id. */
+/** Puntos donde la ejecución DESCENDIÓ respecto de la parada anterior visitada.
+ *
+ *  Regla de negocio (Codex P2-5): se marca el DESCENSO, no toda la recuperación.
+ *  Con ejecución 50 → 10 → 20 se marca solo el 10 (ahí bajó el orden); el 20 ya
+ *  va subiendo y no se le imputa nada. La marca es descriptiva ("bajó en la
+ *  secuencia"), no una acusación: reordenar puede ser legítimo.
+ *
+ *  Una parada SIN secuencia planeada no es evaluable y nunca se marca ni corta
+ *  la comparación. Devuelve un Set de stop_id. */
 export function outOfSequenceStopIds(stopsInExecutionOrder) {
   const out = new Set()
-  let maxSeq = null
+  let prevSeq = null
   for (const st of (Array.isArray(stopsInExecutionOrder) ? stopsInExecutionOrder : [])) {
     if (!st?.actual_start_time) continue
-    const seq = Number.isFinite(Number(st?.sequence)) ? Number(st.sequence) : null
-    if (seq == null) continue
-    if (maxSeq != null && seq < maxSeq) out.add(st?.stop_id)
-    else maxSeq = seq
+    const seq = stopSequence(st)
+    if (seq == null) continue          // ausencia ⇒ no evaluable
+    if (prevSeq != null && seq < prevSeq) out.add(st?.stop_id)
+    prevSeq = seq
   }
   return out
 }
@@ -137,4 +153,36 @@ export function checkinDistanceLabel(meters) {
   if (m < 1) return 'en sitio'
   if (m < 1000) return `a ${Math.round(m)} m`
   return `a ${(m / 1000).toFixed(1)} km`
+}
+
+/** Marca de tiempo del backend → epoch ms, SIEMPRE interpretada como UTC.
+ *
+ *  Odoo emite unos campos como "YYYY-MM-DDTHH:mm:ssZ" y otros (day-control
+ *  `departure.real_at`) como "YYYY-MM-DD HH:mm:ss" SIN zona. `Date.parse` trata
+ *  la segunda forma como hora LOCAL, así que restarla de una marca UTC daba
+ *  brechas negativas de horas y la UI las escondía como "Sin dato". Aquí se
+ *  normaliza: sin zona explícita, es UTC (que es lo que Odoo guarda).
+ */
+export function parseServerTime(value) {
+  if (!value) return null
+  const raw = String(value).trim()
+  const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(raw)
+    ? raw.replace(' ', 'T')
+    : raw.replace(' ', 'T') + 'Z'
+  const ms = Date.parse(iso)
+  return Number.isFinite(ms) ? ms : null
+}
+
+/** Brecha en minutos entre dos marcas del servidor. Devuelve:
+ *   {minutes}                 cuando se puede calcular y es coherente;
+ *   {minutes:null, anomaly}   cuando la segunda es ANTERIOR a la primera —eso es
+ *                             un dato imposible y se DECLARA, no se esconde;
+ *   null                      cuando falta alguna marca. */
+export function serverGapMinutes(fromValue, toValue) {
+  const a = parseServerTime(fromValue)
+  const b = parseServerTime(toValue)
+  if (a == null || b == null) return null
+  const minutes = Math.round((b - a) / 60000)
+  if (minutes < 0) return { minutes: null, anomaly: 'anterior' }
+  return { minutes, anomaly: null }
 }

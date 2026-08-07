@@ -281,22 +281,37 @@ export function deriveRouteTimeline(route, capabilities = {}) {
 // supervisora AHORA, y cada fila declara POR QUÉ subió (nunca solo un color).
 export const ATTENTION_NONE = 'ok'
 
+// Etapas de cierre que YA no están abiertas pero todavía no se validan.
+const CLOSE_PENDING_STAGES = new Set(['closed', 'corte_done', 'liquidated'])
+
 export function routeAttention(row) {
   const dep = String(row?.departureStatus || 'unknown')
   const done = num(row?.stopsDone)
   const total = num(row?.stopsTotal)
   // 1. No salió: es lo único que todavía se puede corregir hoy temprano.
   if (dep === 'not_departed') return { rank: 0, level: 'bad', reason: 'No ha salido' }
-  // 2. Salió tarde.
-  if (dep === 'late') return { rank: 1, level: 'warn', reason: 'Salió tarde' }
-  // 3. Incidencias abiertas.
-  if (num(row?.incidentCount) > 0) return { rank: 2, level: 'warn', reason: 'Con incidencia' }
-  // 4. Sin señal GPS: no se puede verificar la ejecución.
+  // 2. Cerró con CAJA PENDIENTE: es dinero de la empresa sin validar. Va antes
+  //    que cualquier aviso informativo (la Torre acumuló $607K justo así).
+  const cash = num(row?.cashPending?.amount)
+  const stage = String(row?.closeStage || 'unknown')
+  if (CLOSE_PENDING_STAGES.has(stage) && cash != null && cash > 0) {
+    return { rank: 1, level: 'bad', reason: 'Caja pendiente' }
+  }
+  // 3. Salió tarde.
+  if (dep === 'late') return { rank: 2, level: 'warn', reason: 'Salió tarde' }
+  // 4. Incidencias abiertas.
+  if (num(row?.incidentCount) > 0) return { rank: 3, level: 'warn', reason: 'Con incidencia' }
+  // 5. Cierre sin validar (aunque no se conozca el monto de caja).
+  if (CLOSE_PENDING_STAGES.has(stage)) {
+    return { rank: 4, level: 'warn', reason: 'Cierre sin validar' }
+  }
+  // 6. Sin señal GPS: no se puede verificar la ejecución.
   const sig = String(row?.signalStatus || '')
-  if (sig === 'no_signal' || sig === 'invalid') return { rank: 3, level: 'warn', reason: 'Sin señal' }
-  // 5. Salió pero no ha marcado ninguna visita.
-  if (dep !== 'unknown' && total != null && total > 0 && done === 0) {
-    return { rank: 4, level: 'warn', reason: 'Sin visitas aún' }
+  if (sig === 'no_signal' || sig === 'invalid') return { rank: 5, level: 'warn', reason: 'Sin señal' }
+  // 7. Salió y todavía no marca visitas. NO es alarma: a primera hora es lo normal
+  //    (Codex P2-4). Se informa en tono neutro y solo cuando ya salió de verdad.
+  if (dep !== 'unknown' && dep !== 'not_departed' && total != null && total > 0 && done === 0) {
+    return { rank: 6, level: 'info', reason: 'Sin visitas aún' }
   }
   return { rank: 9, level: ATTENTION_NONE, reason: null }
 }
