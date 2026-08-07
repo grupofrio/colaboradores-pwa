@@ -10,11 +10,23 @@ import { BRAND_TOKENS as T } from '../../../../theme/brandTokens'
 import StateScreen from '../../../../components/kold/StateScreen'
 import { logScreenError } from '../../../shared/logScreenError'
 import { getRoutesWeek } from '../../api'
-import { weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId } from './routesWeekModel'
+import { weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId, rowZone, TYPE_SHORT } from './routesWeekModel'
 
 const C = T.colors
 const R = T.radius
 const TONE_COLOR = { ok: C.success, watch: C.warning, bad: C.error, none: C.textMuted }
+// Chip de tipo de plan operativo (color + palabra; el color solo no basta, AA).
+const TYPE_TONE = { SO: C.blue3, SP: C.text, P: '#7c3aed' }
+
+function TypeChip({ tipo }) {
+  const fg = TYPE_TONE[tipo] || C.textMuted
+  return (
+    <span data-testid="rw-tipo" data-tipo={tipo} style={{
+      fontSize: 9.5, fontWeight: 800, padding: '1px 6px', borderRadius: R.pill,
+      color: fg, border: `1px solid ${fg}`, background: 'transparent', whiteSpace: 'nowrap',
+    }}>{TYPE_SHORT[tipo] || 'Plan'}</span>
+  )
+}
 
 function DayCell({ cell }) {
   const tone = cell?.coverage_tone || 'none'
@@ -83,14 +95,14 @@ export default function RutasMananaMatriz({ onOpenRoute }) {
 
   useEffect(() => load(), [load])
 
-  const open = (row) => onOpenRoute && onOpenRoute(rowRouteId(row), row)
+  const open = (row) => onOpenRoute && onOpenRoute(rowRouteId(row), rowZone(row))
 
   const shell = (children) => (
     <div data-testid="rutas-manana-matriz" data-theme="brand-light" style={{ display: 'grid', gap: 12 }}>
       <div>
-        <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: 0 }}>Mis rutas de mañana</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: 0 }}>Mis planes de mañana</h1>
         <p style={{ fontSize: 12.5, color: C.textMuted, margin: '2px 0 0' }}>
-          Cumplimiento de la semana por subpolígono. Asigna y publica la ruta de mañana desde cada fila.
+          Cumplimiento de la semana por plan operativo. Asigna y publica el de mañana.
         </p>
       </div>
       {children}
@@ -112,7 +124,7 @@ export default function RutasMananaMatriz({ onOpenRoute }) {
   if (data.rows.length === 0) {
     return shell(
       <StateScreen tokens={T} testid="rutas-manana-vacio"
-        title="Sin subpolígonos en tu sucursal" detail="No hay rutas ni planes que mostrar esta semana." />,
+        title="Sin planes operativos en tu sucursal" detail="Aún no hay planes operativos (segmentos, subpolígonos o polígonos) asignados a tu sucursal." />,
     )
   }
 
@@ -122,7 +134,7 @@ export default function RutasMananaMatriz({ onOpenRoute }) {
       <table data-testid="rw-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left', padding: '10px 10px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.textMuted, position: 'sticky', left: 0, background: C.surface }}>Subpolígono</th>
+            <th style={{ textAlign: 'left', padding: '10px 10px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.textMuted, position: 'sticky', left: 0, background: C.surface }}>Plan operativo</th>
             {days.map((d) => (
               <th key={d} style={{ textAlign: 'center', padding: '10px 4px', fontSize: 10.5, fontWeight: 700, color: C.textMuted, whiteSpace: 'nowrap' }}>{weekdayLabel(d)}</th>
             ))}
@@ -132,8 +144,9 @@ export default function RutasMananaMatriz({ onOpenRoute }) {
         <tbody>
           {data.rows.map((row) => (
             <tr key={row.key} data-testid="rw-row">
-              <td style={{ padding: '6px 10px', borderTop: `1px solid ${C.border}`, position: 'sticky', left: 0, background: C.surface, minWidth: 130 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{rowName(row)}</div>
+              <td style={{ padding: '6px 10px', borderTop: `1px solid ${C.border}`, position: 'sticky', left: 0, background: C.surface, minWidth: 150 }}>
+                <div style={{ marginBottom: 2 }}><TypeChip tipo={row.tipo} /></div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{rowName(row)}</div>
                 {row.weekly_coverage_pct != null && (
                   <div style={{ fontSize: 10.5, color: C.textMuted }}>Semana: {row.weekly_coverage_pct}%</div>
                 )}

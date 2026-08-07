@@ -18,6 +18,9 @@ export default function MisRutasManana() {
     return (
       <PlanearMananaTab
         initialRouteId={routeId}
+        initialPolygonId={Number(params.get('poly') || 0) || 0}
+        initialSubpolygonId={Number(params.get('sub') || 0) || 0}
+        initialSegmentId={Number(params.get('seg') || 0) || 0}
         onExit={() => setParams({}, { replace: true })}
       />
     )
@@ -25,7 +28,16 @@ export default function MisRutasManana() {
 
   return (
     <RutasMananaMatriz
-      onOpenRoute={(routeId) => setParams(routeId ? { armar: '1', route: String(routeId) } : { armar: '1' })}
+      onOpenRoute={(routeId, zone) => {
+        // Hereda la zona/segmento del plan operativo (según su tipo) para
+        // preseleccionar al armar; así la supervisora no re-elige a mano.
+        const next = { armar: '1' }
+        if (routeId) next.route = String(routeId)
+        if (zone?.polygonId) next.poly = String(zone.polygonId)
+        if (zone?.subpolygonId) next.sub = String(zone.subpolygonId)
+        if (zone?.segmentId) next.seg = String(zone.segmentId)
+        setParams(next)
+      }}
     />
   )
 }

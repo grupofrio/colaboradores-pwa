@@ -8398,22 +8398,28 @@ async function directSupervisorVentas(method, path, body) {
     const routePlanId = Number(ensureData.route_plan_id || ensureData.plan_id || 0)
     if (!routePlanId) return ensureResponse
 
-    const stopsResult = await readModelSorted('gf.route.stop', {
-      fields: [
-        'id', 'route_plan_id', 'customer_id', 'state', 'result_status',
-        'route_sequence', 'not_visited_reason_id', 'actual_start_time',
-        'actual_end_time', 'comments',
-      ],
-      domain: [['route_plan_id', '=', routePlanId]],
-      sort_column: 'route_sequence',
-      sort_desc: false,
-      limit: 500,
-      sudo: 1,
+    // Clientes del plan con NOMBRE + DIRECCIÓN desde el ÚNICO camino seguro:
+    // stops_preview (token-only, con _plan_branch_domain). P1-2 Codex: se ELIMINÓ
+    // el antiguo fallback de lectura ORM directa de paradas con privilegios elevados
+    // desde el cliente, que evadía el guard/escopo de sucursal. Si stops_preview
+    // falla, se propaga el error para que la vista muestre estado honesto ("No se
+    // pudieron cargar las paradas") + reintento; jamás una lectura privilegiada
+    // desde el navegador.
+    const previewStops = await odooJson('/gf/salesops/supervisor/v2/route_plan/stops_preview', {
+      meta: supervisorMeta(),
+      data: { route_plan_id: routePlanId },
     })
-    const customers = pickListResponse(stopsResult).map((row) => ({
-      ...row,
-      stop_id: row.id,
-    }))
+    if (previewStops?.ok === false || !Array.isArray(previewStops?.data?.stops)) {
+      return {
+        ...(previewStops || {}),
+        ok: false,
+        status: 'error',
+        code: previewStops?.code || previewStops?.data?.code || 'stops_preview_unavailable',
+        message: previewStops?.user_message || previewStops?.message || 'No se pudieron cargar las paradas del plan.',
+        data: { ...ensureData, plan_id: routePlanId, route_plan_id: routePlanId },
+      }
+    }
+    const customers = previewStops.data.stops.map((row) => ({ ...row, stop_id: row.stop_id || row.id }))
 
     return {
       ...ensureResponse,
