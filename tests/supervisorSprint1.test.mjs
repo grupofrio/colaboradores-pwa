@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { segmentCustomers, isStopWithoutCustomer, isProspectStop } from '../src/modules/supervisor-ventas/v2/presentation.js'
 import { cellTone, isCurrentDay, todayFromTomorrow, toneWord } from '../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js'
 import { buildFunnel } from '../src/modules/supervisor-ventas/kpis/kpisModel.js'
+import { derivePlanAssignment, resourceOptions } from '../src/modules/supervisor-ventas/v2/planear/planearModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
 
@@ -108,4 +109,49 @@ test('la cobertura de "Hoy" es parcial, no "Crítico" a media mañana', () => {
   const semana = buildFunnel(payload, 'semana').drops.find((d) => d.key === 'coverage')
   assert.equal(semana.tone, 'bad')
   assert.equal(semana.toneWord, 'Crítico')
+})
+
+// ── (4) Bloqueadores hallados en la corrida real con Aida (2026-08-07) ────────
+
+test('P0: los recursos se leen de assigned_plan_ids (LISTA), no del singular', () => {
+  // Forma REAL de /available-resources (available_resources_core.vehicle_dto).
+  const resources = {
+    vehicles: [
+      { id: 9, name: 'Isuzu/ELF 200', capacity_kg: 3000, assigned_plan_ids: [6870] },
+      { id: 8, name: 'Nissan/NP300', capacity_kg: 1400, assigned_plan_ids: [6868] },
+      { id: 7, name: 'Libre', capacity_kg: 1400, assigned_plan_ids: [] },
+    ],
+    people: [
+      { id: 684, name: 'ESTEVAN VALERIO GUZMAN', is_driver: true, is_seller: true, assigned_plan_ids: [6870] },
+    ],
+  }
+  const a = derivePlanAssignment(resources, 6870)
+  assert.equal(a.vehicle?.id, 9, 'la unidad del plan se refleja (antes salía "Sin asignar")')
+  assert.equal(a.driver?.id, 684)
+  assert.equal(a.salesperson?.id, 684)
+  // Un plan sin recursos sigue mostrando vacío honesto.
+  assert.equal(derivePlanAssignment(resources, 9999).vehicle, null)
+})
+
+test('P0: no se puede doblar una unidad ocupada en otra ruta del día', () => {
+  const items = [
+    { id: 9, name: 'Isuzu', assigned_plan_ids: [6870] },   // este plan
+    { id: 8, name: 'Nissan', assigned_plan_ids: [6868] },  // OTRA ruta ⇒ bloqueada
+    { id: 7, name: 'Libre', assigned_plan_ids: [] },
+  ]
+  const opts = resourceOptions(items, 6870, 9)
+  assert.equal(opts.find((o) => o.id === 8).busyElsewhere, true, 'ocupada en otra ruta')
+  assert.equal(opts.find((o) => o.id === 9).busyElsewhere, false, 'la de ESTE plan no se bloquea')
+  assert.equal(opts.find((o) => o.id === 7).busyElsewhere, false, 'libre')
+  assert.equal(opts.find((o) => o.id === 9).isCurrent, true)
+})
+
+test('P0: publicar NO se pre-bloquea en el cliente (el alcance lo decide el servidor)', () => {
+  const s = src('lib/api.js')
+  const i = s.indexOf("/pwa-supv/route-plan-publish")
+  const block = s.slice(i, s.indexOf('/pwa-supv/forecast-products', i))
+  assert.ok(/route_plan\/publish/.test(block), 'publica por el controller con guard')
+  assert.ok(!/employeeInScope/.test(block), 'sin gate de alcance en el cliente')
+  assert.ok(!/sudo:\s*1/.test(block), 'sin lectura privilegiada desde el navegador')
+  assert.ok(!/Plan no existe o esta fuera de tu alcance/.test(block), 'sin el falso negativo')
 })

@@ -76,7 +76,7 @@ test('summarizeResources: cuenta libres/tomados y capacidad sin dato', () => {
     ],
     people: [
       { id: 10, available: true, is_driver: true, is_seller: false },
-      { id: 11, available: false, is_driver: false, is_seller: true, assigned_plan_id: 99 },
+      { id: 11, available: false, is_driver: false, is_seller: true, assigned_plan_ids: [99] },
     ],
   })
   assert.equal(s.unitsTotal, 3)
@@ -117,14 +117,14 @@ test('planStateLabel: estados en palabra', () => {
 const RESOURCES = {
   vehicles_available: true,
   vehicles: [
-    { id: 1, name: 'Camión A', capacity_kg: 1500, available: false, assigned_plan_id: 50 },
-    { id: 2, name: 'Camión B', capacity_kg: null, available: true, assigned_plan_id: null },
-    { id: 3, name: 'Camión C', capacity_kg: 2000, available: false, assigned_plan_id: 99 },
+    { id: 1, name: 'Camión A', capacity_kg: 1500, available: false, assigned_plan_ids: [50] },
+    { id: 2, name: 'Camión B', capacity_kg: null, available: true, assigned_plan_ids: [] },
+    { id: 3, name: 'Camión C', capacity_kg: 2000, available: false, assigned_plan_ids: [99] },
   ],
   people: [
-    { id: 10, name: 'Ana', is_driver: true, is_seller: false, available: false, assigned_plan_id: 50 },
-    { id: 11, name: 'Beto', is_driver: false, is_seller: true, available: false, assigned_plan_id: 50 },
-    { id: 12, name: 'Caro', is_driver: true, is_seller: true, available: true, assigned_plan_id: null },
+    { id: 10, name: 'Ana', is_driver: true, is_seller: false, available: false, assigned_plan_ids: [50] },
+    { id: 11, name: 'Beto', is_driver: false, is_seller: true, available: false, assigned_plan_ids: [50] },
+    { id: 12, name: 'Caro', is_driver: true, is_seller: true, available: true, assigned_plan_ids: [] },
   ],
 }
 

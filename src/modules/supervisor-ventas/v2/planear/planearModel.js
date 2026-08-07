@@ -130,15 +130,30 @@ export function capacityLabel(kg) {
 
 // ── Asignación de recursos de UNA ruta ───────────────────────────────────────
 // Deriva del payload de /available-resources qué unidad/chofer/vendedor ya trae
-// ESTE plan (los recursos marcan assigned_plan_id). Es la foto inicial antes de
-// que la supervisora reasigne; tras cada write, el backend devuelve la autoridad.
+// ESTE plan. El backend marca los planes que ocupan cada recurso en
+// `assigned_plan_ids` (LISTA: un recurso puede aparecer en varios planes del día).
+// Antes se leía `assigned_plan_id` en singular —campo que el backend NUNCA
+// devuelve—, así que la comparación era siempre 0 ≠ planId: los selectores salían
+// "Sin asignar" aunque el plan ya tuviera sus recursos, y `busyElsewhere` jamás se
+// activaba (se podía doblar una unidad ya usada en otra ruta del día).
+const planIdsOfResource = (it) => {
+  const raw = it?.assigned_plan_ids
+  const list = Array.isArray(raw) ? raw : (raw == null ? [] : [raw])
+  return list.map((v) => Number(v || 0)).filter((v) => v > 0)
+}
+
+export function isResourceAssignedTo(item, planId) {
+  const pid = Number(planId || 0)
+  return pid > 0 && planIdsOfResource(item).includes(pid)
+}
+
 export function derivePlanAssignment(resources = {}, planId = 0) {
   const pid = Number(planId || 0)
   const vehicles = Array.isArray(resources.vehicles) ? resources.vehicles : []
   const people = Array.isArray(resources.people) ? resources.people : []
-  const veh = vehicles.find((v) => Number(v.assigned_plan_id || 0) === pid) || null
-  const driver = people.find((p) => p.is_driver && Number(p.assigned_plan_id || 0) === pid) || null
-  const seller = people.find((p) => p.is_seller && Number(p.assigned_plan_id || 0) === pid) || null
+  const veh = vehicles.find((v) => isResourceAssignedTo(v, pid)) || null
+  const driver = people.find((p) => p.is_driver && isResourceAssignedTo(p, pid)) || null
+  const seller = people.find((p) => p.is_seller && isResourceAssignedTo(p, pid)) || null
   return {
     vehicle: veh ? { id: veh.id, name: veh.name, capacity_kg: veh.capacity_kg } : null,
     driver: driver ? { id: driver.id, name: driver.name } : null,
@@ -151,8 +166,9 @@ export function derivePlanAssignment(resources = {}, planId = 0) {
 export function resourceOptions(items = [], planId = 0, currentId = 0) {
   const pid = Number(planId || 0)
   return (Array.isArray(items) ? items : []).map((it) => {
-    const otherPlan = Number(it.assigned_plan_id || 0)
-    const busyElsewhere = otherPlan > 0 && otherPlan !== pid
+    const planIds = planIdsOfResource(it)
+    // Ocupado en OTRA ruta del día: cualquier plan distinto del actual.
+    const busyElsewhere = planIds.some((id) => id !== pid)
     return {
       id: it.id,
       name: it.name,
