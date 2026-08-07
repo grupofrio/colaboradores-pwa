@@ -127,9 +127,9 @@ export default function ScreenTalentUpload() {
           borderRadius: TOKENS.radius.md, padding: 20, textAlign: 'center', maxWidth: 320,
         }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
-          <p style={{ ...typo.title, color: TOKENS.colors.textSoft, margin: 0 }}>Recibido</p>
+          <p style={{ ...typo.title, color: TOKENS.colors.success, margin: 0 }}>Identificación exitosa</p>
           <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6 }}>
-            RH va a validar tu documento. Ya puedes cerrar esta página.
+            El equipo de Grupo Frío te contactará pronto. Ya puedes cerrar esta página.
           </p>
         </div>
       )}
