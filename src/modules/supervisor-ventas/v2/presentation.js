@@ -127,6 +127,8 @@ export function deriveRouteRows(dayControl) {
     return {
       planId: r?.plan_id ?? null,
       routeName: r?.route_name || 'Ruta sin nombre',
+      // QUÉ se ejecuta (segmento/subpolígono/polígono), no solo quién.
+      operationalPlan: r?.operational_plan || null,
       driver: r?.driver?.name || 'Sin responsable',
       vehicle: r?.vehicle?.name || 'Sin unidad',
       departureStatus: dep.status || 'unknown',
@@ -271,6 +273,55 @@ export function deriveRouteTimeline(route, capabilities = {}) {
         ? 'Conciliación de SISTEMA — no acredita recepción física'
         : 'Conciliación'),
   ]
+}
+
+// ── Jerarquía de ATENCIÓN de las rutas del día ───────────────────────────────
+// Las 5 tarjetas pesaban igual: una ruta que NO ha salido (sin venta, sin señal)
+// se leía como cualquier otra. Aquí se ordena por lo que necesita a la
+// supervisora AHORA, y cada fila declara POR QUÉ subió (nunca solo un color).
+export const ATTENTION_NONE = 'ok'
+
+// Etapas de cierre que YA no están abiertas pero todavía no se validan.
+const CLOSE_PENDING_STAGES = new Set(['closed', 'corte_done', 'liquidated'])
+
+export function routeAttention(row) {
+  const dep = String(row?.departureStatus || 'unknown')
+  const done = num(row?.stopsDone)
+  const total = num(row?.stopsTotal)
+  // 1. No salió: es lo único que todavía se puede corregir hoy temprano.
+  if (dep === 'not_departed') return { rank: 0, level: 'bad', reason: 'No ha salido' }
+  // 2. Cerró con CAJA PENDIENTE: es dinero de la empresa sin validar. Va antes
+  //    que cualquier aviso informativo (la Torre acumuló $607K justo así).
+  const cash = num(row?.cashPending?.amount)
+  const stage = String(row?.closeStage || 'unknown')
+  if (CLOSE_PENDING_STAGES.has(stage) && cash != null && cash > 0) {
+    return { rank: 1, level: 'bad', reason: 'Caja pendiente' }
+  }
+  // 3. Salió tarde.
+  if (dep === 'late') return { rank: 2, level: 'warn', reason: 'Salió tarde' }
+  // 4. Incidencias abiertas.
+  if (num(row?.incidentCount) > 0) return { rank: 3, level: 'warn', reason: 'Con incidencia' }
+  // 5. Cierre sin validar (aunque no se conozca el monto de caja).
+  if (CLOSE_PENDING_STAGES.has(stage)) {
+    return { rank: 4, level: 'warn', reason: 'Cierre sin validar' }
+  }
+  // 6. Sin señal GPS: no se puede verificar la ejecución.
+  const sig = String(row?.signalStatus || '')
+  if (sig === 'no_signal' || sig === 'invalid') return { rank: 5, level: 'warn', reason: 'Sin señal' }
+  // 7. Salió y todavía no marca visitas. NO es alarma: a primera hora es lo normal
+  //    (Codex P2-4). Se informa en tono neutro y solo cuando ya salió de verdad.
+  if (dep !== 'unknown' && dep !== 'not_departed' && total != null && total > 0 && done === 0) {
+    return { rank: 6, level: 'info', reason: 'Sin visitas aún' }
+  }
+  return { rank: 9, level: ATTENTION_NONE, reason: null }
+}
+
+/** Rutas ordenadas por atención; empate ⇒ orden estable por nombre. */
+export function sortRoutesByAttention(rows) {
+  return [...(Array.isArray(rows) ? rows : [])]
+    .map((r, i) => ({ r, i, a: routeAttention(r) }))
+    .sort((x, y) => (x.a.rank - y.a.rank) || (x.i - y.i))
+    .map((x) => x.r)
 }
 
 // ── Segmentación de clientes (desde route-stops de una o varias rutas) ────────
