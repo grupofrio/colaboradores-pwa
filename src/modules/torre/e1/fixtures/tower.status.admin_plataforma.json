@@ -1,0 +1,147 @@
+{
+  "version": "1.0.0",
+  "generated_for_role": "admin_plataforma",
+  "data_as_of": "2026-07-08T14:56:34-06:00",
+  "read_only": true,
+  "source_of_truth": "docs/pc/PC_CLOSURE_TRACKER.md",
+  "role_gate": {
+    "is_gated": false,
+    "gate": null,
+    "reason": null
+  },
+  "modules": [
+    {
+      "id": "adopcion",
+      "name": "Adopción",
+      "description": "Uso real de cada capacidad (checklist, POD, B2B, refill).",
+      "badge": "parcial",
+      "badge_label": "Parcial",
+      "badge_tone": "amber",
+      "source": "conteos Odoo por feature",
+      "link_kind": "status",
+      "roles": [
+        "direccion_general",
+        "admin_plataforma"
+      ],
+      "can_not": [
+        "inferir adopción alta donde es baja",
+        "escribir"
+      ],
+      "residual": "checklist 18/10; B2B pwa_b2b ~0; POD employee ~100% reciente",
+      "tracker_ref": "PC#4/#6/#7",
+      "last_evidence": "PC#4/#6/#7 [R]",
+      "owner": "Sebastián"
+    },
+    {
+      "id": "control_radar",
+      "name": "Control / Radar",
+      "description": "Salud de módulos y alertas de estado (no telemetría viva).",
+      "badge": "piloto",
+      "badge_label": "Piloto",
+      "badge_tone": "teal",
+      "source": "tracker + estado de módulos",
+      "link_kind": "status",
+      "roles": [
+        "direccion_general",
+        "admin_plataforma"
+      ],
+      "can_not": [
+        "tomar como monitoreo en tiempo real",
+        "escribir"
+      ],
+      "residual": "es status curado, no telemetría",
+      "tracker_ref": "acta E0",
+      "last_evidence": "acta E0 [V]",
+      "owner": "Claude/Sebastián"
+    },
+    {
+      "id": "whatsapp_clientes",
+      "name": "WhatsApp clientes",
+      "description": "Mensajería a clientes (ticket / encuesta / en-camino).",
+      "badge": "bloqueado",
+      "badge_label": "Bloqueado (pre-E6)",
+      "badge_tone": "red",
+      "source": "gf_koldfield_whatsapp",
+      "link_kind": "status_only",
+      "roles": [
+        "admin_plataforma"
+      ],
+      "can_not": [
+        "enviar",
+        "configurar URL/secret",
+        "poner enabled=1",
+        "activar"
+      ],
+      "residual": "fail-closed; activación real = E6 con S/N; PEND-N8N-TRIAGE",
+      "tracker_ref": "PC#15",
+      "last_evidence": "PC#15 robusto fail-closed [V]+[R]",
+      "owner": "Sebastián/Yamil"
+    },
+    {
+      "id": "n8n_estado",
+      "name": "n8n (estado / admin)",
+      "description": "Inventario y estado de workflows (NO consola operativa).",
+      "badge": "estado_admin",
+      "badge_label": "Estado / Admin",
+      "badge_tone": "slate",
+      "source": "inventario n8n (foto 2026-07-04)",
+      "link_kind": "status_only",
+      "roles": [
+        "admin_plataforma"
+      ],
+      "can_not": [
+        "operar/activar/lanzar workflows",
+        "link operativo general"
+      ],
+      "residual": "API no reconsultable hoy; PEND-N8N-TRIAGE (95 err)",
+      "tracker_ref": "PC#8",
+      "last_evidence": "PC#8 [P]",
+      "owner": "Yamil op. / owner técnico n8n (por definir)"
+    },
+    {
+      "id": "estado_modulos_pc",
+      "name": "Estado de módulos / PC",
+      "description": "Mapa real del sistema (semáforo E0), curado por rol.",
+      "badge": "operativo",
+      "badge_label": "Operativo",
+      "badge_tone": "green",
+      "source": "PC_CLOSURE_TRACKER curado por rol",
+      "link_kind": "status",
+      "roles": [
+        "direccion_general",
+        "admin_plataforma"
+      ],
+      "can_not": [
+        "exponer tracker crudo (evidencia/riesgos internos)",
+        "escribir"
+      ],
+      "residual": "curación por rol obligatoria (DEC-E1-SCOPE-MIN)",
+      "tracker_ref": "PC_CLOSURE_TRACKER (documental)",
+      "last_evidence": "acta E0 GREEN15 [V]",
+      "owner": "Claude"
+    },
+    {
+      "id": "optimizadores_osrm_tw",
+      "name": "Optimizadores / OSRM / TW",
+      "description": "Motor de ruteo y ventanas de tiempo (estado del motor).",
+      "badge": "piloto",
+      "badge_label": "Piloto",
+      "badge_tone": "teal",
+      "source": "route-optimizer + PC#14",
+      "link_kind": "status_only",
+      "roles": [
+        "admin_plataforma",
+        "supervisor_ventas"
+      ],
+      "can_not": [
+        "ejecutar",
+        "publicar",
+        "escribir"
+      ],
+      "residual": "TW coverage 07-09; default OSRM sin decidir",
+      "tracker_ref": "PC#14",
+      "last_evidence": "PC#14 [P]",
+      "owner": "Sebastián"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "generated_for_role": "direccion_general",
+  "data_as_of": "2026-07-08T14:56:34-06:00",
+  "read_only": true,
+  "source_of_truth": "docs/pc/PC_CLOSURE_TRACKER.md",
+  "role_gate": {
+    "is_gated": true,
+    "gate": "PEND-NOMINALES",
+    "reason": "Contenido sensible de Dirección requiere usuarios nominales antes de exposición (cuenta compartida direccion@)."
+  },
+  "modules": []
+}

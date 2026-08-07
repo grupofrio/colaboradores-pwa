@@ -22,14 +22,20 @@ function toMillis(value) {
 }
 
 function normalizeSaleEvents(sales = []) {
-  return sales.map((sale) => ({
-    id: `sale-${sale.id}`,
-    type: 'sale',
-    label: sale.name || `Venta ${sale.id}`,
-    amount: Number(sale.amount_total ?? sale.total ?? 0),
-    at: sale.date_order || sale.create_date || null,
-    meta: sale.partner_id?.[1] || sale.partner_name || sale.customer || '',
-  }))
+  return sales.map((sale) => {
+    // today-sales (gf_pwa_admin._sale_summary) devuelve `order_id`; otras rutas
+    // pueden usar `id`. Aceptamos ambos para poder abrir el ticket de la venta.
+    const orderId = sale.order_id ?? sale.id ?? null
+    return {
+      id: `sale-${orderId}`,
+      type: 'sale',
+      orderId,
+      label: sale.name || `Venta ${orderId}`,
+      amount: Number(sale.amount_total ?? sale.total ?? 0),
+      at: sale.date_order || sale.create_date || null,
+      meta: sale.partner_id?.[1] || sale.partner_name || sale.customer || '',
+    }
+  })
 }
 
 function normalizeExpenseEvents(expenses = []) {

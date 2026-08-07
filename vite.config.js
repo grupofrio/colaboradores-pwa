@@ -2,11 +2,67 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { fileURLToPath } from 'node:url'
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
+  // ── Fixtures de DEMOSTRACIÓN: fail-closed ──────────────────────────────────
+  // Antes cada alias preguntaba por `mode`. Eso resultó frágil: el build de
+  // Vercel del 2026-08-02 metió `dayControl/fixtures.js` en el bundle y el
+  // guardián `check_supervisor_day_control_leak` lo cazó (sentinel
+  // "gf.salesops.supervisor.radar/1" dentro del chunk de M7). Reproducido:
+  // `vite build --mode development` mete los fixtures; `vite build` no.
+  //
+  // Ahora la condición es el COMANDO, no el modo: los fixtures solo existen en
+  // el servidor de desarrollo (`vite`) o en tests. CUALQUIER `vite build`, con
+  // el modo que sea, resuelve a los stubs de producción. Un entorno de CI mal
+  // configurado ya no puede filtrar datos sintéticos al bundle.
+  const useDemoFixtures = command === 'serve' || mode === 'test'
+  const demoFixtureLoader = fileURLToPath(new URL(
+    useDemoFixtures
+      ? './src/modules/ventas/m4/demoFixtureLoader.dev.js'
+      : './src/modules/ventas/m4/demoFixtureLoader.prod.js',
+    import.meta.url,
+  ))
+  // M7: mismo patrón que M4 — en build de producción el loader NO importa el
+  // fixture, así el payload financiero agregado nunca entra al bundle productivo.
+  const m7DemoFixtureLoader = fileURLToPath(new URL(
+    useDemoFixtures
+      ? './src/modules/rentabilidad-costos/m7/demoFixtureLoader.dev.js'
+      : './src/modules/rentabilidad-costos/m7/demoFixtureLoader.prod.js',
+    import.meta.url,
+  ))
+  // Supervisor day-control ("Hoy"): mismo patrón — en producción resuelve al stub
+  // sin fixtures, así los datos sintéticos nunca entran al bundle productivo.
+  const supervisorDayControlDemo = fileURLToPath(new URL(
+    useDemoFixtures
+      ? './src/modules/supervisor-ventas/dayControl/demoLoader.dev.js'
+      : './src/modules/supervisor-ventas/dayControl/demoLoader.prod.js',
+    import.meta.url,
+  ))
+  const supervisorV2Demo = fileURLToPath(new URL(
+    useDemoFixtures
+      ? './src/modules/supervisor-ventas/v2/demoLoader.dev.js'
+      : './src/modules/supervisor-ventas/v2/demoLoader.prod.js',
+    import.meta.url,
+  ))
+
   return {
+    resolve: {
+      alias: {
+        '#m3-demo-fixture': fileURLToPath(new URL(
+          useDemoFixtures
+            ? './src/modules/ejecucion/m3/fixtures/apiLatestFixture.js'
+            : './src/modules/ejecucion/m3/fixtures/emptyDemoFixture.js',
+          import.meta.url,
+        )),
+        'virtual:m4-demo-fixture': demoFixtureLoader,
+        'virtual:m7-demo-fixture': m7DemoFixtureLoader,
+        'virtual:supervisor-daycontrol-demo': supervisorDayControlDemo,
+        'virtual:supervisor-v2-demo': supervisorV2Demo,
+      },
+    },
     plugins: [
       react(),
       tailwindcss(),

@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "generated_for_role": "comercial",
+  "data_as_of": "2026-07-08T14:56:34-06:00",
+  "read_only": true,
+  "source_of_truth": "docs/pc/PC_CLOSURE_TRACKER.md",
+  "role_gate": {
+    "is_gated": true,
+    "gate": "FASE-1.5",
+    "reason": "Comercial diferido a Fase 1.5 hasta owner/dueño claro; no se expone en E1.0."
+  },
+  "modules": []
+}

@@ -5,10 +5,16 @@ function unwrapResponse(response) {
 
 function localIsoDate(date = new Date()) {
   const d = date instanceof Date ? date : new Date(date)
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  // Fecha del día en la zona horaria de NEGOCIO (México, -06 sin DST desde 2022),
+  // determinística sin importar la TZ del runtime (browser MX, servidor UTC o CI UTC).
+  // Antes usaba getFullYear/getMonth/getDate (TZ ambiente) → el "hoy" se corría al día
+  // siguiente a partir de las 18:00 MX (00:00 UTC) en entornos UTC. `en-CA` => YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
 }
 
 export function assertOkResponse(response) {
@@ -34,6 +40,45 @@ export function normalizeLiquidationListResponse(response, listKeys = ['plans'])
 export function normalizeLiquidationDetailResponse(response) {
   const envelope = assertOkResponse(response)
   return envelope?.data ?? envelope ?? null
+}
+
+export function getLiquidationValidationOutcome(planId, response) {
+  const envelope = assertOkResponse(response)
+  if (envelope?.ok !== true) {
+    throw new Error('Respuesta inválida de validación de liquidación')
+  }
+  const data = envelope?.data ?? envelope ?? {}
+  const alreadyValidated = Boolean(data.already_validated)
+
+  return {
+    alreadyValidated,
+    message: alreadyValidated
+      ? `Liquidación del plan #${planId} ya estaba validada`
+      : `Liquidación del plan #${planId} validada`,
+  }
+}
+
+export const LIQUIDATION_PENDING_REFRESH_WARNING =
+  'La validación se completó, pero no se pudo actualizar la cola de pendientes.'
+
+export function getLiquidationValidationSuccessTransition(planId, response) {
+  return {
+    ...getLiquidationValidationOutcome(planId, response),
+    historySelectedId: planId,
+    view: 'history',
+  }
+}
+
+export function getLiquidationPlanId(plan) {
+  return plan?.plan_id ?? plan?.id ?? null
+}
+
+export function resolveLiquidationHistorySelection(rows, currentId, initialSelectedId) {
+  const includesId = (id) => id != null && rows.some((plan) => getLiquidationPlanId(plan) === id)
+
+  if (includesId(currentId)) return currentId
+  if (includesId(initialSelectedId)) return initialSelectedId
+  return null
 }
 
 export function getDefaultLiquidationHistoryDateRange(today = new Date()) {

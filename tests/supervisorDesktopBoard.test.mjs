@@ -1,0 +1,379 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import React from 'react'
+import TestRenderer, { act } from 'react-test-renderer'
+
+import { derivePendingStops, summarizePendingByRoute, hasStopPlan } from '../src/modules/supervisor-ventas/v2/desktop/pendingStops.js'
+import { isDesktopWidth } from '../src/modules/supervisor-ventas/v2/desktop/useDesktopBoard.js'
+import { resolveActivePlanId } from '../src/modules/supervisor-ventas/v2/radar/radarSelection.js'
+import { DESKTOP_MIN } from '../src/lib/navModel.js'
+import { loadJsxDefault } from './helpers/renderJsx.mjs'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const RutasView = (await loadJsxDefault(fileURLToPath(
+  new URL('../src/modules/supervisor-ventas/v2/rutas/RutasView.jsx', import.meta.url),
+))).Component
+const SupervisorDesktopBoard = (await loadJsxDefault(fileURLToPath(
+  new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url),
+))).Component
+
+// Forma REAL medida en producción (radar/1, sucursal 29, recortada).
+const RADAR = {
+  ok: true,
+  contract: 'gf.salesops.supervisor.radar/1',
+  units: [
+    {
+      employee_id: 683, name: 'ALEJANDRO OSORIO BARRERA', plan_id: 6822, route_name: 'Chofer Iguala #5',
+      latitude: 18.3565567, longitude: -99.548735, captured_at: '2026-08-02 00:22:54',
+      age_seconds: 128, is_moving: true, signal_status: 'recent',
+      stops: {
+        planned: [
+          { stop_id: 1, sequence: 20, name: 'TAQUERIA GUZMAN', latitude: 18.35, longitude: -99.53, done: true },
+          { stop_id: 2, sequence: 10, name: 'FONDITAS ISSSTE', latitude: 18.34, longitude: -99.52, done: false },
+          { stop_id: 3, sequence: 30, name: 'SIN COORDS', latitude: null, longitude: null, done: false },
+        ],
+      },
+    },
+    {
+      employee_id: 679, name: 'ESTEBAN ALEMAN SERRADO', plan_id: 6826, route_name: 'ESTEBAN ALEMAN SERRADO',
+      latitude: null, longitude: null, captured_at: null, age_seconds: null,
+      is_moving: null, signal_status: 'no_signal',
+      // Sin `stops` ⇒ plan DESCONOCIDO (no "cero pendientes").
+    },
+  ],
+}
+
+// ── Breakpoint ──────────────────────────────────────────────────────────────
+
+test('el tablero usa el DESKTOP_MIN de la app, no un breakpoint inventado', () => {
+  assert.equal(isDesktopWidth(DESKTOP_MIN), true)
+  assert.equal(isDesktopWidth(DESKTOP_MIN - 1), false)
+  assert.equal(isDesktopWidth(375), false, 'móvil')
+  assert.equal(isDesktopWidth(768), false, 'tablet vertical')
+})
+
+test('fail-closed hacia móvil ante anchos no numéricos', () => {
+  for (const bad of [null, undefined, NaN, '1440', {}]) {
+    assert.equal(isDesktopWidth(bad), false, String(bad))
+  }
+})
+
+// ── Columna 3: se DERIVA, no se vuelve a pedir ──────────────────────────────
+
+test('los clientes por visitar salen del payload de radar ya cargado', () => {
+  const { rows, totalPending } = derivePendingStops(RADAR)
+
+  assert.equal(totalPending, 2, 'solo las paradas no visitadas')
+  assert.deepEqual(rows.map((r) => r.name), ['FONDITAS ISSSTE', 'SIN COORDS'])
+  assert.equal(rows[0].sequence, 10, 'ordenadas por secuencia dentro de la ruta')
+  assert.equal(rows[0].routeName, 'Chofer Iguala #5')
+})
+
+test('null ≠ 0: una ruta sin plan declarado se nombra, no se cuenta como cero', () => {
+  const { unknownRoutes } = derivePendingStops(RADAR)
+  assert.deepEqual(unknownRoutes, ['ESTEBAN ALEMAN SERRADO'])
+
+  const resumen = summarizePendingByRoute(RADAR)
+  assert.equal(resumen.find((r) => r.planId === 6822).pending, 2)
+  assert.equal(resumen.find((r) => r.planId === 6826).pending, null, 'sin plan ⇒ null, nunca 0')
+  assert.equal(hasStopPlan(RADAR.units[1]), false)
+})
+
+test('no se inventan coordenadas: la parada sin lat/lng se lista pero no es mapeable', () => {
+  const { rows } = derivePendingStops(RADAR)
+  const sinCoords = rows.find((r) => r.name === 'SIN COORDS')
+
+  assert.equal(sinCoords.mappable, false)
+  assert.equal(sinCoords.latitude, null)
+  assert.equal(sinCoords.longitude, null)
+  assert.equal(rows.find((r) => r.name === 'FONDITAS ISSSTE').mappable, true)
+})
+
+test('el filtro por ruta cruza columnas sin pedir nada al backend', () => {
+  assert.equal(derivePendingStops(RADAR, 6822).totalPending, 2)
+  assert.equal(derivePendingStops(RADAR, 6826).totalPending, 0)
+  assert.deepEqual(derivePendingStops(RADAR, 6826).unknownRoutes, ['ESTEBAN ALEMAN SERRADO'])
+  assert.equal(derivePendingStops(RADAR, 999999).totalPending, 0, 'ruta inexistente')
+})
+
+test('radar ausente o basura no revienta ni finge vacío', () => {
+  for (const bad of [null, undefined, {}, { units: null }, { units: 'x' }, 42]) {
+    const out = derivePendingStops(bad)
+    assert.deepEqual(out.rows, [])
+    assert.deepEqual(out.unknownRoutes, [])
+  }
+})
+
+// ── Reglas duras del contrato radar/1 ───────────────────────────────────────
+
+// Los comentarios explican las reglas y por tanto CITAN las palabras prohibidas.
+// Se escanea el código sin comentarios, si no el test se caza a sí mismo.
+function withoutComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+}
+
+test('el tablero lleva el banner permanente de retraso y NO promete tiempo real', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+  const code = withoutComments(src)
+
+  assert.match(code, /Las posiciones pueden tener retraso\. Consulta la hora de la última señal\./)
+  // El banner no puede estar detrás de una condición: vale para todo el tablero.
+  assert.ok(!/\{\s*\w+\s*&&\s*\(?\s*<div[^>]*v2-desktop-delay-banner/.test(code), 'banner incondicional')
+
+  for (const prohibido of ['en vivo', 'tiempo real', 'live tracking', 'setInterval', 'requestAnimationFrame']) {
+    assert.ok(!code.toLowerCase().includes(prohibido.toLowerCase()), `promete/simula "${prohibido}"`)
+  }
+})
+
+test('la UI no recalcula ni hardcodea umbrales de frescura', () => {
+  const board = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+  const pending = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/pendingStops.js', import.meta.url), 'utf8')
+
+  for (const src of [board, pending]) {
+    assert.ok(!/age_seconds\s*[<>]/.test(src), 'compara edades por su cuenta en vez de leer signal_status')
+    assert.ok(!/thresholds\s*=\s*\{/.test(src), 'define umbrales propios')
+  }
+})
+
+// ── Un solo fetch, y móvil intacto ──────────────────────────────────────────
+
+test('el tablero NO carga datos: los recibe ya resueltos', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+  const code = withoutComments(src)
+
+  for (const prohibido of ['useOperationalDay', 'loadOperationalDay', 'getDayControl', 'getRadar', 'fetch(']) {
+    assert.ok(!code.includes(prohibido), `el tablero llama a ${prohibido} — debe recibir \`day\` por prop`)
+  }
+})
+
+test('el tablero conecta la selección de ruta con el filtro y conserva Abrir ruta para navegar', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+  const rutasView = src.match(/<RutasView[\s\S]*?\/>/)?.[0]
+
+  assert.match(src, /const selectPlan = useCallback\(\(planId\) => \{[\s\S]*?!isPlanId\(planId\)[\s\S]*?resolveActivePlanId\(radarUnits, planId\) !== planId[\s\S]*?setSelectedPlanId\(planId\)[\s\S]*?\}, \[radarUnits\]\)/, 'solo selecciona IDs presentes en el radar')
+  assert.ok(rutasView, 'el tablero monta RutasView')
+  assert.match(rutasView, /onSelectRoute=\{selectPlan\}/, 'la tarjeta selecciona su plan sin navegar')
+  assert.match(rutasView, /onOpenRoute=\{onOpenRoute\}/, 'Abrir ruta conserva el callback del padre')
+  assert.doesNotMatch(rutasView, /onOpenRoute=\{toggle\}/, 'la selección no se reutiliza como navegación')
+})
+
+test('el tablero rechaza un plan de forma válida que el radar resolvería a otra unidad', () => {
+  const units = [{ plan_id: 91 }, { plan_id: 92 }]
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+
+  assert.equal(resolveActivePlanId(units, 93), 91, 'el radar cae en su primer plan válido')
+  assert.match(src, /resolveActivePlanId\(radarUnits, planId\) !== planId\) return/, 'el tablero no conserva una selección que el radar sustituiría')
+})
+
+test('el tablero no conserva una ruta seleccionada ausente del radar', async () => {
+  const day = {
+    dayControl: {
+      routes: [{
+        plan_id: 93,
+        route_name: 'Ruta sin radar',
+        driver: { name: 'Ana' }, vehicle: { name: 'U-93' }, departure: { status: 'on_time' },
+        stops: { done: 0, total: 1 }, sales: { available: false }, loads: { available: false },
+        position: { signal_status: 'no_signal' }, close: { stage: 'open' },
+      }],
+    },
+    radar: {
+      units: [
+        { plan_id: 91, route_name: 'Ruta radar 91', name: 'Beto', vehicle: { name: 'U-91' }, signal_status: 'recent', stops: { planned: [] } },
+        { plan_id: 92, route_name: 'Ruta radar 92', name: 'Caro', vehicle: { name: 'U-92' }, signal_status: 'recent', stops: { planned: [] } },
+      ],
+    },
+  }
+  let renderer
+
+  try {
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(SupervisorDesktopBoard, { day }))
+    })
+
+    const selection = renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta sin radar' })
+    assert.equal(selection.props['aria-pressed'], false)
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91)
+
+    await act(async () => { selection.props.onClick() })
+
+    assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta sin radar' }).props['aria-pressed'], false, 'el plan 93 no queda seleccionado')
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91, 'el radar conserva su plan efectivo')
+    assert.equal(renderer.root.findAllByProps({ 'data-testid': 'v2-desktop-porvisitar-limpiar' }).length, 0, 'pendientes no queda filtrado por el plan ausente')
+  } finally {
+    await act(async () => { renderer?.unmount() })
+  }
+})
+
+test('el tablero de escritorio comparte un plan efectivo entre rutas, mapa, pendientes y rastro GPS', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /import \{ useRadarTrail \} from '\.\.\/radar\/useRadarTrail\.js'/)
+  assert.match(src, /const effectivePlanId = resolveActivePlanId\(day\?\.radar\?\.units, selectedPlanId\)/)
+  assert.match(src, /useRadarTrail\(effectivePlanId, day\?\.dayControl\?\.date\)/)
+
+  const rutasView = src.match(/<RutasView[\s\S]*?\/>/)?.[0]
+  const radarView = src.match(/<RadarView[\s\S]*?\/>/)?.[0]
+  assert.ok(rutasView, 'monta rutas a la izquierda')
+  assert.ok(radarView, 'monta el mapa en el panel de operaciones')
+  assert.match(rutasView, /selectedPlanId=\{effectivePlanId\}/)
+  assert.match(radarView, /selectedId=\{effectivePlanId\}/)
+  assert.match(radarView, /showUnitList=\{false\}/)
+  assert.match(radarView, /trail=\{trail\}/)
+  assert.match(radarView, /trailStatus=\{trailStatus\}/)
+  assert.match(src, /<PendingStopsColumn radar=\{day\?\.radar\} selectedPlanId=\{effectivePlanId\}\s*\/>/)
+})
+
+test('el tablero compone mapa y clientes en un panel de operaciones y no permite ver todas las rutas', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/desktop/SupervisorDesktopBoard.jsx', import.meta.url), 'utf8')
+  const cssUrl = new URL('../src/modules/supervisor-ventas/v2/desktop/supervisorDesktopBoard.css', import.meta.url)
+
+  assert.match(src, /import '\.\/supervisorDesktopBoard\.css'/)
+  assert.match(src, /className="supervisor-desktop-board-grid"/)
+  const rightColumn = src.match(/<Column testid="v2-desktop-col-operaciones"[\s\S]*?<\/Column>/)?.[0]
+  assert.ok(rightColumn, 'existe un solo panel derecho de operaciones')
+  assert.match(rightColumn, /<RadarView[\s\S]*?<section[^>]*>[\s\S]*?<h2[^>]*>\s*Clientes\s+sin visitar\s*<\/h2>[\s\S]*?<PendingStopsColumn/)
+  assert.doesNotMatch(src, /v2-desktop-porvisitar-limpiar|ver todas/)
+  assert.ok(existsSync(cssUrl), 'el grid responsive vive en una hoja de estilo hermana')
+  const css = readFileSync(cssUrl, 'utf8')
+  assert.match(css, /\.supervisor-desktop-board-grid\s*\{[\s\S]*grid-template-columns:\s*minmax\(320px,\s*1\.05fr\)\s+minmax\(0,\s*1\.75fr\)/)
+  assert.match(css, /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*?\.supervisor-desktop-board-grid\s*\{[\s\S]*grid-template-columns:\s*1fr[\s\S]*height:\s*auto/)
+})
+
+test('el plan efectivo sustituye una selección obsoleta en rutas, mapa y pendientes', async () => {
+  const staleDay = {
+    dayControl: {
+      date: '2026-08-03',
+      routes: [{
+        plan_id: 91, route_name: 'Ruta estable', driver: { name: 'Ana' }, vehicle: { name: 'U-91' },
+        departure: { status: 'on_time' }, stops: { done: 0, total: 1 }, sales: { available: false },
+        loads: { available: false }, position: { signal_status: 'recent' }, close: { stage: 'open' },
+      }, {
+        plan_id: 92, route_name: 'Ruta reemplazada', driver: { name: 'Beto' }, vehicle: { name: 'U-92' },
+        departure: { status: 'on_time' }, stops: { done: 0, total: 1 }, sales: { available: false },
+        loads: { available: false }, position: { signal_status: 'recent' }, close: { stage: 'open' },
+      }],
+    },
+    radar: { units: [
+      { plan_id: 91, route_name: 'Ruta estable', name: 'Ana', vehicle: { name: 'U-91' }, signal_status: 'recent', stops: { planned: [] } },
+      { plan_id: 92, route_name: 'Ruta reemplazada', name: 'Beto', vehicle: { name: 'U-92' }, signal_status: 'recent', stops: { planned: [{ stop_id: 1, name: 'Pendiente', done: false }] } },
+    ] },
+  }
+  const refreshedDay = { ...staleDay, radar: { units: [staleDay.radar.units[0]] } }
+  let renderer
+
+  try {
+    await act(async () => { renderer = TestRenderer.create(React.createElement(SupervisorDesktopBoard, { day: staleDay })) })
+    const selectReplacement = renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta reemplazada' })
+    await act(async () => { selectReplacement.props.onClick() })
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 92)
+    assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta reemplazada' }).props['aria-pressed'], true)
+
+    await act(async () => { renderer.update(React.createElement(SupervisorDesktopBoard, { day: refreshedDay })) })
+    assert.equal(renderer.root.findByProps({ 'data-testid': 'radar-plan-select' }).props.value, 91)
+    assert.equal(renderer.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta estable' }).props['aria-pressed'], true)
+    assert.equal(renderer.root.findAllByProps({ 'data-testid': 'v2-desktop-porvisitar-row' }).length, 0)
+  } finally {
+    await act(async () => { renderer?.unmount() })
+  }
+})
+
+test('HoyTab conserva la vista móvil y solo cambia en escritorio', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/tabs/HoyTab.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /if \(isDesktop\)[\s\S]*?SupervisorDesktopBoard/, 'el tablero solo se monta en escritorio')
+  assert.ok(src.includes('<HoyView'), 'la vista móvil sigue ahí')
+  // Un solo hook de datos para ambas ramas.
+  assert.equal((src.match(/useOperationalDay\(/g) || []).length, 1, 'un solo fetch compartido')
+})
+
+test('RutasView mantiene compatibilidad: la selección es opcional', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/rutas/RutasView.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /selectedPlanId = null/, 'default null ⇒ móvil se ve igual')
+  // La selección no se comunica SOLO por color.
+  assert.match(src, /boxShadow: selected \?/, 'la fila seleccionada se marca con barra lateral, no solo con fondo')
+})
+
+test('RutasView de escritorio separa seleccionar la ruta de abrirla, sin anidar controles', async () => {
+  const dayControl = {
+    routes: [{
+      plan_id: 91,
+      route_name: 'Ruta Central',
+      driver: { name: 'Ana' },
+      vehicle: { name: 'U-91' },
+      departure: { status: 'on_time' },
+      stops: { done: 0, total: 2 },
+      sales: { available: false },
+      loads: { available: false },
+      position: { signal_status: 'recent' },
+      close: { stage: 'open' },
+    }],
+  }
+  const selected = []
+  const opened = []
+  let desktop
+  let mobile
+
+  try {
+    await act(async () => {
+      desktop = TestRenderer.create(React.createElement(RutasView, {
+        dayControl,
+        selectedPlanId: 91,
+        onSelectRoute: (planId) => selected.push(planId),
+        onOpenRoute: (planId) => opened.push(planId),
+      }))
+    })
+
+    const selection = desktop.root.findByProps({ 'aria-label': 'Seleccionar ruta Ruta Central' })
+    const open = desktop.root.findAll((node) => node.type === 'button' && node.props.children === 'Abrir ruta')
+
+    assert.equal(selection.type, 'button')
+    assert.equal(selection.props['aria-pressed'], true, 'la ruta seleccionada comunica su estado')
+    assert.equal(open.length, 1, 'la navegación tiene su propio botón')
+    assert.equal(open[0].props['aria-label'], 'Abrir ruta Ruta Central', 'Abrir ruta nombra su destino')
+    assert.equal(selection.findAll((node) => node.props.children === 'Abrir ruta').length, 0, 'no anida Abrir ruta en la selección')
+
+    await act(async () => { open[0].props.onClick() })
+    assert.deepEqual(opened, [91])
+    assert.deepEqual(selected, [], 'abrir no altera la selección')
+
+    await act(async () => { selection.props.onClick() })
+    assert.deepEqual(selected, [91])
+    assert.deepEqual(opened, [91], 'seleccionar no navega')
+
+    await act(async () => {
+      mobile = TestRenderer.create(React.createElement(RutasView, {
+        dayControl,
+        onOpenRoute: (planId) => opened.push(planId),
+      }))
+    })
+    const mobileRows = mobile.root.findAllByProps({ 'data-testid': 'v2-ruta-row' })
+    assert.equal(mobileRows.length, 1, 'móvil conserva una sola fila-control')
+    assert.equal(mobileRows[0].type, 'button')
+    assert.equal(mobileRows[0].props['aria-label'], 'Abrir ruta Ruta Central')
+    assert.equal(mobile.root.findAll((node) => node.type === 'button' && node.props.children === 'Abrir ruta').length, 0, 'móvil no muestra acción extra')
+  } finally {
+    await act(async () => {
+      desktop?.unmount()
+      mobile?.unmount()
+    })
+  }
+})
+
+test('RutasView de escritorio conserva objetivo táctil de 44 px para Abrir ruta', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/rutas/RutasView.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /onSelectRoute = null/, 'la variante escritorio debe ser opt-in')
+  assert.match(src, /minHeight:\s*44/, 'Abrir ruta mantiene objetivo táctil mínimo')
+})
+
+test('la selección de unidades del radar del tablero funciona también con teclado', () => {
+  const src = readFileSync(new URL('../src/modules/supervisor-ventas/v2/radar/RadarView.jsx', import.meta.url), 'utf8')
+
+  assert.match(src, /onKeyDown=/, 'la fila interactiva debe responder al teclado')
+  assert.match(src, /e\.key !== 'Enter' && e\.key !== ' '/, 'Enter y Espacio activan la selección')
+  assert.match(src, /e\.preventDefault\(\)/, 'Espacio no debe desplazar la página al seleccionar')
+})

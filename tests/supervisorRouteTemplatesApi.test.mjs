@@ -145,7 +145,7 @@ test('supervisor route templates does not introspect ir.model.fields metadata', 
   assert.equal(models.includes('ir.model.fields'), false)
 })
 
-test('supervisor route plan preview uses ensure endpoint and reads generated stops', async () => {
+test('supervisor route plan preview uses ensure + stops_preview (nunca sudo)', async () => {
   setSession()
   const calls = []
 
@@ -154,36 +154,23 @@ test('supervisor route plan preview uses ensure endpoint and reads generated sto
     const params = payload.params || {}
     calls.push({ url, params })
 
-    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/preview_customers') {
-      throw new Error('preview_customers endpoint is not installed')
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/ensure') {
+      return createJsonResponse(200, {
+        result: { ok: true, data: { plan_id: 800, plan_name: 'PLAN/800', state: 'draft', stops_total: 1 } },
+      })
     }
 
-    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/ensure') {
+    // P1-2: las paradas del plan vienen SOLO del endpoint seguro token-only.
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/stops_preview') {
       return createJsonResponse(200, {
         result: {
           ok: true,
           data: {
-            plan_id: 800,
-            plan_name: 'PLAN/800',
-            state: 'draft',
-            stops_total: 1,
+            route_plan_id: 800,
+            stops: [
+              { stop_id: 501, customer_id: 301, name: 'Abarrotes Sol', address: 'Centro 12', state: 'draft' },
+            ],
           },
-        },
-      })
-    }
-
-    if (url === '/odoo-api/get_records_sorted' && params.model === 'gf.route.stop') {
-      return createJsonResponse(200, {
-        result: {
-          response: [
-            {
-              id: 501,
-              route_plan_id: [800, 'PLAN/800'],
-              customer_id: [301, 'Abarrotes Sol'],
-              route_sequence: 1,
-              state: 'draft',
-            },
-          ],
         },
       })
     }
@@ -204,9 +191,39 @@ test('supervisor route plan preview uses ensure endpoint and reads generated sto
 
   assert.equal(response.data.route_plan_id, 800)
   assert.equal(response.data.customers.length, 1)
-  assert.equal(response.data.customers[0].customer_id[0], 301)
-  assert.equal(calls.some((call) => call.url.endsWith('/preview_customers')), false)
+  assert.equal(response.data.customers[0].customer_id, 301)
+  assert.equal(response.data.customers[0].name, 'Abarrotes Sol')
+  assert.equal(response.data.customers[0].stop_id, 501)
+  // P1-2: JAMÁS un read ORM con sudo de gf.route.stop desde el cliente.
+  assert.equal(calls.some((call) => call.url.endsWith('/get_records_sorted') && call.params.model === 'gf.route.stop'), false)
+  assert.equal(calls.some((call) => call.url.endsWith('/route_plan/stops_preview')), true)
   assert.equal(calls.find((call) => call.url.endsWith('/route_plan/ensure')).params.meta.tz, 'America/Mexico_City')
+})
+
+test('supervisor route plan preview degrada a error honesto si stops_preview falla (sin sudo)', async () => {
+  setSession()
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const params = (JSON.parse(options.body).params) || {}
+    calls.push({ url, params })
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/ensure') {
+      return createJsonResponse(200, { result: { ok: true, data: { plan_id: 800, state: 'draft', stops_total: 1 } } })
+    }
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/stops_preview') {
+      return createJsonResponse(200, { result: { ok: false, code: 'FORBIDDEN', user_message: 'Plan fuera de tu sucursal.' } })
+    }
+    return createJsonResponse(200, { result: { response: [] } })
+  }
+
+  const response = await api('POST', '/pwa-supv/route-plan-preview-customers', {
+    route_id: 16, date_target: '2026-06-03', polygon_id: 69,
+    subpolygon_ids: [], channel_ids: [], visit_days: [], time_window_id: null, demand_classes: [],
+  })
+
+  assert.equal(response.ok, false)
+  assert.equal(response.status, 'error')
+  // No cae a un read con sudo: nunca llama a get_records_sorted de paradas.
+  assert.equal(calls.some((call) => call.url.endsWith('/get_records_sorted') && call.params.model === 'gf.route.stop'), false)
 })
 
 test('supervisor branch configs forbidden response degrades without throwing', async () => {

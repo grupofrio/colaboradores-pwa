@@ -31,7 +31,6 @@ test('autoCloseRouteAfterLiquidacion closes the route with persisted kilometers 
   assert.equal(result.closeResult.success, true)
   assert.deepEqual(calls, [
     ['saveCierreState', 501, {
-      liquidacionDone: true,
       liquidacionAt: '2026-06-02T18:10:00.000Z',
     }],
     ['getKmData', 501, 501],
@@ -42,6 +41,31 @@ test('autoCloseRouteAfterLiquidacion closes the route with persisted kilometers 
       autoClosedAfterLiquidacion: true,
     }],
   ])
+})
+
+test('autoCloseRouteAfterLiquidacion records display timing but does not close a closed or reconciled route again', async () => {
+  for (const state of ['closed', 'reconciled']) {
+    const calls = []
+    const result = await autoCloseRouteAfterLiquidacion({
+      plan: { id: 504, state },
+      now: () => '2026-06-02T18:40:00.000Z',
+      getKmData: () => {
+        calls.push('getKmData')
+        return {}
+      },
+      saveCierreState: (planId, cache) => calls.push(['saveCierreState', planId, cache]),
+      closeRouteWithValidation: async () => {
+        calls.push('closeRouteWithValidation')
+        return { success: true }
+      },
+    })
+
+    assert.equal(result.closeAttempted, false)
+    assert.deepEqual(result.closeResult, { success: true, state, alreadyClosed: true })
+    assert.deepEqual(calls, [
+      ['saveCierreState', 504, { liquidacionAt: '2026-06-02T18:40:00.000Z' }],
+    ])
+  }
 })
 
 test('autoCloseRouteAfterLiquidacion uses zero kilometers when none are captured', async () => {

@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "tower.status (E1-A) — contrato read-only, curado por rol",
+  "type": "object",
+  "required": ["version", "generated_for_role", "data_as_of", "read_only", "role_gate", "modules"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string", "description": "versión del contrato" },
+    "generated_for_role": {
+      "type": "string",
+      "enum": ["direccion_general", "admin_plataforma", "gerente_sucursal", "supervisor_ventas", "comercial", "finanzas"],
+      "description": "rol para el que está curado este documento"
+    },
+    "data_as_of": {
+      "type": "string", "format": "date-time",
+      "description": "ISO8601 — fecha del commit del tracker del que deriva (no runtime)"
+    },
+    "read_only": { "const": true },
+    "source_of_truth": { "type": "string" },
+    "role_gate": {
+      "type": "object",
+      "required": ["is_gated", "gate", "reason"],
+      "additionalProperties": false,
+      "description": "Gate de exposición del rol. Si is_gated=true, E1-B NO debe exponer contenido sensible sin resolver el gate.",
+      "properties": {
+        "is_gated": { "type": "boolean" },
+        "gate": { "type": ["string", "null"], "description": "código del gate (p.ej. PEND-NOMINALES, FASE-1.5)" },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "description", "badge", "badge_label", "badge_tone", "source", "roles", "can_not", "residual", "tracker_ref", "last_evidence", "owner"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "badge": { "type": "string", "enum": ["operativo", "piloto", "parcial", "pc", "bloqueado", "estado_admin"] },
+          "badge_label": { "type": "string" },
+          "badge_tone": { "type": "string", "enum": ["green", "teal", "amber", "gray", "red", "slate"] },
+          "source": { "type": "string" },
+          "link_kind": {
+            "type": "string",
+            "enum": ["status", "status_only", "metabase", "metabase_embed", "metabase_or_status"],
+            "description": "TIPO de destino; E1-A NO emite URLs a endpoints nuevos"
+          },
+          "roles": { "type": "array", "items": { "type": "string" } },
+          "can_not": { "type": "array", "items": { "type": "string" } },
+          "residual": { "type": "string" },
+          "tracker_ref": { "type": "string" },
+          "last_evidence": { "type": "string" },
+          "owner": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$forbidden_fields_note": "NUNCA incluir: evidencia interna cruda, riesgos internos del tracker, secretos, tokens, URLs de webhook, ni el tracker completo. La curación por rol es obligatoria (DEC-E1-SCOPE-MIN)."
+}

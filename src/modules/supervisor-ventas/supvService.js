@@ -24,6 +24,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { api, getSession } from '../../lib/api.js'
+import { getDayControl } from './api.js'
+import { civilWeekRange } from './v2/civilWeek.js'
 import {
   resolveEmployeeMonthlySalesActual,
   resolveMonthlySalesActual,
@@ -238,9 +240,32 @@ export async function getYesterdaySummary() {
  *   vendorScores: Array<Object>,
  * }>}
  */
+/** Fecha operativa AUTORITATIVA del servidor (tz de la sucursal), leída del
+ *  payload de day-control. Codex §14: la semana de Score se ancla en ESTA fecha,
+ *  NUNCA en `new Date()` del dispositivo. Devuelve 'YYYY-MM-DD' o null. */
+async function resolveServerOperationalDate() {
+  try {
+    const dc = await getDayControl()
+    const d = dc?.date || dc?.data?.date || null
+    return (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d : null
+  } catch {
+    return null
+  }
+}
+
 export async function getWeeklyScore() {
+  // §14: la semana se ancla en la fecha operativa del SERVIDOR. Sin ella NO se
+  // calcula con el dispositivo ⇒ estado `unavailable` explícito.
+  const serverDate = await resolveServerOperationalDate()
+  if (!serverDate) {
+    return { weekDays: [], vendorScores: [], serverDate: null, todayStr: null, unavailable: true, reason: 'no_server_date' }
+  }
+  const week = civilWeekRange(serverDate)
+  const weekDays = week.days
+
   const [weekRes, teamRes] = await Promise.allSettled([
-    api('GET', '/pwa-supv/week-routes'),
+    // week-routes anclado a la MISMA semana del servidor (no device).
+    api('GET', `/pwa-supv/week-routes?week_start=${week.monday}&week_end=${week.sunday}`),
     api('GET', '/pwa-supv/team'),
   ])
 
@@ -256,17 +281,7 @@ export async function getWeeklyScore() {
     byDriver[did].routes.push(r)
   })
 
-  // Build week days (Mon-Sun)
-  const today = new Date()
-  const dayOfWeek = today.getDay()
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-  const weekDays = []
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    weekDays.push(fmtDate(d))
-  }
+  // weekDays ya se derivó arriba de civilWeekRange(serverDate) (fecha del servidor).
 
   // Build score per vendor per day
   const vendorScores = team.map((emp) => {
@@ -298,7 +313,7 @@ export async function getWeeklyScore() {
     }
   })
 
-  return { weekDays, vendorScores }
+  return { weekDays, vendorScores, serverDate, todayStr: serverDate, unavailable: false }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

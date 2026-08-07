@@ -6,30 +6,35 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "node -e \"require('fs').mkdirSync('dist',{recursive:true})\"",
-    "build": "vite build",
+    "build": "vite build && node scripts/check_m3_dist_leaks.mjs && node scripts/check_m4_fixture_leak.mjs && node scripts/check_m7_demo_bundle.mjs && node scripts/check_supervisor_day_control_leak.mjs",
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "test": "node --test tests/**/*.test.mjs"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "qz-tray": "^2.2.6",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "leaflet": "^1.9.4",
+    "react-leaflet": "^5.0.0",
     "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.0",
     "@eslint/js": "^9.9.0",
     "@tailwindcss/vite": "^4.0.0",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.1",
     "eslint": "^9.9.0",
     "eslint-plugin-react": "^7.35.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
-    "globals": "^15.9.0",
+    "globals": "^17.7.0",
+    "react-test-renderer": "^19.2.8",
     "tailwindcss": "^4.0.0",
     "vite": "^5.4.1",
-    "vite-plugin-pwa": "^0.20.5",
+    "vite-plugin-pwa": "^1.3.0",
     "workbox-window": "^7.1.0",
     "xmlrpc": "^1.3.2"
   }

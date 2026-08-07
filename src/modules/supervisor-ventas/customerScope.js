@@ -14,10 +14,15 @@ export function resolveSupervisorCustomerAnalyticUnitId({
 }
 
 export function buildSupervisorCustomerDomains(analyticUnitId) {
-  const resolvedAnalyticUnitId = Number(analyticUnitId || 0)
-  if (!resolvedAnalyticUnitId) return [['id', '=', 0]]
+  const ids = (Array.isArray(analyticUnitId) ? analyticUnitId : [analyticUnitId])
+    .map((id) => Number(id || 0))
+    .filter((id, index, list) => id > 0 && list.indexOf(id) === index)
+
+  if (!ids.length) return [['id', '=', 0]]
   return [
     ['active', '=', true],
-    ['x_analytic_un_id', '=', resolvedAnalyticUnitId],
+    ids.length > 1
+      ? ['x_analytic_un_id', 'in', ids]
+      : ['x_analytic_un_id', '=', ids[0]],
   ]
 }

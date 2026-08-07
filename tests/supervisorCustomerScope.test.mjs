@@ -34,5 +34,10 @@ test('buildSupervisorCustomerDomains filters only by active and x_analytic_un_id
     ['x_analytic_un_id', '=', 77],
   ])
 
+  assert.deepEqual(buildSupervisorCustomerDomains([301, 201, 301]), [
+    ['active', '=', true],
+    ['x_analytic_un_id', 'in', [301, 201]],
+  ])
+
   assert.deepEqual(buildSupervisorCustomerDomains(0), [['id', '=', 0]])
 })

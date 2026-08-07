@@ -1,7 +1,8 @@
 # CODE_MANUAL — PWA Colaboradores Grupo Frío
 
 > Documento de ingeniería de referencia para el repositorio [`sebascm0906/colaboradores-pwa`](https://github.com/sebascm0906/colaboradores-pwa).
-> Documenta el `as-is` al **2026-04-27** sobre el commit `52b7b5f`.
+> Documenta el `as-is` al **2026-07-28**; la administración de asistencias está
+> implementada localmente y su despliegue requiere autorización separada.
 > Este manual es generado automáticamente y requiere review humano antes de considerarse fuente única de verdad.
 
 ---
@@ -61,7 +62,9 @@ El PWA Colaboradores es una aplicación web instalable (PWA) construida en Vite 
 **Qué NO hace (alcance explícito).**
 
 - No es un ERP. No reemplaza Odoo: lo consume.
-- No gestiona RRHH (a pesar de lo que dice [README.md:1](../README.md), desactualizado). El portal RRHH/intranet es otro proyecto.
+- No reemplaza el portal RRHH/intranet ni Odoo. Su única escritura laboral es
+  la superficie aprobada de asistencias `IGU`/`IGU34`, siempre autorizada y
+  auditada por `gf_hr_ops`.
 - No es B2C. El frontend público de KOLD para distribuidores es un repo separado.
 - No corre lógica de negocio compleja en el cliente. Toda regla crítica (autorizaciones, validación de tenancy, posting de inventario) se valida en Odoo backend.
 - No tiene rutas API server-side propias: es un SPA puro. Las rewrites de Vercel proxean a Odoo y n8n.
@@ -399,7 +402,9 @@ colaboradores-pwa/
 
 ## 6. Modelos de datos y contratos
 
-El frontend NO usa TypeScript ni Zod. Los shapes están implícitos en cada caller. Documentamos los **5 modelos de datos centrales** que aparecen transversalmente.
+El frontend NO usa TypeScript ni Zod. Los contratos históricos permanecen
+implícitos en cada caller; el módulo de cortes POS sí aplica normalizadores de
+esquema exacto antes de aceptar respuestas del backend.
 
 ### 6.1 Sesión (`gf_session` en localStorage)
 
@@ -515,6 +520,79 @@ Payload de creación (`createSaleOrder` en [`admin/api.js:35-37`](../src/modules
 
 Endpoint Odoo: `POST /pwa-admin/sale-create`. **No existe `app/api/orders/route.ts`** — esta no es una app Next.js (gap G004 desmentido).
 
+### 6.6 Cortes POS Noche/Día
+
+La ruta `/admin/cierre` tiene dos dominios deliberadamente separados:
+
+- **Cortes POS por turno**, autoritativos, versionados y administrados desde
+  [`ScreenCierreCaja.jsx`](../src/modules/admin/ScreenCierreCaja.jsx).
+- **Cierre diario Legacy**, disponible solo como historial después de activar
+  turnos en la sucursal. `gf.cash.closing` no se mezcla con el consolidado
+  Noche/Día.
+
+El backend (`gf_pwa_admin`) aporta los modelos `gf.pos.cash.shift.config`,
+`gf.pos.cash.shift`, `gf.pos.cash.shift.version`, `denomination`, `adjustment`,
+`authorization`, `event`, `cancellation.audit`, `evidence` y `operation`. El
+modelo `evidence` se conserva para leer versiones históricas; un cierre móvil
+nuevo ya no crea ni exige evidencia. Ventas y gastos guardan
+`x_pwa_cash_shift_id` y `x_pwa_cash_recorded_at`; ventas además guardan el canal
+`admin|day|night|legacy_pwa`.
+
+Principios del contrato:
+
+- El alcance `company/warehouse/analytic` y el actor se derivan del empleado
+  resuelto por el token opaco `X-GF-Employee-Token`. Los payloads de mutación no
+  aceptan identidad, alcance ni listas de movimientos elegidas por el cliente.
+  Angy puede cerrar como empleada autorizada aunque no tenga un `res.users`
+  vinculado; el responsable persistido e impreso es el empleado del token.
+- `allow_manage_pos_cash_shifts` habilita administración. La autorización usa
+  `allow_authorize_cash_closing` o dirección general. `/pwa-admin/capabilities`
+  publica `cashShiftRead`, `cashShiftManage`, `cashShiftAuthorize`,
+  `cashShiftPendingDetail`, `cashShiftReopen` y `cashShiftPrint`; sin token
+  válido todos fallan cerrado.
+- Los límites son manuales y usan la hora confiable del servidor en
+  `America/Mexico_City`. Los intervalos son semiabiertos `[opened_at,
+  closed_at)`. Una Noche 27 puede comenzar el 26 a las 18:00. 06:00/18:00 son
+  referencias configuradas, no cron jobs ni fronteras inferidas del vendedor.
+- La apertura inicial reevalúa bajo lock los tickets y gastos elegibles. Cada
+  cierre crea una `gf.pos.cash.shift.version` inmutable con snapshots exactos de
+  ventas, cancelaciones, productos, pagos, gastos, denominaciones, ajustes,
+  totales y autorizaciones. Un recierre enlaza la versión anterior y no crea
+  otro turno sucesor.
+- Cierre y recierre móviles no solicitan foto ni `evidence_token`. Si la
+  diferencia es distinta de cero, la nota sigue siendo obligatoria. Las
+  versiones creadas antes de este cambio conservan su evidencia inmutable y la
+  impresión sigue mostrando referencia, digest y archivo; una versión nueva
+  imprime `Sin evidencia adjunta`.
+- Apertura, cierre, recierre, reapertura y autorización usan una clave
+  idempotente más huella canónica. Una respuesta de red incierta se consulta en
+  `/operations/status` con la **misma** clave y payload. Reusar la clave con otro
+  contenido es conflicto; generar otra clave durante recuperación rompe la
+  reconciliación operativa.
+- Un advisory lock por compañía/almacén, locks de filas y el índice único
+  parcial `gf_pos_cash_shift_one_open_branch_idx` serializan fronteras. Los
+  modelos de auditoría rechazan `create/write/unlink` externos; una venta o
+  gasto de turno cerrado solo puede corregirse mediante el servicio de una
+  reapertura bloqueada.
+
+En frontend, [`cashShiftModel.js`](../src/modules/admin/cashShiftModel.js) y
+[`cashShiftHistoryModel.js`](../src/modules/admin/cashShiftHistoryModel.js)
+validan objetos simples, campos exactos, IDs únicos, números finitos y la unión
+exacta de turno vivo, versión histórica y consolidado. Datos adicionales,
+getters heredados o shapes parciales se rechazan. El historial carga una fecha
+operativa México y después un detalle por `shift_id + version_id`; imprimir usa
+esa versión exacta, no el estado vivo. La normalización acepta tanto evidencia
+histórica como las nuevas versiones con `evidence=false` y
+`evidence_present=false`, sin condicionar `printable` a una foto.
+
+[`cashShiftService.js`](../src/modules/admin/cashShiftService.js) aísla claves y
+borradores por identidad de sesión, limita el registro sin expulsar operaciones
+pendientes y conserva la solicitud incierta. Los componentes usan generaciones
+de request y limpieza al desmontar para ignorar respuestas tardías; cambiar
+sesión, alcance o borrador invalida resultados previos. El modo `authorize`
+solo consulta por ID explícito el DTO mínimo pendiente y nunca carga turno
+activo, vista previa, historial, impresión, apertura, cierre o reapertura.
+
 ---
 
 ## 7. Endpoints API (referencia completa)
@@ -626,8 +704,8 @@ Lista completa (≈40 endpoints) en [`src/modules/admin/api.js`](../src/modules/
 | `/pwa-admin/sale-create` | POST | `auxiliar_admin`, `gerente_sucursal`, `direccion_general` | Crea `sale.order`, confirma, descuenta inventario al `dispatch-ticket` |
 | `/pwa-admin/sale-cancel` | POST | `auxiliar_admin`, `gerente_sucursal` | Llama `sale.order.action_cancel`, revierte stock moves |
 | `/pwa-admin/dispatch-ticket` | POST | Almacenista Entregas (operativamente), `auxiliar_admin` | Valida deliveries, descuenta stock |
-| `/pwa-admin/cash-closing` | GET | `auxiliar_admin`, `gerente_sucursal`, `direccion_general` | Read-only |
-| `/pwa-admin/cash-closing` | POST | `auxiliar_admin` (registra), `gerente_sucursal` (autoriza) | Crea `gf.cash.closing`. Umbrales hoy validados solo en UI. |
+| `/pwa-admin/cash-closing` | GET | `auxiliar_admin`, `gerente_sucursal`, `direccion_general` | Cierre diario Legacy, read-only después de activar turnos. |
+| `/pwa-admin/cash-closing` | POST | `auxiliar_admin` (registra), `gerente_sucursal` (autoriza) | Crea `gf.cash.closing` Legacy mientras la sucursal esté inactiva. G018 aplica a este contrato anterior. |
 | `/pwa-admin/expense-create` | POST | `auxiliar_admin`, todos los roles operativos para sus gastos | Crea `hr.expense` con company + analítica |
 | `/pwa-admin/expense-approve`, `/expense-reject` | POST | `gerente_sucursal`, `direccion_general` | Aprueba/rechaza |
 | `/pwa-admin/requisition-create` | POST | `auxiliar_admin`, otros roles que las disparan | Crea `purchase.order` draft con analytic_distribution |
@@ -659,6 +737,25 @@ Reglas de autorización (validadas hoy solo cliente, gap G018 derivado):
 - `|difference| > 100` → nota obligatoria mínimo 10 chars.
 - `> 1000` → banner "requiere autorización gerente".
 - `> 10000` → banner "requiere autorización dirección".
+
+Los endpoints de cortes POS por turno no usan ese payload Legacy:
+
+| Endpoint | Método | Capacidad | Resultado/efecto |
+|----------|--------|-----------|------------------|
+| `/pwa-admin/capabilities` | GET | token de empleado | Capacidades fail-closed del actor autenticado. |
+| `/pwa-admin/cash-shifts/active` | GET | `cashShiftManage` | Config inactiva o turno vivo del alcance autoritativo. |
+| `/pwa-admin/cash-shifts/preview` | GET | `cashShiftManage` | Vista previa inicial o viva; no muta. |
+| `/pwa-admin/cash-shifts/open` | POST | `cashShiftManage` | Primera apertura idempotente; activa la sucursal y asigna elegibles bajo lock. |
+| `/pwa-admin/cash-shifts/close` | POST | `cashShiftManage` | Cierre normal con `next_opening_fund`, o recierre sin ese campo. |
+| `/pwa-admin/cash-shifts/history` | GET | `cashShiftManage` | Noche, Día y Consolidado por fecha operativa México. |
+| `/pwa-admin/cash-shifts/detail` | GET | manage o authorizer | Versión exacta completa para manage; DTO pendiente mínimo para authorizer. |
+| `/pwa-admin/cash-shifts/reopen` | POST | `cashShiftReopen` | Reabre con razón y conserva la cadena de versiones. |
+| `/pwa-admin/cash-shifts/authorize` | POST | `cashShiftAuthorize` | Registra el nivel permitido en una versión `pending_auth`. |
+| `/pwa-admin/cash-shifts/operations/status` | GET | actor de la operación | Recupera por operación + clave idempotente. |
+| `/pwa/evidence/upload` | POST | según el flujo | Continúa disponible para comprobantes de gastos y flujos Legacy; el cierre POS por turno nuevo no lo llama ni envía `evidence_token`. |
+
+`open`, `close`, `reopen` y `authorize` tienen allowlists exactas. Company,
+warehouse, analytic, employee y movement IDs enviados por cliente se rechazan.
 
 ### 7.5 Familia `/pwa-prod/*` (Producción)
 
@@ -728,7 +825,89 @@ Endpoints ~20 en [`src/modules/supervisor-ventas/api.js`](../src/modules/supervi
 | `/pwa-supv/tasks/*`, `/notes/*` | **Stub frontend** — `IS_STUB=true` en [`tareasService.js`](../src/modules/supervisor-ventas/tareasService.js) y [`notasService.js`](../src/modules/supervisor-ventas/notasService.js). Datos en localStorage. Gap G006 (P1). |
 | `/pwa-supv/customers/inactive`, `/recovery` | live |
 
-### 7.11 Endpoints n8n y voice
+### 7.11 Administración de asistencias de Iguala (`gf_hr_ops`)
+
+La ruta PWA `/asistencias` consume ocho endpoints HTTP directos de Odoo. No
+existe fallback a n8n ni se reconstruye información laboral en el navegador.
+
+| Contrato | Uso | Concurrencia / efecto |
+|----------|-----|-----------------------|
+| `GET /pwa-hr/attendance/capabilities` | Confirma autorización, zona horaria y funciones disponibles. | Solo lectura. Debe ejecutarse antes del listado. |
+| `GET /pwa-hr/attendance` | Devuelve el snapshot empleado-día y sus tramos, faltas y resumen. | Solo lectura; rango máximo de 93 días. |
+| `POST /pwa-hr/attendance` | Crea el primer tramo o agrega otro tramo no traslapado. | Exige `change_reason`; crea auditoría. |
+| `PATCH /pwa-hr/attendance/<attendance_id>` | Corrige entrada/salida o cierra un tramo abierto. | Exige `version` y `change_reason`; rechaza `stale_record`. |
+| `POST /pwa-hr/faltas` | Registra una falta explícita. | Rechaza días con asistencia; un día no programado exige confirmación. |
+| `POST /pwa-hr/faltas/<falta_id>/justify` | Justifica una falta pendiente y adjunta evidencia opcional. | Exige `version`, motivo administrativo y actor con usuario Odoo. |
+| `GET /pwa-hr/audit` | Consulta historial inmutable paginado de una asistencia o falta. | Orden estable por fecha e ID descendentes. |
+| `GET /pwa-hr/attendance/export.xlsx` | Descarga el mismo snapshot filtrado como libro Excel. | Solo lectura; Odoo genera el archivo completo. |
+
+#### Autoridad, alcance y tiempo
+
+- `X-GF-Employee-Token` es la autoridad de identidad. El backend resuelve al
+  actor desde la sesión móvil; nunca confía en `employee_id`, nombre, rol,
+  compañía o cuenta enviados por el cliente para ampliar permisos.
+- La allowlist autoritativa vive en el parámetro Odoo
+  `gf_hr_ops.pwa_attendance_manager_employee_ids`. La PWA usa
+  `VITE_ATTENDANCE_MANAGER_EMPLOYEE_IDS` solo como gate de navegación. Ambos
+  valores deben ser `717` para Angélica; una prueba de drift debe comparar el
+  gate local con `capabilities.allowed`. Odoo siempre gana ante discrepancias.
+- El alcance se resuelve cada vez por códigos analíticos exactos `IGU` y
+  `IGU34`, empleados activos y `hr.employee.x_analytic_account_id`. Si falta
+  cualquiera de los dos códigos, la operación falla cerrada e informa
+  `missing_codes`; no se busca por nombre ni por coincidencia parcial.
+- La zona operativa es `America/Mexico_City`. El navegador envía offset
+  explícito, Odoo almacena UTC y el empleado-día se asigna por la fecha local
+  de entrada, incluso en tramos nocturnos.
+
+#### Escrituras, adjuntos y auditoría
+
+- Cada asistencia/falta serializada incluye `version` derivada de
+  `write_date`; corrección, cierre y justificación usan control optimista y
+  obligan a recargar ante `409 stale_record`.
+- Cada escritura requiere `change_reason` y crea de forma atómica un evento
+  inmutable con actor, empleado objetivo, acción, fecha UTC, IP/user-agent y
+  snapshots anterior/posterior. Si la auditoría falla, también falla la
+  escritura. Los snapshots no guardan binarios.
+- Los comprobantes de justificación son opcionales y solo aceptan PDF, JPG o
+  PNG de hasta 5 MiB. La validación ocurre antes de decodificar base64 y vuelve
+  a validarse en Odoo.
+- No existen borrados desde la PWA. Tampoco se capturan o exportan biometría,
+  fotografías de reconocimiento facial ni documentos/comprobantes adjuntos.
+
+#### Contrato Excel
+
+Odoo es la única fuente del `.xlsx`. La descarga conserva exactamente los
+filtros activos, valida un `Blob` no vacío y usa el filename seguro del
+backend. El libro contiene las hojas `Resumen`, `Asistencias` y `Faltas`, con
+fechas/horas/números nativos, filtros, estilos legibles y neutralización de
+formula injection. El cliente crea un único enlace temporal, inicia la
+descarga, lo elimina y revoca el object URL; una falla no produce archivos
+parciales ni borra filtros.
+
+#### Handoff de despliegue backend-first (no ejecutar sin autorización)
+
+El orden es **backend-first** y requiere una autorización de producción
+separada:
+
+1. desplegar/actualizar `gf_hr_ops` y ejecutar sus pruebas;
+2. verificar que `hr.employee(717)` esté vinculado a un `res.users` activo;
+3. configurar `gf_hr_ops.pwa_attendance_manager_employee_ids=717`;
+4. ejecutar smoke checks de solo lectura para capacidades, listado y Excel con
+   una sesión autorizada, y confirmar que otra sesión reciba denegación;
+5. configurar el env de la PWA
+   `VITE_ATTENDANCE_MANAGER_EMPLOYEE_IDS=717`;
+6. desplegar la PWA;
+7. comprobar que el módulo aparece solo para Angélica y que no hay drift entre
+   el gate local y `capabilities.allowed`.
+
+Los smoke checks no deben crear, corregir, cerrar ni justificar registros de
+producción. Si el scope es incorrecto, el rollback consiste en quitar la
+allowlist PWA, limpiar la allowlist backend y volver a los artefactos previos;
+no hay datos que revertir. Registrar revisiones desplegadas, resultados,
+allowlists efectivas y verificación de ausencia de biometría/documentos en la
+entrega.
+
+### 7.12 Endpoints n8n y voice
 
 | Path | Workflow | Token |
 |------|----------|-------|
@@ -1135,7 +1314,7 @@ npm test
 ### 12.2 Checklist pre-deploy
 
 - [ ] `npm run build` corre sin errores en local.
-- [ ] `npm test` pasa los 21 tests existentes.
+- [ ] `npm test` pasa la suite completa, incluidos los contratos `cashShift*`.
 - [ ] `npm run lint` sin errores ni warnings nuevos.
 - [ ] No hay variables prohibidas (`META_ACCESS_TOKEN`, `WA_PHONE_NUMBER_ID`, `ODOO_PASS`, `kold-secret-dev`) en `.env.local` ni en Vercel.
 - [ ] `VITE_N8N_VOICE_TOKEN` rotado en los últimos 30 días (gap G003).
@@ -1150,6 +1329,42 @@ npm test
 - Los SW están con `selfDestroying: true` ([`vite.config.js:18`](../vite.config.js)), así que un cliente con versión vieja recibirá la nueva en la siguiente carga sin necesidad de unregister manual.
 
 > [!NOTE] Confirmado por Yamil el 2026-04-27: el deploy productivo activo está en [`colaboradores-pwa.vercel.app/login`](https://colaboradores-pwa.vercel.app/login) (subdominio default de Vercel). El dominio custom `colaboradores.grupofrio.mx` referenciado en `vercel.json` y README **no está activo o no apunta al deploy** — ver gap G024.
+
+### 12.4 Orden de rollout para cortes POS por turno
+
+La PWA no se libera antes del backend. Para la actualización que habilita cierre
+y recierre móvil sin foto, la sucursal ya tiene configuración activa: en un
+clon de staging con snapshot nuevo, confirmar primero que `$PGDATABASE` sea la
+base prevista y actualizar `gf_pwa_admin` a `18.0.2.2.1`:
+
+```bash
+test -n "${PGDATABASE:?Run inside the intended Odoo.sh staging build}"
+odoo-bin -d "$PGDATABASE" -u gf_pwa_admin --stop-after-init --workers=0 --max-cron-threads=0
+odoo-bin shell -d "$PGDATABASE" < tests/check_pos_cash_shift_rollout.py
+```
+
+El checker se ejecuta en **modo normal post-activación**, sin
+`GF_CASH_SHIFT_REQUIRE_INACTIVE`, porque la configuración ya está activa. Este
+modo acepta configuraciones activas únicamente cuando cada una tiene
+exactamente un turno abierto coherente con `active_shift_id` y su alcance. No
+cerrar, reabrir ni modificar manualmente turnos o movimientos para hacer pasar
+el checker. Si upgrade, checker y compatibilidad están verdes, desplegar la PWA,
+cerrar sesión, recargar la aplicación instalada y volver a iniciar sesión con
+el token de empleado para renovar capacidades.
+
+En la aceptación, Angy debe poder cerrar y recerrar capturando denominaciones y
+nota obligatoria cuando exista diferencia, sin adjuntar foto. También debe
+imprimir una versión nueva con `Sin evidencia adjunta` y una versión histórica
+con su referencia, digest y nombre de archivo intactos. Las fotografías de
+comprobantes de gastos y las reglas del cierre diario Legacy están fuera de este
+cambio.
+
+La configuración ya está activa. Si falla el upgrade o checker, no liberar la
+PWA y no restaurar ni bajar la base a ciegas: ya puede haber ventas/gastos
+enlazados. Ocultar temporalmente la PWA si hace falta, conservar vínculos e
+invariantes y corregir hacia adelante.
+El runbook ejecutable vive en el repositorio backend en
+`docs/validation/2026-07-27-pos-cash-shift-rollout.md`.
 
 ---
 
@@ -1422,6 +1637,8 @@ Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_s
 
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
+| 2026-07-29 | Codex (cierre móvil sin foto) | §6.6 preserva evidencia histórica, permite cierre/recierre nuevo sin foto y documenta al responsable por token de empleado sin exigir `res.users`. §7.4 separa comprobantes de gastos/Legacy. §12.4 actualiza el rollout backend-first para `gf_pwa_admin` 18.0.2.2.1 con checker normal y renovación de sesión PWA. |
+| 2026-07-28 | Codex (cortes POS por turno) | §6.6 documenta alcance autoritativo, periodos manuales, snapshots, evidencia, idempotencia, concurrencia e invariantes. §7.4 agrega endpoints/capacidades Noche-Día y separa Legacy. §12.4 fija el orden de upgrade backend-first y rollback antes/después de activación. El manual por rol añade la operación completa de Angy. |
 | 2026-04-27 | Claude (auto-generado, review por Yamil) | Generación inicial. Cubre 18 secciones, 162+ endpoints, 9 roles operativos + 7 fuera de scope, 5 diagramas Mermaid embebidos. Branch: `docs/code-manual-initial`. Necesita review humano antes de considerarse fuente única de verdad. |
 | 2026-04-27 | Claude (verificación P1 + ajustes scope) | Reescritura de §8 a 11 roles operativos (9 primarios + 2 secundarios `auxiliar_produccion` y `auxiliar_ruta`). §8.12 reducida a 5 roles fuera de scope. Matriz Mermaid §4.4 actualizada con 2 nuevos nodos. §12 actualizada con dominio real `colaboradores-pwa.vercel.app`. §7.7 anota que `gf.inventory.posting` vive en `gf_production_ops` y que tiene 56.2% records en error en producción al momento de la auditoría. |
 | 2026-05-05 | Claude (Fase 4 — cierre del ciclo de seguridad/inventario) | §4.3 reescrito: el sistema NO usa JWT, los tokens reales son opacos (`gf_employee_token` en BD, `gf_salesops_token` estático global). §6 actualiza modelo de sesión. §7.7 cierra el aviso de bloqueador en `/pwa-pt/reception-create`. §8.6 (Almacenista PT) marca G013 cerrado y referencia G026 con la mitigación preventiva (`setup-plantas-produccion.md` en repo backend). §9.1 y §12.2 incorporan referencia obligatoria al setup de plantas. ADR-03 corregido para reflejar diagnóstico real del session_token. **Nuevo ADR-08:** autorización en `gf_saleops` derivada de `X-GF-Employee-Token`, no de payload, con flag `require_employee_token=True` en producción desde 2026-05-05. §15 actualiza gotcha G15.6 (gf.inventory.posting resuelto) y agrega G15.11 (privilege escalation resuelto). §16 reordena top 10 sin G002/G013. §17 expande glosario con definiciones precisas de `gf_employee_token`, `gf_salesops_token`, `session_token`. |

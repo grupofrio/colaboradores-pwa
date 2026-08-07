@@ -6,6 +6,40 @@ import {
   withExpectedFreezeField,
 } from '../modules/produccion/cycleTiming.js'
 import {
+  TOWER_M1_BACKLOG_PATH,
+  isTowerM1Path,
+  filterTowerM1Params,
+} from './towerM1Route.js'
+import {
+  isKoldOsM2Path,
+  filterKoldOsM2Params,
+} from './koldOsM2Route.js'
+import { toPositiveSafeIntegerId } from '../modules/admin/posCustomers.js'
+import {
+  isKoldOsM3Path,
+  filterKoldOsM3Params,
+} from './koldOsM3Route.js'
+import {
+  isKoldOsM4Path,
+  filterKoldOsM4Params,
+} from './koldOsM4Route.js'
+import {
+  isKoldOsM5Path,
+  filterKoldOsM5Params,
+} from './koldOsM5Route.js'
+import {
+  isKoldOsM6Path,
+  filterKoldOsM6Params,
+} from './koldOsM6Route.js'
+import {
+  isKoldOsM7Path,
+  filterKoldOsM7Params,
+} from './koldOsM7Route.js'
+import {
+  isPwaHrNamespace,
+  matchPwaHrAttendanceRoute,
+} from './pwaHrRoute.js'
+import {
   buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
@@ -24,6 +58,7 @@ import {
 } from '../modules/produccion/checklistContext.js'
 import { sumRolitoLocationStock } from '../modules/produccion/rolitoBagMath.js'
 import { normalizeChecklistPhotoValue } from '../modules/shared/checklistPhoto.js'
+import { normalizeWriteResponse, WRITE_PHASE } from '../modules/supervisor-ventas/v2/normalizeWriteResponse.js'
 import {
   addLocalPackingEntry,
   getLocalPackingEntries,
@@ -68,11 +103,12 @@ const NO_DIRECT = Symbol('no_direct')
 //   e.status → HTTP status (404, 401, 500...) o 0 si no aplica
 //   e.code   → 'network' | 'bypass' | 'no_session' | 'http_error'
 export class ApiError extends Error {
-  constructor(message, { status = 0, code = 'http_error' } = {}) {
+  constructor(message, { status = 0, code = 'http_error', details = {} } = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.details = details && typeof details === 'object' ? details : {}
   }
 }
 
@@ -151,10 +187,44 @@ function isBypass() {
   return getSession()._bypass === true
 }
 
+// Codex §2/§4: expiración IDEMPOTENTE — un solo evento lógico aunque múltiples
+// requests devuelvan UNAUTHORIZED a la vez. Se rearma al establecerse una sesión
+// nueva y válida (login).
+let _sessionExpireFired = false
 function expireSession() {
-  if (!isBypass()) {
-    window.dispatchEvent(new Event('gf:session-expired'))
-  }
+  if (isBypass()) return
+  if (_sessionExpireFired) return
+  _sessionExpireFired = true
+  window.dispatchEvent(new Event('gf:session-expired'))
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('gf:session-changed', () => {
+    const s = getSession()
+    if (s && (s.employee_id || s.odoo_employee_token || s.gf_employee_token)) {
+      _sessionExpireFired = false // nueva sesión válida ⇒ rearmar
+    }
+  })
+}
+
+// Codex §3: detector ESTRICTO de envelope UNAUTHORIZED (HTTP 200 con
+// {status:"error", code:"UNAUTHORIZED"} o su forma anidada {result:{...}}, o el
+// crudo {ok:false, code:"UNAUTHORIZED"}). Basado en CÓDIGO estructurado, nunca en
+// texto de mensaje. NO expira por FORBIDDEN/FEATURE_DISABLED/DATE_NOT_ALLOWED/
+// VALIDATION/CONFLICT/LOCKED.
+function isUnauthorizedEnvelope(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
+  const env = (raw.result && typeof raw.result === 'object' && !Array.isArray(raw.result)) ? raw.result : raw
+  if (!env || typeof env !== 'object') return false
+  if (String(env.code || '').toUpperCase() !== 'UNAUTHORIZED') return false
+  // Requiere forma de error/no-ok estructurada (evita falsos positivos por texto).
+  return env.status === 'error' || env.status === 'busy' || env.ok === false
+}
+
+// Expira sesión (idempotente) si `raw` es un envelope UNAUTHORIZED estructurado, y
+// el endpoint NO es opcional (no romper Metabase/capabilities). Devuelve `raw`.
+function expireSessionIfUnauthorizedEnvelope(raw, path = '') {
+  if (isUnauthorizedEnvelope(raw) && !isOptionalEndpoint(path)) expireSession()
+  return raw
 }
 
 function buildBaseHeaders(path = '') {
@@ -207,6 +277,9 @@ function extractErrorDetails(payload, status = 0) {
   return {
     code,
     message: String(message),
+    details: payload?.error?.details && typeof payload.error.details === 'object'
+      ? payload.error.details
+      : {},
   }
 }
 
@@ -434,11 +507,16 @@ function pickListResponse(payload) {
 
 async function odooJson(path, params = {}) {
   const headers = buildBaseHeaders(path)
-  const res = await fetch(`${ODOO_BASE}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(buildJsonRpcPayload(params)),
-  })
+  let res
+  try {
+    res = await fetch(`${ODOO_BASE}${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(buildJsonRpcPayload(params)),
+    })
+  } catch (error) {
+    throw new ApiError(error?.message || 'Network error', { status: 0, code: 'network' })
+  }
 
   const text = await res.text().catch(() => '')
   let json = {}
@@ -452,9 +530,17 @@ async function odooJson(path, params = {}) {
 
   if (!res.ok) {
     const { message, code } = extractErrorDetails(json, res.status)
+    // Codex §1/§2: 401 (o code UNAUTHORIZED) de endpoint crítico ⇒ expira sesión.
+    if ((res.status === 401 || String(code || '').toUpperCase() === 'UNAUTHORIZED') && !isOptionalEndpoint(path)) {
+      expireSession()
+    }
     throw new ApiError(message, { status: res.status, code })
   }
 
+  // Codex §2: HTTP 200 + envelope {status:"error", code:"UNAUTHORIZED"} ⇒ expira
+  // sesión de forma CENTRAL (idempotente), sin convertirlo a network error ni
+  // reintentar; el envelope normalizado se preserva y se devuelve al caller.
+  expireSessionIfUnauthorizedEnvelope(json, path)
   return json?.result !== undefined ? json.result : json
 }
 
@@ -510,7 +596,7 @@ function unwrapSalesOpsEnvelope(envelope, {
   }
 }
 
-async function odooHttp(method, path, query = {}, body) {
+async function odooHttpResponse(method, path, query = {}, body) {
   const url = query && Object.keys(query).length
     ? `${ODOO_BASE}${path}?${toQueryString(query)}`
     : `${ODOO_BASE}${path}`
@@ -523,7 +609,15 @@ async function odooHttp(method, path, query = {}, body) {
     opts.body = typeof body === 'string' ? body : JSON.stringify(body)
   }
 
-  const res = await fetch(url, opts)
+  let res
+  try {
+    res = await fetch(url, opts)
+  } catch (error) {
+    throw new ApiError(error?.message || 'Network error', { status: 0, code: 'network' })
+  }
+
+  if (res.ok) return res
+
   const text = await res.text().catch(() => '')
   let json = {}
   if (text) {
@@ -534,12 +628,69 @@ async function odooHttp(method, path, query = {}, body) {
     }
   }
 
-  if (!res.ok) {
-    const { message, code } = extractErrorDetails(json, res.status)
-    throw new ApiError(message, { status: res.status, code })
+  const { message, code, details } = extractErrorDetails(json, res.status)
+  if ((res.status === 401 || String(code || '').toUpperCase() === 'UNAUTHORIZED')
+    && !isOptionalEndpoint(path)) {
+    expireSession()
+  }
+  throw new ApiError(message, { status: res.status, code, details })
+}
+
+async function odooHttp(method, path, query = {}, body) {
+  const res = await odooHttpResponse(method, path, query, body)
+  const text = await res.text().catch(() => '')
+  if (!text) return {}
+  let json
+  try {
+    json = JSON.parse(text)
+  } catch {
+    json = { error: text }
   }
 
+  // §2: envelope UNAUTHORIZED con HTTP 200 ⇒ expira sesión central.
+  expireSessionIfUnauthorizedEnvelope(json, path)
   return json
+}
+
+function attendanceWorkbookFallback(query = {}) {
+  const safeDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))
+    ? String(value)
+    : 'rango'
+  return `asistencias_IGU_IGU34_${safeDate(query.date_from)}_${safeDate(query.date_to)}.xlsx`
+}
+
+function decodeDispositionFilename(value) {
+  if (!value) return ''
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return ''
+  }
+}
+
+function safeWorkbookFilename(contentDisposition, fallback) {
+  const header = String(contentDisposition || '')
+  const encoded = header.match(/filename\*\s*=\s*UTF-8''([^;]+)/i)?.[1]
+  const regular = header.match(/filename\s*=\s*(?:"([^"]*)"|([^;]*))/i)
+  let candidate = encoded
+    ? decodeDispositionFilename(encoded.trim())
+    : String(regular?.[1] ?? regular?.[2] ?? '').trim()
+  candidate = candidate.split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f]/g, '').trim()
+
+  if (!candidate || candidate === '.' || candidate === '..' || candidate.length > 180
+    || !candidate.toLowerCase().endsWith('.xlsx')) {
+    return fallback
+  }
+  return candidate
+}
+
+async function odooAttendanceWorkbook(path, query = {}) {
+  const res = await odooHttpResponse('GET', path, query)
+  const fallback = attendanceWorkbookFallback(query)
+  return {
+    blob: await res.blob(),
+    filename: safeWorkbookFilename(res.headers.get('Content-Disposition'), fallback),
+  }
 }
 
 async function readModel(model, {
@@ -613,25 +764,11 @@ const IGUALA_COMPANY_ID = 35
 const UNIT_UOM_ID = 1
 const POS_CUSTOMER_ANALYTIC_PLAN_ID = 2
 const POS_CUSTOMER_ANALYTIC_CODE = 'IGU'
+const POS_CUSTOMER_ANALYTIC_CODES = ['IGU34', POS_CUSTOMER_ANALYTIC_CODE]
 const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
+const POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES = ['IGU34', POS_CUSTOMER_ANALYTIC_NAME]
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
 const ANGELICA_JAIMES_NAME_PARTS = ['angelica', 'jaimes']
-
-function shapePosCustomer(row = {}) {
-  const pricelist = row.pricelist_id || row.property_product_pricelist
-  return {
-    id: Number(row.id || 0),
-    name: row.name || row.display_name || '',
-    email: row.email || '',
-    phone: row.phone || row.mobile || '',
-    mobile: row.mobile || '',
-    vat: row.vat || '',
-    ref: row.ref || '',
-    is_company: Boolean(row.is_company),
-    pricelist_id: toMany2oneId(pricelist) || null,
-    pricelist_name: toMany2oneName(pricelist),
-  }
-}
 
 function shapeSupervisorCustomer(row = {}) {
   return {
@@ -650,239 +787,6 @@ function shapeSupervisorCustomer(row = {}) {
     latitude: row.latitude ?? row.partner_latitude ?? false,
     longitude: row.longitude ?? row.partner_longitude ?? false,
     [POS_CUSTOMER_ANALYTIC_FIELD]: row[POS_CUSTOMER_ANALYTIC_FIELD] || false,
-  }
-}
-
-const POS_PRODUCT_FIELDS = ['id', 'display_name', 'name', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos']
-const POS_PRICELIST_ITEM_FIELDS = [
-  'id',
-  'pricelist_id',
-  'applied_on',
-  'product_id',
-  'product_tmpl_id',
-  'categ_id',
-  'min_quantity',
-  'compute_price',
-  'fixed_price',
-  'percent_price',
-  'price_discount',
-  'price_surcharge',
-  'price_round',
-  'price_min_margin',
-  'price_max_margin',
-]
-
-async function readPosPricelist(companyId, partnerId = 0) {
-  if (partnerId) {
-    const partnerRows = pickListResponse(await readModelSorted('res.partner', {
-      fields: ['id', 'property_product_pricelist', 'pricelist_id'],
-      domain: [['id', '=', partnerId]],
-      sort_column: 'id',
-      sort_desc: false,
-      limit: 1,
-      sudo: 1,
-    }))
-    const partnerPricelist = partnerRows[0]?.pricelist_id || partnerRows[0]?.property_product_pricelist
-    if (toMany2oneId(partnerPricelist)) {
-      return {
-        id: toMany2oneId(partnerPricelist),
-        name: toMany2oneName(partnerPricelist),
-      }
-    }
-  }
-
-  const domains = companyId
-    ? [[['company_id', '=', companyId]], [['company_id', '=', false]]]
-    : [[]]
-  let pricelistRows = []
-  for (const domain of domains) {
-    pricelistRows = pickListResponse(await readModelSorted('product.pricelist', {
-      fields: ['id', 'name', 'display_name'],
-      domain,
-      sort_column: 'id',
-      sort_desc: false,
-      limit: 1,
-      sudo: 1,
-    }))
-    if (pricelistRows.length) break
-  }
-  const pricelist = pricelistRows[0] || null
-  return pricelist
-    ? { id: Number(pricelist.id || 0) || null, name: pricelist.display_name || pricelist.name || '' }
-    : { id: null, name: '' }
-}
-
-async function readPosProducts() {
-  const { result } = await readWithOptionalFieldFallback(readModelSorted, 'product.product', {
-    requiredFields: POS_PRODUCT_FIELDS,
-    optionalFieldGroups: [['categ_id'], ['product_tmpl_id']],
-    domain: [['sale_ok', '=', true], ['available_in_pos', '=', true]],
-    sort_column: 'name',
-    sort_desc: false,
-    limit: 400,
-    sudo: 1,
-  })
-  return pickListResponse(result)
-}
-
-async function readPosPricelistItems(pricelistId) {
-  const resolvedPricelistId = Number(pricelistId || 0)
-  if (!resolvedPricelistId) return []
-  return pickListResponse(await readModelSorted('product.pricelist.item', {
-    fields: POS_PRICELIST_ITEM_FIELDS,
-    domain: [['pricelist_id', '=', resolvedPricelistId]],
-    sort_column: 'min_quantity',
-    sort_desc: true,
-    limit: 1000,
-    sudo: 1,
-  }))
-}
-
-function productBasePrice(product = {}) {
-  return Number(product.price_unit ?? product.list_price ?? product.lst_price ?? 0) || 0
-}
-
-function pricelistItemSpecificity(item = {}, product = {}) {
-  const appliedOn = String(item.applied_on || '')
-  const productId = Number(product.id || 0)
-  const productTemplateId = toMany2oneId(product.product_tmpl_id)
-  const categoryId = toMany2oneId(product.categ_id)
-
-  if ((appliedOn === '0_product_variant' || appliedOn.includes('variant')) && toMany2oneId(item.product_id) === productId) {
-    return 4
-  }
-  if ((appliedOn === '1_product' || appliedOn.includes('product')) && toMany2oneId(item.product_tmpl_id) === productTemplateId) {
-    return 3
-  }
-  if ((appliedOn === '2_product_category' || appliedOn.includes('category')) && toMany2oneId(item.categ_id) === categoryId) {
-    return 2
-  }
-  if (appliedOn === '3_global' || appliedOn === 'global') {
-    return 1
-  }
-  return 0
-}
-
-function selectPricelistItem(items = [], product = {}) {
-  let selected = null
-  let selectedScore = 0
-  for (const item of items) {
-    const minQuantity = Number(item.min_quantity || 0) || 0
-    if (minQuantity > 1) continue
-    const score = pricelistItemSpecificity(item, product)
-    if (!score) continue
-    if (
-      !selected
-      || score > selectedScore
-      || (score === selectedScore && minQuantity > (Number(selected.min_quantity || 0) || 0))
-    ) {
-      selected = item
-      selectedScore = score
-    }
-  }
-  return selected
-}
-
-function applyPricelistItemPrice(product = {}, item = null) {
-  const basePrice = productBasePrice(product)
-  if (!item) return basePrice
-
-  const computePrice = String(item.compute_price || '').toLowerCase()
-  if (computePrice === 'fixed') {
-    return Number(item.fixed_price ?? basePrice) || 0
-  }
-  if (computePrice === 'percentage') {
-    const percent = Number(item.percent_price || 0) || 0
-    return Math.max(0, basePrice * (1 - (percent / 100)))
-  }
-  if (computePrice === 'formula') {
-    const discount = Number(item.price_discount || 0) || 0
-    const surcharge = Number(item.price_surcharge || 0) || 0
-    const round = Number(item.price_round || 0) || 0
-    const minMargin = Number(item.price_min_margin || 0) || 0
-    const maxMargin = Number(item.price_max_margin || 0) || 0
-    let price = basePrice * (1 - (discount / 100)) + surcharge
-    if (round > 0) price = Math.round(price / round) * round
-    if (minMargin > 0) price = Math.max(price, basePrice + minMargin)
-    if (maxMargin > 0) price = Math.min(price, basePrice + maxMargin)
-    return Math.max(0, price)
-  }
-  return basePrice
-}
-
-async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {}) {
-  const requestedWarehouseId = Number(warehouseId || 0)
-  if (!requestedWarehouseId) {
-    throw new ApiError("Debe enviar 'warehouse_id'.", { status: 400, code: 'warehouse_required' })
-  }
-
-  const warehouseRows = pickListResponse(await readModelSorted('stock.warehouse', {
-    fields: ['id', 'company_id', 'lot_stock_id'],
-    domain: [['id', '=', requestedWarehouseId]],
-    sort_column: 'id',
-    sort_desc: false,
-    limit: 1,
-    sudo: 1,
-  }))
-  const warehouse = warehouseRows[0]
-  if (!warehouse?.id) {
-    throw new ApiError('Almacen no encontrado.', { status: 404, code: 'warehouse_not_found' })
-  }
-
-  const resolvedCompanyId = Number(companyId || toMany2oneId(warehouse.company_id) || 0)
-  const lotStockId = toMany2oneId(warehouse.lot_stock_id)
-  const pricelist = await readPosPricelist(resolvedCompanyId, Number(partnerId || 0))
-
-  const productRows = await readPosProducts()
-  const productIds = productRows.map((row) => Number(row.id || 0)).filter(Boolean)
-
-  const quantRows = lotStockId && productIds.length
-    ? pickListResponse(await readModelSorted('stock.quant', {
-        fields: ['id', 'product_id', 'quantity', 'reserved_quantity'],
-        domain: [
-          ['location_id', 'child_of', lotStockId],
-          ['product_id', 'in', productIds],
-        ],
-        sort_column: 'product_id',
-        sort_desc: false,
-        limit: 2000,
-        sudo: 1,
-      }))
-    : []
-
-  const stockByProduct = new Map()
-  for (const quant of quantRows) {
-    const productId = toMany2oneId(quant?.product_id)
-    if (!productId) continue
-    const available = (Number(quant?.quantity || 0) || 0) - (Number(quant?.reserved_quantity || 0) || 0)
-    stockByProduct.set(productId, (stockByProduct.get(productId) || 0) + available)
-  }
-  const pricelistItems = await readPosPricelistItems(pricelist.id)
-
-  return {
-    ok: true,
-    message: 'OK',
-    data: {
-      company_id: resolvedCompanyId,
-      warehouse_id: Number(warehouse.id),
-      pricelist_id: pricelist.id || false,
-      pricelist_name: pricelist.name || '',
-      products: productRows.map((product) => {
-        const price = applyPricelistItemPrice(product, selectPricelistItem(pricelistItems, product))
-        const stock = Math.max(0, stockByProduct.get(Number(product.id)) || 0)
-        return {
-          id: Number(product.id),
-          name: product.display_name || product.name || '',
-          price,
-          price_unit: price,
-          stock,
-          barcode: product.barcode || '',
-          weight: Number(product.weight || 0) || 0,
-          sale_ok: Boolean(product.sale_ok),
-          available_in_pos: Boolean(product.available_in_pos),
-        }
-      }),
-    },
   }
 }
 
@@ -991,10 +895,29 @@ async function resolveAngelicaJaimesSalesScope() {
   }
 }
 
-async function resolvePosCustomerAnalyticUnitId() {
+async function resolvePosCustomerAnalyticUnitIds() {
+  const ids = []
+  const addId = (id) => {
+    const numericId = Number(id || 0)
+    if (numericId && !ids.includes(numericId)) ids.push(numericId)
+  }
+
+  for (const code of POS_CUSTOMER_ANALYTIC_CODES) {
+    const rows = pickListResponse(await readModelSorted('account.analytic.account', {
+      fields: ['id', 'name', 'code'],
+      domain: [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['code', '=', code]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 10,
+      sudo: 1,
+    }))
+    for (const row of rows) addId(row?.id)
+  }
+
   const domains = [
-    [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['code', '=', POS_CUSTOMER_ANALYTIC_CODE]],
-    [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['name', 'ilike', POS_CUSTOMER_ANALYTIC_NAME]],
+    ...POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES.map((name) => (
+      [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['name', 'ilike', name]]
+    )),
   ]
   for (const domain of domains) {
     const rows = pickListResponse(await readModelSorted('account.analytic.account', {
@@ -1002,53 +925,19 @@ async function resolvePosCustomerAnalyticUnitId() {
       domain,
       sort_column: 'id',
       sort_desc: false,
-      limit: 1,
+      limit: 10,
       sudo: 1,
     }))
-    const analyticUnitId = Number(rows[0]?.id || 0)
-    if (analyticUnitId) return analyticUnitId
+    for (const row of rows) {
+      const code = normalizeScopeText(row?.code)
+      const name = normalizeScopeText(row?.name)
+      const isIgualaUnit = POS_CUSTOMER_ANALYTIC_CODES.some((candidate) => normalizeScopeText(candidate) === code)
+        || name.includes('igu34')
+        || (name.includes('igu') && name.includes('iguala'))
+      if (isIgualaUnit) addId(row?.id)
+    }
   }
-  return 0
-}
-
-function posCustomerAnalyticDomain(analyticUnitId) {
-  const resolvedAnalyticUnitId = Number(analyticUnitId || 0)
-  return resolvedAnalyticUnitId
-    ? [[POS_CUSTOMER_ANALYTIC_FIELD, '=', resolvedAnalyticUnitId]]
-    : [['id', '=', 0]]
-}
-
-function buildPosCustomerBaseDomains(companyId, analyticUnitId) {
-  const baseDomain = [
-    ['active', '=', true],
-    ...posCustomerAnalyticDomain(analyticUnitId),
-  ]
-  return companyId
-    ? [
-        [...baseDomain, ['company_id', '=', companyId]],
-        [...baseDomain, ['company_id', '=', false]],
-      ]
-    : [baseDomain]
-}
-
-function buildPosCustomerIdBaseDomains(companyId, analyticUnitId) {
-  const baseDomain = [
-    ['active', '=', true],
-    ...posCustomerAnalyticDomain(analyticUnitId),
-  ]
-  return companyId
-    ? [
-        [...baseDomain, ['company_id', '=', companyId]],
-        [...baseDomain, ['company_id', '=', false]],
-      ]
-    : [baseDomain]
-}
-
-function parsePosCustomerIdQuery(query) {
-  const normalized = String(query || '').trim()
-  if (/^\d+$/.test(normalized)) return Number(normalized)
-  const idMatch = normalized.match(/\bid\s*:?\s*(\d+)\b/i)
-  return idMatch ? Number(idMatch[1]) : 0
+  return ids
 }
 
 function addUniquePosCustomers(target, rows = []) {
@@ -1059,17 +948,6 @@ function addUniquePosCustomers(target, rows = []) {
     seen.add(id)
     target.push(row)
   }
-}
-
-async function readPosCustomerRows(domain, limit) {
-  return pickListResponse(await readModelSorted('res.partner', {
-    fields: ['id', 'name', 'display_name', 'email', 'phone', 'mobile', 'vat', 'ref', 'is_company', 'property_product_pricelist', 'pricelist_id', POS_CUSTOMER_ANALYTIC_FIELD],
-    domain,
-    sort_column: 'name',
-    sort_desc: false,
-    limit,
-    sudo: 1,
-  }))
 }
 
 async function readSupervisorCustomerRows(domain, limit = 200) {
@@ -1091,8 +969,8 @@ async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 20
   const safeLimit = Math.min(Number(limit || 200) || 200, 500)
   // Use the plan_id=2 analytic account directly. The session/employee analytic account
   // is the CEDIS account (different plan), not the Unidad de Negocio used in x_analytic_un_id.
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomain = buildSupervisorCustomerDomains(analyticUnitId)
+  const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+  const baseDomain = buildSupervisorCustomerDomains(analyticUnitIds)
   const query = String(q || '').trim()
   const rows = []
 
@@ -1116,84 +994,6 @@ async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 20
       customers: rows.map(shapeSupervisorCustomer),
       total: rows.length,
     },
-  }
-}
-
-async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = {}) {
-  const safeLimit = Math.min(Number(limit || 30) || 30, 100)
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0), analyticUnitId)
-  const query = String(q || '').trim()
-  const rows = []
-
-  if (!query) {
-    for (const baseDomain of baseDomains) {
-      if (rows.length >= safeLimit) break
-      addUniquePosCustomers(rows, await readPosCustomerRows(baseDomain, safeLimit - rows.length))
-    }
-  } else {
-    const exactId = parsePosCustomerIdQuery(query)
-    if (exactId) {
-      const idBaseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0), analyticUnitId)
-      for (const baseDomain of idBaseDomains) {
-        if (rows.length >= safeLimit) break
-        addUniquePosCustomers(
-          rows,
-          await readPosCustomerRows([...baseDomain, ['id', '=', exactId]], safeLimit - rows.length),
-        )
-      }
-    }
-
-    const searchFields = ['name', 'email', 'vat', 'ref', 'phone', 'mobile']
-    for (const baseDomain of baseDomains) {
-      if (rows.length >= safeLimit) break
-      for (const field of searchFields) {
-        if (rows.length >= safeLimit) break
-        addUniquePosCustomers(
-          rows,
-          await readPosCustomerRows([...baseDomain, [field, 'ilike', query]], safeLimit - rows.length),
-        )
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    message: 'OK',
-    data: rows.map(shapePosCustomer),
-  }
-}
-
-async function getDefaultPosCustomerFromModels(companyId) {
-  const baseCompanyId = Number(companyId || 0)
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomains = buildPosCustomerBaseDomains(baseCompanyId, analyticUnitId)
-  let partner = null
-  for (const baseDomain of baseDomains) {
-    const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', 'VENTA PUBLICO IGUALA']], 1)
-    if (exactRows[0]) {
-      partner = exactRows[0]
-      break
-    }
-  }
-  if (!partner) {
-    const fallbackNames = ['PUBLICO', 'PUBLIC', 'MOSTRADOR']
-    for (const baseDomain of baseDomains) {
-      if (partner) break
-      for (const fallbackName of fallbackNames) {
-        const fallbackRows = await readPosCustomerRows([...baseDomain, ['name', 'ilike', fallbackName]], 1)
-        if (fallbackRows[0]) {
-          partner = fallbackRows[0]
-          break
-        }
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    message: 'OK',
-    data: partner ? shapePosCustomer(partner) : null,
   }
 }
 
@@ -1548,36 +1348,59 @@ async function directAdmin(method, path, body) {
   const warehouseId = getWarehouseId()
   const companyId = getCompanyId()
   const [todayStart, todayEnd] = todayRange()
+  const posIntentEndpoints = new Set([
+    '/pwa-admin/pos-products',
+    '/pwa-admin/customers',
+    '/pwa-admin/default-customer',
+    '/pwa-admin/today-sales',
+    '/pwa-admin/sale-detail',
+  ])
+  if (
+    posIntentEndpoints.has(cleanPath)
+    && (query.getAll('pos_scope').length > 1 || query.getAll('night_pos').length > 1)
+  ) {
+    throw new ApiError('No puedes combinar modos de POS.', {
+      status: 400,
+      code: 'pos_intent_conflict',
+    })
+  }
+  const hasExplicitPosScope = query.has('pos_scope')
+  const forwardGetQuery = (endpoint, params = query) => {
+    const search = params.toString()
+    return odooHttp('GET', `${endpoint}${search ? `?${search}` : ''}`)
+  }
 
   if (cleanPath === '/pwa-admin/pos-products' && method === 'GET') {
-    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
-    return getPosCatalogFromModels({
-      warehouseId: reqWarehouseId,
-      companyId: Number(query.get('company_id') || companyId || 0) || undefined,
-      partnerId: Number(query.get('partner_id') || 0) || undefined,
-    })
+    return forwardGetQuery('/pwa-admin/pos-products')
   }
 
   if (cleanPath === '/pwa-admin/customers' && method === 'GET') {
-    return searchPosCustomersFromModels({
-      q: query.get('q') || undefined,
-      companyId: Number(query.get('company_id') || companyId || 0) || undefined,
-      limit: Number(query.get('limit') || 30) || undefined,
-    })
+    return forwardGetQuery('/pwa-admin/customers')
   }
 
   if (cleanPath === '/pwa-admin/default-customer' && method === 'GET') {
-    return getDefaultPosCustomerFromModels(Number(query.get('company_id') || companyId || 0) || undefined)
+    return forwardGetQuery('/pwa-admin/default-customer')
   }
 
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
+    if (query.has('night_pos') || hasExplicitPosScope) {
+      const intentParts = []
+      if (hasExplicitPosScope) {
+        intentParts.push(`pos_scope=${encodeURIComponent(query.get('pos_scope'))}`)
+      }
+      if (query.has('night_pos')) {
+        intentParts.push(`night_pos=${encodeURIComponent(query.get('night_pos'))}`)
+      }
+      return odooHttp('GET', `/pwa-admin/today-sales?${intentParts.join('&')}`)
+    }
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const reqCompanyId = Number(query.get('company_id') || companyId || 0)
-    return odooHttp('GET', '/pwa-admin/today-sales', {
+    const requestQuery = {
       warehouse_id: reqWarehouseId || undefined,
       company_id: reqCompanyId || undefined,
-    })
+      date: query.get('date') || undefined,
+    }
+    return odooHttp('GET', '/pwa-admin/today-sales', requestQuery)
   }
 
   if (cleanPath === '/pwa-admin/today-expenses' && method === 'GET') {
@@ -1693,38 +1516,12 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/expense-create' && method === 'POST') {
-    const employeeId = getEmployeeId()
-    if (!employeeId) return { success: false, error: 'No employee session' }
-
-    const totalAmount = Number(body?.total_amount ?? body?.unit_amount ?? body?.amount ?? 0)
-    const quantity = Number(body?.quantity || 1) || 1
-    const companyIdPayload = Number(body?.company_id || companyId || 0)
-    const rawDescription = String(body?.description || '').trim()
-    const contextParts = []
-    if (body?.sucursal) contextParts.push(`[Sucursal: ${String(body.sucursal).trim()}]`)
-    if (body?.capturista) contextParts.push(`[Capturó: ${String(body.capturista).trim()}]`)
-    const description = [rawDescription, contextParts.join(' ')].filter(Boolean).join('\n') || '\n'
-
-    const expenseDict = {
-      name: String(body?.name || '').trim(),
-      date: body?.date || todayStart.slice(0, 10),
-      employee_id: employeeId,
-      company_id: companyIdPayload || undefined,
-      payment_mode: body?.payment_mode || 'company_account',
-      quantity,
-      total_amount: totalAmount,
-      description,
-      product_id: body?.product_id ? Number(body.product_id) : undefined,
-    }
-    const result = await createUpdate({
-      model: 'hr.expense',
-      method: 'create',
-      dict: expenseDict,
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-
-    return { success: true, data: result }
+    // El controller valida el token de empleado y deriva ahí la identidad.
+    // Evitar el antiguo create_update sudo, que confiaba en employee_id cacheado.
+    const expensePayload = { ...(body || {}) }
+    delete expensePayload.employee_id
+    delete expensePayload.account_id
+    return odooJson('/pwa-admin/expense-create', expensePayload)
   }
 
   if (cleanPath === '/pwa-admin/cash-closing' && method === 'GET') {
@@ -1766,23 +1563,25 @@ async function directAdmin(method, path, body) {
 
   if (cleanPath === '/pwa-admin/sale-detail' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
-    const orderId = Number(query.get('order_id') || 0)
-    if (!orderId) return null
-    const result = await readModel('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'payment_method', 'x_studio_mtodo_de_pago', 'warehouse_id'],
-      domain: [['id', '=', orderId]],
-      many: ['order_line'],
-      file: 'file',
-      limit: 1,
-      sudo: 1,
-    })
-    const order = pickFirstResponse(result)
-    if (!order) return null
-    return normalizeSaleOrder({
-      ...order,
-      total: Number(order.amount_total || 0),
-      customer: order.partner_id?.[1] || '',
-    })
+    const orderId = toPositiveSafeIntegerId(query.get('order_id'))
+    if (!orderId) {
+      return { ok: false, error: 'order_id requerido' }
+    }
+    // Usa el endpoint dedicado de Odoo (gf_pwa_admin._sale_detail_payload), que
+    // expande las líneas con qty/price_unit/subtotal y devuelve folio + total.
+    // El readModel genérico /get_records NO expandía order_line ni el total, por
+    // eso el ticket salía sin productos, en $0 y con folio incorrecto (caía al
+    // fallback S{orderId}, que mostraba el id como si fuera el folio).
+    const detailQuery = new URLSearchParams({ order_id: String(orderId) })
+    if (query.has('pos_scope')) detailQuery.set('pos_scope', query.get('pos_scope'))
+    if (query.has('night_pos')) detailQuery.set('night_pos', query.get('night_pos'))
+    const result = await forwardGetQuery('/pwa-admin/sale-detail', detailQuery)
+    const order = result?.data ?? result
+    if (!order || !order.id) return null
+    const normalizedOrder = normalizeSaleOrder(order)
+    return result?.data
+      ? { ...result, data: normalizedOrder }
+      : normalizedOrder
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
@@ -1855,33 +1654,10 @@ async function directAdmin(method, path, body) {
   }
 
   // ── Capabilities (feature flags leídos al boot) ─────────────────────────
-  // Con n8n fuera de línea, devolvemos el set canónico de flags habilitados
-  // para que bootCapabilities() no tenga que caer a defaults por error.
-  // Estos flags reflejan lo que Sebastián tiene instalado en producción
-  // (Sprint 3 + Sprint 4, audit 2026-04-10). Si algún flag cambia, ajustar aquí.
   if (cleanPath === '/pwa-admin/capabilities' && method === 'GET') {
-    return {
-      ok: true,
-      data: {
-        expenseAnalytics: true,
-        requisitionAnalytics: true,
-        expenseStructuredMeta: true,
-        serverSideCompanyFilter: true,
-        cashClosingRead: true,
-        cashClosingWrite: true,
-        liquidaciones: true,
-        materiaPrima: true,
-        productSearch: true,
-        requisitionDetail: true,
-        cashClosingHistory: true,
-        expenseAttachments: true,
-        saleCancel: true,
-        liquidacionesHistory: true,
-        mpKardex: true,
-        requisitionApproval: true,
-        requisitionApprovalThreshold: 5000,
-      },
-    }
+    // Las capacidades de seguridad dependen del empleado autenticado. No se
+    // permite una respuesta local porque podría elevar permisos cashShift.
+    return odooHttp('GET', '/pwa-admin/capabilities', {})
   }
 
   // ── Requisitions (purchase.order) ───────────────────────────────────────
@@ -2186,20 +1962,32 @@ async function directAdmin(method, path, body) {
   }
 
   // ── Sale cancel ─────────────────────────────────────────────────────────
+  if (cleanPath === '/pwa-admin/sale-create' && method === 'POST') {
+    return odooJson('/pwa-admin/sale-create', { ...(body || {}) })
+  }
+
   if (cleanPath === '/pwa-admin/sale-cancel' && method === 'POST') {
-    const id = Number(body?.order_id || 0)
-    if (!id) return { ok: false, error: 'order_id requerido' }
-    await createUpdate({
-      model: 'sale.order',
-      method: 'update',
-      ids: [id],
-      dict: {
-        state: 'cancel',
-      },
-      sudo: 1,
-      app: 'pwa_colaboradores',
+    const id = toPositiveSafeIntegerId(body?.order_id)
+    if (!id) {
+      return { ok: false, error: 'order_id requerido' }
+    }
+    const hasReasonCode = Object.prototype.hasOwnProperty.call(body || {}, 'reason_code')
+    const hasPosScope = Object.prototype.hasOwnProperty.call(body || {}, 'pos_scope')
+    const hasNightPos = Object.prototype.hasOwnProperty.call(body || {}, 'night_pos')
+    if (hasReasonCode || hasPosScope || hasNightPos) {
+      return odooJson('/pwa-admin/sale-cancel', {
+        order_id: id,
+        ...(hasReasonCode
+          ? { reason_code: body.reason_code }
+          : { reason: body?.reason || '' }),
+        ...(hasPosScope ? { pos_scope: body.pos_scope } : {}),
+        ...(hasNightPos ? { night_pos: body.night_pos } : {}),
+      })
+    }
+    return odooJson('/pwa-admin/sale-cancel', {
+      order_id: id,
+      reason: body?.reason || '',
     })
-    return { ok: true, data: { id, state: 'cancel' } }
   }
 
   // ── Expense attachments (ir.attachment) ─────────────────────────────────
@@ -2721,6 +2509,17 @@ async function directAdmin(method, path, body) {
   // Backend espera `file_base64` (no `data`). Aceptamos ambas claves del
   // lado cliente pero siempre enviamos `file_base64` al controller Odoo.
   if (cleanPath === '/pwa/evidence/upload' && method === 'POST') {
+    if (body?.context === 'cash_shift') {
+      return odooJson('/pwa/evidence/upload', {
+        context: 'cash_shift',
+        shift_id: body?.shift_id,
+        expected_version: body?.expected_version,
+        purpose: body?.purpose,
+        filename: body?.filename,
+        file_base64: body?.file_base64,
+        mime_type: body?.mime_type,
+      })
+    }
     return odooJson('/pwa/evidence/upload', {
       filename:     body?.filename || 'evidencia.jpg',
       file_base64:  body?.file_base64 ?? body?.data ?? '',
@@ -2728,6 +2527,19 @@ async function directAdmin(method, path, body) {
       linked_model: body?.linked_model || undefined,
       linked_id:    body?.linked_id ? Number(body.linked_id) : undefined,
     })
+  }
+
+  if (cleanPath === '/pwa-admin/iguala-sales-history' && method === 'GET') {
+    const filters = {}
+    for (const key of ['date_from', 'date_to', 'search', 'page', 'page_size']) {
+      const value = query.get(key)
+      if (value) filters[key] = value
+    }
+    return odooHttp('GET', cleanPath, filters)
+  }
+
+  if (cleanPath === '/pwa-admin/iguala-sales-tickets' && method === 'POST') {
+    return NO_DIRECT
   }
 
   // Cualquier otro /pwa-admin/* va DIRECTO a Odoo — n8n no participa en
@@ -7952,12 +7764,63 @@ async function directEntregas(method, path, body) {
   return NO_DIRECT
 }
 
+const SUPERVISOR_DAY_CONTROL_PATH =
+  '/gf/salesops/supervisor/v2/day-control'
+
+async function directSupervisorDayControl(method, path, body) {
+  const cleanPath = path.split('?')[0]
+  if (cleanPath !== SUPERVISOR_DAY_CONTROL_PATH) return NO_DIRECT
+  if (method !== 'POST') {
+    throw new ApiError('method_not_allowed', {
+      status: 405,
+      code: 'method_not_allowed',
+    })
+  }
+  return odooJson(cleanPath, body || {})
+}
+
 async function directSupervisorVentas(method, path, body) {
   const query = new URLSearchParams(path.split('?')[1] || '')
   const cleanPath = path.split('?')[0]
   const companyId = getCompanyId()
 
   if (!cleanPath.startsWith('/pwa-supv/')) return NO_DIRECT
+
+  if (cleanPath === '/pwa-supv/customer-deactivation/summary' && method === 'GET') {
+    return odooHttp('GET', '/pwa-supv/customer-deactivation/summary', { company_id: companyId || undefined })
+  }
+
+  if (cleanPath === '/pwa-supv/customer-deactivation/sugey' && method === 'GET') {
+    return odooHttp('GET', '/pwa-supv/customer-deactivation/sugey', {
+      company_id: companyId || undefined,
+      limit: query.get('limit') || undefined,
+      offset: query.get('offset') || undefined,
+      route: query.get('route') || undefined,
+      reason: query.get('reason') || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/customer-deactivation/angelica' && method === 'GET') {
+    return odooHttp('GET', '/pwa-supv/customer-deactivation/angelica', {
+      company_id: companyId || undefined,
+      limit: query.get('limit') || undefined,
+      offset: query.get('offset') || undefined,
+      route: query.get('route') || undefined,
+      reason: query.get('reason') || undefined,
+    })
+  }
+
+  if (/^\/pwa-supv\/customer-deactivation\/\d+$/.test(cleanPath) && method === 'GET') {
+    return odooHttp('GET', cleanPath, { company_id: companyId || undefined })
+  }
+
+  if (/^\/pwa-supv\/customer-deactivation\/\d+\/sugey-verify$/.test(cleanPath) && method === 'POST') {
+    return odooJson(cleanPath, body || {})
+  }
+
+  if (/^\/pwa-supv\/customer-deactivation\/\d+\/angelica-decide$/.test(cleanPath) && method === 'POST') {
+    return odooJson(cleanPath, body || {})
+  }
 
   async function getSupportedFields(model, candidates) {
     const supported = []
@@ -8258,10 +8121,44 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/unit-track') {
+    if (method !== 'GET') {
+      throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+    }
+
+    const rawPlanId = query.get('plan_id') || ''
+    const planId = Number(rawPlanId)
+    if (!/^[1-9]\d*$/.test(rawPlanId) || !Number.isSafeInteger(planId)) {
+      return {
+        ok: false,
+        data: { code: 'VALIDATION_ERROR' },
+        message: 'plan_id requerido',
+      }
+    }
+
+    return odooJson('/gf/salesops/supervisor/v2/unit-track', {
+      meta: supervisorMeta(),
+      data: {
+        plan_id: planId,
+        date: query.get('date') || undefined,
+      },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/subpolygons' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/subpolygons', {
       meta: supervisorMeta(),
       data: { polygon_id: Number(query.get('polygon_id') || 0) || undefined },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/segments' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/segments', {
+      meta: supervisorMeta(),
+      data: {
+        polygon_id: Number(query.get('polygon_id') || 0) || undefined,
+        subpolygon_id: Number(query.get('subpolygon_id') || 0) || undefined,
+      },
     })
   }
 
@@ -8286,6 +8183,56 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  // Day Control / Radar v2 (backend gf_saleops · GrupoVeniu/GrupoFrio#220).
+  // La fecha operativa la resuelve el backend con la timezone de la sucursal;
+  // `date` es opcional (solo override explícito). Devuelve el payload del
+  // contrato day_control/1 · radar/1 tal cual (odooJson desenvuelve .result).
+  if (cleanPath === '/pwa-supv/day-control' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/day-control', {
+      meta: supervisorMeta(),
+      data: { date: query.get('date') || undefined },
+    })
+  }
+
+  // KPIs nativos del supervisor (backend GrupoVeniu/GrupoFrio#250). El periodo
+  // va por NOMBRE (hoy|semana|mes): el backend resuelve el rango con la
+  // timezone de la sucursal. Mandar fechas desde aqui seria inutil -- las
+  // rechaza y las reporta en rejected_params.
+  if (cleanPath === '/pwa-supv/kpis' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/kpis', {
+      meta: supervisorMeta(),
+      data: { period: query.get('period') || 'hoy' },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/products-sold' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/products-sold', {
+      meta: supervisorMeta(),
+      data: { period: query.get('period') || 'hoy' },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/routes-week' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/routes-week', {
+      meta: supervisorMeta(),
+      data: { week: query.get('week') || undefined },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/radar' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/radar', {
+      meta: supervisorMeta(),
+      data: { date: query.get('date') || undefined },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/available-resources' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/available-resources', {
+      meta: supervisorMeta(),
+      data: { date: query.get('date') || undefined },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/customers/search' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/customers/search', {
       meta: supervisorMeta(),
@@ -8307,8 +8254,8 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, status: 'error', code: 'customer_id_required', message: 'customer_id requerido.' }
     }
 
-    const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitId), ['id', '=', customerId]]
+    const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
+    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitIds), ['id', '=', customerId]]
     const customer = (await readSupervisorCustomerRows(customerDomain, 1))[0] || null
     if (!customer?.id) {
       return { ok: false, status: 'error', code: 'customer_not_found', message: 'Cliente fuera de tu sucursal o no encontrado.' }
@@ -8354,19 +8301,38 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: true, status: 'ok', message: 'Sin cambios', data: shapeSupervisorCustomer(customer) }
     }
 
-    await createUpdate({
-      model: 'res.partner',
-      method: 'update',
-      ids: [customerId],
-      dict: updates,
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
+    // SEGURIDAD (B8): el write va por controller DEDICADO con guard #220
+    // (rol supervisor_ventas + scope de sucursal server-side), NO por ORM
+    // genérico con sudo del cliente. Los pre-checks de arriba quedan como
+    // fail-fast de UX; la AUTORIDAD es server-side. Requiere el controller
+    // /gf/salesops/supervisor/v2/customers/update desplegado (gate externo).
+    // Codex §7: el envelope MANDA — status:error/busy/malformed NUNCA es éxito
+    // (antes se ignoraba la respuesta y se devolvía ok:true optimista).
+    let writeRes
+    try {
+      writeRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/customers/update', {
+        meta: supervisorMeta(),
+        data: { customer_id: customerId, values: updates },
+      }), null)
+    } catch (writeErr) {
+      writeRes = normalizeWriteResponse(null, writeErr)
+    }
+    if (!writeRes.ok) {
+      return {
+        ok: false,
+        status: 'error',
+        phase: writeRes.phase,
+        code: writeRes.code,
+        message: writeRes.message || 'No se pudo actualizar el cliente.',
+        retryable: writeRes.retryable,
+      }
+    }
 
     const refreshedRows = await readSupervisorCustomerRows([['id', '=', customerId]], 1)
     return {
       ok: true,
       status: 'ok',
+      phase: writeRes.phase,
       message: 'Cliente actualizado.',
       data: shapeSupervisorCustomer(refreshedRows[0] || { ...customer, ...updates, id: customerId }),
     }
@@ -8397,6 +8363,18 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/route-plan-assign-resources' && method === 'POST') {
+    // WRITE seguro: solo se reenvían los recursos presentes (ausente = no tocar).
+    const data = { plan_id: Number(body?.plan_id || 0) }
+    if (body?.vehicle_id != null) data.vehicle_id = Number(body.vehicle_id)
+    if (body?.driver_employee_id != null) data.driver_employee_id = Number(body.driver_employee_id)
+    if (body?.salesperson_employee_id != null) data.salesperson_employee_id = Number(body.salesperson_employee_id)
+    return odooJson('/gf/salesops/supervisor/v2/route_plan/assign-resources', {
+      meta: supervisorMeta(),
+      data,
+    })
+  }
+
   if (cleanPath === '/pwa-supv/route-plan-preview-customers' && method === 'POST') {
     const ensureResponse = await odooJson('/gf/salesops/supervisor/v2/route_plan/ensure', {
       meta: supervisorMeta(),
@@ -8420,22 +8398,28 @@ async function directSupervisorVentas(method, path, body) {
     const routePlanId = Number(ensureData.route_plan_id || ensureData.plan_id || 0)
     if (!routePlanId) return ensureResponse
 
-    const stopsResult = await readModelSorted('gf.route.stop', {
-      fields: [
-        'id', 'route_plan_id', 'customer_id', 'state', 'result_status',
-        'route_sequence', 'not_visited_reason_id', 'actual_start_time',
-        'actual_end_time', 'comments',
-      ],
-      domain: [['route_plan_id', '=', routePlanId]],
-      sort_column: 'route_sequence',
-      sort_desc: false,
-      limit: 500,
-      sudo: 1,
+    // Clientes del plan con NOMBRE + DIRECCIÓN desde el ÚNICO camino seguro:
+    // stops_preview (token-only, con _plan_branch_domain). P1-2 Codex: se ELIMINÓ
+    // el antiguo fallback de lectura ORM directa de paradas con privilegios elevados
+    // desde el cliente, que evadía el guard/escopo de sucursal. Si stops_preview
+    // falla, se propaga el error para que la vista muestre estado honesto ("No se
+    // pudieron cargar las paradas") + reintento; jamás una lectura privilegiada
+    // desde el navegador.
+    const previewStops = await odooJson('/gf/salesops/supervisor/v2/route_plan/stops_preview', {
+      meta: supervisorMeta(),
+      data: { route_plan_id: routePlanId },
     })
-    const customers = pickListResponse(stopsResult).map((row) => ({
-      ...row,
-      stop_id: row.id,
-    }))
+    if (previewStops?.ok === false || !Array.isArray(previewStops?.data?.stops)) {
+      return {
+        ...(previewStops || {}),
+        ok: false,
+        status: 'error',
+        code: previewStops?.code || previewStops?.data?.code || 'stops_preview_unavailable',
+        message: previewStops?.user_message || previewStops?.message || 'No se pudieron cargar las paradas del plan.',
+        data: { ...ensureData, plan_id: routePlanId, route_plan_id: routePlanId },
+      }
+    }
+    const customers = previewStops.data.stops.map((row) => ({ ...row, stop_id: row.stop_id || row.id }))
 
     return {
       ...ensureResponse,
@@ -8480,50 +8464,50 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'route_plan_id requerido' }
     }
 
-    const scope = await supervisorAnalyticScope()
-    if (!scope.analyticAccountId) {
-      return { ok: false, status: 'error', code: 'missing_x_analytic_account_id', message: 'Tu usuario no tiene analitica CEDIS asignada.' }
-    }
+    // ALCANCE: lo decide el SERVIDOR, no el cliente. Aquí vivía un pre-chequeo que
+    // leía gf.route.plan con privilegios elevados desde el navegador y exigía que
+    // el plan tuviera un empleado dentro de un conjunto derivado en el cliente.
+    // Rechazaba la publicación ANTES de que corriera el guard real — falso
+    // negativo reproducido con la sesión de Aida sobre un plan que SÍ era de su
+    // sucursal. El controller /route_plan/publish ya aplica guard token-only +
+    // sucursal canónica + doble flag de escritura, y devuelve el motivo REAL
+    // (NOT_FOUND / FORBIDDEN / DATE_NOT_ALLOWED / plan_not_editable /
+    // no_customers_found / LOCKED), así que este pre-chequeo sobraba y mentía.
 
-    const planEmployeeFields = await getSupportedFields('gf.route.plan', SUPV_ROUTE_EMPLOYEE_FIELDS)
-    const planRows = pickListResponse(await readModelSorted('gf.route.plan', {
-      fields: ['id', 'state', 'stops_total', 'load_picking_id', 'load_sealed', ...planEmployeeFields],
-      domain: [['id', '=', routePlanId]],
-      sort_column: 'id',
-      sort_desc: false,
-      limit: 1,
-      sudo: 1,
-    }))
-    const plan = planRows[0] || null
-    if (!plan || !employeeInScope(plan, scope)) {
-      return { ok: false, status: 'error', code: 'NOT_FOUND', message: 'Plan no existe o esta fuera de tu alcance.' }
-    }
-    const loadPickingId = Number(plan.load_picking_id?.[0] || plan.load_picking_id || 0) || 0
-    if (String(plan.state || '').toLowerCase() !== 'draft' || plan.load_sealed || loadPickingId > 0) {
-      return { ok: false, status: 'error', code: 'plan_not_editable', message: 'Este plan no se puede publicar en su estado actual.', data: { state: plan.state || '' } }
-    }
-    if (Number(plan.stops_total || 0) <= 0) {
-      return { ok: false, status: 'error', code: 'no_customers_found', message: 'No hay clientes para publicar.' }
-    }
-
+    // SEGURIDAD (B8): publicación por controller DEDICADO con guard #220
+    // (rol + scope server-side + transición permitida), NO por función ORM
+    // genérica con sudo del cliente. Codex §8: el envelope MANDA — todos los
+    // estados (DATE_NOT_ALLOWED/FEATURE_DISABLED/FORBIDDEN/CONFLICT/LOCKED/
+    // VALIDATION/NOT_FOUND/network/malformed) ⇒ NO éxito (antes: éxito optimista).
+    let publishRes
     try {
-      await createUpdate({
-        model: 'gf.route.plan',
-        method: 'function',
-        ids: [routePlanId],
-        function: 'action_publish',
-        sudo: 1,
-        app: 'pwa_colaboradores',
-      })
+      publishRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/route_plan/publish', {
+        meta: supervisorMeta(),
+        data: { route_plan_id: routePlanId },
+      }), null)
     } catch (e) {
-      return { ok: false, status: 'error', code: 'route_plan_publish_failed', message: e?.message || 'No se pudo publicar el plan.' }
+      publishRes = normalizeWriteResponse(null, e)
     }
+    if (!publishRes.ok) {
+      // Estado previo intacto (no se marca publicado, no se borra nada).
+      return {
+        ok: false, status: 'error', phase: publishRes.phase, code: publishRes.code,
+        message: publishRes.message || 'No se pudo publicar el plan.', retryable: publishRes.retryable,
+      }
+    }
+    // §8: tras publicar con éxito, invalida la caché compartida de day-control
+    // para que la UI refresque con el MISMO scope y no conserve el plan en draft.
+    try {
+      const dayMod = await import('../modules/supervisor-ventas/v2/useOperationalDay.js')
+      dayMod.invalidateOperationalDayCacheForSessionChange?.()
+    } catch { /* sin caché que invalidar (p.ej. SSR) */ }
 
     return {
       ok: true,
       status: 'ok',
+      phase: publishRes.phase,
       message: 'Plan diario publicado',
-      data: { route_plan_id: routePlanId, state: 'published' },
+      data: (publishRes.data && (publishRes.data.route_plan_id ? publishRes.data : publishRes.data.data)) || { route_plan_id: routePlanId, state: 'published' },
       meta: supervisorMeta(),
     }
   }
@@ -8708,7 +8692,10 @@ async function directSupervisorVentas(method, path, body) {
       fields: [
         'id', 'name', 'date_target', 'state', 'company_id',
         'analytic_account_id', 'created_by_employee_id', 'confirmed_by_employee_id',
-        'confirmed_at', 'employee_id', 'line_ids',
+        // write_date: versión canónica del backend para el control de concurrencia
+        // (Codex §7/§9). La pantalla la reenvía como expected_write_date; NO se
+        // inventa una versión en el frontend.
+        'confirmed_at', 'employee_id', 'line_ids', 'write_date',
       ],
       domain,
       sort_column: 'date_target',
@@ -8739,9 +8726,38 @@ async function directSupervisorVentas(method, path, body) {
     }))
   }
 
+  if (cleanPath === '/pwa-supv/forecast-get' && method === 'POST') {
+    // Codex §7/§10: DTO GET SEGURO — reemplaza la lectura ORM/sudo del navegador
+    // (/pwa-supv/forecast-lines) para cargar forecast + write_date + líneas
+    // completas en el flujo de edición. Token-only + scope canónico server-side.
+    const forecastId = Number(body?.forecast_id || 0)
+    if (!forecastId) return { ok: false, code: 'VALIDATION_ERROR', message: 'forecast_id requerido' }
+    let raw
+    try {
+      raw = await odooJson('/gf/salesops/supervisor/v2/forecast/get', {
+        meta: supervisorMeta(),
+        data: { forecast_id: forecastId },
+      })
+    } catch (e) {
+      return { ok: false, code: e?.code || 'network', message: e?.message || 'No se pudo cargar el pronóstico.' }
+    }
+    if (raw?.status === 'ok' && raw?.data) return { ok: true, ...raw.data }
+    return { ok: false, code: raw?.code || 'ERROR', message: raw?.user_message || raw?.message || 'No se pudo cargar el pronóstico.' }
+  }
+
   if (cleanPath === '/pwa-supv/forecast-update-lines' && method === 'POST') {
     const forecastId = Number(body?.forecast_id || 0)
-    if (!forecastId) return { success: false, error: 'forecast_id requerido' }
+    if (!forecastId) return { ok: false, success: false, phase: WRITE_PHASE.VALIDATION, code: 'VALIDATION_ERROR', error: 'forecast_id requerido' }
+    // Codex §9: concurrencia OBLIGATORIA (espejo del backend). Sin la marca de
+    // versión leída, no se puede escribir sin pisar a ciegas.
+    const expectedWriteDate = body?.expected_write_date
+    if (!expectedWriteDate || typeof expectedWriteDate !== 'string') {
+      return { ok: false, success: false, phase: WRITE_PHASE.VALIDATION, code: 'VALIDATION_ERROR', error: 'expected_write_date requerido (recarga el forecast).' }
+    }
+    // §9: el reemplazo TOTAL es destructivo ⇒ confirmación explícita del cliente.
+    if (body?.confirm_replace_all !== true) {
+      return { ok: false, success: false, phase: WRITE_PHASE.VALIDATION, code: 'CONFIRM_REQUIRED', error: 'Confirma el reemplazo total (confirm_replace_all).' }
+    }
     const normalizeChannel = (ch) => {
       const raw = String(ch || '').trim().toLowerCase()
       if (raw === 'mostrador' || raw === 'counter') return 'counter'
@@ -8756,16 +8772,41 @@ async function directSupervisorVentas(method, path, body) {
             channel: normalizeChannel(l.channel),
           }))
       : []
-    // (5,0,0) removes all existing lines; (0,0,{...}) creates each new one
-    const lineCommands = [[5, 0, 0], ...lines.map((l) => [0, 0, l])]
-    await createUpdate({
-      model: 'gf.saleops.forecast',
-      method: 'update',
-      ids: [forecastId],
-      dict: { line_ids: lineCommands },
-      sudo: 1,
-    })
-    return { success: true, updated: true, forecast_id: forecastId }
+    // §9: vaciar TODAS las líneas exige 2.ª confirmación (no vaciar por un error
+    // de carga o una lista incompleta).
+    if (lines.length === 0 && body?.confirm_empty_replace !== true) {
+      return { ok: false, success: false, phase: WRITE_PHASE.VALIDATION, code: 'CONFIRM_EMPTY_REQUIRED', error: 'Vaciar el forecast requiere confirmación explícita.' }
+    }
+    // SEGURIDAD (B8): reemplazo por controller DEDICADO con guard #220 (rol +
+    // dueño/scope del forecast server-side + advisory lock). Codex §7/§10: el
+    // envelope MANDA — status:error/busy/malformed NUNCA es éxito; en CONFLICT la
+    // UI debe RECARGAR y re-confirmar (nunca pisar a ciegas). Concurrencia de ESTE
+    // endpoint = lock + expected_write_date; forecast/update_lines NO usa el
+    // idempotency_service (que sí existe y usan los flujos PT/warehouse de main.py)
+    // ⇒ NO se declara idempotencia/retry idempotente para forecast (Codex §10).
+    let fRes
+    try {
+      fRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/forecast/update_lines', {
+        meta: supervisorMeta(),
+        data: {
+          forecast_id: forecastId,
+          lines,
+          confirm_replace_all: true,
+          expected_write_date: expectedWriteDate,
+          ...(lines.length === 0 ? { confirm_empty_replace: true } : {}),
+        },
+      }), null)
+    } catch (e) {
+      fRes = normalizeWriteResponse(null, e)
+    }
+    if (!fRes.ok) {
+      return {
+        ok: false, success: false, phase: fRes.phase, code: fRes.code,
+        message: fRes.message, retryable: fRes.retryable,
+        reload: fRes.phase === WRITE_PHASE.CONFLICT, // §10: conflict ⇒ recargar
+      }
+    }
+    return { ok: true, success: true, phase: fRes.phase, updated: true, forecast_id: forecastId, data: fRes.data }
   }
 
   if (cleanPath === '/pwa-supv/forecast-confirm' && method === 'POST') {
@@ -8932,6 +8973,16 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   // ── Route Stops (detalle de paradas de una ruta) ──
+  // Supervisor V2: paradas por el DTO read-only guardado (#223), NO por ORM
+  // genérico con sudo. El cliente solo manda route_plan_id; el servidor limita
+  // campos y scope. Requiere el endpoint desplegado (gate externo).
+  if (cleanPath === '/pwa-supv/route-stops-v2' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/route_stops', {
+      meta: supervisorMeta(),
+      data: { route_plan_id: Number(query.get('plan_id') || query.get('route_plan_id') || 0) },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/route-stops' && method === 'GET') {
     const scope = await supervisorAnalyticScope()
     if (!scope.analyticAccountId) return []
@@ -8981,15 +9032,24 @@ async function directSupervisorVentas(method, path, body) {
   if (cleanPath === '/pwa-supv/week-routes' && method === 'GET') {
     const scope = await supervisorAnalyticScope()
     if (!scope.analyticAccountId) return []
-    const today = new Date()
-    const dayOfWeek = today.getDay()
-    const monday = new Date(today)
-    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
+    // Codex §14: si el caller ancla la semana con la fecha del SERVIDOR
+    // (week_start/week_end, derivada de day-control en tz de la sucursal), se usa
+    // esa. El cálculo con `new Date()` del dispositivo queda SOLO como defensa
+    // para llamadas directas sin anclaje (getWeeklyScore ya no lo usa).
     const pad = (n) => String(n).padStart(2, '0')
-    const monStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
-    const sunStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`
+    const isYmd = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))
+    let monStr = query.get('week_start')
+    let sunStr = query.get('week_end')
+    if (!isYmd(monStr) || !isYmd(sunStr)) {
+      const today = new Date()
+      const dayOfWeek = today.getDay()
+      const monday = new Date(today)
+      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+      monStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
+      sunStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`
+    }
 
     const domain = [['date', '>=', monStr], ['date', '<=', sunStr]]
     if (companyId) domain.push(['company_id', '=', companyId])
@@ -9206,10 +9266,150 @@ async function directKoldcup(method, path, body) {
   return odooJson(cleanPath, body || {})
 }
 
+// ── KOLD Tower M1 (gf_tower_m1) ── Odoo directo; PROHIBIDO fallback n8n ────
+async function directTower(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isTowerM1Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // el endpoint existe SOLO como GET en Odoo; jamás dejar caer esta ruta a n8n
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // odooHttp usa buildBaseHeaders => hereda X-GF-Employee-Token; errores llegan
+  // como ApiError(status/code) al manejo existente (401/403/400/503/500). Sin retries.
+  return odooHttp('GET', TOWER_M1_BACKLOG_PATH, filterTowerM1Params(query))
+}
+
+// ── KOLD OS M2 (gf_kold_os_m2) ── Odoo directo; PROHIBIDO fallback n8n ─────
+async function directKoldOsM2(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM2Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M2 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1: X-GF-Employee-Token vía
+  // buildBaseHeaders, errores como ApiError(status/code), sin retries.
+  return odooHttp('GET', cleanPath, filterKoldOsM2Params(query))
+}
+
+// ── KOLD OS M3 (gf_kold_os_m3) ── Odoo directo; PROHIBIDO fallback n8n ─────
+async function directKoldOsM3(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM3Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M3 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1 y M2.
+  return odooHttp('GET', cleanPath, filterKoldOsM3Params(query))
+}
+
+// ── KOLD OS M4 (gf_kold_os_m4) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Backend: gf_kold_os_m4 (GrupoVeniu/GrupoFrio PR #205), aún sin desplegar.
+async function directKoldOsM4(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM4Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M4 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  // mismo mecanismo canónico que Tower M1 y M2.
+  return odooHttp('GET', cleanPath, filterKoldOsM4Params(query))
+}
+
+// ── KOLD OS M5 (gf_kold_os_m5) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// KOLD OS M5 backend: cliente autenticado GET-only de inventario y flujo.
+async function directKoldOsM5(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM5Path(cleanPath)) return NO_DIRECT
+  if (method !== 'GET') {
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM5Params(query))
+}
+
+// ── KOLD OS M6 (gf_kold_os_m6) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Direct authenticated GET-only client for the KOLD OS M6 backend (caja,
+// cobranza, conciliación y liquidación). Sin número de PR: el backend está
+// construido en LOCAL y aún no publicado (el repo Odoo migra a grupofrio/gf), y
+// un número de PR en runtime envejece y miente.
+async function directKoldOsM6(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM6Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M6 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM6Params(query))
+}
+
+// ── KOLD OS M7 (gf_kold_os_m7) ── Odoo directo; PROHIBIDO fallback n8n ─────
+// Cliente autenticado GET-only del backend M7 (rentabilidad, costos, márgenes).
+// Backend en PR TEMPORAL #211, no desplegado: en producción resuelve unavailable.
+async function directKoldOsM7(method, path) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+
+  if (!isKoldOsM7Path(cleanPath)) return NO_DIRECT
+
+  if (method !== 'GET') {
+    // los endpoints M7 existen SOLO como GET (read-only por contrato)
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+  return odooHttp('GET', cleanPath, filterKoldOsM7Params(query, cleanPath))
+}
+
+// ── Administración de asistencias (gf_hr_ops) ── Odoo directo; sin n8n ────
+async function directAttendance(method, path, body) {
+  if (!isPwaHrNamespace(path)) return NO_DIRECT
+
+  const route = matchPwaHrAttendanceRoute(method, path)
+  if (!route.recognized) {
+    throw new ApiError('route_not_found', { status: 404, code: 'route_not_found' })
+  }
+  if (!route.allowed) {
+    throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+  }
+
+  const query = {}
+  for (const [key, value] of new URLSearchParams(String(path).split('?')[1] || '')) {
+    query[key] = value
+  }
+  if (route.name === 'export') {
+    return odooAttendanceWorkbook(route.path, query)
+  }
+  return odooHttp(String(method).toUpperCase(), route.path, query, body)
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
   const directHandlers = [
+    directAttendance,
+    directTower,
+    directKoldOsM2,
+    directKoldOsM3,
+    directKoldOsM4,
+    directKoldOsM5,
+    directKoldOsM6,
+    directKoldOsM7,
     directProfile,
     directGerente,
     directAdmin,
@@ -9218,6 +9418,7 @@ async function routeDirect(method, path, body) {
     directSupervision,
     directAlmacenPT,
     directEntregas,
+    directSupervisorDayControl,
     directSupervisorVentas,
     directKoldcup,
   ]

@@ -1,9 +1,9 @@
 // ─── API Jefe de Ruta — Complemento a KoldField ─────────────────────────────
-import { api } from '../../lib/api'
+import { api } from '../../lib/api.js'
 import {
   buildMyRoutePlanPath,
   normalizeRoutePlanResponse,
-} from './routePlanAssignment'
+} from './routePlanAssignment.js'
 
 // ── Plan de ruta ─────────────────────────────────────────────────────────────
 

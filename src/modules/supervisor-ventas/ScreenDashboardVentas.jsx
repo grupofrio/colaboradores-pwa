@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+// Tema CLARO (rebranding tanda 3): misma forma que TOKENS, paleta institucional.
+// Estas pantallas solo se montan bajo rutas moduleId="supervisor_ventas"; el
+// invariante lo verifica tests/brandTokensScope.test.mjs.
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { ScreenShell, EmptyState } from '../entregas/components'
 import { apiGet, getSession } from '../../lib/api.js'
 import { getDayOverview } from './supvService'
@@ -81,7 +85,7 @@ export default function ScreenDashboardVentas() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="23 4 23 10 17 10" />
         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
       </svg>
@@ -90,11 +94,11 @@ export default function ScreenDashboardVentas() {
 
   if (loading) {
     return (
-      <ScreenShell title="Dashboard Ventas" backTo="/equipo" rightAction={refreshBtn}>
+      <ScreenShell tokens={TOKENS} title="Dashboard Ventas" backTo="/equipo" rightAction={refreshBtn}>
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
           <div style={{
             width: 32, height: 32,
-            border: '2px solid rgba(255,255,255,0.12)',
+            border: `2px solid ${TOKENS.colors.border}`,
             borderTop: `2px solid ${TOKENS.colors.blue2}`,
             borderRadius: '50%',
             animation: 'entregasShellSpin 0.8s linear infinite',
@@ -106,8 +110,8 @@ export default function ScreenDashboardVentas() {
 
   if (error && !overview && !embedUrl) {
     return (
-      <ScreenShell title="Dashboard Ventas" backTo="/equipo" rightAction={refreshBtn}>
-        <EmptyState icon="!" title="Dashboard no disponible" subtitle={error} typo={typo} />
+      <ScreenShell tokens={TOKENS} title="Dashboard Ventas" backTo="/equipo" rightAction={refreshBtn}>
+        <EmptyState tokens={TOKENS} icon="!" title="Dashboard no disponible" subtitle={error} typo={typo} />
       </ScreenShell>
     )
   }
@@ -115,7 +119,7 @@ export default function ScreenDashboardVentas() {
   const fallback = buildSupervisorDashboardFallback(overview || {})
 
   return (
-    <ScreenShell title="Dashboard Ventas" backTo="/equipo" rightAction={refreshBtn}>
+    <ScreenShell tokens={TOKENS} title="Dashboard Ventas" backTo="/equipo" rightAction={refreshBtn}>
       <div style={{
         padding: '18px 16px', borderRadius: TOKENS.radius.xl,
         background: TOKENS.glass.hero,
@@ -163,7 +167,10 @@ export default function ScreenDashboardVentas() {
         marginTop: 14,
         borderRadius: TOKENS.radius.xl,
         border: `1px solid ${TOKENS.colors.borderBlue}`,
-        background: 'rgba(4,10,24,0.85)',
+        // Marco simulado de navegador alrededor del embed de Metabase. El
+        // CONTENIDO del iframe es externo y no se toca (igual que el brief);
+        // el marco sí sigue el tema.
+        background: TOKENS.colors.surface,
         overflow: 'hidden',
         position: 'relative',
         minHeight: 340,
@@ -175,14 +182,14 @@ export default function ScreenDashboardVentas() {
           gap: 8,
           padding: '0 14px',
           borderBottom: `1px solid ${TOKENS.colors.border}`,
-          background: 'rgba(4,10,24,0.96)',
+          background: TOKENS.colors.surfaceStrong,
         }}>
           <div style={{ display: 'flex', gap: 5 }}>
             {['#ef4444', '#f59e0b', '#22c55e'].map((color) => (
               <div key={color} style={{ width: 8, height: 8, borderRadius: '50%', background: color, opacity: 0.6 }} />
             ))}
           </div>
-          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.04em' }}>
+          <span style={{ fontSize: 9, color: TOKENS.colors.textMuted, letterSpacing: '0.04em' }}>
             dashboard.grupofrio.mx · Supervisor ventas
           </span>
         </div>
@@ -196,12 +203,12 @@ export default function ScreenDashboardVentas() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'rgba(4,10,24,0.8)',
+                background: TOKENS.colors.surface,
                 zIndex: 1,
               }}>
                 <div style={{
                   width: 32, height: 32,
-                  border: '2px solid rgba(255,255,255,0.12)',
+                  border: `2px solid ${TOKENS.colors.border}`,
                   borderTop: `2px solid ${TOKENS.colors.blue2}`,
                   borderRadius: '50%',
                   animation: 'entregasShellSpin 0.8s linear infinite',
@@ -268,7 +275,7 @@ function BreakdownPill({ typo, label, value }) {
     <div style={{
       padding: '10px 8px',
       borderRadius: TOKENS.radius.md,
-      background: 'rgba(255,255,255,0.04)',
+      background: TOKENS.colors.surfaceSoft,
       border: `1px solid ${TOKENS.colors.border}`,
       textAlign: 'center',
     }}>
@@ -283,7 +290,7 @@ function InlineStat({ typo, label, value }) {
     <div style={{
       padding: '10px 12px',
       borderRadius: TOKENS.radius.md,
-      background: 'rgba(255,255,255,0.04)',
+      background: TOKENS.colors.surfaceSoft,
       border: `1px solid ${TOKENS.colors.border}`,
     }}>
       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>{label}</p>

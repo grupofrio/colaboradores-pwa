@@ -18,11 +18,11 @@ import {
   updateKm,
   getLiquidation,
   closeRoute,
-} from './api'
-import { todayLocal } from '../../lib/api'
-import { validateCierre as validateCierreRules } from './routeCloseValidation'
-export { calculateFlowState } from './routeFlowState'
-export { buildInventoryView } from './routeInventoryView'
+} from './api.js'
+import { todayLocal } from '../../lib/api.js'
+import { validateCierre as validateCierreRules } from './routeCloseValidation.js'
+export { calculateFlowState } from './routeFlowState.js'
+export { buildInventoryView } from './routeInventoryView.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Constants
@@ -266,20 +266,19 @@ export function saveCierreState(planId, state) {
 }
 
 /**
- * Get cierre state — merges backend plan fields with localStorage cache.
+ * Get cierre state — backend completion fields override local display cache.
  */
 export function getCierreState(planId, plan) {
   const local = _getCierreData()[planId] || {}
-  if (plan) {
-    // Backend fields override local cache when available
-    if (plan.corte_validated) local.corteDone = true
-    if (plan.state === 'closed' || plan.state === 'reconciled') {
-      local.closed = true
-      local.liquidacionDone = true
-      local.corteDone = true
-    }
+  if (!plan) return local
+
+  const state = String(plan.state || '').toLowerCase()
+  return {
+    ...local,
+    corteDone: Boolean(plan.corte_validated),
+    liquidacionDone: Boolean(plan.liquidacion_done_at),
+    closed: state === 'closed' || state === 'reconciled',
   }
-  return local
 }
 
 function _getCierreData() {

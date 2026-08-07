@@ -12,6 +12,23 @@ export const TOKENS = {
     surface:       'rgba(255,255,255,0.05)',
     surfaceSoft:   'rgba(255,255,255,0.03)',
     surfaceStrong: 'rgba(255,255,255,0.07)',
+    // Chips de estado (StatusBadge). Valores EXACTOS que estaban hardcodeados
+    // ahí: al tokenizarlos, el tema oscuro no cambia un solo píxel.
+    chipNeutralBg: 'rgba(255,255,255,0.06)',
+    chipInfoBg:    'rgba(43,143,224,0.12)',
+    chipInfoFg:    '#2B8FE0',
+    // Degradado del botón primario (ErrorState). Valor EXACTO que estaba
+    // hardcodeado: al tokenizarlo, el tema oscuro no cambia.
+    ctaGradient:   'linear-gradient(90deg,#15499B,#2B8FE0)',
+    // Riel del spinner (Loader): valor exacto previo para el tema oscuro.
+    spinnerTrack:  'rgba(255,255,255,0.12)',
+    // Elementos del sheet móvil «Más». Conservan los literales previos para
+    // que los roles oscuros no cambien al tematizar la variante clara.
+    moreSheetBg:     'rgba(6,12,22,0.98)',
+    moreSheetHandle: 'rgba(255,255,255,0.18)',
+    moreSheetItemBg: 'rgba(255,255,255,0.04)',
+    // Fondo de la navegación global (antes hardcodeado en AppNav; mismo valor)
+    navBg:     'rgba(3,8,17,0.96)',
     // Bordes
     border:     'rgba(255,255,255,0.08)',
     borderBlue: 'rgba(97,178,255,0.18)',
@@ -60,6 +77,27 @@ export const TOKENS = {
     fast:   '180ms ease',
     normal: '280ms ease',
     spring: '380ms cubic-bezier(0.34,1.56,0.64,1)',
+  },
+
+  // ── Canal semántico de ESTADOS (Etapa 0A) ─────────────────────────────────
+  // Distingue por forma + palabra + color, no solo color (no "arcoíris"). Cada
+  // estado trae fg/bg/border y un glyph textual accesible. `word` es la etiqueta
+  // por defecto; la UI puede sobreescribirla.
+  state: {
+    info:          { fg: 'rgba(255,255,255,0.72)', bg: 'transparent',            border: 'transparent',            glyph: '·', word: 'Información' },
+    signal:        { fg: '#60a5fa',                bg: 'rgba(96,165,250,0.10)',  border: 'rgba(96,165,250,0.34)',  glyph: '◈', word: 'Señal', dashed: true },
+    risk:          { fg: '#f59e0b',                bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.34)',  glyph: '⚠', word: 'Riesgo' },
+    incumplimiento:{ fg: '#ef4444',                bg: 'rgba(239,68,68,0.10)',   border: 'rgba(239,68,68,0.40)',   glyph: '⛔', word: 'Incumplimiento' },
+    no_evaluable:  { fg: 'rgba(255,255,255,0.50)', bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.14)', glyph: '▢', word: 'No evaluable' },
+  },
+
+  // ── Canal de FRESCURA (Etapa 0A) ──────────────────────────────────────────
+  // Reloj/neutro: JAMÁS reutiliza el rojo de riesgo de negocio. En 0A solo se usa
+  // el tono `neutral` (edad descriptiva); los evaluativos existen para cuando se
+  // aprueben cadencias (ver FRESHNESS_POLICY_PROPOSAL.md), no antes.
+  freshness: {
+    neutral: { fg: 'rgba(148,197,255,0.85)', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.22)', glyph: '🕑' },
+    stale:   { fg: '#c084fc',                bg: 'rgba(192,132,252,0.10)', border: 'rgba(192,132,252,0.30)', glyph: '🕑' },
   },
 }
 

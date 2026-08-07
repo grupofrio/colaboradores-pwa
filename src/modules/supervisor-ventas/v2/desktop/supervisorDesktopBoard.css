@@ -1,0 +1,16 @@
+.supervisor-desktop-board-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.05fr) minmax(0, 1.75fr);
+  gap: 14px;
+  align-items: stretch;
+  height: calc(100dvh - 190px);
+  min-height: 520px;
+}
+
+@media (max-width: 1180px) {
+  .supervisor-desktop-board-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+  }
+}

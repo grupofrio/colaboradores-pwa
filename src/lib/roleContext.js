@@ -1,3 +1,6 @@
+import { isValidAuthenticatedSession } from './session.js'
+import { readAuthoritativeTowerStatus } from '../modules/torre/e1/loadTowerStatus.js'
+
 const MODULE_ROLE_VARIANTS = {
   registro_produccion: ['operador_barra', 'operador_rolito', 'auxiliar_produccion'],
   admin_sucursal: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'],
@@ -126,6 +129,31 @@ export function getModuleEntryDecision(module, session = {}) {
   }
 
   return { type: 'choose', compatibleRoles, selectedRole: '' }
+}
+
+// Decisión de entrada SESSION-AWARE para el clic del home. Alinea el gate de
+// entrada con la MISMA autoridad que decide la visibilidad de la tarjeta
+// (navModel.isModuleVisibleForSession), evitando la incoherencia de que un
+// módulo se muestre por tower_status pero su clic se autorice por x_job_key:
+//   · sesión inválida  => denied (fail-closed).
+//   · módulo towerGated => autoridad = tower_status AUTORITATIVO
+//     (readAuthoritativeTowerStatus, allowlist dura), NO x_job_key. Entra sii
+//     resuelve a un valor canónico; navega directo a module.route sin
+//     role-context. TowerRoute sigue siendo el guard final de la ruta.
+//   · resto            => delega en getModuleEntryDecision (rol/x_job_key),
+//     sin cambios de comportamiento.
+export function getModuleEntryDecisionForSession(module, session = {}) {
+  if (!isValidAuthenticatedSession(session)) {
+    return { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  if (module?.towerGated) {
+    const towerStatus = readAuthoritativeTowerStatus(session)
+    if (!towerStatus) {
+      return { type: 'denied', compatibleRoles: [], selectedRole: '' }
+    }
+    return { type: 'direct', compatibleRoles: [towerStatus], selectedRole: '' }
+  }
+  return getModuleEntryDecision(module, session)
 }
 
 export function upsertModuleRoleContext(contexts = {}, moduleId, role) {

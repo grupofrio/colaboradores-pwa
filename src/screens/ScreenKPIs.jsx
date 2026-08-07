@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiGet as _apiGet, getSession } from "../lib/api";
+import { isBrandLightSession } from "../theme/useBrandPalette";
+import PanelKpisSupervisor from "../modules/supervisor-ventas/kpis/PanelKpis";
 
 /* ============================================================================
    DESIGN TOKENS (mismo sistema que Pantalla 2)
@@ -67,36 +69,6 @@ function getTypo(sw) {
 /* ============================================================================
    NAV (mismo que Pantalla 2)
 ============================================================================ */
-const NAV_ITEMS = [
-  { id:"home",     label:"Inicio",   icon:()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-  { id:"kpis",     label:"KPIs",     icon:()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
-  { id:"encuestas",label:"Encuestas",icon:()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> },
-  { id:"logros",   label:"Logros",   icon:()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg> },
-  { id:"perfil",   label:"Yo",       icon:()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-];
-
-function BottomNav({ active = "kpis", sw }) {
-  const navigate = useNavigate();
-  const ROUTES = { home: "/", kpis: "/kpis", encuestas: "/surveys", logros: "/badges", badges: "/badges", perfil: "/profile" };
-  const navH = sw < 340 ? 58 : 64;
-  const itemW = sw < 340 ? 48 : 58;
-  return (
-    <div style={{ position:"absolute", left:10, right:10, bottom:10, height:navH, borderRadius:20, background:TOKENS.glass.panel, border:`1px solid ${TOKENS.colors.border}`, backdropFilter:"blur(16px)", boxShadow:TOKENS.shadow.md, display:"flex", alignItems:"center", justifyContent:"space-around", zIndex:5 }}>
-      {NAV_ITEMS.map(item => {
-        const isActive = item.id === active;
-        const Icon = item.icon;
-        return (
-          <button key={item.id} onClick={() => navigate(ROUTES[item.id] || "/")} style={{ width:itemW, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, color:isActive?TOKENS.colors.blue3:"rgba(255,255,255,0.42)", transition:`all ${TOKENS.motion.fast}` }}>
-            <div style={{ width:34, height:34, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", background:isActive?"rgba(43,143,224,0.10)":"transparent", border:isActive?"1px solid rgba(97,178,255,0.14)":"1px solid transparent", boxShadow:isActive?"0 0 16px rgba(43,143,224,0.12)":"none" }}>
-              <Icon/>
-            </div>
-            <span style={{ fontSize:9, fontWeight:isActive?700:500 }}>{item.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 /* ============================================================================
    PARTÍCULAS
@@ -380,7 +352,26 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
 /* ============================================================================
    KPI SCREEN PRINCIPAL
 ============================================================================ */
+// ── Rama por ROL ─────────────────────────────────────────────────────────────
+// `supervisor_ventas` ve un panel NATIVO con dato real. Todos los demás roles
+// siguen exactamente donde estaban: Metabase, y el mock oscuro cuando su puesto
+// no tiene dashboard. Es un early-return ANTES de cualquier estado, para que su
+// rama no pase por una sola línea nueva.
+//
+// Por qué el mock se retira solo para este rol: los números que pintaba (82% de
+// cumplimiento, 14 visitas, "31 clientes nuevos") están escritos a mano en el
+// archivo. Para un supervisor que decide con ellos eso no es una maqueta, es
+// información falsa. Para los demás roles el reemplazo requiere su propia
+// fuente y su propia decisión de dirección; quitarlo sin eso los dejaría sin
+// pantalla.
 function KPIScreen({ sw: propSw, sh: propSh }) {
+  if (isBrandLightSession(getSession())) {
+    return <PanelKpisSupervisor />;
+  }
+  return <KPIScreenLegacy sw={propSw} sh={propSh} />;
+}
+
+function KPIScreenLegacy({ sw: propSw, sh: propSh }) {
   const [winW, setWinW] = useState(window.innerWidth);
   const [winH, setWinH] = useState(window.innerHeight);
   useEffect(() => {
@@ -457,7 +448,6 @@ function KPIScreen({ sw: propSw, sh: propSh }) {
         <div style={{ height:4 }}/>
       </div>
 
-      <BottomNav active="kpis" sw={sw}/>
     </div>
   );
 }

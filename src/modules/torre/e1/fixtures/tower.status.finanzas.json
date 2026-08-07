@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "generated_for_role": "finanzas",
+  "data_as_of": "2026-07-08T14:56:34-06:00",
+  "read_only": true,
+  "source_of_truth": "docs/pc/PC_CLOSURE_TRACKER.md",
+  "role_gate": {
+    "is_gated": true,
+    "gate": "FASE-1.5",
+    "reason": "Rentabilidad agregada diferida a Fase 1.5; depende de km real + consignación (PC#12 -> E5)."
+  },
+  "modules": []
+}
