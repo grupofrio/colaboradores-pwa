@@ -34,6 +34,8 @@ import ScreenProfile from './screens/ScreenProfile'
 
 // ─── Módulos operativos (lazy — solo descarga si el rol lo necesita) ─────────
 const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente'))
+// Talento GF — ruta pública, sin sesión (P2.8B.1)
+const ScreenTalentUpload = lazy(() => import('./modules/talent/ScreenTalentUpload'))
 // E1-C.4 — superficie KOLD Tower read-only (E1-B), montada detrás de TowerRoute (gate por rol autoritativo)
 const ScreenKoldTowerE1 = lazy(() => import('./modules/torre/e1/ScreenKoldTowerE1'))
 // M1-D — Backlog M1 read-only (mismo gate TowerRoute; SIN menú, solo ruta directa)
@@ -693,6 +695,9 @@ export default function App() {
 
             {/* ── Layout global: navegación por rol persistente en todas las pantallas autenticadas ── */}
             <Route element={<AppShell />}>
+
+            {/* Talento GF — pública, sin sesión (candidato anónimo vía WhatsApp) */}
+            <Route path="/talent/upload/:token" element={<ScreenTalentUpload />} />
 
             {/* Generales */}
             <Route path="/" element={<PrivateRoute><ScreenHome /></PrivateRoute>} />
