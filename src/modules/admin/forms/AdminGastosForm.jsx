@@ -222,7 +222,6 @@ export default function AdminGastosForm() {
         : await createExpense({
           ...functionalPayload,
           company_id: companyId,
-          employee_id: employeeId || undefined,
           warehouse_id: warehouseId || undefined,
           sucursal_code: sucursal || undefined,
         })
