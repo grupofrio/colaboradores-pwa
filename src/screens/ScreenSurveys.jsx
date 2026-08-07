@@ -76,12 +76,12 @@ function mapOdooSurvey(s) {
     id: s.id,
     survey_id: s.survey_id,
     title: s.survey_title || `Encuesta #${s.id}`,
-    description: "Responde esta encuesta para acumular puntos.",
+    description: "Tu respuesta se revisa en conjunto para mejorar la app.",
     duration: "~3 min",
     questionCount: null,  // Odoo no lo expone en la lista
     status: s.state === "in_progress" ? "pending" : s.state === "new" ? "pending" : "done",
     dueDate: deadline ? `${deadline.getDate()} ${["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][deadline.getMonth()]}` : null,
-    points: 80,
+    points: null,   // el servidor no otorga puntos por encuesta: no se inventan
     access_token: s.access_token,
     is_overdue: s.is_overdue,
     completedDate: s.state === "done" ? "Completada" : null,
@@ -203,10 +203,12 @@ function SurveyCard({ survey, onStart, sw, delay }) {
               </span>
             </div>
 
-            <div style={{ display:"flex", alignItems:"center", gap:4, background:"rgba(255,255,255,0.05)", borderRadius:999, padding:"4px 8px", border:`1px solid ${TOKENS.colors.border}` }}>
-              <span style={{ fontSize:10 }}>⭐</span>
-              <span style={{ fontSize:10, fontWeight:700, color:TOKENS.colors.textSoft }}>+{survey.points} pts</span>
-            </div>
+            {survey.points != null && (
+              <div style={{ display:"flex", alignItems:"center", gap:4, background:"rgba(255,255,255,0.05)", borderRadius:999, padding:"4px 8px", border:`1px solid ${TOKENS.colors.border}` }}>
+                <span style={{ fontSize:10 }}>⭐</span>
+                <span style={{ fontSize:10, fontWeight:700, color:TOKENS.colors.textSoft }}>+{survey.points} pts</span>
+              </div>
+            )}
           </div>
 
           <div style={{ ...typo.title, color:TOKENS.colors.text, marginBottom:6 }}>{survey.title}</div>
@@ -559,9 +561,9 @@ function DoneState({ survey, onBack, sw }) {
 
         <FadeIn delay={320}>
           <Card style={{ padding:"16px 20px", border:`1px solid ${TOKENS.colors.borderBlue}`, background:TOKENS.glass.hero, width:"100%", textAlign:"center", boxShadow:`${TOKENS.shadow.md}, ${TOKENS.shadow.inset}, ${TOKENS.shadow.blue}` }}>
-            <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, marginBottom:4 }}>Puntos ganados</div>
-            <div style={{ fontSize:34, fontWeight:700, color:TOKENS.colors.blue3, letterSpacing:"-0.04em" }}>+{survey.points}</div>
-            <div style={{ ...typo.caption, color:"rgba(255,255,255,0.40)", marginTop:2 }}>Se reflejarán en tu balance hoy</div>
+            <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, marginBottom:4 }}>Gracias</div>
+            <div style={{ fontSize:22, fontWeight:700, color:TOKENS.colors.blue3, letterSpacing:"-0.02em" }}>Respuesta enviada</div>
+            <div style={{ ...typo.caption, color:"rgba(255,255,255,0.40)", marginTop:2 }}>Se revisa en conjunto para mejorar la app</div>
           </Card>
         </FadeIn>
 
@@ -602,7 +604,6 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
   const [activeSurvey, setActiveSurvey] = useState(null);
   const [surveys, setSurveys] = useState([]);
   const [loadState, setLoadState] = useState("loading"); // loading | ready | error | empty
-  const [completedIds, setCompletedIds] = useState([]);
   const typo = getTypo(sw);
 
   const navH = sw < 340 ? 58 : 64;
@@ -630,11 +631,9 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
     return () => { cancelled = true; };
   }, []);
 
-  const displaySurveys = surveys.map(s => ({
-    ...s,
-    status: completedIds.includes(s.id) ? "done" : s.status,
-    completedDate: completedIds.includes(s.id) ? "Hoy" : s.completedDate,
-  }));
+  // El estado viene del SERVIDOR (survey.user_input.state). Ya no se sobrescribe
+  // con una lista local de "contestadas", que mentía hasta el siguiente refresh.
+  const displaySurveys = surveys;
 
   const pendingCount = displaySurveys.filter(s => s.status === "pending").length;
 
@@ -643,9 +642,15 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
     setView("survey");
   };
 
-  const handleComplete = (id) => {
-    setCompletedIds(prev => prev.includes(id) ? prev : [...prev, id]);
+  // El estado de una encuesta lo decide el SERVIDOR, no este botón. Antes se
+  // marcaba como contestada en memoria del navegador al pulsar, sin confirmación
+  // de Odoo: al recargar reaparecía como pendiente. Ahora solo se muestra el
+  // acuse y se RECARGA desde el servidor, que es la única autoridad.
+  const handleComplete = () => {
     setView("done");
+    apiGet("/pwa-surveys")
+      .then(r => { if (r.success && Array.isArray(r.data)) setSurveys(r.data.map(mapOdooSurvey)); })
+      .catch(() => {});
   };
 
   const handleBack = () => {

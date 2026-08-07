@@ -1370,6 +1370,30 @@ async function directAdmin(method, path, body) {
     return odooHttp('GET', `${endpoint}${search ? `?${search}` : ''}`)
   }
 
+  // ── Encuestas y Reconocimientos del colaborador (todos los roles) ──────────
+  // Estas dos rutas NO tenían handler y caían al fallback de n8n, cuyo workflow
+  // W16 está desactivado: por eso ambas pantallas mostraban "Error al cargar".
+  // Ahora van DIRECTO a Odoo con la credencial real (X-GF-Employee-Token que ya
+  // adjunta odooJson). Las pantallas esperan `success`, no `ok`: se mapea aquí.
+  if (cleanPath === '/pwa-surveys' && (method === 'GET' || method === 'POST')) {
+    const res = await odooJson('/pwa-surveys', {})
+    return { success: res?.ok !== false, message: res?.message || '', data: Array.isArray(res?.data) ? res.data : [] }
+  }
+
+  if (cleanPath === '/pwa-badges' && (method === 'GET' || method === 'POST')) {
+    const res = await odooJson('/pwa-badges', {})
+    const d = res?.data && typeof res.data === 'object' ? res.data : {}
+    return {
+      success: res?.ok !== false,
+      message: res?.message || '',
+      data: {
+        earned: Array.isArray(d.earned) ? d.earned : [],
+        locked: Array.isArray(d.locked) ? d.locked : [],
+        total_points: Number(d.total_points || 0),
+      },
+    }
+  }
+
   if (cleanPath === '/pwa-admin/pos-products' && method === 'GET') {
     return forwardGetQuery('/pwa-admin/pos-products')
   }
