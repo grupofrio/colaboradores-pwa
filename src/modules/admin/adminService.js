@@ -353,14 +353,11 @@ export async function createExpense(payload) {
   // Nunca se permite que un payload de UI seleccione a otro empleado.
   delete clean.employee_id
 
-  // Analítica — Opción A (analytic_distribution dict Odoo 18)
-  const dist = normalizeAnalyticDistribution(clean.analytic_distribution)
-  if (BACKEND_CAPS.expenseAnalytics && dist) {
-    clean.analytic_distribution = dist
-  } else {
-    delete clean.analytic_distribution
-  }
-  // Limpieza de legacy — ya no se usan
+  // Analítica: el backend la DERIVA del token y de la categoría (product_id).
+  // El cliente NUNCA la manda (RED Codex P3 #160): el wrapper la descarta aunque
+  // un llamador futuro la incluya por error. Capturar dimensiones en el navegador
+  // es el anti-patrón que esta fase eliminó.
+  delete clean.analytic_distribution
   delete clean.analytic_account_id
   delete clean.analytic_tag_ids
 

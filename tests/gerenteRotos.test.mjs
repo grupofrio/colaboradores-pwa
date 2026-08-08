@@ -4,7 +4,7 @@
 // **null ≠ 0**. Un «—» significa "no hay dato"; un 0 significa "medimos cero".
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { api } from '../src/lib/api.js'
@@ -242,11 +242,20 @@ test('la tarjeta del hub gerente rotula la fecha del dato', () => {
   assert.match(code, /const fmtKpi = \(v\) => \(v === null \|\| v === undefined/, 'null se pinta «—», no 0')
 })
 
-test('la lista de gastos desenvuelve el envelope y reporta el error', () => {
-  const code = src('../src/modules/shared/GastosScreenBase.jsx')
-  assert.doesNotMatch(code, /Array\.isArray\(data\) \? data : \[\]/, 'Array.isArray sobre el envelope siempre daba falso')
-  assert.match(code, /function unwrapExpenses/)
-  assert.match(code, /setListError/, 'un 401 no puede verse igual que "sin gastos hoy"')
+test('el formulario degradado de gastos ya no existe', () => {
+  // `GastosScreenBase` era la versión que veía el gerente y cualquiera en móvil:
+  // sin analítica, sin almacén, sin adjunto, y con la lista siempre vacía porque
+  // hacía `Array.isArray()` sobre el envelope. Se eliminó junto con la
+  // bifurcación por ancho de pantalla.
+  assert.equal(
+    existsSync(fileURLToPath(new URL('../src/modules/shared/GastosScreenBase.jsx', import.meta.url))),
+    false,
+  )
+  const admin = src('../src/modules/admin/ScreenGastos.jsx')
+  const gerente = src('../src/modules/gerente/ScreenGastos.jsx')
+  assert.doesNotMatch(admin, /window\.innerWidth\s*<\s*1024/, 'sin bifurcación por ancho')
+  assert.match(admin, /AdminGastosForm/)
+  assert.match(gerente, /from '\.\.\/admin\/ScreenGastos'/, 'el gerente usa el MISMO formulario')
 })
 
 test('el bloque muerto de aprobación de requisiciones ya no existe', () => {
