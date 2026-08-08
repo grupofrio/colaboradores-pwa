@@ -9164,21 +9164,25 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
-  // ── Sprint 5: Clientes inactivos / recuperación (guía §6) ─────────────────
-
-  if (cleanPath === '/pwa-supv/customers/inactive' && method === 'GET') {
-    return odooJson('/pwa-supv/customers/inactive', {
-      company_id: Number(query.get('company_id')) || companyId || undefined,
-      limit:      Number(query.get('limit'))      || undefined,
-      offset:     Number(query.get('offset'))     || undefined,
-    })
-  }
-
-  if (cleanPath === '/pwa-supv/customers/recovery' && method === 'GET') {
-    return odooJson('/pwa-supv/customers/recovery', {
-      company_id: Number(query.get('company_id')) || companyId || undefined,
-      limit:      Number(query.get('limit'))      || undefined,
-      offset:     Number(query.get('offset'))     || undefined,
+  // ── Clientes inactivos / recuperación ─────────────────────────────────────
+  // REDIRIGIDOS al endpoint V2 escopado a sucursal (Codex P1). Los paths legado
+  // reenviaban un `company_id` controlado por el CLIENTE al listado de COMPAÑÍA
+  // (fuga: mostraba clientes de todas las plazas). Ocultar la pantalla no bastaba:
+  // la ruta seguía siendo invocable desde el bundle. Ahora ambos caen al V2
+  // token-only (el alcance sale del token; el company_id del cliente se IGNORA).
+  // El `kind` se deriva del path. El endpoint BE api_key legado sigue vivo pero
+  // solo es alcanzable con la api_key que inyecta el proxy, no desde el navegador
+  // — su deprecación queda a Sebas (dueño de gf_pwa_admin).
+  if ((cleanPath === '/pwa-supv/customers/inactive'
+       || cleanPath === '/pwa-supv/customers/recovery') && method === 'GET') {
+    const kind = cleanPath.endsWith('/inactive') ? 'inactive' : 'recovery'
+    return odooJson('/gf/salesops/supervisor/v2/customers/recovery', {
+      meta: supervisorMeta(),
+      data: {
+        kind,
+        limit: Number(query.get('limit')) || undefined,
+        offset: Number(query.get('offset')) || undefined,
+      },
     })
   }
 

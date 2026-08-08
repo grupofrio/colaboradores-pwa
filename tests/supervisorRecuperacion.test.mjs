@@ -94,6 +94,22 @@ test('el wrapper V2 va por kind y sin company_id', () => {
   assert.match(shim, /\/gf\/salesops\/supervisor\/v2\/customers\/recovery/)
 })
 
+test('los paths legado de compañía se REDIRIGEN al V2 (Codex P1)', () => {
+  // Ocultar la pantalla no bastaba: el bundle seguía exponiendo
+  // /pwa-supv/customers/{inactive,recovery} y reenviaba un company_id del CLIENTE
+  // al listado de compañía (fuga). Ahora ambos caen al endpoint V2 token-only.
+  const shim = src('lib/api.js')
+  const i = shim.indexOf("cleanPath === '/pwa-supv/customers/inactive'")
+  assert.ok(i > 0, 'el path legado sigue interceptado (no cae a n8n)')
+  const block = shim.slice(i, i + 700)
+  assert.match(block, /\/gf\/salesops\/supervisor\/v2\/customers\/recovery/,
+    'los paths legado redirigen al endpoint V2 escopado a sucursal')
+  assert.doesNotMatch(block, /company_id/,
+    'ya NO se reenvía company_id del cliente a un listado de compañía')
+  assert.match(block, /kind = cleanPath\.endsWith\('\/inactive'\)/,
+    'el kind se deriva del path')
+})
+
 test('la acción de agregar NO finge éxito: usa addResultMessage', () => {
   const scr = src('modules/supervisor-ventas/ScreenClientesRecuperacion.jsx')
   assert.match(scr, /addCustomerToRoutePlan/, 'la escritura pasa por el endpoint seguro')
