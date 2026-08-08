@@ -1397,7 +1397,10 @@ async function directAdmin(method, path, body) {
   if (cleanPath === '/pwa-survey-start' && method === 'POST') {
     const res = await odooJson('/pwa-survey-start', { survey_id: Number(body?.survey_id || 0) })
     const d = res?.data && typeof res.data === 'object' ? res.data : null
-    if (res?.ok !== true || !d?.access_token) {
+    // La señal de éxito es la URL ARMADA POR EL SERVIDOR (token de encuesta +
+    // answer_token). Antes se exigía `access_token` (el de la respuesta) y la
+    // pantalla lo metía como si fuera el de la encuesta ⇒ URL rota (Codex P1-1).
+    if (res?.ok !== true || !d?.survey_url) {
       return {
         success: false,
         code: res?.code || 'survey_start_unavailable',

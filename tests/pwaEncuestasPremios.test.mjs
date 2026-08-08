@@ -97,22 +97,50 @@ test('Premios no promete una mecánica que no existe (Codex P2-2)', () => {
 
 // ── El flujo funciona de punta a punta (Codex P1-2) ────────────────────────
 
-test('la encuesta se abre con un token REAL pedido al servidor', () => {
+test('la encuesta se abre con la URL ARMADA POR EL SERVIDOR (Codex P1-1)', () => {
   const s = src('screens/ScreenSurveys.jsx')
   assert.match(s, /apiPost\("\/pwa-survey-start", \{ survey_id: survey\.survey_id \}\)/,
     'el servidor crea/recupera la respuesta ligada al empleado del token')
-  assert.match(s, /survey_url: s\.access_token \? /,
-    'sin token no se fabrica una URL: antes salía /survey/start/ vacío')
+  // La URL viene del backend (token de encuesta + answer_token); la pantalla NO
+  // la reconstruye con el token de la respuesta (era la URL rota).
+  assert.match(s, /survey_url: s\.survey_url \? `\$\{ODOO_BASE\}\$\{s\.survey_url\}`/,
+    'el mapper usa la survey_url del backend, no un /survey/start/<answer_token>')
+  assert.match(s, /survey_url: `\$\{ODOO_BASE\}\$\{res\.data\.survey_url\}`/,
+    'al iniciar, se usa la survey_url del backend')
+  assert.doesNotMatch(s, /survey\/start\/\$\{res\.data\.access_token\}/,
+    'ya no se arma la URL con el token de la respuesta')
   assert.match(s, /needs_start/, 'el DTO declara si hay que iniciarla')
   assert.match(s, /setStartError/, 'si no se puede abrir, se dice')
 })
 
-test('el shim de inicio exige token usable, no éxito por omisión', () => {
+test('el shim de inicio exige URL usable, no éxito por omisión', () => {
   const s = src('lib/api.js')
   const i = s.indexOf("cleanPath === '/pwa-survey-start'")
   assert.ok(i > 0, 'existe el shim')
-  const block = s.slice(i, i + 800)
-  assert.match(block, /res\?\.ok !== true \|\| !d\?\.access_token/,
-    'sin token no hay éxito: abrir una URL rota es peor que fallar')
+  const block = s.slice(i, i + 900)
+  assert.match(block, /res\?\.ok !== true \|\| !d\?\.survey_url/,
+    'sin URL del servidor no hay éxito: abrir una URL rota es peor que fallar')
   assert.match(block, /success: false/)
+})
+
+// ── La encuesta NO se anuncia como anónima (Codex P1-3) ─────────────────────
+
+test('la pantalla NO promete anonimato: el diseño guarda identidad', () => {
+  const s = src('screens/ScreenSurveys.jsx')
+  assert.doesNotMatch(s, /son anónimas/, 'prometer anonimato era materialmente falso')
+  assert.doesNotMatch(s, /respuestas? (son|es) anónim/i, 'ninguna afirmación de anonimato')
+  assert.match(s, /ligada a tu nombre/, 'se declara que la respuesta va ligada a la identidad')
+  assert.match(s, /no es anónima/, 'y se dice explícitamente (la negación honesta SÍ vale)')
+})
+
+// ── "Ya terminé" verifica contra el servidor (Codex P2) ─────────────────────
+
+test('el éxito solo se declara si el servidor confirma state === done', () => {
+  const s = src('screens/ScreenSurveys.jsx')
+  assert.match(s, /setView\("verifying"\)/, 'primero verifica, no canta victoria')
+  assert.match(s, /mine\.state === "done"/, 'solo pasa a "done" si el servidor lo confirma')
+  // Si no se confirma, vuelve a la lista en vez de mostrar "¡Listo!".
+  const i = s.indexOf('const handleComplete')
+  const block = s.slice(i, i + 700)
+  assert.match(block, /setView\("list"\)/, 'sin confirmación regresa a la lista, no a "done"')
 })
