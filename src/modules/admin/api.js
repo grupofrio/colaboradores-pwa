@@ -342,6 +342,9 @@ export function getFuelRoutes(date) {
 
 /** Gasto de gasolina. El backend deriva empleado, compañía y sucursal. */
 export function createFuelExpense(data) {
+  // El cliente NO manda alcance ni analítica: el backend los deriva del token y
+  // de la ruta (RED Codex P1 #160). `analytic_distribution` se descarta aquí
+  // aunque el llamador lo incluya por error.
   const {
     company_id,
     companyId,
@@ -353,6 +356,8 @@ export function createFuelExpense(data) {
     attachmentId,
     sucursal_code,
     sucursalCode,
+    analytic_distribution,
+    analyticDistribution,
     ...functionalFields
   } = data || {}
   return api('POST', '/pwa-admin/fuel-expense-create', functionalFields)

@@ -17,7 +17,6 @@ import {
 } from '../adminService'
 import { attachExpense, createFuelExpense, getFuelRoutes } from '../api'
 import { api, todayLocal } from '../../../lib/api'
-import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
 import {
   businessToday,
   dimensionChips,
@@ -228,15 +227,26 @@ export default function AdminGastosForm() {
     if (!amount || Number(amount) <= 0) { setError('Ingresa un monto válido'); return }
     if (expenseMode === 'general' && !companyId) { setError('Selecciona una razón social'); return }
     if (expenseMode === 'fuel' && !fuelRouteId) { setError('Selecciona la ruta de gasolina'); return }
-    if (derivedMode && expenseMode === 'general') {
-      // Fail-closed espejo del backend: sin categoría no hay dimensiones, y sin
-      // dimensiones el gasto no sirve para el P&L por UN ni por CC.
+    // FAIL-CLOSED (RED Codex P1 #160): el gasto general SOLO se captura en modo
+    // derivado (categoría → el backend asienta Plaza·UN·CC). Si el catálogo no
+    // cargó o el modo derivado está apagado, NO se reconstruyen dimensiones en
+    // el navegador ni se crea el gasto por la vía legacy: se bloquea con un
+    // mensaje. Reconstruir analytic_distribution en cliente es justo el
+    // anti-patrón que esta fase vino a matar.
+    if (expenseMode === 'general') {
+      if (!derivedMode) {
+        setError(
+          catalogError
+            ? 'No se pudo cargar el catálogo de categorías. No es posible registrar el gasto ahora.'
+            : 'La captura de gastos con categoría no está habilitada en el servidor. No se registra el gasto desde aquí.',
+        )
+        return
+      }
+      // Sin categoría no hay dimensiones, y sin dimensiones el gasto no sirve
+      // para el P&L por UN ni por CC.
       if (!categoryId) { setError('Selecciona la categoría del gasto'); return }
       if (dateError) { setError(dateError); return }
       if (dimensionsError) { setError(dimensionsError); return }
-    } else if (BACKEND_CAPS.expenseAnalytics && !analyticDistribution) {
-      setError('Selecciona la cuenta analítica del gasto')
-      return
     }
 
     // Validación de foto obligatoria cuando el monto supera el umbral
@@ -308,28 +318,32 @@ export default function AdminGastosForm() {
         attachment_id: uploadedAttachmentId || undefined,
         evidence_token: uploadedFuelEvidenceToken || undefined,
       }
-      // En modo derivado el payload NO manda analítica ni alcance: el backend
-      // los deriva del token y de la categoría, y RECHAZA si vienen.
+      // El payload NUNCA manda analítica ni alcance armado en cliente: el
+      // backend los deriva del token y de la categoría, y RECHAZA si vienen
+      // (RED Codex P1 #160 — no se reconstruyen dimensiones en el navegador).
       const {
         company_id: _c, warehouse_id: _w, sucursal_code: _s,
         analytic_distribution: _a, ...derivedPayload
       } = functionalPayload
       const res = expenseMode === 'fuel'
-        ? await createFuelExpense({ ...functionalPayload, route_plan_id: Number(fuelRouteId) })
-        : await createExpense(derivedMode
-          ? { ...derivedPayload, product_id: categoryId }
-          : {
-            ...functionalPayload,
-            company_id: companyId,
-            warehouse_id: warehouseId || undefined,
-            sucursal_code: sucursal || undefined,
-          })
+        ? await createFuelExpense({ ...derivedPayload, route_plan_id: Number(fuelRouteId) })
+        : await createExpense({ ...derivedPayload, product_id: categoryId })
 
-      // Fallback legacy: si el evidence/upload no funcionó pero expense-attach
-      // sí, intentamos adjuntar por separado. Solo para montos bajos donde
-      // el attachment es opcional pero el usuario lo subió.
+      // Verificar el ENVELOPE antes de cantar éxito (RED Codex P1 #160):
+      // `odooJson` devuelve `{ok:false}` con HTTP 200 cuando el backend rechaza
+      // lógicamente (foto/evidencia, validación de dimensiones, alcance). Sin
+      // esta comprobación, un rechazo parecía una captura realizada.
       const created = res?.data ?? res
       const expenseId = created?.id ?? created?.expense_id ?? created?.data?.id
+      const rejected = res?.ok === false || res?.success === false
+      if (rejected || !expenseId) {
+        setError(
+          res?.user_message || res?.message ||
+          'El gasto no se registró: el servidor lo rechazó. Revisa la categoría y el comprobante.',
+        )
+        setSubmitting(false)
+        return  // NO se limpia el formulario ni se anuncia éxito
+      }
       let attachedMsg = (uploadedAttachmentId || uploadedFuelEvidenceToken) ? ' (con comprobante)' : ''
       if (attachment && expenseMode !== 'fuel' && !uploadedAttachmentId && BACKEND_CAPS.expenseAttachments && expenseId) {
         try {
@@ -659,12 +673,24 @@ export default function AdminGastosForm() {
                 )}
               </>
             ) : (
-              <AnalyticAccountPicker
-                value={analyticDistribution}
-                onChange={setAnalyticDistribution}
-                companyId={companyId}
-                required={BACKEND_CAPS.expenseAnalytics}
-              />
+              // FAIL-CLOSED (RED Codex P1 #160): sin modo derivado NO se ofrece
+              // el selector de analítica manual — capturarla en el cliente es el
+              // anti-patrón que esta fase elimina. Se avisa y se bloquea el envío.
+              <div style={{
+                padding: '10px 12px', borderRadius: TOKENS.radius.md,
+                background: TOKENS.colors.warningSoft || 'rgba(180,83,9,0.10)',
+                border: `1px solid ${TOKENS.colors.warning}40`,
+              }}>
+                <p style={{ fontSize: 12, color: TOKENS.colors.warning, margin: 0, fontWeight: 600 }}>
+                  {catalogError
+                    ? 'No se pudo cargar el catálogo de categorías.'
+                    : 'La captura con categoría no está habilitada en el servidor.'}
+                </p>
+                <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                  El gasto no se registra desde aquí hasta que el catálogo esté disponible;
+                  las dimensiones (Plaza·UN·CC) las asigna el servidor, no el navegador.
+                </p>
+              </div>
             )}
           </div>
 
