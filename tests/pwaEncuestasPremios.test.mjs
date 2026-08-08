@@ -131,6 +131,12 @@ test('la pantalla NO promete anonimato: el diseño guarda identidad', () => {
   assert.doesNotMatch(s, /respuestas? (son|es) anónim/i, 'ninguna afirmación de anonimato')
   assert.match(s, /ligada a tu nombre/, 'se declara que la respuesta va ligada a la identidad')
   assert.match(s, /no es anónima/, 'y se dice explícitamente (la negación honesta SÍ vale)')
+  // El aviso no debe prometer más de lo que el ACL garantiza (Codex P1-3 2ª vuelta):
+  // ni "RRHH/Sistemas" (el grupo real es administración interna) ni un plazo de
+  // retención que no existe.
+  assert.doesNotMatch(s, /RRHH\/Sistemas/, 'el grupo real es administración interna, no RRHH/Sistemas')
+  assert.doesNotMatch(s, /mientras siga siendo útil/, 'sin promesa de retención inexistente')
+  assert.match(s, /administración interna/, 'nombra al grupo que sí tiene acceso por ACL')
 })
 
 // ── "Ya terminé" verifica contra el servidor (Codex P2) ─────────────────────

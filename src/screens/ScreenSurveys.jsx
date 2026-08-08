@@ -762,16 +762,19 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
 
         {loadState === "ready" && pendingCount > 0 && (
           <FadeIn delay={100}>
-            {/* AVISO HONESTO (Codex P1-3): el diseño guarda un vínculo entre la
-                identidad del colaborador y su respuesta (gf.pwa.survey.answer), así
-                que la promesa anterior era materialmente falsa. Se declara sin
-                rodeos: identidad ligada, finalidad, quién accede y retención. */}
+            {/* AVISO HONESTO (Codex P1-3, 2ª vuelta): el aviso NO debe prometer más
+                de lo que el código garantiza. El ACL da lectura al grupo "GF
+                Administración Interna" (security.xml/ir.model.access.csv), no a otras
+                áreas, y NO hay política de retención implementada. Así que se dice
+                solo lo verificable: identidad ligada, para qué sirve, y que la
+                consulta el equipo de administración interna en Odoo. Sin plazos de
+                borrado que no existen. */}
             <Card style={{ padding:"12px 14px", background:"rgba(43,143,224,0.07)", border:"1px solid rgba(97,178,255,0.16)", display:"flex", alignItems:"flex-start", gap:10 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.blue3} strokeWidth="2" strokeLinecap="round" style={{ flexShrink:0, marginTop:1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               <span style={{ fontSize:11, color:"rgba(97,178,255,0.85)", lineHeight:1.5 }}>
                 Tu respuesta queda <b>ligada a tu nombre</b> — no es anónima. Sirve para mejorar tus
-                herramientas de trabajo y solo la revisa el equipo de RRHH/Sistemas en Odoo, donde se
-                conserva mientras siga siendo útil. Contesta con confianza y con honestidad.
+                herramientas de trabajo y la consulta el equipo de administración interna en Odoo.
+                Contesta con confianza y con honestidad.
               </span>
             </Card>
           </FadeIn>
