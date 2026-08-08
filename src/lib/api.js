@@ -8205,6 +8205,20 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  // Recuperacion/inactivos escopado a sucursal (backend GrupoVeniu/GrupoFrio#275).
+  // Read-only, token-only: el alcance sale del token, el cliente NO manda
+  // company_id. Reemplaza a /pwa-supv/customers/recovery (que era de compañía).
+  if (cleanPath === '/pwa-supv/customers-recovery' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/customers/recovery', {
+      meta: supervisorMeta(),
+      data: {
+        kind: query.get('kind') || 'recovery',
+        limit: Number(query.get('limit')) || undefined,
+        offset: Number(query.get('offset')) || undefined,
+      },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/products-sold' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/products-sold', {
       meta: supervisorMeta(),
