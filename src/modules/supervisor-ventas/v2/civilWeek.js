@@ -45,6 +45,24 @@ export function utcTodayStr(nowMs = null) {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
 }
 
+// Fecha de HOY en una zona horaria concreta (la de la SUCURSAL), como
+// 'YYYY-MM-DD'. Para una semana OPERATIVA, UTC es incorrecto (Codex): en domingo
+// por la tarde de México (UTC-6) UTC ya es lunes, así que la Torre abriría la
+// semana SIGUIENTE antes de que termine la jornada local. El ideal sigue siendo
+// la fecha operativa server-side; esto la aproxima con la tz de la sucursal y es
+// DST-correcto vía Intl. Ante tz inválida cae a UTC, nunca revienta.
+export function zonedTodayStr(timeZone, nowMs = null) {
+  const d = typeof nowMs === 'number' ? new Date(nowMs) : new Date()
+  try {
+    // 'en-CA' entrega el formato YYYY-MM-DD directamente.
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(d)
+  } catch {
+    return utcTodayStr(nowMs)
+  }
+}
+
 /**
  * Rango Lun–Dom que contiene `refDateStr` (o la fecha UTC si se omite/ inválida).
  * @returns {{monday, sunday, days:string[7], todayIndex:number|-1, ref:string}}

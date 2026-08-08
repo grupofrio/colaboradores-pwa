@@ -9,6 +9,56 @@
 // solo presenta: no re-clasifica buckets, no recalcula KPIs, no reinterpreta
 // `recommended_action` — eso lo decide el backend y se muestra tal cual.
 import { fmtInt, fmtMoney } from '../../torre/m1/m1BacklogModel.js'  // extension explicita: node --test lo importa como ESM
+import { civilWeekRange } from '../v2/civilWeek.js'
+
+// ── Período: la Torre abre en la SEMANA EN CURSO, no en el backlog viejo ──────
+// Hallazgo de la auditoría: la Torre arrancaba filtrada a ">7 días", así que
+// Aida abría y NO veía la operación de la semana, solo lo añejo. Ahora el
+// arranque es la semana en curso (su realidad diaria) y el histórico queda como
+// una vista aparte, a un clic.
+//
+// Semana (rango de fechas) y antigüedad (edad de la ruta) miden ejes DISTINTOS y
+// se contradicen: "esta semana" + ">7 días" da vacío. Por eso son excluyentes:
+// elegir uno limpia el otro (ver applyPeriod/applyAging).
+export const TORRE_PERIODS = Object.freeze([
+  { value: 'week', label: 'Semana en curso' },
+  { value: 'historical', label: 'Histórico (+7 días)' },
+])
+
+/** Rango Lun–Dom que contiene `todayStr` ('YYYY-MM-DD'); tz-neutral. */
+export function weekRange(todayStr) {
+  const wk = civilWeekRange(todayStr)
+  return { date_from: wk.monday || '', date_to: wk.sunday || '' }
+}
+
+/** ¿En qué período estamos, a partir de los filtros vivos? El histórico se
+ *  reconoce por el bucket de antigüedad; cualquier otra cosa es "semana". */
+export function periodOf(filters) {
+  return (filters && filters.bucket === 'historical') ? 'historical' : 'week'
+}
+
+/** Filtros iniciales de la Torre: semana en curso, abiertas, sin antigüedad. */
+export function initialTorreFilters(todayStr) {
+  return { state_bucket: 'open', bucket: '', ...weekRange(todayStr) }
+}
+
+/** Delta al cambiar de período. Cada preset deja un conjunto COHERENTE:
+ *   · week       → rango de la semana, sin filtro de antigüedad;
+ *   · historical → antigüedad >7 días, sin rango de fechas (si no, vacío). */
+export function applyPeriod(period, todayStr) {
+  if (period === 'historical') {
+    return { bucket: 'historical', date_from: '', date_to: '' }
+  }
+  return { bucket: '', ...weekRange(todayStr) }
+}
+
+/** Delta al elegir una antigüedad concreta desde los chips. Si se pide cualquier
+ *  antigüedad, se sale de la semana (ejes excluyentes); volver a "toda" reanuda
+ *  la semana en curso. */
+export function applyAging(bucket, todayStr) {
+  if (bucket) return { bucket, date_from: '', date_to: '' }
+  return { bucket: '', ...weekRange(todayStr) }
+}
 
 // Los tres números del encabezado, en el orden en que importan para este puesto.
 // `open_routes_over_7d` va primero A PROPÓSITO: es la señal de envejecimiento y

@@ -8219,6 +8219,16 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  // Integridad de ejecucion por vendedor (backend GrupoVeniu/GrupoFrio#269).
+  // Read-only. Como en KPIs, el periodo viaja por NOMBRE: el rango lo resuelve
+  // el backend con la timezone de la sucursal.
+  if (cleanPath === '/pwa-supv/execution-integrity' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/execution-integrity', {
+      meta: supervisorMeta(),
+      data: { period: query.get('period') || 'semana' },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/products-sold' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/products-sold', {
       meta: supervisorMeta(),

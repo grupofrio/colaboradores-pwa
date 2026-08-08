@@ -24,14 +24,21 @@ import StateScreen from '../../../components/kold/StateScreen'
 import { Loader } from '../../../components/Loader'
 import { BRAND_LIGHT as C, BRAND_HEADER_GRADIENT } from '../../../theme/brandLight'
 import { BRAND_TOKENS } from '../../../theme/brandTokens'
-import { DEFAULT_FILTERS, STATE_LABELS, fmtMoney, pagination } from '../../torre/m1/m1BacklogModel'
+import { STATE_LABELS, fmtMoney, pagination } from '../../torre/m1/m1BacklogModel'
 import { useM1BacklogQuery } from '../../torre/m1/useM1BacklogQuery'
+import { zonedTodayStr } from '../v2/civilWeek'
 import {
-  AGING_FILTERS, TORRE_BUCKETS, TORRE_SORTS, cashForBucket, coverage,
-  fmtActivity, headerKpis, progressOf, riskTone, routeDetailPath,
+  AGING_FILTERS, TORRE_BUCKETS, TORRE_PERIODS, TORRE_SORTS, applyAging, applyPeriod,
+  cashForBucket, coverage, fmtActivity, headerKpis, initialTorreFilters, periodOf,
+  progressOf, riskTone, routeDetailPath,
 } from './torreSupervisorModel'
 
 const ROLE = 'supervisor_ventas'
+// Zona horaria operativa de la sucursal (piloto Iguala / centro de México). El
+// IDEAL es que el backend entregue la fecha operativa por sucursal (deuda
+// declarada); mientras, se usa la tz de la plaza en vez de UTC para no abrir la
+// semana siguiente un domingo por la tarde (Codex).
+const BRANCH_TIME_ZONE = 'America/Mexico_City'
 
 const STATE_COPY = {
   feature_disabled: {
@@ -219,10 +226,14 @@ function RouteRow({ row, stateBucket, onOpen }) {
 
 export default function ScreenTorreSupervisor() {
   const navigate = useNavigate()
+  // La fecha de referencia se calcula en la tz de la SUCURSAL, no en UTC: así la
+  // semana en curso no salta al lunes siguiente un domingo por la tarde de México.
+  const today = useMemo(() => zonedTodayStr(BRANCH_TIME_ZONE), [])
   const {
-    phase, data, filters, offset, setFilter, goOffset, reload,
-  } = useM1BacklogQuery(ROLE, { ...DEFAULT_FILTERS, state_bucket: 'open', bucket: 'historical' })
+    phase, data, filters, offset, setFilter, patchFilters, goOffset, reload,
+  } = useM1BacklogQuery(ROLE, initialTorreFilters(today))
 
+  const period = periodOf(filters)
   const kpis = useMemo(() => headerKpis(data?.kpis), [data])
   const cov = useMemo(() => coverage(data?.rows?.length, data?.total), [data])
   const pag = data ? pagination(data.offset, data.rows.length, data.total, data.limit) : null
@@ -263,6 +274,20 @@ export default function ScreenTorreSupervisor() {
       </header>
 
       <main style={{ maxWidth: 1000, margin: '0 auto', padding: '16px 14px 8px' }}>
+        {/* Período: la Torre abre en la SEMANA EN CURSO (operación viva). El
+            histórico (+7 días) es una vista aparte, explícita, a un clic. */}
+        <div role="group" aria-label="Período" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+          {TORRE_PERIODS.map((p) => (
+            <Chip
+              key={p.value}
+              active={period === p.value}
+              onClick={() => patchFilters(applyPeriod(p.value, today))}
+            >
+              {p.label}
+            </Chip>
+          ))}
+        </div>
+
         {/* Buckets: los dos huérfanos dejan de ser un número y se pueden abrir. */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
           {TORRE_BUCKETS.map((b) => (
@@ -282,7 +307,9 @@ export default function ScreenTorreSupervisor() {
             <Chip
               key={a.value || 'all'}
               active={(filters.bucket || '') === a.value}
-              onClick={() => setFilter('bucket', a.value)}
+              // La antigüedad y el rango de semana se excluyen: elegir una limpia
+              // la otra en la MISMA carga (si no, "esta semana" + ">7 días" = vacío).
+              onClick={() => patchFilters(applyAging(a.value, today))}
             >
               {a.label}
             </Chip>
