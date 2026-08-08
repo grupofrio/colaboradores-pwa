@@ -181,6 +181,14 @@ const ScreenDashboardGerente = lazy(() => import('./modules/gerente/ScreenDashbo
 const ScreenAlertasGerente   = lazy(() => import('./modules/gerente/ScreenAlertasGerente'))
 const ScreenForecastUnlock   = lazy(() => import('./modules/gerente/ScreenForecastUnlock'))
 const ScreenGastosGerente    = lazy(() => import('./modules/gerente/ScreenGastos'))
+// Gerente V2 — "Mi Sucursal" (shell de 6 pestañas, detrás del flag gerente_v2)
+const GerenteV2Gate          = lazy(() => import('./modules/gerente/v2/GerenteV2Gate'))
+const HoyGerenteTab          = lazy(() => import('./modules/gerente/v2/tabs/HoyGerenteTab'))
+const EquipoGerenteTab       = lazy(() => import('./modules/gerente/v2/tabs/EquipoGerenteTab'))
+const AdminGerenteTab        = lazy(() => import('./modules/gerente/v2/tabs/AdminGerenteTab'))
+const ProduccionGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/ProduccionGerenteTab'))
+const InventarioGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/InventarioGerenteTab'))
+const MasGerenteTab          = lazy(() => import('./modules/gerente/v2/tabs/MasGerenteTab'))
 // Briefs (ventas, producción, …) — HTML servido por n8n, embebido aislado.
 // UNA sola pantalla para todas las variantes; lo que cambia vive en briefCatalog.
 const BriefEmbedScreen       = lazy(() => import('./modules/brief/BriefEmbedScreen'))
@@ -903,8 +911,22 @@ export default function App() {
               <VentasIgualaRoute><ScreenVentasIguala /></VentasIgualaRoute>
             } />
 
-            {/* ── Gerente de Sucursal ──────────────────────────────────── */}
-            <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><ScreenGerente /></ModuleRoleRoute>} />
+            {/* ── Gerente de Sucursal · "Mi Sucursal" (shell V2) ─────────────
+                /gerente es la puerta del shell de 6 pestañas. Detrás del flag
+                gerente_v2 (fail-closed): con el flag OFF cada ruta cae a su
+                LEGACY (el hub de 5 botones / las pantallas viejas), byte a byte
+                como hoy. Las pestañas nuevas (Equipo/Producción/Inventario) sin
+                legacy redirigen a /gerente. Encender el flag es decisión de
+                dirección; mergear no cambia producción. */}
+            <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="hoy" legacy={<ScreenGerente />}><HoyGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
+            <Route path="/gerente/equipo" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="equipo"><EquipoGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
+            <Route path="/gerente/admin" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="admin"><AdminGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
+            <Route path="/gerente/produccion" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="produccion"><ProduccionGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
+            <Route path="/gerente/inventario" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="inventario"><InventarioGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
+            <Route path="/gerente/mas" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="mas"><MasGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
+            {/* Ruta vieja Dashboard (iframe Metabase sin scope): retirada en
+                Fase 1; con el flag ON la pestaña Hoy la reemplaza. Se conserva la
+                ruta con su pantalla actual para no romper enlaces guardados. */}
             <Route path="/gerente/dashboard" element={<ModuleRoleRoute moduleId="gerente"><ScreenDashboardGerente /></ModuleRoleRoute>} />
             <Route path="/gerente/alertas" element={<ModuleRoleRoute moduleId="gerente"><ScreenAlertasGerente /></ModuleRoleRoute>} />
             <Route path="/gerente/gastos" element={<ModuleRoleRoute moduleId="gerente"><ScreenGastosGerente /></ModuleRoleRoute>} />

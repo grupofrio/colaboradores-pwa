@@ -63,3 +63,32 @@ export async function getKpiSummary() {
   const { success, ...kpi } = res || {}
   return { ok: true, kpi }
 }
+
+// ── Fase 2 · tablero read-only ───────────────────────────────────────────────
+
+/** Tablero "Hoy" de la sucursal: venta mostrador, gastos, caja, asistencias. */
+export async function getGerenteToday() {
+  const res = await api('GET', '/pwa-gerente/today')
+  if (res && res.success === false) {
+    return { ok: false, code: res.code, error: gerenteErrorMessage(res.code, res.message), data: null }
+  }
+  return { ok: true, data: res?.data || null, scope: res?.scope || null }
+}
+
+/** Existencias por almacén de la sucursal (solo los almacenes propios). */
+export async function getGerenteInventory(warehouseId) {
+  const res = await api('GET', '/pwa-gerente/inventory', warehouseId ? { warehouse_id: warehouseId } : undefined)
+  if (res && res.success === false) {
+    return { ok: false, code: res.code, error: gerenteErrorMessage(res.code, res.message), warehouses: [] }
+  }
+  return { ok: true, warehouses: Array.isArray(res?.warehouses) ? res.warehouses : [], available: res?.available !== false }
+}
+
+/** Resumen del día de producción de la(s) planta(s) de la sucursal. */
+export async function getGerenteProduction() {
+  const res = await api('GET', '/pwa-gerente/production')
+  if (res && res.success === false) {
+    return { ok: false, code: res.code, error: gerenteErrorMessage(res.code, res.message), data: null }
+  }
+  return { ok: true, data: res?.data || null }
+}

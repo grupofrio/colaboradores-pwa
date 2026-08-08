@@ -21,11 +21,15 @@ function canEnter(session, moduleId) {
 }
 
 // ── Matriz de autorización (URL directa = card = nav) ───────────────────────
-test('gerente_sucursal: entra Admin/Gerente; NO Equipo/Ruta/Producción/Almacén', () => {
+test('gerente_sucursal: entra Admin/Gerente/Equipo; NO Ruta/Producción/Almacén', () => {
+  // Fase 2 de Gerente (decisión de dirección): el gerente ve el módulo Equipo
+  // COMPLETO —el mismo del supervisor— con el scope de su sucursal impuesto
+  // server-side. Por eso ahora SÍ entra a supervisor_ventas. Ruta/Producción/
+  // Almacén siguen fuera de su alcance.
   const g = s('gerente_sucursal')
   assert.equal(canEnter(g, 'admin_sucursal'), 'monta')
   assert.equal(canEnter(g, 'gerente'), 'monta')
-  assert.equal(canEnter(g, 'supervisor_ventas'), 'home')
+  assert.equal(canEnter(g, 'supervisor_ventas'), 'monta')
   assert.equal(canEnter(g, 'cierre_ruta'), 'home')
   assert.equal(canEnter(g, 'registro_produccion'), 'home')
   assert.equal(canEnter(g, 'almacen_pt'), 'home')

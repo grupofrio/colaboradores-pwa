@@ -164,7 +164,13 @@ export const MODULES = [
     shortLabel: 'Equipo',
     route:  '/equipo',
     tone:   'blueSoft',
-    roles:  ['supervisor_ventas'],
+    // Fase 2 de Gerente: el gerente ve el módulo Equipo COMPLETO (decisión de
+    // dirección), con scope de su sucursal impuesto server-side (el guard ya
+    // acepta gerente_sucursal). Ampliar aquí abre las rutas /equipo/* para el
+    // gerente vía ModuleRoleRoute; el scope real lo garantiza el backend, no
+    // este listado. La experiencia V2 vs legacy del supervisor la sigue
+    // decidiendo el flag supervisor_v2 de la sucursal (fail-closed).
+    roles:  ['supervisor_ventas', 'gerente_sucursal'],
     status: 'live',
     icon:   'equipo',
     navPriority: 10,
@@ -419,14 +425,19 @@ export const MODULES = [
   // ── Gerente de Sucursal ────────────────────────────────────────────────
   {
     id:     'gerente',
-    label:  'Gerente',
-    shortLabel: 'Gerente',
+    label:  'Mi Sucursal',
+    shortLabel: 'Sucursal',
     route:  '/gerente',
     tone:   'blueDeep',
-    roles:  ['gerente_sucursal'],
+    // direccion_general se suma SOLO para revisión del shell V2 (Fase 2). El
+    // dato de cada pestaña lo gatea su endpoint server-side por token.
+    roles:  ['gerente_sucursal', 'direccion_general'],
     status: 'live',
     icon:   'admin',
-    navPriority: 12,
+    // 8 (antes 12): "Mi Sucursal" es la PUERTA del shell del gerente, así que
+    // lidera su barra por delante de Admin(10) y Equipo(10). Solo la ven
+    // gerente_sucursal/direccion_general, no altera la barra de otros roles.
+    navPriority: 8,
   },
 
   // Brief de GERENCIA — tercera variante del mismo catálogo (mismo componente,
