@@ -185,6 +185,7 @@ const ScreenGastosGerente    = lazy(() => import('./modules/gerente/ScreenGastos
 const GerenteV2Gate          = lazy(() => import('./modules/gerente/v2/GerenteV2Gate'))
 const HoyGerenteTab          = lazy(() => import('./modules/gerente/v2/tabs/HoyGerenteTab'))
 const EquipoGerenteTab       = lazy(() => import('./modules/gerente/v2/tabs/EquipoGerenteTab'))
+const PendientesGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/PendientesGerenteTab'))
 const AdminGerenteTab        = lazy(() => import('./modules/gerente/v2/tabs/AdminGerenteTab'))
 const ProduccionGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/ProduccionGerenteTab'))
 const InventarioGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/InventarioGerenteTab'))
@@ -924,6 +925,9 @@ export default function App() {
             <Route path="/gerente/produccion" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="produccion"><ProduccionGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             <Route path="/gerente/inventario" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="inventario"><InventarioGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             <Route path="/gerente/mas" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="mas"><MasGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
+            {/* Pendientes read-only del gerente: se alcanza desde el directorio
+                Equipo. Se pinta dentro del shell con la pestaña Equipo activa. */}
+            <Route path="/gerente/pendientes" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="equipo"><PendientesGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             {/* Ruta vieja Dashboard (iframe Metabase sin scope): retirada en
                 Fase 1; con el flag ON la pestaña Hoy la reemplaza. Se conserva la
                 ruta con su pantalla actual para no romper enlaces guardados. */}

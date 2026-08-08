@@ -1368,6 +1368,16 @@ async function directGerente(method, path, body) {
     return { success: true, data: res.data }
   }
 
+  // Pendientes (tareas + notas) SOLO LECTURA de la sucursal.
+  if (path === '/pwa-gerente/pendientes' && method === 'GET') {
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/pendientes`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: { tasks: [], notes: [] } },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, data: null }
+    return { success: true, data: res.data }
+  }
+
   return NO_DIRECT
 }
 

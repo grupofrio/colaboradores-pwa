@@ -92,3 +92,12 @@ export async function getGerenteProduction() {
   }
   return { ok: true, data: res?.data || null }
 }
+
+/** Pendientes (tareas + notas) SOLO LECTURA del equipo de la sucursal. */
+export async function getGerentePendientes() {
+  const res = await api('GET', '/pwa-gerente/pendientes')
+  if (res && res.success === false) {
+    return { ok: false, code: res.code, error: gerenteErrorMessage(res.code, res.message), data: null }
+  }
+  return { ok: true, data: res?.data || null }
+}

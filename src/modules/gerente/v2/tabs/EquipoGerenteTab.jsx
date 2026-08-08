@@ -20,7 +20,10 @@ const SURFACES = [
   { key: 'rutas', label: 'Rutas', desc: 'Rutas del día y planeación', route: '/equipo/rutas', glyph: '⋔' },
   { key: 'planear', label: 'Planear mañana', desc: 'Recursos y asignación del día siguiente', route: '/equipo/rutas/planear', glyph: '⊹' },
   { key: 'clientes', label: 'Clientes', desc: 'Cartera y segmentos de la sucursal', route: '/equipo/clientes', glyph: '⚇' },
-  { key: 'pendientes', label: 'Pendientes', desc: 'Tareas y notas del equipo', route: '/equipo/pendientes', glyph: '⚑' },
+  // Pendientes va a la superficie READ-ONLY del gerente (/gerente/pendientes):
+  // los endpoints de escritura del supervisor lo excluyen a propósito, así que
+  // aquí ve tareas y notas en solo lectura, no la pantalla de escritura.
+  { key: 'pendientes', label: 'Pendientes', desc: 'Tareas y notas del equipo (lectura)', route: '/gerente/pendientes', glyph: '⚑' },
 ]
 
 export default function EquipoGerenteTab() {

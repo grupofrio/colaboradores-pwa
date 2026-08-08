@@ -121,9 +121,22 @@ test('las vistas del gerente son read-only: sin escrituras', () => {
   for (const f of [
     '../src/modules/gerente/v2/tabs/InventarioGerenteTab.jsx',
     '../src/modules/gerente/v2/tabs/ProduccionGerenteTab.jsx',
+    '../src/modules/gerente/v2/tabs/PendientesGerenteTab.jsx',
     '../src/modules/gerente/v2/hoy/HoyGerenteView.jsx',
   ]) {
     const code = src(f)
     assert.doesNotMatch(code, /api\('POST'|api\('PUT'|api\('DELETE'/, `${f} no debe escribir`)
   }
+})
+
+test('Pendientes del gerente: ruta read-only propia y Equipo apunta ahí', () => {
+  const app = src('../src/App.jsx')
+  // Ruta montada tras el gate, solo para el módulo gerente.
+  assert.match(app, /path="\/gerente\/pendientes"[^]*?PendientesGerenteTab/)
+  assert.match(app, /path="\/gerente\/pendientes"[^]*?moduleId="gerente"/)
+  // El directorio Equipo del gerente ya NO manda a /equipo/pendientes
+  // (denegado por el guard de escritura), sino a la superficie read-only.
+  const equipo = src('../src/modules/gerente/v2/tabs/EquipoGerenteTab.jsx')
+  assert.match(equipo, /route: '\/gerente\/pendientes'/)
+  assert.doesNotMatch(equipo, /route: '\/equipo\/pendientes'/)
 })
