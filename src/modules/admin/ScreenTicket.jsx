@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
-import { computePosSummary } from './posPricing'
+import { computePosSummary, readServerAmounts } from './posPricing'
 import {
   getPosCancelBlockMessage,
   getPosSaleStateLabel,
@@ -263,7 +263,17 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
   const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
   const lines = order?.lines || order?.order_lines || []
-  const { subtotal, total } = computePosSummary(lines)
+  // El ticket es el documento que se lleva el cliente: tiene que decir lo que
+  // Odoo facturó, no lo que el navegador estimó. Antes `computePosSummary`
+  // fijaba `tax: 0` y el ticket imprimía el subtotal como TOTAL.
+  const { subtotal: estimatedSubtotal } = computePosSummary(lines)
+  const server = readServerAmounts(order)
+  const subtotal = server.untaxed ?? estimatedSubtotal
+  const tax = server.tax
+  const total = server.total
+  // `null` = el backend todavía no manda los importes (contrato viejo). Se
+  // imprime «—», nunca un cero inventado.
+  const money = (value) => (value === null || value === undefined ? '—' : fmt(value))
 
   // Odoo devuelve date_order en UTC sin sufijo (ej. "2026-07-22 17:15:00"). Si se
   // parsea directo, el navegador lo toma como hora local y el ticket salía con
@@ -380,8 +390,9 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
         <div class="sep"></div>
         ${rows}
         <div class="sep"></div>
-        <div class="totals"><span>Subtotal</span><span>${esc(fmt(subtotal))}</span></div>
-        <div class="total"><span>TOTAL</span><span>${esc(fmt(total))}</span></div>
+        <div class="totals"><span>Subtotal</span><span>${esc(money(subtotal))}</span></div>
+        <div class="totals"><span>IVA</span><span>${esc(money(tax))}</span></div>
+        <div class="total"><span>TOTAL</span><span>${esc(money(total))}</span></div>
         <div class="pay">Metodo de pago: ${esc(paymentMethodLabel(order?.payment_method))}</div>
         <div class="sep"></div>
         <div class="box"><span class="t">TICKET</span><span class="f">${esc(folio)}</span></div>
@@ -408,6 +419,7 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
         lines,
         fmt,
         subtotal,
+        tax,
         total,
         paymentLabel: paymentMethodLabel(order?.payment_method),
       })
@@ -588,11 +600,15 @@ export default function ScreenTicket({ flow = ADMIN_POS_FLOW }) {
               {/* Totals */}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{ fontSize: 12, color: '#666' }}>Subtotal</span>
-                <span style={{ fontSize: 12, color: '#333' }}>{fmt(subtotal)}</span>
+                <span style={{ fontSize: 12, color: '#333' }}>{money(subtotal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 12, color: '#666' }}>IVA</span>
+                <span style={{ fontSize: 12, color: '#333' }}>{money(tax)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingTop: 6, borderTop: '1px solid #ddd' }}>
                 <span style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a' }}>TOTAL</span>
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a' }}>{fmt(total)}</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a' }}>{money(total)}</span>
               </div>
 
               {/* Payment method */}
