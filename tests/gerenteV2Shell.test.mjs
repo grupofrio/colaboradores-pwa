@@ -140,3 +140,15 @@ test('Pendientes del gerente: ruta read-only propia y Equipo apunta ahí', () =>
   assert.match(equipo, /route: '\/gerente\/pendientes'/)
   assert.doesNotMatch(equipo, /route: '\/equipo\/pendientes'/)
 })
+
+test('RED Codex P1: la rama legacy de V2ExcludedRoute solo es para supervisor REAL', () => {
+  // Las pantallas legacy de /equipo/* (tareas/notas/nota-rápida/bajas) escriben
+  // por endpoints inseguros. El gerente entra al módulo Equipo por la ampliación
+  // de rol, pero NO debe montar esas superficies por deep-link cuando el flag del
+  // supervisor está OFF. La rama legacy exige job_key supervisor_ventas REAL.
+  const src_ = src('../src/modules/supervisor-ventas/v2/V2ExcludedRoute.jsx')
+  assert.match(src_, /getEffectiveJobKeys\(session\)\.includes\('supervisor_ventas'\)/)
+  // El legacy solo se monta si NO es V2 activo Y es supervisor real; cualquier
+  // otro rol (gerente incluido) cae al estado seguro.
+  assert.match(src_, /isV2Active\(\)\s*\|\|\s*!isRealSupervisor/)
+})
