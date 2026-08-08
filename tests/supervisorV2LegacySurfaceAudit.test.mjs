@@ -41,9 +41,13 @@ const AUDITED_IMPORTS = {
   'modules/supervisor-ventas/ScreenScoreSemanal.jsx': {
     './supvService': ['getComplianceColor', 'getWeeklyScore'],
   },
-  'modules/supervisor-ventas/ScreenClientesRecuperacion.jsx': {
-    '../admin/api': ['getInactiveCustomers', 'getRecoveryCustomers'],
-  },
+  // ScreenClientesRecuperacion.jsx YA NO está aquí: dejó de ser una superficie de
+  // solo lectura. En el trabajo de "Recuperación accionable" (BE #275 + este FE)
+  // pasó, DELIBERADAMENTE y tras revisión, a agregar clientes al plan de mañana
+  // via addCustomerToRoutePlan (writer, tras write-flags de servidor + Codex + S/N).
+  // Su higiene de imports y su token-only scope se cubren en
+  // tests/supervisorRecuperacion.test.mjs. Quitarla de este registro de lectura es
+  // el reconocimiento explícito de ese cambio, no una laguna.
 }
 
 const WRITER_BINDINGS = [

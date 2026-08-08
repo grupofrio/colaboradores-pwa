@@ -210,6 +210,17 @@ export function previewRoutePlanCustomers(criteria = {}) {
   return api('POST', '/pwa-supv/route-plan-preview-customers', criteria)
 }
 
+/** Clientes por recuperar / inactivos de la sucursal del token (V2, read-only,
+ *  escopado server-side). Reemplaza al listado viejo que era de COMPAÑÍA. El
+ *  cliente NO manda company_id: el alcance sale del token. */
+export function getBranchRecovery({ kind = 'recovery', limit, offset } = {}) {
+  const p = new URLSearchParams()
+  p.set('kind', kind === 'inactive' ? 'inactive' : 'recovery')
+  if (limit) p.set('limit', String(limit))
+  if (offset) p.set('offset', String(offset))
+  return api('GET', `/pwa-supv/customers-recovery?${p.toString()}`)
+}
+
 /** Guardar borrador de plan de ruta */
 export function saveRoutePlanDraft(payload = {}) {
   return api('POST', '/pwa-supv/route-plan-save-draft', payload)
