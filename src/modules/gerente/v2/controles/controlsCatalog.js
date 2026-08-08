@@ -1,4 +1,4 @@
-// ─── Catálogo de las 14 reglas de control (Fase 3) ──────────────────────────
+// ─── Catálogo de las 15 reglas de control (Fase 3) ──────────────────────────
 // Fuente única de la metadata de presentación: clave, etiqueta, categoría y
 // unidad. Espeja las claves que devuelve el backend (`/pwa-gerente/controls`).
 // El backend es la autoridad del DATO (count/total/items/available); esto solo
@@ -15,6 +15,7 @@ export const CONTROL_CATEGORIES = Object.freeze({
   pos: 'Ventas mostrador',
   caja: 'Caja',
   requis: 'Requisiciones e inventario',
+  cruce: 'Cruce de canales',
 })
 
 // Orden = orden de aparición en el panel. `unit` decide cómo se formatea el
@@ -52,6 +53,9 @@ export const CONTROL_RULES = Object.freeze([
     desc: 'Requisiciones confirmadas con recepción parcial estancada (mercancía pagada no recibida)', unit: 'money', severity: 'error' },
   { key: 'fuel_no_route', category: 'requis', label: 'Gasolina sin ruta',
     desc: 'Gastos de combustible cuya ruta no corrió ese día', unit: 'money', severity: 'error' },
+  // ── Cruce de canales ──
+  { key: 'sale_in_cut_and_route', category: 'cruce', label: 'Venta contada dos veces',
+    desc: 'La misma venta aparece en el corte de caja Y en la liquidación de ruta (doble conteo). Normalmente 0', unit: 'money', severity: 'error' },
 ])
 
 export const CONTROL_RULE_KEYS = CONTROL_RULES.map((r) => r.key)
