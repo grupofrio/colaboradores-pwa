@@ -189,6 +189,7 @@ const PendientesGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/Pend
 const AdminGerenteTab        = lazy(() => import('./modules/gerente/v2/tabs/AdminGerenteTab'))
 const ProduccionGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/ProduccionGerenteTab'))
 const InventarioGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/InventarioGerenteTab'))
+const ControlesGerenteTab    = lazy(() => import('./modules/gerente/v2/tabs/ControlesGerenteTab'))
 const MasGerenteTab          = lazy(() => import('./modules/gerente/v2/tabs/MasGerenteTab'))
 // Briefs (ventas, producción, …) — HTML servido por n8n, embebido aislado.
 // UNA sola pantalla para todas las variantes; lo que cambia vive en briefCatalog.
@@ -924,6 +925,9 @@ export default function App() {
             <Route path="/gerente/admin" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="admin"><AdminGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             <Route path="/gerente/produccion" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="produccion"><ProduccionGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             <Route path="/gerente/inventario" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="inventario"><InventarioGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
+            {/* Fase 3 · panel de controles (detección read-only). Detrás del gate
+                V2 como las demás pestañas; con el flag OFF redirige a /gerente. */}
+            <Route path="/gerente/controles" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="controles"><ControlesGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             <Route path="/gerente/mas" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="mas"><MasGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             {/* Pendientes read-only del gerente: se alcanza desde el directorio
                 Equipo. Se pinta dentro del shell con la pestaña Equipo activa. */}

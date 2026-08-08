@@ -101,3 +101,28 @@ export async function getGerentePendientes() {
   }
   return { ok: true, data: res?.data || null }
 }
+
+// ── Fase 3 · panel de controles (detección read-only) ────────────────────────
+
+/** Todas las reglas de control del período. Cada regla:
+ *  { key, available, count, total_amount, data_as_of, reason, threshold }.
+ *  El scope lo impone el backend por token; `branchId` solo lo usa dirección
+ *  para elegir sucursal (el gerente lo ignora). */
+export async function getControls(period = 'today', branchId) {
+  const qs = branchId ? `&branch_id=${branchId}` : ''
+  const res = await api('GET', `/pwa-gerente/controls?period=${encodeURIComponent(period)}${qs}`)
+  if (res && res.success === false) {
+    return { ok: false, code: res.code, error: gerenteErrorMessage(res.code, res.message), rules: [] }
+  }
+  return { ok: true, rules: Array.isArray(res?.rules) ? res.rules : [], period: res?.period || period, scope: res?.scope || null }
+}
+
+/** Detalle (items) de UNA regla en el período. */
+export async function getControlDetail(rule, period = 'today', branchId) {
+  const qs = branchId ? `&branch_id=${branchId}` : ''
+  const res = await api('GET', `/pwa-gerente/controls/detail?rule=${encodeURIComponent(rule)}&period=${encodeURIComponent(period)}${qs}`)
+  if (res && res.success === false) {
+    return { ok: false, code: res.code, error: gerenteErrorMessage(res.code, res.message), items: [] }
+  }
+  return { ok: true, items: Array.isArray(res?.items) ? res.items : [], rule, available: res?.available !== false, reason: res?.reason || null }
+}

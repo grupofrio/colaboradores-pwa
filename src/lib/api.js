@@ -1378,6 +1378,37 @@ async function directGerente(method, path, body) {
     return { success: true, data: res.data }
   }
 
+  // ── Fase 3 · panel de controles (detección read-only) ─────────────────────
+  const gzClean = path.split('?')[0]
+  if (gzClean === '/pwa-gerente/controls' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const period = query.get('period') || 'today'
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/controls`, {
+        meta: gerenteMeta(),
+        data: { period, branch_id: Number(body?.branch_id || query.get('branch_id') || 0) || undefined },
+      }),
+      { onEmpty: { rules: [] } },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, rules: [] }
+    return { success: true, ...res.data, scope: res.meta?.scope || null }
+  }
+
+  if (gzClean === '/pwa-gerente/controls/detail' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const rule = query.get('rule') || ''
+    const period = query.get('period') || 'today'
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/controls/detail`, {
+        meta: gerenteMeta(),
+        data: { rule, period, branch_id: Number(body?.branch_id || query.get('branch_id') || 0) || undefined },
+      }),
+      { onEmpty: { items: [] } },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, items: [] }
+    return { success: true, ...res.data }
+  }
+
   return NO_DIRECT
 }
 
