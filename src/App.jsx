@@ -169,6 +169,7 @@ const MisRutasManana = lazy(() => import('./modules/supervisor-ventas/v2/planear
 const ClientesTab   = lazy(() => import('./modules/supervisor-ventas/v2/tabs/ClientesTab'))
 const PendientesTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/PendientesTab'))
 const MasTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/MasTab'))
+const IntegridadEjecucion = lazy(() => import('./modules/supervisor-ventas/v2/equipo/IntegridadEjecucion'))
 import SupervisorV2Gate from './modules/supervisor-ventas/v2/SupervisorV2Gate'
 import V2ExcludedRoute from './modules/supervisor-ventas/v2/V2ExcludedRoute'
 // Torres de Control — Validación de Requisiciones
@@ -852,6 +853,9 @@ export default function App() {
             <Route path="/equipo/bajas/angelica/:requestId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenBajasAngelicaDetail />} /></ModuleRoleRoute>} />
             <Route path="/equipo/vendedor/:vendedorId" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDetalleVendedor /></ModuleRoleRoute>} />
             <Route path="/equipo/sin-visitar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesSinVisitar /></ModuleRoleRoute>} />
+            {/* Capacidad V2 (no existe en legacy): su fuente es el endpoint
+                execution-integrity, que solo el backend V2 sirve. v2Only. */}
+            <Route path="/equipo/integridad" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="mas" v2Only><IntegridadEjecucion /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/score-semanal" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenScoreSemanal /></ModuleRoleRoute>} />
             <Route path="/equipo/cierre" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenCierreOperativo /></ModuleRoleRoute>} />
             <Route path="/equipo/dashboard" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDashboardVentas /></ModuleRoleRoute>} />

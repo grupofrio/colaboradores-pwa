@@ -48,6 +48,15 @@ export function getSupervisorKpis(period) {
   return api('GET', `/pwa-supv/kpis?period=${encodeURIComponent(period || 'hoy')}`)
 }
 
+/** Integridad de ejecucion por vendedor (hoy|semana|mes): cuánto del trabajo
+ *  terminado se puede VERIFICAR. Devuelve DOS porcentajes que se leen juntos
+ *  (calidad de lo evaluable y cobertura de la evidencia) — ver el modelo puro.
+ *  Read-only, escopado server-side a la sucursal del token; no expone identidad
+ *  de cliente ni de prospecto, solo si la visita tenía una. */
+export function getExecutionIntegrity(period) {
+  return api('GET', `/pwa-supv/execution-integrity?period=${encodeURIComponent(period || 'semana')}`)
+}
+
 /** Productos vendidos del período (SKU/cantidad/importe + delta + cobertura de
  *  portafolio), read-only, escopado server-side a la sucursal. */
 export function getProductsSold(period) {
