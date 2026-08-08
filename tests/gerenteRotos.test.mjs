@@ -71,120 +71,133 @@ test.afterEach(() => {
   globalThis.window = originalWindow
 })
 
-// ── kpi-summary: null ≠ 0 ───────────────────────────────────────────────────
+// ── Los cuatro endpoints ahora son de servidor ──────────────────────────────
+// Ya no se arma ninguna consulta ORM aquí. Lo que se prueba es (a) que se llama
+// al endpoint token-only correcto, (b) que el envelope V2 se traduce bien y
+// (c) que un rechazo del backend NO degrada al camino viejo con sudo.
 
-test('kpi-summary sin snapshot devuelve null, no cero', async () => {
-  mockOdoo({ '/get_records_sorted': { response: [] } })
+const V2 = {
+  alerts: '/gf/salesops/gerente/v2/alerts',
+  kpi: '/gf/salesops/gerente/v2/kpi-summary',
+  forecasts: '/gf/salesops/gerente/v2/forecasts-locked',
+  unlock: '/gf/salesops/gerente/v2/forecast-unlock',
+}
+
+const okEnvelope = (data, meta = {}) => ({ status: 'ok', code: 'OK', data, meta })
+const errEnvelope = (code, msg) => ({ status: 'error', code, user_message: msg, data: {}, meta: {} })
+
+test('kpi-summary llama al endpoint token-only, no al ORM del cliente', async () => {
+  const calls = mockOdoo({
+    [V2.kpi]: okEnvelope(
+      { has_data: true, sales_today: 4210, forecast: 5000, available: 125, date_kpi: '2026-08-05' },
+      { scope: { branch_name: '[IGU34] Iguala Glaciem', source: 'employee_token' } },
+    ),
+  })
+
+  const kpi = await api('GET', '/pwa-gerente/kpi-summary')
+
+  assert.equal(kpi.success, true)
+  assert.equal(kpi.sales_today, 4210)
+  assert.equal(kpi.date_kpi, '2026-08-05')
+  assert.equal(kpi.sucursal, '[IGU34] Iguala Glaciem')
+  // Lo crítico: cero lecturas ORM compuestas desde el navegador.
+  assert.equal(calls.filter(c => c.path === '/get_records_sorted').length, 0)
+  assert.equal(calls[0].path, V2.kpi)
+})
+
+test('el cliente NO manda company_id ni analytic_account_id', async () => {
+  const calls = mockOdoo({ [V2.kpi]: okEnvelope({ has_data: false, sales_today: null }) })
+  await api('GET', '/pwa-gerente/kpi-summary')
+
+  const sent = JSON.stringify(calls[0].body || {})
+  assert.ok(!sent.includes('company_id'), 'el alcance lo deriva el servidor del token')
+  assert.ok(!sent.includes('analytic_account_id'))
+})
+
+test('kpi-summary preserva null (sin dato) y no lo convierte en cero', async () => {
+  mockOdoo({ [V2.kpi]: okEnvelope({ has_data: false, sales_today: null, forecast: null, available: null, date_kpi: null }) })
 
   const kpi = await api('GET', '/pwa-gerente/kpi-summary')
 
   assert.equal(kpi.has_data, false)
   assert.equal(kpi.sales_today, null, 'sin snapshot no es "vendimos 0"')
   assert.equal(kpi.forecast, null)
-  assert.equal(kpi.available, null)
-  assert.equal(kpi.date_kpi, null)
 })
 
 test('kpi-summary conserva un cero REAL medido', async () => {
-  mockOdoo({
-    '/get_records_sorted': {
-      response: [{
-        id: 1,
-        date_kpi: '2026-08-05',
-        sales_qty: 0,
-        forecast_qty: 120,
-        pt_available_qty: 0,
-        en_available_qty: 0,
-        vans_available_qty: 0,
-        analytic_account_id: [34, 'IGU34'],
-      }],
-    },
-  })
+  mockOdoo({ [V2.kpi]: okEnvelope({ has_data: true, sales_today: 0, forecast: 120, available: 0, date_kpi: '2026-08-05' }) })
 
   const kpi = await api('GET', '/pwa-gerente/kpi-summary')
 
-  assert.equal(kpi.has_data, true)
   assert.equal(kpi.sales_today, 0, 'un cero medido debe seguir siendo 0')
   assert.equal(kpi.forecast, 120)
-  assert.equal(kpi.available, 0)
 })
 
-test('kpi-summary expone la fecha real del snapshot para poder rotularlo', async () => {
-  mockOdoo({
-    '/get_records_sorted': {
-      response: [{
-        id: 9, date_kpi: '2026-08-05', sales_qty: 4210, forecast_qty: 5000,
-        pt_available_qty: 100, en_available_qty: 20, vans_available_qty: 5,
-        analytic_account_id: [34, 'IGU34'],
-      }],
-    },
-  })
+test('FEATURE_DISABLED NO degrada al camino viejo con sudo', async () => {
+  const calls = mockOdoo({ [V2.kpi]: errEnvelope('FEATURE_DISABLED', 'Función apagada.') })
 
   const kpi = await api('GET', '/pwa-gerente/kpi-summary')
 
-  // El handler pide el ÚLTIMO snapshot DEL MES, que casi nunca es hoy: la UI
-  // necesita la fecha para no rotular como "hoy" el dato del día 5.
-  assert.equal(kpi.date_kpi, '2026-08-05')
-  assert.equal(kpi.sucursal, 'IGU34')
+  assert.equal(kpi.success, false)
+  assert.equal(kpi.code, 'FEATURE_DISABLED')
+  // Degradar a la lectura con sudo sería reabrir justo el agujero que se cierra.
+  assert.equal(calls.filter(c => c.path === '/get_records_sorted').length, 0)
 })
 
-// ── forecasts-locked: campos reales ─────────────────────────────────────────
-
-test('forecasts-locked aplana los campos que la pantalla realmente lee', async () => {
+test('alerts y forecasts-locked traducen el envelope y sus rechazos', async () => {
   mockOdoo({
-    '/get_records_sorted': {
-      response: [{
-        id: 77,
-        name: 'Forecast IGU34',
-        analytic_account_id: [34, 'IGU34'],
-        company_id: [34, 'Grupo Frio Iguala'],
-        date_target: '2026-08-08',
-        state: 'confirmed',
-        created_by_employee_id: [718, 'Aida Ramirez'],
-        confirmed_by_employee_id: [102, 'Hector Tapia'],
-        confirmed_at: '2026-08-06 14:03:00',
-        line_ids: [1, 2, 3, 4],
-      }],
-    },
+    [V2.alerts]: okEnvelope({ items: [{ id: 1, event_type: 'sync', sucursal: 'IGU34' }], count: 1 }),
+    [V2.forecasts]: okEnvelope({
+      items: [{ id: 77, sucursal: 'IGU34', created_by: 'Aida Ramirez', line_count: 4 }],
+    }),
   })
 
-  const [fc] = await api('GET', '/pwa-gerente/forecasts-locked')
+  const alerts = await api('GET', '/pwa-gerente/alerts')
+  assert.equal(alerts.success, true)
+  assert.equal(alerts.items.length, 1)
 
-  // Antes la pantalla leía sucursal/created_by/line_count y el handler nunca
-  // los devolvía: tres de las cuatro columnas del detalle pintaban "-".
-  assert.equal(fc.sucursal, 'IGU34')
-  assert.equal(fc.created_by, 'Aida Ramirez')
-  assert.equal(fc.confirmed_by, 'Hector Tapia')
-  assert.equal(fc.line_count, 4)
-  assert.equal(fc.empresa, 'Grupo Frio Iguala')
-  // Los many2one crudos siguen ahí para consumidores existentes.
-  assert.deepEqual(fc.analytic_account_id, [34, 'IGU34'])
+  const fcs = await api('GET', '/pwa-gerente/forecasts-locked')
+  assert.equal(fcs.items[0].sucursal, 'IGU34')
+  assert.equal(fcs.items[0].created_by, 'Aida Ramirez')
+  assert.equal(fcs.items[0].line_count, 4)
 })
 
-// ── forecast-unlock: ni revienta ni escribe sin alcance ─────────────────────
+test('un rechazo deja lista vacía Y motivo — no "no hay alertas"', async () => {
+  mockOdoo({ [V2.alerts]: errEnvelope('UNAUTHORIZED', 'Token requerido.') })
 
-test('forecast-unlock ya no revienta con ReferenceError y NO escribe sin alcance', async () => {
-  const calls = mockOdoo({})
+  const alerts = await api('GET', '/pwa-gerente/alerts')
+
+  assert.equal(alerts.success, false)
+  assert.equal(alerts.code, 'UNAUTHORIZED')
+  assert.deepEqual(alerts.items, [])
+})
+
+test('forecast-unlock va al endpoint con alcance y no escribe por su cuenta', async () => {
+  const calls = mockOdoo({ [V2.unlock]: okEnvelope({ forecast_id: 77, state: 'draft' }) })
 
   const res = await api('POST', '/pwa-gerente/forecast-unlock', { forecast_id: 77 })
 
-  assert.equal(res.success, false)
-  assert.equal(res.code, 'forecast_unlock_unavailable')
-  assert.ok(res.message, 'debe explicar por qué no se pudo')
-  // Lo crítico: cero escrituras. El handler viejo llamaba action_reset_to_draft
-  // con sudo y sin comprobar que el forecast fuera de la sucursal del gerente.
-  assert.equal(
-    calls.filter(c => c.path === '/api/create_update').length,
-    0,
-    'no debe ejecutarse ninguna escritura hasta que exista el endpoint con alcance',
-  )
+  assert.equal(res.success, true)
+  assert.equal(calls[0].path, V2.unlock)
+  // El `action_reset_to_draft` con sudo desde el cliente ya no existe.
+  assert.equal(calls.filter(c => c.path === '/api/create_update').length, 0)
 })
 
-test('forecast-unlock sin id responde el código de validación, no un crash', async () => {
-  mockOdoo({})
+test('forecast-unlock rechazado por alcance se reporta, no se silencia', async () => {
+  mockOdoo({ [V2.unlock]: errEnvelope('NOT_FOUND', 'No encontré ese forecast en tu sucursal.') })
+
+  const res = await api('POST', '/pwa-gerente/forecast-unlock', { forecast_id: 999 })
+
+  assert.equal(res.success, false)
+  assert.equal(res.code, 'NOT_FOUND')
+})
+
+test('forecast-unlock sin id ni siquiera sale a la red', async () => {
+  const calls = mockOdoo({})
   const res = await api('POST', '/pwa-gerente/forecast-unlock', {})
   assert.equal(res.success, false)
   assert.equal(res.code, 'forecast_id_required')
+  assert.equal(calls.length, 0)
 })
 
 // ── Contratos de código (lo que no se puede ejercitar sin DOM) ──────────────

@@ -12,7 +12,9 @@ export default function ScreenGerente() {
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const [alerts, setAlerts] = useState([])
+  const [alertsError, setAlertsError] = useState('')
   const [kpi, setKpi] = useState(null)
+  const [kpiError, setKpiError] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -28,16 +30,18 @@ export default function ScreenGerente() {
     try {
       const [a, k] = await Promise.allSettled([getAlerts(), getKpiSummary()])
       if (a.status === 'fulfilled') {
-        setAlerts(Array.isArray(a.value) ? a.value : [])
+        setAlerts(a.value.items)
+        setAlertsError(a.value.ok ? '' : a.value.error)
       } else {
-        logScreenError('ScreenGerente', 'getAlerts', a.reason)
         setAlerts([])
+        setAlertsError(logScreenError('ScreenGerente', 'getAlerts', a.reason))
       }
       if (k.status === 'fulfilled') {
-        setKpi(k.value || null)
+        setKpi(k.value.ok ? k.value.kpi : null)
+        setKpiError(k.value.ok ? '' : k.value.error)
       } else {
-        logScreenError('ScreenGerente', 'getKpiSummary', k.reason)
         setKpi(null)
+        setKpiError(logScreenError('ScreenGerente', 'getKpiSummary', k.reason))
       }
     } finally {
       setLoading(false)
@@ -60,15 +64,18 @@ export default function ScreenGerente() {
     : 'SIN DATO'
 
   const ACTIONS = [
-    { id: 'dashboard', label: 'Dashboard', desc: 'Indicadores generales', route: '/gerente/dashboard',
-      color: TOKENS.colors.blue2,
-      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> },
+    // "Dashboard" se retiró: montaba un tablero de Metabase SIN token firmado y
+    // SIN filtro de sucursal — el mismo tablero global para todos los gerentes.
+    // La ruta sigue existiendo y explica por qué; el botón no invita a entrar.
     { id: 'gastos', label: 'Gastos', desc: 'Registrar gastos del dia', route: '/gerente/gastos',
       color: TOKENS.colors.warning,
       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 1 0 0 7H14a3 3 0 1 1 0 6H6"/></svg> },
-    { id: 'alertas', label: 'Alertas', desc: alertCount > 0 ? `${alertCount} alertas hoy` : 'Sin alertas', route: '/gerente/alertas',
-      color: alertCount > 0 ? TOKENS.colors.error : TOKENS.colors.success,
-      badge: alertCount > 0 ? alertCount : null,
+    // Si la lectura falló, "Sin alertas" sería mentira: se dice que no se pudo leer.
+    { id: 'alertas', label: 'Alertas',
+      desc: alertsError ? 'No se pudieron leer' : (alertCount > 0 ? `${alertCount} alertas hoy` : 'Sin alertas'),
+      route: '/gerente/alertas',
+      color: alertsError ? TOKENS.colors.textMuted : (alertCount > 0 ? TOKENS.colors.error : TOKENS.colors.success),
+      badge: !alertsError && alertCount > 0 ? alertCount : null,
       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> },
     { id: 'forecast', label: 'Forecast', desc: 'Desbloquear forecasts', route: '/gerente/forecast',
       color: TOKENS.colors.warning,
@@ -126,6 +133,15 @@ export default function ScreenGerente() {
                 El dato es el ÚLTIMO snapshot de gf.saleops.kpi.snapshot del mes
                 en curso, no forzosamente el de hoy: por eso la tarjeta se rotula
                 con la fecha real del snapshot en vez de decir "Venta Hoy". */}
+            {kpiError && (
+              <div style={{
+                marginTop: 4, padding: '12px 16px', borderRadius: TOKENS.radius.lg,
+                background: TOKENS.glass.panelSoft, border: `1px solid ${TOKENS.colors.border}`,
+              }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>{kpiError}</p>
+              </div>
+            )}
+
             {kpi && (
               <div style={{
                 marginTop: 4, padding: 16, borderRadius: TOKENS.radius.xl,

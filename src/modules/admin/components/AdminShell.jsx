@@ -13,39 +13,15 @@ import { TOKENS, getTypo } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import { useSession } from '../../../App'
 import { getEffectiveJobKeys } from '../../../lib/roleContext'
+import { NAV_ITEMS } from '../adminNavItems'
 import { isCashShiftNavigationVisible } from '../../../lib/navModel.js'
 import { BACKEND_CAPS } from '../adminService.js'
 import CompanySelector from './CompanySelector'
 import ActivityFeed from './ActivityFeed'
 
-// Navegación lateral. Cada ítem declara qué roles pueden verlo.
-// Mapping alineado con el backend (guía de pruebas 2026-04-18):
-//   auxiliar_admin    → captura del día: caja, POS, gastos, requisiciones, cierre
-//   gerente_sucursal  → además: aprobar gastos, liquidaciones, materia prima
-//   direccion_general → acceso completo (supervisa todo)
-//
-// Regla: si un rol no está en `roles`, el ítem se oculta de la UI.
-// Backend valida permisos en DB — este filtrado es solo UX.
-// eslint-disable-next-line react-refresh/only-export-components
-export const NAV_ITEMS = [
-  { id: 'hub',          label: 'Caja del día',     route: '/admin',                    roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'gastos',       label: 'Gastos',           route: '/admin/gastos',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'gastos-hist',  label: 'Historial gastos', route: '/admin/gastos-historial',   roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'historial-cargas', label: 'Historial cargas', route: '/admin/historial-cargas', roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  // Aprobar gastos: SOLO gerente/dirección (auxiliar_admin NO aprueba — ver guía §2d)
-  { id: 'gastos-aprobar', label: 'Aprobar gastos', route: '/admin/gastos/aprobar',     roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'cierre',       label: 'Cortes de caja',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  // ── Restringidos a gerente / dirección ──────────────────────────────────
-  { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'traspaso-mp',  label: 'Traspaso MP',      route: '/admin/traspaso-materia-prima', roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  // Validar materiales / Validar bolsas: ELIMINADO (2026-04-25).
-  // El traspaso MP ahora mueve stock real al confirmar, y la declaración del
-  // operador al cierre devuelve el remanente automáticamente — no requiere
-  // segunda validación del gerente.
-]
+// NAV_ITEMS vive en ../adminNavItems.js: lo comparten el menú y la
+// autorización por subruta (adminRouteAccess.js). Se re-exporta por compatibilidad.
+export { NAV_ITEMS }
 
 /** Filtra NAV_ITEMS por el rol actual. Export para tests y HubV2. */
 // eslint-disable-next-line react-refresh/only-export-components

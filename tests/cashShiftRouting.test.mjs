@@ -20,6 +20,7 @@ const screenSource = readFileSync(
   'utf8',
 )
 const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+const navItemsSource = readFileSync(new URL('../src/modules/admin/adminNavItems.js', import.meta.url), 'utf8')
 
 test('cash-shift navigation fails closed and accepts only own server booleans', () => {
   assert.equal(isCashShiftNavigationVisible({}), false)
@@ -39,7 +40,10 @@ test('manage takes precedence and authorizer-only never becomes general manageme
 })
 
 test('admin desktop and mobile navigation use the same server capability gate and label', () => {
-  assert.match(shellSource, /label:\s*['"]Cortes de caja['"]/)
+  // NAV_ITEMS se movió a adminNavItems.js (fuente única compartida con la
+  // autorización por subruta). El ítem sigue existiendo y con el mismo label.
+  assert.match(navItemsSource, /label:\s*['"]Cortes de caja['"]/)
+  assert.match(shellSource, /import \{ NAV_ITEMS \} from '\.\.\/adminNavItems'/)
   assert.match(shellSource, /isCashShiftNavigationVisible/)
   assert.match(hubSource, /label:\s*['"]Cortes de caja['"]/)
   assert.match(hubSource, /isCashShiftNavigationVisible/)
@@ -48,7 +52,10 @@ test('admin desktop and mobile navigation use the same server capability gate an
 })
 
 test('the existing /admin/cierre route remains wired to a screen-level safe gate', () => {
-  assert.match(appSource, /<Route path="cierre" element=\{<ScreenCierreCaja \/>\}/)
+  // La ruta sigue montando ScreenCierreCaja (el gate a nivel pantalla), ahora
+  // envuelta en AdminSubRoute, que revalida el rol de la SUBRUTA. Antes el rol
+  // solo se comprobaba una vez en el padre /admin.
+  assert.match(appSource, /<Route path="cierre" element=\{<AdminSubRoute path="\/admin\/cierre"><ScreenCierreCaja \/><\/AdminSubRoute>\}/)
   assert.match(screenSource, /cashShiftAccessMode/)
   assert.match(screenSource, /capabilitiesReady|capsReady/)
   assert.doesNotMatch(screenSource, /AdminCierreForm|getTodaySales|getTodayExpenses|getCashClosing/)

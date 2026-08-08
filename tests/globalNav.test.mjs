@@ -7,6 +7,7 @@ import {
   isNavItemActive, resolveActiveId, isNavHiddenForPath, normalizePath,
   HOME_ANCHOR, PROFILE_ANCHOR,
 } from '../src/lib/navModel.js'
+import { IDENTITY_GATE_IDS } from '../src/modules/admin/identityGates.js'
 
 const ids = (arr) => arr.map((m) => m.id)
 // Sesiones de prueba VÁLIDAS (contrato real: employee_id + session_token).
@@ -49,16 +50,26 @@ test('usuario común (solo universales): 3 módulos directos, sin "Más"', () =>
   assert.equal(m.overflow.length, 0)
 })
 
-test('Héctor Tapia recibe POS nocturno en nav pero no Admin Sucursal', () => {
+test('el POS nocturno se decide por employee_id y no arrastra Admin Sucursal', () => {
+  // El gate dejó de comparar el NOMBRE de la sesión: ahora compara employee_id,
+  // que emite el servidor. 728 = "Hector Tapia Avino" en producción.
   const nav = ids(getNavModules({
-    employee_id: 730,
+    employee_id: IDENTITY_GATE_IDS.nightPos[0],
     session_token: 'h.p.s',
     role: 'almacenista_entregas',
-    name: 'Héctor Tapia',
   }))
 
   assert.ok(nav.includes('pos_nocturno'))
   assert.ok(!nav.includes('admin_sucursal'))
+
+  // Un nombre que coincide ya NO abre nada.
+  const porNombre = ids(getNavModules({
+    employee_id: 99999,
+    session_token: 'h.p.s',
+    role: 'almacenista_entregas',
+    name: 'Héctor Tapia',
+  }))
+  assert.ok(!porNombre.includes('pos_nocturno'))
 })
 
 test('jefe_ruta: ve Mi Ruta pero NO admin/gerente/equipo', () => {

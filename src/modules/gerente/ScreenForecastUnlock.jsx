@@ -28,7 +28,8 @@ export default function ScreenForecastUnlock() {
     setError('')
     try {
       const f = await getLockedForecasts()
-      setForecasts(Array.isArray(f) ? f : [])
+      setForecasts(f.items)
+      if (!f.ok) setError(f.error)
     } catch (e) {
       const msg = logScreenError('ScreenForecastUnlock', 'getLockedForecasts', e)
       setError(msg)
@@ -42,11 +43,11 @@ export default function ScreenForecastUnlock() {
     setUnlocking(id)
     setError('')
     try {
-      // El endpoint devuelve un envelope: `success:false` NO lanza. Sin este
-      // chequeo un desbloqueo rechazado se veía igual que uno exitoso.
+      // El endpoint devuelve un envelope: un rechazo NO lanza. Sin este chequeo
+      // un desbloqueo rechazado se veía igual que uno exitoso.
       const res = await unlockForecast(id)
-      if (res && res.success === false) {
-        setError(res.message || 'No se pudo desbloquear el forecast.')
+      if (!res.ok) {
+        setError(res.error || 'No se pudo desbloquear el forecast.')
         return
       }
       await loadData()

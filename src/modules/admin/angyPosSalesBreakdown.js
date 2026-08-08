@@ -1,3 +1,5 @@
+import { isPosBreakdownEmployee } from './identityGates.js'
+
 const LOAD_ERROR_MESSAGE = 'No se pudo cargar el desglose POS'
 const MEXICO_TIME_ZONE = 'America/Mexico_City'
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -21,21 +23,16 @@ function isCalendarDate(value) {
     && day <= daysPerMonth[month - 1]
 }
 
-export function isAngelicaJaimesSession(session = {}) {
-  const source = [
-    session?.name,
-    session?.display_name,
-    session?.employee?.name,
-  ].filter(Boolean).join(' ')
-  const tokens = source
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .split(/[^\p{Letter}\p{Number}]+/u)
-    .filter(Boolean)
-
-  return tokens.includes('angelica') && tokens.includes('jaimes')
+// El gate por NOMBRE se retiró: "Angelica Jaimes Dominguez" tiene TRES fichas de
+// hr.employee vivas en producción (717/2518/2521, tres compañías) y el match por
+// nombre las aceptaba todas sin distinguir. Ahora se compara `employee_id`, que
+// emite el servidor. Ver `identityGates.js`.
+export function isPosBreakdownSession(session = {}) {
+  return isPosBreakdownEmployee(session)
 }
+
+// Alias de compatibilidad para los llamadores existentes.
+export const isAngelicaJaimesSession = isPosBreakdownSession
 
 export function getMexicoDateKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {

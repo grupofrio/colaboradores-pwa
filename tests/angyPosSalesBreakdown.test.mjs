@@ -1,23 +1,43 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+import { IDENTITY_GATE_IDS } from '../src/modules/admin/identityGates.js'
+
 import {
   breakdownStateReducer,
   createInitialBreakdownState,
   createLatestRequestTracker,
   getMexicoDateKey,
-  isAngelicaJaimesSession,
+  isPosBreakdownSession,
   isSelectableSalesDate,
   loadPosProductBreakdown,
   normalizePosProductBreakdown,
 } from '../src/modules/admin/angyPosSalesBreakdown.js'
 
-test('identifies Angélica Jaimes across session names with accents and extra surnames', () => {
-  assert.equal(isAngelicaJaimesSession({ name: 'Angélica Jaimes Gómez' }), true)
-  assert.equal(isAngelicaJaimesSession({ employee: { name: 'ANGELICA JAIMES' } }), true)
-  assert.equal(isAngelicaJaimesSession({ display_name: 'Jaimes, Angélica López' }), true)
-  assert.equal(isAngelicaJaimesSession({ name: 'Angélica Pérez' }), false)
-  assert.equal(isAngelicaJaimesSession({ name: 'Otro gerente' }), false)
+test('el desglose POS se decide por employee_id, no por el nombre', () => {
+  // Medido en producción (2026-08-07): "Angelica Jaimes Dominguez" tiene TRES
+  // fichas de hr.employee vivas — 717 (cía 34), 2518 (cía 35), 2521 (cía 36).
+  // El gate por nombre las aceptaba las tres sin distinguir compañía.
+  for (const employeeId of IDENTITY_GATE_IDS.posBreakdown) {
+    assert.equal(isPosBreakdownSession({ employee_id: employeeId }), true, String(employeeId))
+  }
+  assert.equal(isPosBreakdownSession({ employee: { id: IDENTITY_GATE_IDS.posBreakdown[0] } }), true)
+})
+
+test('un nombre que coincide YA NO abre el desglose POS', () => {
+  for (const session of [
+    { name: 'Angélica Jaimes Gómez' },
+    { employee: { name: 'ANGELICA JAIMES' } },
+    { display_name: 'Jaimes, Angélica López' },
+  ]) {
+    assert.equal(isPosBreakdownSession(session), false, JSON.stringify(session))
+  }
+})
+
+test('el desglose POS falla cerrado sin employee_id válido', () => {
+  assert.equal(isPosBreakdownSession({}), false)
+  assert.equal(isPosBreakdownSession({ employee_id: 0 }), false)
+  assert.equal(isPosBreakdownSession({ employee_id: 99999 }), false)
 })
 
 test('gets the Mexico City calendar date on both sides of the UTC midnight cutoff', () => {
