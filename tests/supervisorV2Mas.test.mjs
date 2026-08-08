@@ -18,6 +18,7 @@ const render = (props = {}) => renderToStaticMarkup(createElement(MasView, props
 
 // Contrato: label visible + ruta legacy real. Espejo de los GROUPS de MasView.
 const EXPECTED_TILES = [
+  { label: 'Integridad', route: '/equipo/integridad' },
   { label: 'Metas', route: '/equipo/metas' },
   { label: 'Score', route: '/equipo/score-semanal' },
   { label: 'Dashboard', route: '/equipo/dashboard' },
