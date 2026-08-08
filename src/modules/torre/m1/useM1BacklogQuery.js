@@ -80,6 +80,20 @@ export function useM1BacklogQuery(role, initialFilters) {
     })
   }, [load])
 
+  // Fija VARIOS filtros con una sola carga. Existe porque hay ejes que se
+  // contradicen y hay que moverlos juntos: p.ej. el rango de semana y la
+  // antigüedad (>7 días) no pueden convivir, así que elegir uno debe limpiar el
+  // otro EN LA MISMA petición — con setFilter en cadena se dispararían dos cargas
+  // y la primera dejaría un estado incoherente pintado un instante.
+  const patchFilters = useCallback((delta) => {
+    setFilters((prev) => {
+      const next = { ...prev, ...(delta || {}) }
+      setOffset(0)
+      load(next, 0)
+      return next
+    })
+  }, [load])
+
   const goOffset = useCallback((next) => {
     setOffset(next)
     load(filters, next)

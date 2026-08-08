@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import {
-  AGING_FILTERS, HEADER_KPI_KEYS, TORRE_BUCKETS, TORRE_SORTS, cashForBucket,
-  coverage, fmtActivity, headerKpis, progressOf, riskTone, routeDetailPath,
+  AGING_FILTERS, HEADER_KPI_KEYS, TORRE_BUCKETS, TORRE_PERIODS, TORRE_SORTS, applyAging,
+  applyPeriod, cashForBucket, coverage, fmtActivity, headerKpis, initialTorreFilters,
+  periodOf, progressOf, riskTone, routeDetailPath, weekRange,
 } from '../src/modules/supervisor-ventas/torre/torreSupervisorModel.js'
 import { normalizePayload } from '../src/modules/torre/m1/m1BacklogModel.js'
 
@@ -59,6 +60,53 @@ test('un KPI ausente sale como — y NO como cero', () => {
     assert.equal(kpi.value, null)
     assert.equal(kpi.text, '—', 'null no es 0: "no vino" y "no hay" son distintos')
   }
+})
+
+// ── Período: la Torre abre en la SEMANA EN CURSO, no en el histórico ─────────
+
+test('el arranque es la semana en curso, abiertas, SIN filtro de antigüedad', () => {
+  // El bug: arrancaba en bucket:'historical' (>7 días) y Aida no veía su semana.
+  const f = initialTorreFilters('2026-08-05') // miércoles
+  assert.equal(f.state_bucket, 'open')
+  assert.equal(f.bucket, '', 'NO arranca filtrada a >7 días')
+  assert.equal(f.date_from, '2026-08-03', 'lunes de esa semana')
+  assert.equal(f.date_to, '2026-08-09', 'domingo de esa semana')
+  assert.equal(periodOf(f), 'week')
+})
+
+test('weekRange: Lun–Dom que contiene la fecha; tz-neutral (civil)', () => {
+  assert.deepEqual(weekRange('2026-08-03'), { date_from: '2026-08-03', date_to: '2026-08-09' }, 'un lunes')
+  assert.deepEqual(weekRange('2026-08-09'), { date_from: '2026-08-03', date_to: '2026-08-09' }, 'un domingo')
+})
+
+test('cambiar a Histórico limpia el rango de semana (ejes excluyentes)', () => {
+  // "esta semana" + ">7 días" = vacío; por eso elegir histórico saca las fechas.
+  const d = applyPeriod('historical', '2026-08-05')
+  assert.equal(d.bucket, 'historical')
+  assert.equal(d.date_from, '')
+  assert.equal(d.date_to, '')
+  assert.equal(periodOf({ bucket: 'historical' }), 'historical')
+})
+
+test('volver a Semana en curso repone el rango y quita la antigüedad', () => {
+  const d = applyPeriod('week', '2026-08-05')
+  assert.equal(d.bucket, '')
+  assert.equal(d.date_from, '2026-08-03')
+  assert.equal(d.date_to, '2026-08-09')
+})
+
+test('elegir una antigüedad concreta también sale de la semana; "toda" la reanuda', () => {
+  const historico = applyAging('historical', '2026-08-05')
+  assert.equal(historico.bucket, 'historical')
+  assert.equal(historico.date_from, '', 'un chip de antigüedad no convive con el rango de semana')
+
+  const toda = applyAging('', '2026-08-05')
+  assert.equal(toda.bucket, '')
+  assert.equal(toda.date_from, '2026-08-03', 'quitar la antigüedad vuelve a la semana en curso')
+})
+
+test('hay exactamente dos períodos y el primero es la semana', () => {
+  assert.deepEqual(TORRE_PERIODS.map((p) => p.value), ['week', 'historical'])
 })
 
 // ── Avance: separar "ya terminó" de "va a medias" ───────────────────────────
@@ -177,7 +225,7 @@ test('la Torre es SOLO LECTURA: ningún control ejecuta acciones', () => {
   // Todo onClick o navega, o cambia filtro, o recarga.
   const handlers = [...src.matchAll(/onClick=\{\(\)\s*=>\s*([a-zA-Z_.]+)\(/g)].map((m) => m[1])
   for (const h of handlers) {
-    assert.ok(['setFilter', 'goOffset', 'reload', 'navigate', 'onOpen'].includes(h),
+    assert.ok(['setFilter', 'patchFilters', 'goOffset', 'reload', 'navigate', 'onOpen'].includes(h),
       `handler inesperado: ${h}`)
   }
 })
@@ -193,10 +241,17 @@ test('la Torre NO reconstruye el fetch ni re-clasifica buckets', () => {
   assert.ok(src.includes("torre/m1/m1BacklogModel"), 'la pantalla reutiliza el modelo compartido')
 })
 
-test('arranca por el envejecimiento, que es el encargo de esta vista', () => {
+test('arranca en la SEMANA EN CURSO, no en el histórico', () => {
+  // Este test decía lo contrario ("arranca por el envejecimiento") y fijaba el
+  // default que la auditoría marcó como el bug: Aida abría y no veía su semana.
+  // El encabezado sigue titulando el envejecimiento (KPI protagonista), pero las
+  // FILAS arrancan en la semana; el histórico es una vista aparte, explícita.
   const src = PANTALLA()
-  assert.match(src, /state_bucket: 'open', bucket: 'historical'/,
-    'el estado inicial es "abiertas de más de 7 días"')
+  assert.ok(!src.includes("bucket: 'historical'"),
+    'ya NO arranca filtrada a >7 días')
+  assert.match(src, /initialTorreFilters\(today\)/,
+    'el arranque sale del modelo puro (semana en curso)')
+  assert.match(src, /TORRE_PERIODS/, 'el histórico es un período seleccionable, no el default')
 })
 
 test('la Torre NO repite lo que ya vive en Pendientes', () => {
