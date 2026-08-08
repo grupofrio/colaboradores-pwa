@@ -322,6 +322,19 @@ export function createExpense(data) {
   return api('POST', '/pwa-admin/expense-create', data)
 }
 
+/** Catálogo CERRADO de categorías de gasto de la compañía del token.
+ *  Solo trae las que tienen centro de costo mapeado: ofrecer una que después
+ *  será rechazada convierte el fail-closed en un callejón sin salida. */
+export function getExpenseCategories() {
+  return api('GET', '/pwa-admin/expense-categories')
+}
+
+/** Preview de las dimensiones (Plaza × UN × CC) SIN escribir nada.
+ *  Alimenta los chips antes de guardar. */
+export function getExpenseDimensions(productId) {
+  return api('GET', `/pwa-admin/expense-dimensions?product_id=${encodeURIComponent(productId)}`)
+}
+
 /** Rutas (abiertas o cerradas) de la sucursal autenticada para gasolina. */
 export function getFuelRoutes(date) {
   return api('GET', `/pwa-admin/fuel-routes?date=${encodeURIComponent(date)}`)

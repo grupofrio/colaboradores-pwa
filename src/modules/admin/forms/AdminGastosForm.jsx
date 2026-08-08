@@ -18,6 +18,13 @@ import {
 import { attachExpense, createFuelExpense, getFuelRoutes } from '../api'
 import { api, todayLocal } from '../../../lib/api'
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
+import {
+  businessToday,
+  dimensionChips,
+  looksLikeDeposit,
+  minCaptureDate,
+  validateExpenseDate,
+} from '../expenseCapture'
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024 // 8 MB
 
@@ -58,8 +65,37 @@ export default function AdminGastosForm() {
   const [fuelRoutes, setFuelRoutes] = useState([])
   const [fuelRoutesLoading, setFuelRoutesLoading] = useState(false)
   const [fuelRouteId, setFuelRouteId] = useState('')
-  // Analítica Odoo 18: dict { account_id: pct } o null
+  // Analítica Odoo 18: dict { account_id: pct } o null.
+  // Solo se usa en modo LEGACY: con las dimensiones derivadas activas, la
+  // analítica la asienta el servidor y el payload deja de mandarla.
   const [analyticDistribution, setAnalyticDistribution] = useState(null)
+
+  // ── Categoría + dimensiones derivadas ────────────────────────────────────
+  const [catalog, setCatalog] = useState(null)   // null = aún no se sabe
+  const [catalogError, setCatalogError] = useState('')
+  const [categoryId, setCategoryId] = useState(null)
+  const [dimensions, setDimensions] = useState(null)
+  const [dimensionsError, setDimensionsError] = useState('')
+  const [dimensionsLoading, setDimensionsLoading] = useState(false)
+
+  // Un solo formulario para escritorio y móvil: el layout se adapta, la
+  // funcionalidad NO se degrada.
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 1280,
+  )
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  const isNarrow = viewportWidth < 900
+
+  const derivedMode = Boolean(catalog?.dimensions_enabled)
+  const backdateDays = Number(catalog?.backdate_days ?? 7)
+  const today = businessToday()
+  const dateError = derivedMode ? validateExpenseDate(date, backdateDays, today) : ''
+  const depositWarning = looksLikeDeposit(name)
+  const chips = dimensionChips(dimensions)
 
   // Adjunto (Sprint 4 — expense-attach)
   const [attachment, setAttachment] = useState(null) // File
@@ -102,8 +138,57 @@ export default function AdminGastosForm() {
     loadExpenses()
     // Limpiar la cuenta analítica: depende de la company
     setAnalyticDistribution(null)
+    setCategoryId(null)
+    setDimensions(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, warehouseId])
+
+  // Catálogo de categorías. Su respuesta también dice si el modo derivado está
+  // encendido: la UI NO adivina el modo, se lo pregunta al backend.
+  useEffect(() => {
+    let alive = true
+    setCatalogError('')
+    getExpenseCategories()
+      .then((res) => {
+        if (!alive) return
+        const d = res?.data ?? res ?? {}
+        setCatalog({
+          categories: Array.isArray(d.categories) ? d.categories : [],
+          dimensions_enabled: Boolean(d.dimensions_enabled),
+          backdate_days: d.backdate_days ?? 7,
+        })
+      })
+      .catch((e) => {
+        if (!alive) return
+        // Sin catálogo se cae al modo legacy, que es el comportamiento actual.
+        setCatalog({ categories: [], dimensions_enabled: false, backdate_days: 7 })
+        setCatalogError(e?.message || '')
+      })
+    return () => { alive = false }
+  }, [companyId])
+
+  // Preview de dimensiones al elegir categoría: los chips muestran lo que el
+  // servidor VA a asentar, no lo que el cliente cree.
+  useEffect(() => {
+    if (!derivedMode || !categoryId) { setDimensions(null); setDimensionsError(''); return }
+    let alive = true
+    setDimensionsLoading(true)
+    setDimensionsError('')
+    getExpenseDimensions(categoryId)
+      .then((res) => {
+        if (!alive) return
+        const d = res?.data ?? res ?? {}
+        setDimensions(d.dimensions || null)
+        if (!d.dimensions) setDimensionsError('El backend no devolvió las dimensiones.')
+      })
+      .catch((e) => {
+        if (!alive) return
+        setDimensions(null)
+        setDimensionsError(e?.message || 'No se pudieron calcular las dimensiones.')
+      })
+      .finally(() => { if (alive) setDimensionsLoading(false) })
+    return () => { alive = false }
+  }, [derivedMode, categoryId])
 
   useEffect(() => {
     if (expenseMode !== 'fuel') return
@@ -143,7 +228,13 @@ export default function AdminGastosForm() {
     if (!amount || Number(amount) <= 0) { setError('Ingresa un monto válido'); return }
     if (expenseMode === 'general' && !companyId) { setError('Selecciona una razón social'); return }
     if (expenseMode === 'fuel' && !fuelRouteId) { setError('Selecciona la ruta de gasolina'); return }
-    if (BACKEND_CAPS.expenseAnalytics && !analyticDistribution) {
+    if (derivedMode && expenseMode === 'general') {
+      // Fail-closed espejo del backend: sin categoría no hay dimensiones, y sin
+      // dimensiones el gasto no sirve para el P&L por UN ni por CC.
+      if (!categoryId) { setError('Selecciona la categoría del gasto'); return }
+      if (dateError) { setError(dateError); return }
+      if (dimensionsError) { setError(dimensionsError); return }
+    } else if (BACKEND_CAPS.expenseAnalytics && !analyticDistribution) {
       setError('Selecciona la cuenta analítica del gasto')
       return
     }
@@ -217,14 +308,22 @@ export default function AdminGastosForm() {
         attachment_id: uploadedAttachmentId || undefined,
         evidence_token: uploadedFuelEvidenceToken || undefined,
       }
+      // En modo derivado el payload NO manda analítica ni alcance: el backend
+      // los deriva del token y de la categoría, y RECHAZA si vienen.
+      const {
+        company_id: _c, warehouse_id: _w, sucursal_code: _s,
+        analytic_distribution: _a, ...derivedPayload
+      } = functionalPayload
       const res = expenseMode === 'fuel'
         ? await createFuelExpense({ ...functionalPayload, route_plan_id: Number(fuelRouteId) })
-        : await createExpense({
-          ...functionalPayload,
-          company_id: companyId,
-          warehouse_id: warehouseId || undefined,
-          sucursal_code: sucursal || undefined,
-        })
+        : await createExpense(derivedMode
+          ? { ...derivedPayload, product_id: categoryId }
+          : {
+            ...functionalPayload,
+            company_id: companyId,
+            warehouse_id: warehouseId || undefined,
+            sucursal_code: sucursal || undefined,
+          })
 
       // Fallback legacy: si el evidence/upload no funcionó pero expense-attach
       // sí, intentamos adjuntar por separado. Solo para montos bajos donde
@@ -249,6 +348,8 @@ export default function AdminGastosForm() {
       setDescription('')
       setPaymentMode('company')
       setAnalyticDistribution(null)
+      setCategoryId(null)
+      setDimensions(null)
       if (expenseMode === 'fuel') {
         setExpenseMode('general')
         setFuelRouteId('')
@@ -309,10 +410,13 @@ export default function AdminGastosForm() {
         </div>
       )}
 
-      {/* Grid: formulario + lista lado a lado en desktop */}
+      {/* Grid responsive: dos columnas en escritorio, UNA en móvil.
+          Antes la ruta bifurcaba por `window.innerWidth < 1024` y servía un
+          formulario degradado en móvil —sin analítica, sin almacén, sin
+          adjunto— que es de donde salen los gastos sin clasificar. */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+        gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)',
         gap: 20,
       }}>
         {/* Formulario */}
@@ -350,8 +454,23 @@ export default function AdminGastosForm() {
           <input
             type="text" placeholder="Ej: Compra de papelería"
             value={name} onChange={e => setName(e.target.value)}
-            style={{ ...inputStyle, marginBottom: 12 }}
+            style={{ ...inputStyle, marginBottom: depositWarning ? 6 : 12 }}
           />
+          {/* Guard SUAVE. Medido en producción: "DEPOSITO WALMART" por $10,010
+              capturado como gasto. No bloquea a propósito — hasta que exista la
+              pantalla de Depósitos, bloquear dejaría a la capturista sin ningún
+              lugar donde registrarlo. */}
+          {depositWarning && (
+            <div style={{
+              padding: '8px 12px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
+              background: TOKENS.colors.warningSoft ?? 'rgba(245,158,11,0.12)',
+              border: `1px solid ${TOKENS.colors.warning}40`,
+              fontSize: 11, fontWeight: 600, color: TOKENS.colors.warning,
+            }}>
+              Esto parece un depósito, no un gasto. Si lo es, no lo captures aquí:
+              va en Depósitos de caja.
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
             <div>
@@ -370,8 +489,15 @@ export default function AdminGastosForm() {
               </label>
               <input
                 type="date" value={date} onChange={e => setDate(e.target.value)}
+                max={derivedMode ? today : undefined}
+                min={derivedMode ? minCaptureDate(backdateDays, today) : undefined}
                 style={{ ...inputStyle, colorScheme: 'dark' }}
               />
+              {dateError && (
+                <p style={{ fontSize: 11, color: TOKENS.colors.error, margin: '4px 0 0' }}>
+                  {dateError}
+                </p>
+              )}
             </div>
           </div>
 
@@ -461,7 +587,12 @@ export default function AdminGastosForm() {
             </button>
           </div>
 
-          {/* ── Bloque de analítica (LIVE — gf_pwa_admin) ─────────────── */}
+          {/* ── Clasificación ──────────────────────────────────────────
+              Modo DERIVADO: la capturista elige UNA cosa —la categoría— y el
+              servidor asienta Plaza × UN × CC. Los chips muestran lo que el
+              servidor VA a escribir; no se pueden editar porque no son una
+              opinión del cliente.
+              Modo LEGACY (flag apagado): sigue el picker analítico de siempre. */}
           <div style={{
             padding: 14, borderRadius: TOKENS.radius.md,
             background: TOKENS.colors.surfaceSoft,
@@ -472,14 +603,69 @@ export default function AdminGastosForm() {
               fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
               color: TOKENS.colors.textLow, margin: '0 0 10px',
             }}>
-              CLASIFICACIÓN ANALÍTICA · {companyLabel.toUpperCase()}
+              {derivedMode
+                ? `CATEGORÍA DEL GASTO · ${companyLabel.toUpperCase()}`
+                : `CLASIFICACIÓN ANALÍTICA · ${companyLabel.toUpperCase()}`}
             </p>
-            <AnalyticAccountPicker
-              value={analyticDistribution}
-              onChange={setAnalyticDistribution}
-              companyId={companyId}
-              required={BACKEND_CAPS.expenseAnalytics}
-            />
+
+            {derivedMode ? (
+              <>
+                <select
+                  value={categoryId || ''}
+                  onChange={e => setCategoryId(Number(e.target.value) || null)}
+                  style={{ ...inputStyle, marginBottom: 10, colorScheme: 'dark' }}
+                >
+                  <option value="">Selecciona una categoría…</option>
+                  {(catalog?.categories || []).map(cat => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.code ? `${cat.code} · ${cat.name}` : cat.name}
+                    </option>
+                  ))}
+                </select>
+
+                {dimensionsLoading && (
+                  <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, margin: 0 }}>
+                    Calculando dimensiones…
+                  </p>
+                )}
+                {dimensionsError && (
+                  <p style={{ fontSize: 11, color: TOKENS.colors.error, margin: 0 }}>
+                    {dimensionsError}
+                  </p>
+                )}
+                {chips.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {chips.map(chip => (
+                      <span
+                        key={chip.key}
+                        title={`${chip.label} — lo asigna el sistema`}
+                        style={{
+                          padding: '4px 10px', borderRadius: TOKENS.radius.pill,
+                          background: TOKENS.colors.blueGlow,
+                          border: `1px solid ${TOKENS.colors.borderBlue}`,
+                          fontSize: 11, fontWeight: 600, color: TOKENS.colors.blue3,
+                        }}
+                      >
+                        {chip.value}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {chips.length > 0 && (
+                  <p style={{ fontSize: 10, color: TOKENS.colors.textLow, margin: '8px 0 0' }}>
+                    Plaza · Unidad · Centro de costo — los asigna el sistema a partir de tu
+                    sucursal y de la categoría.
+                  </p>
+                )}
+              </>
+            ) : (
+              <AnalyticAccountPicker
+                value={analyticDistribution}
+                onChange={setAnalyticDistribution}
+                companyId={companyId}
+                required={BACKEND_CAPS.expenseAnalytics}
+              />
+            )}
           </div>
 
           {BACKEND_CAPS.expenseAttachments && (
