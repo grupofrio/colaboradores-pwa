@@ -356,10 +356,11 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
         payment_method: payConfirm,
         payment_reference: payConfirm === 'card' ? cardRef.trim() : undefined,
         pricelist_id: pricelist.id || undefined,
+        // NO se manda price_unit (RED Codex P2 #161): el backend re-precia contra
+        // la lista y lo ignora; enviarlo lo haría parecer una fuente de precio.
         lines: cart.map((c) => ({
           product_id: c.product_id,
           qty: c.qty,
-          price_unit: c.price_unit,
         })),
       })
       const saleResult = normalizePosSaleResult(result)
@@ -895,18 +896,22 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
                 Confirmar pago con <strong>{payConfirm === 'cash' ? 'Efectivo' : 'Terminal'}</strong> — {fmt(total)}
               </p>
 
+              {/* AVISO ESTIMADO, NO decisorio (RED Codex P2 #161): estos umbrales
+                  son del cliente y el monto es un estimado sin IVA. La
+                  autorización REAL la decide el servidor con el total autoritativo
+                  al registrar; aquí solo se anticipa que podría pedirse. */}
               {total > POS_THRESHOLDS.DIRECTOR_AUTH && (
                 <AuthBanner
                   level="director"
-                  title="Venta excepcional"
-                  reason={`Monto de ${fmt(total)} requiere autorización de dirección.`}
+                  title="Posible autorización de dirección"
+                  reason={`Estimado de ${fmt(total)} (sin IVA): esta venta podría requerir autorización de dirección. El servidor lo confirma al registrar.`}
                 />
               )}
               {total > POS_THRESHOLDS.MANAGER_AUTH && total <= POS_THRESHOLDS.DIRECTOR_AUTH && (
                 <AuthBanner
                   level="manager"
-                  title="Venta con monto alto"
-                  reason={`Monto de ${fmt(total)} requiere autorización del gerente de sucursal.`}
+                  title="Posible autorización de gerente"
+                  reason={`Estimado de ${fmt(total)} (sin IVA): esta venta podría requerir autorización del gerente. El servidor lo confirma al registrar.`}
                 />
               )}
 

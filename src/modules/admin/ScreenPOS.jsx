@@ -402,7 +402,9 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         pricelist_id: pricelist.id || undefined,
         payment_method: payConfirm,
         payment_reference: payConfirm === 'card' ? cardRef.trim() : undefined,
-        lines: cart.map(c => ({ product_id: c.product_id, qty: c.qty, price_unit: c.price_unit })),
+        // NO se manda price_unit (RED Codex P2 #161): el backend re-precia contra
+        // la lista y lo ignora; enviarlo lo haría parecer una fuente de precio.
+        lines: cart.map(c => ({ product_id: c.product_id, qty: c.qty })),
       })
       const saleResult = normalizePosSaleResult(result)
       if (saleResult.status === 'error') {
