@@ -13,7 +13,7 @@ export function businessToday(now = new Date()) {
 
 /** Fecha mínima capturable: hoy menos `backdateDays`. */
 export function minCaptureDate(backdateDays, today = businessToday()) {
-  const days = Number.isFinite(Number(backdateDays)) ? Math.max(Number(backdateDays), 0) : 7
+  const days = Number.isFinite(Number(backdateDays)) ? Math.max(Number(backdateDays), 0) : 3
   const [y, m, d] = today.split('-').map(Number)
   const base = new Date(Date.UTC(y, m - 1, d))
   base.setUTCDate(base.getUTCDate() - days)

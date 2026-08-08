@@ -90,7 +90,7 @@ export default function AdminGastosForm() {
   const isNarrow = viewportWidth < 900
 
   const derivedMode = Boolean(catalog?.dimensions_enabled)
-  const backdateDays = Number(catalog?.backdate_days ?? 7)
+  const backdateDays = Number(catalog?.backdate_days ?? 3)
   const today = businessToday()
   const dateError = derivedMode ? validateExpenseDate(date, backdateDays, today) : ''
   const depositWarning = looksLikeDeposit(name)
@@ -154,13 +154,13 @@ export default function AdminGastosForm() {
         setCatalog({
           categories: Array.isArray(d.categories) ? d.categories : [],
           dimensions_enabled: Boolean(d.dimensions_enabled),
-          backdate_days: d.backdate_days ?? 7,
+          backdate_days: d.backdate_days ?? 3,
         })
       })
       .catch((e) => {
         if (!alive) return
         // Sin catálogo se cae al modo legacy, que es el comportamiento actual.
-        setCatalog({ categories: [], dimensions_enabled: false, backdate_days: 7 })
+        setCatalog({ categories: [], dimensions_enabled: false, backdate_days: 3 })
         setCatalogError(e?.message || '')
       })
     return () => { alive = false }
