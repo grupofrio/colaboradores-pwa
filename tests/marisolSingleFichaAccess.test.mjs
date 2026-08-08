@@ -37,6 +37,7 @@ test('multi-company transports keep authority fields out of requisitions and exp
     partner_id: 9,
     name: 'Hielo',
     lines: [{ product_id: 11, quantity: 2 }],
+    company_id: 1,
     employee_id: 694,
     warehouse_id: 10,
     actor_id: 4,
@@ -45,6 +46,7 @@ test('multi-company transports keep authority fields out of requisitions and exp
   const expense = createMultiCompanyExpense({ operating_company_id: 36, operating_plaza_id: 9 }, {
     name: 'Caseta',
     total_amount: 123,
+    company_id: 1,
     employee_id: 694,
     warehouse_id: 10,
     approval_state: 'approved',
