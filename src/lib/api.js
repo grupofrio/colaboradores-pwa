@@ -1370,6 +1370,69 @@ async function directAdmin(method, path, body) {
     return odooHttp('GET', `${endpoint}${search ? `?${search}` : ''}`)
   }
 
+  // ── Encuestas y Reconocimientos del colaborador (todos los roles) ──────────
+  // Estas dos rutas NO tenían handler y caían al fallback de n8n, cuyo workflow
+  // W16 está desactivado: por eso ambas pantallas mostraban "Error al cargar".
+  // Ahora van DIRECTO a Odoo con la credencial real (X-GF-Employee-Token que ya
+  // adjunta odooJson). Las pantallas esperan `success`, no `ok`: se mapea aquí.
+  // El envelope MANDA. `ok !== false` daba por bueno un envelope ausente o
+  // malformado, y convertía un 401/403/error interno en "no tienes encuestas":
+  // exactamente la confusión entre vacío y error que este arreglo venía a quitar.
+  if (cleanPath === '/pwa-surveys' && (method === 'GET' || method === 'POST')) {
+    const res = await odooJson('/pwa-surveys', {})
+    if (res?.ok !== true || !Array.isArray(res?.data)) {
+      return {
+        success: false,
+        code: res?.code || res?.data?.code || 'surveys_unavailable',
+        message: res?.user_message || res?.message || 'No se pudieron cargar las encuestas.',
+        data: [],
+      }
+    }
+    return { success: true, message: res.message || '', data: res.data }
+  }
+
+  // Crear-o-recuperar la respuesta del empleado ANTES de abrir la encuesta: el
+  // /survey/start público de Odoo ata la respuesta a la sesión web, no a nuestro
+  // token, así que sin este paso la respuesta no vuelve a asociarse con la persona.
+  if (cleanPath === '/pwa-survey-start' && method === 'POST') {
+    const res = await odooJson('/pwa-survey-start', { survey_id: Number(body?.survey_id || 0) })
+    const d = res?.data && typeof res.data === 'object' ? res.data : null
+    // La señal de éxito es la URL ARMADA POR EL SERVIDOR (token de encuesta +
+    // answer_token). Antes se exigía `access_token` (el de la respuesta) y la
+    // pantalla lo metía como si fuera el de la encuesta ⇒ URL rota (Codex P1-1).
+    if (res?.ok !== true || !d?.survey_url) {
+      return {
+        success: false,
+        code: res?.code || 'survey_start_unavailable',
+        message: res?.user_message || res?.message || 'No se pudo abrir la encuesta.',
+        data: null,
+      }
+    }
+    return { success: true, message: res.message || '', data: d }
+  }
+
+  if (cleanPath === '/pwa-badges' && (method === 'GET' || method === 'POST')) {
+    const res = await odooJson('/pwa-badges', {})
+    const d = res?.data && typeof res.data === 'object' ? res.data : null
+    if (res?.ok !== true || !d) {
+      return {
+        success: false,
+        code: res?.code || 'badges_unavailable',
+        message: res?.user_message || res?.message || 'No se pudieron cargar tus logros.',
+        data: { earned: [], locked: [], total_points: 0 },
+      }
+    }
+    return {
+      success: true,
+      message: res.message || '',
+      data: {
+        earned: Array.isArray(d.earned) ? d.earned : [],
+        locked: Array.isArray(d.locked) ? d.locked : [],
+        total_points: Number(d.total_points || 0),
+      },
+    }
+  }
+
   if (cleanPath === '/pwa-admin/pos-products' && method === 'GET') {
     return forwardGetQuery('/pwa-admin/pos-products')
   }

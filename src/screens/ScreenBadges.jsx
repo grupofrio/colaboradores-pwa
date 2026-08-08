@@ -521,7 +521,8 @@ function BadgesScreen({ sw: propSw, sh: propSh }) {
     apiGet("/pwa-badges")
       .then(res => {
         if (cancelled) return;
-        if (res.success && res.data) {
+        if (!res.success) { setLoadState("error"); return; }   // error ≠ vacío
+        if (res.data) {
           const earned = (res.data.earned || []).map(mapOdooBadge);
           const locked = (res.data.locked || []).map(b => ({
             id: b.id,
@@ -605,7 +606,7 @@ function BadgesScreen({ sw: propSw, sh: propSh }) {
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
             <div style={{ fontSize:28 }}>📡</div>
             <div style={{ ...typo.body, color:TOKENS.colors.textMuted }}>Error al cargar logros</div>
-            <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-badges").then(r=>{if(r.success&&r.data){const e=(r.data.earned||[]).map(mapOdooBadge);setBadgesData(e);setLockedBadges((r.data.locked||[]).map(b=>({id:b.id,badge_name:b.badge_name||"Logro",icon:getBadgeIcon(b.badge_name),x_points:b.x_points||0,hint:b.hint||""})));setTotalPoints(r.data.total_points||0);setLoadState(e.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
+            <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-badges").then(r=>{if(!r.success){setLoadState("error");return;} if(r.data){const e=(r.data.earned||[]).map(mapOdooBadge);setBadgesData(e);setLockedBadges((r.data.locked||[]).map(b=>({id:b.id,badge_name:b.badge_name||"Logro",icon:getBadgeIcon(b.badge_name),x_points:b.x_points||0,hint:b.hint||""})));setTotalPoints(r.data.total_points||0);setLoadState(e.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
           </div>
         )}
 
@@ -613,7 +614,7 @@ function BadgesScreen({ sw: propSw, sh: propSh }) {
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
             <div style={{ fontSize:28 }}>🎖️</div>
             <div style={{ ...typo.body, color:TOKENS.colors.textMuted }}>Aún no tienes insignias</div>
-            <div style={{ ...typo.caption, color:TOKENS.colors.textLow }}>Completa encuestas y metas para ganar logros</div>
+            <div style={{ ...typo.caption, color:TOKENS.colors.textLow }}>Cuando haya reconocimientos para tu perfil, aparecerán aquí</div>
           </div>
         )}
 

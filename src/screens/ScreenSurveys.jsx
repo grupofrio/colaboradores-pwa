@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet as _apiGet } from "../lib/api";
+import { apiGet as _apiGet, apiPost as _apiPost } from "../lib/api";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -67,6 +67,7 @@ function getTypo(sw) {
 ============================================================================ */
 const ODOO_BASE = import.meta.env.VITE_ODOO_URL;
 const apiGet = _apiGet;
+const apiPost = _apiPost;
 
 // Transforma datos de Odoo al formato que espera SurveyCard
 function mapOdooSurvey(s) {
@@ -76,17 +77,22 @@ function mapOdooSurvey(s) {
     id: s.id,
     survey_id: s.survey_id,
     title: s.survey_title || `Encuesta #${s.id}`,
-    description: "Responde esta encuesta para acumular puntos.",
+    description: "Tu respuesta se revisa en conjunto para mejorar la app.",
     duration: "~3 min",
     questionCount: null,  // Odoo no lo expone en la lista
+    state: s.state || "new",   // estado CRUDO del servidor (única autoridad)
     status: s.state === "in_progress" ? "pending" : s.state === "new" ? "pending" : "done",
     dueDate: deadline ? `${deadline.getDate()} ${["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][deadline.getMonth()]}` : null,
-    points: 80,
-    access_token: s.access_token,
+    points: null,   // el servidor no otorga puntos por encuesta: no se inventan
     is_overdue: s.is_overdue,
     completedDate: s.state === "done" ? "Completada" : null,
-    // URL de Odoo para abrir la encuesta real
-    survey_url: `${ODOO_BASE}/survey/start/${s.access_token}`,
+    // URL de Odoo, ARMADA POR EL SERVIDOR (Codex P1-1): la ruta pública
+    // /survey/start/<token> espera el token de la ENCUESTA, y el de la respuesta
+    // viaja como answer_token. El backend ya la entrega correcta en `survey_url`;
+    // aquí NO se reconstruye con el token de la respuesta (era la URL rota). Solo
+    // existe si YA hay respuesta propia; si no, needs_start y se pide al abrir.
+    needs_start: !!s.needs_start,
+    survey_url: s.survey_url ? `${ODOO_BASE}${s.survey_url}` : null,
   };
 }
 
@@ -203,10 +209,12 @@ function SurveyCard({ survey, onStart, sw, delay }) {
               </span>
             </div>
 
-            <div style={{ display:"flex", alignItems:"center", gap:4, background:"rgba(255,255,255,0.05)", borderRadius:999, padding:"4px 8px", border:`1px solid ${TOKENS.colors.border}` }}>
-              <span style={{ fontSize:10 }}>⭐</span>
-              <span style={{ fontSize:10, fontWeight:700, color:TOKENS.colors.textSoft }}>+{survey.points} pts</span>
-            </div>
+            {survey.points != null && (
+              <div style={{ display:"flex", alignItems:"center", gap:4, background:"rgba(255,255,255,0.05)", borderRadius:999, padding:"4px 8px", border:`1px solid ${TOKENS.colors.border}` }}>
+                <span style={{ fontSize:10 }}>⭐</span>
+                <span style={{ fontSize:10, fontWeight:700, color:TOKENS.colors.textSoft }}>+{survey.points} pts</span>
+              </div>
+            )}
           </div>
 
           <div style={{ ...typo.title, color:TOKENS.colors.text, marginBottom:6 }}>{survey.title}</div>
@@ -450,11 +458,15 @@ function SurveyFlow({ survey, onClose, onComplete, sw }) {
             <div style={{ fontSize:9, fontWeight:700, color:"rgba(97,178,255,0.6)", letterSpacing:"0.18em", marginBottom:2 }}>ENCUESTA</div>
             <div style={{ fontSize:12, fontWeight:500, color:TOKENS.colors.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{survey.title}</div>
           </div>
+          {/* Este botón NO puede saber si la persona contestó: la encuesta vive
+              dentro del iframe de Odoo y no nos avisa. El botón anterior daba por
+              enviada una respuesta que podía no existir. Ahora solo RECONSULTA al
+              servidor y muestra lo que el servidor diga. */}
           <button
-            onClick={() => onComplete(survey.id)}
-            style={{ border:"none", cursor:"pointer", padding:"8px 14px", minHeight:36, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:11, fontWeight:700, fontFamily:"inherit", flexShrink:0 }}
+            onClick={() => onComplete()}
+            style={{ border:`1px solid ${TOKENS.colors.border}`, cursor:"pointer", padding:"8px 14px", minHeight:36, borderRadius:TOKENS.radius.pill, background:"transparent", color:TOKENS.colors.textSoft, fontSize:11, fontWeight:700, fontFamily:"inherit", flexShrink:0 }}
           >
-            Completar ✓
+            Ya terminé
           </button>
         </div>
       </div>
@@ -559,9 +571,11 @@ function DoneState({ survey, onBack, sw }) {
 
         <FadeIn delay={320}>
           <Card style={{ padding:"16px 20px", border:`1px solid ${TOKENS.colors.borderBlue}`, background:TOKENS.glass.hero, width:"100%", textAlign:"center", boxShadow:`${TOKENS.shadow.md}, ${TOKENS.shadow.inset}, ${TOKENS.shadow.blue}` }}>
-            <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, marginBottom:4 }}>Puntos ganados</div>
-            <div style={{ fontSize:34, fontWeight:700, color:TOKENS.colors.blue3, letterSpacing:"-0.04em" }}>+{survey.points}</div>
-            <div style={{ ...typo.caption, color:"rgba(255,255,255,0.40)", marginTop:2 }}>Se reflejarán en tu balance hoy</div>
+            <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, marginBottom:4 }}>Gracias</div>
+            <div style={{ fontSize:22, fontWeight:700, color:TOKENS.colors.blue3, letterSpacing:"-0.02em" }}>Listo</div>
+            <div style={{ ...typo.caption, color:"rgba(255,255,255,0.40)", marginTop:2 }}>
+              Si contestaste, tu respuesta ya quedó en el sistema. Revisa la lista: ahí verás su estado real.
+            </div>
           </Card>
         </FadeIn>
 
@@ -602,7 +616,6 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
   const [activeSurvey, setActiveSurvey] = useState(null);
   const [surveys, setSurveys] = useState([]);
   const [loadState, setLoadState] = useState("loading"); // loading | ready | error | empty
-  const [completedIds, setCompletedIds] = useState([]);
   const typo = getTypo(sw);
 
   const navH = sw < 340 ? 58 : 64;
@@ -618,7 +631,8 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
     apiGet("/pwa-surveys")
       .then(res => {
         if (cancelled) return;
-        if (res.success && Array.isArray(res.data)) {
+        if (!res.success) { setLoadState("error"); return; }   // error ≠ vacío
+        if (Array.isArray(res.data)) {
           const mapped = res.data.map(mapOdooSurvey);
           setSurveys(mapped);
           setLoadState(mapped.length > 0 ? "ready" : "empty");
@@ -630,22 +644,56 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
     return () => { cancelled = true; };
   }, []);
 
-  const displaySurveys = surveys.map(s => ({
-    ...s,
-    status: completedIds.includes(s.id) ? "done" : s.status,
-    completedDate: completedIds.includes(s.id) ? "Hoy" : s.completedDate,
-  }));
+  // El estado viene del SERVIDOR (survey.user_input.state). Ya no se sobrescribe
+  // con una lista local de "contestadas", que mentía hasta el siguiente refresh.
+  const displaySurveys = surveys;
 
   const pendingCount = displaySurveys.filter(s => s.status === "pending").length;
 
-  const handleStart = (survey) => {
-    setActiveSurvey(survey);
+  const [startError, setStartError] = useState(null);
+
+  const handleStart = async (survey) => {
+    setStartError(null);
+    // Ya tiene respuesta propia: se abre directo.
+    if (survey.survey_url) { setActiveSurvey(survey); setView("survey"); return; }
+    // No la ha empezado: el SERVIDOR crea la respuesta ligada a este empleado y
+    // devuelve el token real. Si falla, se dice — no se abre una URL inventada.
+    const res = await apiPost("/pwa-survey-start", { survey_id: survey.survey_id });
+    // El servidor arma la URL correcta (token de encuesta + answer_token). Si no
+    // llega, se dice — no se abre una URL inventada con el token equivocado.
+    if (!res?.success || !res?.data?.survey_url) {
+      setStartError(res?.message || "No se pudo abrir la encuesta.");
+      return;
+    }
+    setActiveSurvey({ ...survey, survey_url: `${ODOO_BASE}${res.data.survey_url}` });
     setView("survey");
   };
 
-  const handleComplete = (id) => {
-    setCompletedIds(prev => prev.includes(id) ? prev : [...prev, id]);
-    setView("done");
+  // El estado de una encuesta lo decide el SERVIDOR, no este botón. Antes se
+  // marcaba como contestada en memoria del navegador al pulsar, sin confirmación
+  // de Odoo: al recargar reaparecía como pendiente. Ahora solo se muestra el
+  // acuse y se RECARGA desde el servidor, que es la única autoridad.
+  // "Ya terminé" NO prueba que la persona haya enviado: la encuesta vive en el
+  // iframe de Odoo y no nos avisa. Antes se pintaba "¡Listo!" sin confirmación.
+  // Ahora se VERIFICA contra el servidor y solo se declara éxito si esa encuesta
+  // volvió con state === 'done'; si no, se regresa a la lista sin cantar victoria.
+  const handleComplete = () => {
+    setView("verifying");
+    apiGet("/pwa-surveys")
+      .then(r => {
+        if (r.success && Array.isArray(r.data)) {
+          const mapped = r.data.map(mapOdooSurvey);
+          setSurveys(mapped);
+          const mine = mapped.find(s => s.survey_id === activeSurvey?.survey_id);
+          if (mine && mine.state === "done") { setView("done"); return; }
+        }
+        setView("list");
+        setStartError("Todavía no vemos tu encuesta como terminada. Si la enviaste dentro de la encuesta, dale un momento y vuelve a entrar.");
+      })
+      .catch(() => {
+        setView("list");
+        setStartError("No pudimos verificar el estado ahora. Revisa la lista en un momento.");
+      });
   };
 
   const handleBack = () => {
@@ -693,11 +741,16 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
             <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
               <div style={{ fontSize:28 }}>📡</div>
               <div style={{ ...typo.body, color:TOKENS.colors.textMuted }}>No se pudieron cargar las encuestas</div>
-              <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-surveys").then(r=>{ if(r.success&&Array.isArray(r.data)){const m=r.data.map(mapOdooSurvey);setSurveys(m);setLoadState(m.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
+              <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-surveys").then(r=>{ if(!r.success){setLoadState("error");return;} if(Array.isArray(r.data)){const m=r.data.map(mapOdooSurvey);setSurveys(m);setLoadState(m.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
             </div>
           </FadeIn>
         )}
 
+        {startError && (
+          <div role="alert" style={{ margin:"0 0 12px", padding:"10px 12px", borderRadius:TOKENS.radius.md, background:"rgba(220,38,38,0.10)", border:"1px solid rgba(220,38,38,0.35)", color:"#fca5a5", fontSize:12, fontWeight:600 }}>
+            {startError}
+          </div>
+        )}
         {loadState === "empty" && (
           <FadeIn delay={100}>
             <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
@@ -709,10 +762,19 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
 
         {loadState === "ready" && pendingCount > 0 && (
           <FadeIn delay={100}>
-            <Card style={{ padding:"12px 14px", background:"rgba(43,143,224,0.07)", border:"1px solid rgba(97,178,255,0.16)", display:"flex", alignItems:"center", gap:10 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.blue3} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span style={{ fontSize:11, color:"rgba(97,178,255,0.8)", lineHeight:1.4 }}>
-                Tus respuestas son anónimas y se envían directo a RRHH en Odoo.
+            {/* AVISO HONESTO (Codex P1-3, 2ª vuelta): el aviso NO debe prometer más
+                de lo que el código garantiza. El ACL da lectura al grupo "GF
+                Administración Interna" (security.xml/ir.model.access.csv), no a otras
+                áreas, y NO hay política de retención implementada. Así que se dice
+                solo lo verificable: identidad ligada, para qué sirve, y que la
+                consulta el equipo de administración interna en Odoo. Sin plazos de
+                borrado que no existen. */}
+            <Card style={{ padding:"12px 14px", background:"rgba(43,143,224,0.07)", border:"1px solid rgba(97,178,255,0.16)", display:"flex", alignItems:"flex-start", gap:10 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.blue3} strokeWidth="2" strokeLinecap="round" style={{ flexShrink:0, marginTop:1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span style={{ fontSize:11, color:"rgba(97,178,255,0.85)", lineHeight:1.5 }}>
+                Tu respuesta queda <b>ligada a tu nombre</b> — no es anónima. Sirve para mejorar tus
+                herramientas de trabajo y la consulta el equipo de administración interna en Odoo.
+                Contesta con confianza y con honestidad.
               </span>
             </Card>
           </FadeIn>
@@ -751,6 +813,13 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
 
       {view === "survey" && activeSurvey && (
         <SurveyFlow survey={activeSurvey} onClose={handleBack} onComplete={handleComplete} sw={sw} />
+      )}
+
+      {view === "verifying" && (
+        <div style={{ position:"absolute", inset:0, zIndex:11, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.22) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)" }}>
+          <div style={{ width:30, height:30, borderRadius:"50%", border:`3px solid rgba(97,178,255,0.2)`, borderTop:`3px solid ${TOKENS.colors.blue2}`, animation:"spin 0.9s linear infinite" }}/>
+          <span style={{ fontSize:13, color:TOKENS.colors.textMuted }}>Verificando tu respuesta…</span>
+        </div>
       )}
 
       {view === "done" && activeSurvey && (
