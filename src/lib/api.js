@@ -97,6 +97,24 @@ const N8N_BASE = '/api-n8n'
 const ODOO_BASE = '/odoo-api'
 const NO_DIRECT = Symbol('no_direct')
 
+export function normalizeRuntimeCapabilities(response) {
+  const envelope = response?.result !== undefined ? response.result : response
+  const raw = envelope?.data?.runtime_capabilities
+  if (!raw || !Array.isArray(raw.allowed) || !Array.isArray(raw.scopes)) {
+    throw new ApiError('Respuesta de capacidades incompleta.', { code: 'capabilities_incomplete' })
+  }
+  return {
+    ready: true,
+    allowed: raw.allowed.filter((value) => typeof value === 'string'),
+    scopes: raw.scopes.filter((scope) => (
+      Number.isInteger(Number(scope?.operating_company_id))
+      && Number(scope.operating_company_id) > 0
+      && Number.isInteger(Number(scope?.operating_plaza_id))
+      && Number(scope.operating_plaza_id) > 0
+    )),
+  }
+}
+
 // ─── Error estructurado ─────────────────────────────────────────────────────
 // ApiError lleva status y code para que los consumidores puedan tomar decisiones
 // sin parsear mensajes de error con regex.

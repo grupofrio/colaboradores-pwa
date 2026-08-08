@@ -1,6 +1,6 @@
 // ─── API Admin Sucursal — POS, Gastos, Requisiciones ─────────────────────────
 // Endpoints del módulo Odoo `gf_pwa_admin` (Sebastián, rollout 2026-04-10).
-import { api, ApiError } from '../../lib/api.js'
+import { api, ApiError, normalizeRuntimeCapabilities } from '../../lib/api.js'
 import {
   buildPosCatalogPath,
   buildPosCustomerSearchPath,
@@ -403,6 +403,11 @@ export function getAnalyticAccounts(companyId) {
 /** Feature flags del backend (leídos al boot por AdminProvider). */
 export function getCapabilities() {
   return api('GET', '/pwa-admin/capabilities')
+}
+
+/** Capabilities de operación para guards runtime; falla cerrada si falta contrato. */
+export async function getRuntimeCapabilities() {
+  return normalizeRuntimeCapabilities(await getCapabilities())
 }
 
 // ── Cortes POS por turno ────────────────────────────────────────────────────

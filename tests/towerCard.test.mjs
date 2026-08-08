@@ -160,7 +160,7 @@ test('módulo NORMAL: getModuleEntryDecisionForSession delega en la lógica por 
 
 test('ScreenHome.handleModule usa la decisión session-aware (no la de solo-x_job_key)', () => {
   const home = readFileSync(new URL('../src/screens/ScreenHome.jsx', import.meta.url), 'utf8')
-  assert.match(home, /getModuleEntryDecisionForSession\(mod, session\)/, 'el clic usa la fuente session-aware')
+  assert.match(home, /getModuleEntryDecisionForSession\(mod, session, runtimeCapabilities\)/, 'el clic usa la fuente session-aware')
   assert.ok(!/getModuleEntryDecision\(mod, session\)/.test(home), 'el clic ya no se autoriza por x_job_key directo')
 })
 
@@ -204,7 +204,7 @@ test('/torre/backlog recupera la nav global (M1); /torre (E1) sigue oculto', () 
 // ── ScreenHome usa la fuente única session-aware de Home ────────────────────
 test('ScreenHome deriva las tarjetas de getHomeModulesForSession', () => {
   const home = readFileSync(new URL('../src/screens/ScreenHome.jsx', import.meta.url), 'utf8')
-  assert.match(home, /getHomeModulesForSession\(session\)/, 'home usa la fuente session-aware')
+  assert.match(home, /getHomeModulesForSession\(session, runtimeCapabilities\)/, 'home usa la fuente session-aware')
   assert.ok(!/getModulesForRoles\(getEffectiveJobKeys/.test(home), 'ya no usa la fuente solo-roles')
 })
 

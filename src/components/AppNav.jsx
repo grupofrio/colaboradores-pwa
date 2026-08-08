@@ -265,7 +265,7 @@ function DesktopRail({ nav, compact, onGo, t, light }) {
 
 /* ── AppNav ───────────────────────────────────────────────────────────────── */
 export default function AppNav() {
-  const { session } = useSession()
+  const { session, runtimeCapabilities } = useSession()
   const light = isBrandLightSession(session)
   const t = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
@@ -335,12 +335,12 @@ export default function AppNav() {
   }
 
   if (w >= DESKTOP_MIN) {
-    const nav = buildDesktopNav(session, location.pathname)
+    const nav = buildDesktopNav(session, location.pathname, runtimeCapabilities)
     if (nav.hidden) return null
     return <DesktopRail nav={nav} compact={w < RAIL_FULL_MIN} onGo={go} t={t} light={light} />
   }
 
-  const nav = buildMobileNav(session, location.pathname)
+  const nav = buildMobileNav(session, location.pathname, { capabilities: runtimeCapabilities })
   if (nav.hidden) return null
   const tabs = [nav.home, ...nav.primary]
 

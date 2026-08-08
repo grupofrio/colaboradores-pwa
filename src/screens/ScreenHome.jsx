@@ -230,7 +230,7 @@ function ModuleCard({ module, typo, onClick }) {
    SCREEN HOME
 ============================================================================ */
 export default function ScreenHome() {
-  const { session, logout, updateSession } = useSession()
+  const { session, runtimeCapabilities, logout, updateSession } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -247,8 +247,8 @@ export default function ScreenHome() {
   // autoritativo y políticas propias (M2/M3) vía ACCESS_POLICY_RESOLVERS.
   // Home conserva el orden histórico del registry.
   const modules = useMemo(() =>
-    getHomeModulesForSession(session),
-  [session])
+    getHomeModulesForSession(session, runtimeCapabilities),
+  [session, runtimeCapabilities])
 
   const firstName = session?.name?.split(' ')[0] ?? 'Colaborador'
   const companyLabel = COMPANY_LABELS[session?.company_id] ?? session?.company ?? ''
@@ -256,7 +256,7 @@ export default function ScreenHome() {
   const turnoLabel = TURNO_LABELS[session?.turno] ?? ''
 
   function handleModule(mod) {
-    const decision = getModuleEntryDecisionForSession(mod, session)
+    const decision = getModuleEntryDecisionForSession(mod, session, runtimeCapabilities)
     if (decision.type === 'denied') return
     if (decision.type === 'choose') {
       setRolePromptModule({ module: mod, compatibleRoles: decision.compatibleRoles })
