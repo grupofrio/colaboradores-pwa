@@ -212,7 +212,11 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
     setCart((prev) => prev.filter((c) => c.product_id !== productId))
   }
 
-  const { subtotal, total } = computePosSummary(cart)
+  // El impuesto NO se puede calcular en el cliente (depende de los impuestos
+  // del producto, de la posición fiscal y del redondeo de Odoo). Antes se
+  // fijaba `tax: 0` y el subtotal se presentaba como total, así que el ticket
+  // no cuadraba con la factura. Aquí es una ESTIMACIÓN, y se rotula como tal.
+  const { subtotal, estimatedTotal: total } = computePosSummary(cart)
   const defaultCustomerReady = flow.posScope !== 'day'
     || defaultCustomerState.status === 'ready'
   const canOpenPayment = canOpenPosPayment(cart, customer, {
@@ -875,8 +879,13 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
               paddingTop: 6,
               borderTop: `1px solid ${TOKENS.colors.border}`,
             }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: TOKENS.colors.text }}>Total</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: TOKENS.colors.text }}>Total estimado</span>
               <span style={{ fontSize: 16, fontWeight: 700, color: TOKENS.colors.text }}>{fmt(total)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 10, color: TOKENS.colors.textLow }}>
+                Sin impuestos — el IVA lo calcula Odoo al emitir
+              </span>
             </div>
           </div>
 

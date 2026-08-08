@@ -103,8 +103,11 @@ export function buildEscPosTicket(t) {
     customerName = 'VENTA PUBLICO',
     lines = [],
     fmt = (n) => String(n),
-    subtotal = 0,
-    total = 0,
+    // `null` = el backend no mandó el importe. Se imprime «—», no un cero: el
+    // ticket es el documento que se lleva el cliente.
+    subtotal = null,
+    tax = null,
+    total = null,
     paymentLabel = 'Efectivo',
   } = t
 

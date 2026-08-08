@@ -264,7 +264,11 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
     setCart(prev => prev.filter(c => c.product_id !== productId))
   }
 
-  const { subtotal, total } = computePosSummary(cart)
+  // El impuesto NO se puede calcular en el cliente (depende de los impuestos
+  // del producto, de la posición fiscal y del redondeo de Odoo). Antes se
+  // fijaba `tax: 0` y el subtotal se presentaba como total, así que el ticket
+  // no cuadraba con la factura. Aquí es una ESTIMACIÓN, y se rotula como tal.
+  const { subtotal, estimatedTotal: total } = computePosSummary(cart)
   const defaultCustomerReady = flow.posScope !== 'day'
     || defaultCustomerState.status === 'ready'
   const canOpenPayment = canOpenPosPayment(cart, customer, {
@@ -693,7 +697,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
               <span style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>{fmt(subtotal)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span style={{ ...typo.title, color: TOKENS.colors.text }}>Total</span>
+              <span style={{ ...typo.title, color: TOKENS.colors.text }}>Total estimado</span>
               <span style={{ ...typo.title, color: TOKENS.colors.text }}>{fmt(total)}</span>
             </div>
 
