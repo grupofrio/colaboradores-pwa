@@ -42,7 +42,8 @@ export default function ScreenAlertasGerente() {
     setError('')
     try {
       const a = await getAlerts()
-      setAlerts(Array.isArray(a) ? a : [])
+      setAlerts(a.items)
+      if (!a.ok) setError(a.error)
     } catch (e) {
       const msg = logScreenError('ScreenAlertasGerente', 'getAlerts', e)
       setError(msg)

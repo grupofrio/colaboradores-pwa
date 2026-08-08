@@ -85,6 +85,7 @@ import {
 } from '../modules/entregas/ptTransferGuards.js'
 import { mexicoDateRangeToOdooUtc } from '../modules/entregas/vanLoadHistory.js'
 import { readWithOptionalFieldFallback } from '../modules/admin/requisitionReadFallback.js'
+import { isPosBreakdownEmployee } from '../modules/admin/identityGates.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -768,7 +769,6 @@ const POS_CUSTOMER_ANALYTIC_CODES = ['IGU34', POS_CUSTOMER_ANALYTIC_CODE]
 const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
 const POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES = ['IGU34', POS_CUSTOMER_ANALYTIC_NAME]
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
-const ANGELICA_JAIMES_NAME_PARTS = ['angelica', 'jaimes']
 
 function shapeSupervisorCustomer(row = {}) {
   return {
@@ -797,14 +797,12 @@ function normalizeScopeText(value) {
     .toLowerCase()
 }
 
-function isAngelicaJaimesSession() {
-  const session = getSession()
-  const normalizedName = normalizeScopeText([
-    session?.name,
-    session?.employee?.name,
-    session?.display_name,
-  ].filter(Boolean).join(' '))
-  return ANGELICA_JAIMES_NAME_PARTS.every((part) => normalizedName.includes(part))
+// Antes esto comparaba el NOMBRE de la sesión contra ['angelica','jaimes'].
+// En producción hay TRES fichas de hr.employee con ese nombre (717/2518/2521,
+// tres compañías distintas) y el match las aceptaba todas. Ahora se compara
+// `employee_id`, que emite el servidor. Ver modules/admin/identityGates.js.
+function isPosBreakdownSession() {
+  return isPosBreakdownEmployee(getSession())
 }
 
 function sessionAnalyticAccountId() {
@@ -882,7 +880,7 @@ async function readEmployeeScopeForAnalyticAccount(analyticAccountId) {
 }
 
 async function resolveAngelicaJaimesSalesScope() {
-  if (!isAngelicaJaimesSession()) return { enabled: false, employeeIds: [], userIds: [] }
+  if (!isPosBreakdownSession()) return { enabled: false, employeeIds: [], userIds: [] }
 
   const analyticAccountId = sessionAnalyticAccountId()
     || await readEmployeeAnalyticAccountId(getEmployeeId())
@@ -1248,131 +1246,94 @@ async function directProfile(method, path, body) {
   return NO_DIRECT
 }
 
-// `body` SÍ es un parámetro: `routeDirect` invoca todos los handlers como
-// handler(method, path, body). La firma anterior lo omitía, así que la rama de
-// forecast-unlock leía una variable libre y reventaba con
-// "ReferenceError: body is not defined" antes de tocar Odoo.
+// ─── Gerente de Sucursal — endpoints REALES token-only ──────────────────────
+// Antes esto eran cuatro consultas ORM compuestas AQUÍ, en el navegador, con
+// `sudo:1` y filtradas por el `company_id` que guardaba la sesión del cliente.
+// El alcance lo elegía el cliente: bastaba cambiar `company_id` en localStorage
+// para leer los KPIs, las alertas y los forecasts de otra empresa; la analítica
+// de la sucursal ni siquiera participaba del filtro, así que un gerente de
+// Iguala veía todas las sucursales de su compañía. Y el desbloqueo de forecast
+// ejecutaba `action_reset_to_draft` con sudo sin comprobar que el forecast fuera
+// de SU sucursal.
+//
+// Ahora se delega en `/gf/salesops/gerente/v2/*` (GrupoVeniu/GrupoFrio#270), que
+// deriva compañía y sucursal del `X-GF-Employee-Token` y es fail-closed. NO hay
+// fallback al camino viejo: si el backend responde FEATURE_DISABLED o
+// UNAUTHORIZED, la pantalla lo dice. Degradar a la lectura con sudo sería
+// reabrir justo el agujero que este cambio cierra.
+const GERENTE_V2_BASE = '/gf/salesops/gerente/v2'
+
+function gerenteMeta() {
+  // Solo identidad accesoria: el servidor NO la usa para elegir alcance, y
+  // rechaza `company_id`/`analytic_account_id` si intentaran imponerlo.
+  return {
+    employee_id: getEmployeeId() || undefined,
+    request_id: `gerente-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+  }
+}
+
+/** Desenvuelve el envelope V2 (`status`/`code`/`data`) a la forma que consumen
+ *  las pantallas del gerente, preservando el motivo del fallo. */
+function unwrapGerenteEnvelope(envelope, { onEmpty }) {
+  const status = String(envelope?.status || '').toLowerCase()
+  if (status === 'ok') return { ok: true, data: envelope?.data || {}, meta: envelope?.meta || {} }
+  return {
+    ok: false,
+    code: envelope?.code || 'UNKNOWN',
+    message: envelope?.user_message || envelope?.message || 'No disponible.',
+    data: onEmpty,
+  }
+}
+
 async function directGerente(method, path, body) {
   if (path === '/pwa-gerente/alerts' && method === 'GET') {
-    const companyId = getCompanyId()
-    const [start, end] = todayRange()
-    const domain = [['date', '>=', start], ['date', '<=', end]]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    const result = await readModelSorted('gf.ops.event_log', {
-      fields: ['id', 'source', 'event_type', 'analytic_account_id', 'company_id', 'status', 'date', 'response_status'],
-      domain,
-      sort_column: 'date',
-      sort_desc: true,
-      limit: 50,
-      sudo: 1,
-    })
-    const rows = pickListResponse(result).map((row) => ({
-      id: row.id,
-      event_type: row.event_type || 'event',
-      status: row.status || 'new',
-      source: row.source || '',
-      sucursal: row.analytic_account_id?.[1] || row.company_id?.[1] || '',
-      date: row.date || null,
-    }))
-    return rows
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/alerts`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: { items: [] } },
+    )
+    if (!res.ok) {
+      return { success: false, code: res.code, message: res.message, items: [] }
+    }
+    return { success: true, items: res.data.items || [], count: res.data.count ?? 0 }
   }
 
   if (path === '/pwa-gerente/kpi-summary' && method === 'GET') {
-    const companyId = getCompanyId()
-    const today = new Date()
-    const [startMonth, endMonth] = monthRange(today)
-    const domain = [['date_kpi', '>=', startMonth], ['date_kpi', '<', endMonth]]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    const result = await readModelSorted('gf.saleops.kpi.snapshot', {
-      fields: ['id', 'date_kpi', 'analytic_account_id', 'company_id', 'sales_qty', 'forecast_qty', 'pt_available_qty', 'en_available_qty', 'vans_available_qty'],
-      domain,
-      sort_column: 'date_kpi',
-      sort_desc: true,
-      limit: 1,
-      sudo: 1,
-    })
-    const row = pickFirstResponse(result)
-    // Sin snapshot NO es "cero ventas": es "no hay dato". Devolver 0 pintaba
-    // un cero rotundo en el hub que la gerente leía como venta real.
-    if (!row) {
-      return {
-        has_data: false,
-        sales_today: null,
-        forecast: null,
-        available: null,
-        date_kpi: null,
-        sucursal: '',
-      }
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/kpi-summary`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: null },
+    )
+    if (!res.ok) {
+      return { success: false, code: res.code, message: res.message, has_data: false }
     }
-    // `date_kpi` es el día del ÚLTIMO snapshot del mes, no necesariamente hoy.
-    // Se devuelve siempre para que la UI pueda rotular el dato con su fecha.
-    const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v))
-    const parts = [row.pt_available_qty, row.en_available_qty, row.vans_available_qty].map(num)
-    return {
-      has_data: true,
-      sales_today: num(row.sales_qty),
-      forecast: num(row.forecast_qty),
-      available: parts.every((p) => p === null)
-        ? null
-        : parts.reduce((sum, p) => sum + (p || 0), 0),
-      date_kpi: row.date_kpi || null,
-      sucursal: row.analytic_account_id?.[1] || row.company_id?.[1] || '',
-    }
+    // `null` sigue significando "sin dato" — el backend ya no manda ceros falsos.
+    return { success: true, ...res.data, sucursal: res.meta?.scope?.branch_name || '' }
   }
 
   if (path === '/pwa-gerente/forecasts-locked' && method === 'GET') {
-    const companyId = getCompanyId()
-    const domain = [['state', '=', 'confirmed']]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    const result = await readModelSorted('gf.saleops.forecast', {
-      fields: ['id', 'name', 'analytic_account_id', 'company_id', 'date_target', 'state', 'created_by_employee_id', 'confirmed_by_employee_id', 'confirmed_at', 'line_ids'],
-      domain,
-      sort_column: 'date_target',
-      sort_desc: true,
-      limit: 50,
-      sudo: 1,
-    })
-    // Además de los many2one crudos se exponen las claves planas que la
-    // pantalla consume (`sucursal`, `line_count`, `created_by`, …). Antes la
-    // pantalla leía nombres que este handler nunca devolvió y por eso tres de
-    // las cuatro columnas del detalle pintaban "-" siempre.
-    const m2oName = (v) => (Array.isArray(v) ? v[1] || '' : '')
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name,
-      analytic_account_id: row.analytic_account_id,
-      company_id: row.company_id,
-      date_target: row.date_target,
-      state: row.state,
-      created_by_employee_id: row.created_by_employee_id,
-      confirmed_by_employee_id: row.confirmed_by_employee_id,
-      confirmed_at: row.confirmed_at,
-      // Claves planas para la UI
-      sucursal: m2oName(row.analytic_account_id) || m2oName(row.company_id),
-      empresa: m2oName(row.company_id),
-      created_by: m2oName(row.created_by_employee_id),
-      confirmed_by: m2oName(row.confirmed_by_employee_id),
-      line_count: Array.isArray(row.line_ids) ? row.line_ids.length : null,
-    }))
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/forecasts-locked`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: { items: [] } },
+    )
+    if (!res.ok) {
+      return { success: false, code: res.code, message: res.message, items: [] }
+    }
+    return { success: true, items: res.data.items || [] }
   }
 
   if (path === '/pwa-gerente/forecast-unlock' && method === 'POST') {
-    // El desbloqueo REAL vive en el bloque 5: endpoint server-side que deriva la
-    // sucursal del token y valida que el forecast sea de ESA sucursal.
-    // Lo que había aquí era un `action_reset_to_draft` con sudo desde el
-    // cliente, sin ninguna comprobación de alcance — y además muerto, porque
-    // leía `body` sin tenerlo en la firma (ReferenceError antes de llegar a
-    // Odoo). No se "arregla" el ReferenceError para no encender una escritura
-    // sin alcance: se responde de forma explícita hasta que exista el endpoint.
     const forecastId = Number(body?.forecast_id || 0)
     if (!forecastId) {
       return { success: false, code: 'forecast_id_required', message: 'forecast_id requerido' }
     }
-    return {
-      success: false,
-      code: 'forecast_unlock_unavailable',
-      message: 'El desbloqueo de forecast no está disponible: falta el endpoint con alcance de sucursal.',
-    }
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/forecast-unlock`, {
+        meta: gerenteMeta(),
+        data: { forecast_id: forecastId },
+      }),
+      { onEmpty: {} },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message }
+    return { success: true, data: res.data }
   }
 
   return NO_DIRECT
