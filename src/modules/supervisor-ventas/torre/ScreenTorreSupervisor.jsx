@@ -26,7 +26,7 @@ import { BRAND_LIGHT as C, BRAND_HEADER_GRADIENT } from '../../../theme/brandLig
 import { BRAND_TOKENS } from '../../../theme/brandTokens'
 import { STATE_LABELS, fmtMoney, pagination } from '../../torre/m1/m1BacklogModel'
 import { useM1BacklogQuery } from '../../torre/m1/useM1BacklogQuery'
-import { utcTodayStr } from '../v2/civilWeek'
+import { zonedTodayStr } from '../v2/civilWeek'
 import {
   AGING_FILTERS, TORRE_BUCKETS, TORRE_PERIODS, TORRE_SORTS, applyAging, applyPeriod,
   cashForBucket, coverage, fmtActivity, headerKpis, initialTorreFilters, periodOf,
@@ -34,6 +34,11 @@ import {
 } from './torreSupervisorModel'
 
 const ROLE = 'supervisor_ventas'
+// Zona horaria operativa de la sucursal (piloto Iguala / centro de México). El
+// IDEAL es que el backend entregue la fecha operativa por sucursal (deuda
+// declarada); mientras, se usa la tz de la plaza en vez de UTC para no abrir la
+// semana siguiente un domingo por la tarde (Codex).
+const BRANCH_TIME_ZONE = 'America/Mexico_City'
 
 const STATE_COPY = {
   feature_disabled: {
@@ -221,10 +226,9 @@ function RouteRow({ row, stateBucket, onOpen }) {
 
 export default function ScreenTorreSupervisor() {
   const navigate = useNavigate()
-  // La fecha de referencia es tz-neutral (UTC civil), como el resto de la semana
-  // civil del supervisor. El ideal sigue siendo la fecha operativa de la sucursal
-  // server-side; aquí basta para que el arranque caiga en la semana correcta.
-  const today = useMemo(() => utcTodayStr(), [])
+  // La fecha de referencia se calcula en la tz de la SUCURSAL, no en UTC: así la
+  // semana en curso no salta al lunes siguiente un domingo por la tarde de México.
+  const today = useMemo(() => zonedTodayStr(BRANCH_TIME_ZONE), [])
   const {
     phase, data, filters, offset, setFilter, patchFilters, goOffset, reload,
   } = useM1BacklogQuery(ROLE, initialTorreFilters(today))

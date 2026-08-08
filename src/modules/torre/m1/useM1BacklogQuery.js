@@ -69,30 +69,31 @@ export function useM1BacklogQuery(role, initialFilters) {
 
   useEffect(() => { load({ ...initialFilters }, 0) }, [load])  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Espejo de los filtros vivos para calcular el SIGUIENTE estado FUERA del
+  // updater de setState. Antes se llamaba `load()` dentro de `setFilters(prev =>
+  // …)`: en StrictMode (o si React reintenta el updater) ese efecto secundario se
+  // ejecutaba dos veces y duplicaba la petición. El updater ahora es PURO
+  // (Codex): recibe un objeto plano; el fetch se dispara aparte, una sola vez.
+  const filtersRef = useRef(filters)
+  useEffect(() => { filtersRef.current = filters }, [filters])
+
+  const applyNext = useCallback((delta) => {
+    const next = { ...filtersRef.current, ...(delta || {}) }
+    filtersRef.current = next
+    setFilters(next)      // updater puro: sin I/O dentro
+    setOffset(0)
+    load(next, 0)         // el fetch, una sola vez, fuera del updater
+  }, [load])
+
   // Cambiar cualquier filtro reinicia el offset: es la regla del contrato de UI
   // y evita quedarse en la página 3 de un resultado que ahora tiene una.
-  const setFilter = useCallback((key, value) => {
-    setFilters((prev) => {
-      const next = { ...prev, [key]: value }
-      setOffset(0)
-      load(next, 0)
-      return next
-    })
-  }, [load])
+  const setFilter = useCallback((key, value) => applyNext({ [key]: value }), [applyNext])
 
   // Fija VARIOS filtros con una sola carga. Existe porque hay ejes que se
   // contradicen y hay que moverlos juntos: p.ej. el rango de semana y la
   // antigüedad (>7 días) no pueden convivir, así que elegir uno debe limpiar el
-  // otro EN LA MISMA petición — con setFilter en cadena se dispararían dos cargas
-  // y la primera dejaría un estado incoherente pintado un instante.
-  const patchFilters = useCallback((delta) => {
-    setFilters((prev) => {
-      const next = { ...prev, ...(delta || {}) }
-      setOffset(0)
-      load(next, 0)
-      return next
-    })
-  }, [load])
+  // otro EN LA MISMA petición.
+  const patchFilters = useCallback((delta) => applyNext(delta), [applyNext])
 
   const goOffset = useCallback((next) => {
     setOffset(next)

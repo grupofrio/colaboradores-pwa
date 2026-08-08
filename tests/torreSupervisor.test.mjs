@@ -8,6 +8,7 @@ import {
   periodOf, progressOf, riskTone, routeDetailPath, weekRange,
 } from '../src/modules/supervisor-ventas/torre/torreSupervisorModel.js'
 import { normalizePayload } from '../src/modules/torre/m1/m1BacklogModel.js'
+import { utcTodayStr, zonedTodayStr } from '../src/modules/supervisor-ventas/v2/civilWeek.js'
 
 // Forma REAL medida en producción (sucursal 29), recortada.
 const RAW = {
@@ -239,6 +240,35 @@ test('la Torre NO reconstruye el fetch ni re-clasifica buckets', () => {
     assert.ok(hook.includes(pieza), `el hook no reutiliza ${pieza}`)
   }
   assert.ok(src.includes("torre/m1/m1BacklogModel"), 'la pantalla reutiliza el modelo compartido')
+})
+
+test('la semana arranca en la tz de la SUCURSAL, no en UTC (Codex P2)', () => {
+  const src = PANTALLA()
+  assert.match(src, /zonedTodayStr\(BRANCH_TIME_ZONE\)/,
+    'la fecha de referencia sale de la tz de la sucursal')
+  assert.match(src, /America\/Mexico_City/, 'la tz operativa es la de la plaza')
+  assert.doesNotMatch(src, /utcTodayStr\(\)/, 'ya NO se deriva de UTC (bug de domingo por la tarde)')
+})
+
+test('zonedTodayStr: domingo por la tarde de México NO salta a lunes', () => {
+  // Domingo 2026-08-09 23:00 en México (UTC-6) = lunes 2026-08-10 05:00 UTC.
+  const ms = Date.UTC(2026, 7, 10, 5, 0, 0)
+  assert.equal(utcTodayStr(ms), '2026-08-10', 'en UTC ya es lunes (el bug)')
+  assert.equal(zonedTodayStr('America/Mexico_City', ms), '2026-08-09',
+    'en la sucursal sigue siendo domingo: la Torre no abre la semana siguiente')
+  // La semana en curso derivada es la que contiene ese domingo, no la siguiente.
+  assert.deepEqual(weekRange(zonedTodayStr('America/Mexico_City', ms)),
+    { date_from: '2026-08-03', date_to: '2026-08-09' })
+  assert.equal(zonedTodayStr('zona/invalida', ms), utcTodayStr(ms), 'tz inválida cae a UTC, no revienta')
+})
+
+test('el hook no dispara I/O dentro del updater de setState (Codex P2)', () => {
+  const hook = readFileSync(new URL('../src/modules/torre/m1/useM1BacklogQuery.js', import.meta.url), 'utf8')
+  // El fetch (load) no debe vivir dentro de setFilters(prev => …): en StrictMode
+  // el updater puede correr dos veces y duplicar la petición.
+  assert.doesNotMatch(hook, /setFilters\(\s*\(prev\)\s*=>/, 'sin updater con función (ni I/O dentro)')
+  assert.match(hook, /const applyNext = useCallback/, 'el siguiente estado se calcula fuera del updater')
+  assert.match(hook, /filtersRef/, 'con un ref al filtro vivo para evitar closures obsoletos')
 })
 
 test('arranca en la SEMANA EN CURSO, no en el histórico', () => {
