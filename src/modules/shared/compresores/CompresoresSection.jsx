@@ -72,13 +72,18 @@ export default function CompresoresSection({ shiftId, typo, screenName = 'Compre
     return () => clearTimeout(t)
   }, [msg])
 
-  async function commitToggle(row, action) {
+  async function commitToggle(row, action, seed = false) {
     setBusyMachineId(row.machine_id)
     setPendingToggle(null)
     try {
-      const data = await toggleCompressor({ shiftId, machineId: row.machine_id, action })
+      const data = await toggleCompressor({ shiftId, machineId: row.machine_id, action, seed })
       if (data?.compressors) setRows(data.compressors)
-      setMsg({ type: 'success', text: `${row.name}: ${action === 'on' ? 'encendido' : 'apagado'} registrado` })
+      setMsg({
+        type: 'success',
+        text: seed
+          ? `${row.name}: estado inicial declarado (${action === 'on' ? 'encendido' : 'apagado'})`
+          : `${row.name}: ${action === 'on' ? 'encendido' : 'apagado'} registrado`,
+      })
     } catch (e) {
       setMsg({ type: 'error', text: e.message || 'No se pudo registrar el evento' })
       await load()
@@ -164,6 +169,7 @@ export default function CompresoresSection({ shiftId, typo, screenName = 'Compre
               onRequestToggle={() => setPendingToggle(row.machine_id)}
               onCancelToggle={() => setPendingToggle(null)}
               onConfirmToggle={(action) => commitToggle(row, action)}
+              onSeed={(action) => commitToggle(row, action, true)}
               onOil={(logType) => setOilModal({ machine: row, logType })}
             />
           ))}
@@ -194,7 +200,7 @@ export default function CompresoresSection({ shiftId, typo, screenName = 'Compre
 
 function CompressorCard({
   row, typo, canWrite, busy, pendingToggle, onRequestToggle, onCancelToggle,
-  onConfirmToggle, onOil,
+  onConfirmToggle, onSeed, onOil,
 }) {
   const state = stateLabel(row.state)
   const stateColor = toneColor(state.tone)
@@ -237,7 +243,52 @@ function CompressorCard({
         />
       </div>
 
-      {canWrite && (
+      {/* Cobertura parcial: la bitacora empezo despues del inicio del turno.
+          Se dice de cuando hay registro en vez de rellenar el hueco. */}
+      {row.hours_fully_covered === false && row.hours_known_from && (
+        <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+          &#x26A0; Con registro solo desde {formatRelative(row.hours_known_from)}
+          {row.hours_uncovered ? ` · ${Number(row.hours_uncovered).toFixed(1)} h del turno sin bitacora` : ''}
+        </p>
+      )}
+
+      {canWrite && row.needs_seed ? (
+        // Dia uno: nadie ha declarado como esta el compresor. Antes de contar
+        // horas hay que fijar el punto de partida.
+        <div style={{
+          padding: 12, borderRadius: TOKENS.radius.md,
+          background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.32)',
+          display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <span style={{ ...typo.caption, color: TOKENS.colors.warning, fontWeight: 700 }}>
+            Declara como esta AHORA este compresor. Hasta entonces no se cuentan horas.
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => onSeed('on')}
+              disabled={busy}
+              style={{
+                flex: 1, padding: '16px', borderRadius: TOKENS.radius.lg,
+                background: 'rgba(34,197,94,0.16)', border: '1px solid rgba(34,197,94,0.40)',
+                color: '#4ade80', fontSize: 16, fontWeight: 800,
+              }}
+            >
+              Esta encendido
+            </button>
+            <button
+              onClick={() => onSeed('off')}
+              disabled={busy}
+              style={{
+                flex: 1, padding: '16px', borderRadius: TOKENS.radius.lg,
+                background: 'rgba(148,163,184,0.14)', border: `1px solid ${TOKENS.colors.border}`,
+                color: TOKENS.colors.textSoft, fontSize: 16, fontWeight: 800,
+              }}
+            >
+              Esta apagado
+            </button>
+          </div>
+        </div>
+      ) : canWrite ? (
         pendingToggle ? (
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -281,7 +332,7 @@ function CompressorCard({
             {nextLabel}
           </button>
         )
-      )}
+      ) : null}
 
       <div style={{
         padding: '10px 12px', borderRadius: TOKENS.radius.md,

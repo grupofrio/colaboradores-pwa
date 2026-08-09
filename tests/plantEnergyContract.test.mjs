@@ -106,3 +106,36 @@ test('la pantalla de energia no multiplica ni suma para decidir', () => {
   assert.ok(!code.includes('1200'))
   assert.ok(!/kwh_value\s*-\s*/.test(code))
 })
+
+const COMPRESORES = readFileSync(
+  new URL('../src/modules/shared/compresores/CompresoresSection.jsx', import.meta.url), 'utf8',
+)
+const EXPECTED_PANEL = readFileSync(
+  new URL('../src/modules/supervision/ExpectedVsRealPanel.jsx', import.meta.url), 'utf8',
+)
+const PLANT_API = readFileSync(
+  new URL('../src/modules/shared/plantEnergyAPI.js', import.meta.url), 'utf8',
+)
+
+test('el dia uno pide declarar el estado inicial en vez de ofrecer el toggle', () => {
+  assert.match(COMPRESORES, /row\.needs_seed/)
+  assert.match(COMPRESORES, /Esta encendido/)
+  assert.match(COMPRESORES, /Esta apagado/)
+})
+
+test('la API puede declarar el estado inicial (seed)', () => {
+  assert.match(PLANT_API, /seed: seed \? true : undefined/)
+})
+
+test('la cobertura parcial de la bitacora se advierte, no se rellena', () => {
+  assert.match(COMPRESORES, /hours_fully_covered === false/)
+  assert.match(EXPECTED_PANEL, /compressor_hours_fully_covered === false/)
+  assert.match(EXPECTED_PANEL, /bitacora_parcial/)
+})
+
+test('bitacora_parcial no se pinta como un estado neutro ni como "en meta"', () => {
+  const code = stripComments(EXPECTED_PANEL)
+  const neutral = code.split('NEUTRAL_STATUSES = new Set([')[1].split('])')[0]
+  assert.ok(!neutral.includes('bitacora_parcial'))
+  assert.match(code, /WARNING_STATUSES[\s\S]{0,80}bitacora_parcial/)
+})

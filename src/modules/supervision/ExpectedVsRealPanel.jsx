@@ -27,6 +27,10 @@ const NEUTRAL_STATUSES = new Set([
   'sin_dato',
 ])
 
+// Cobertura parcial: el esperado sale SUBESTIMADO porque parte del turno no
+// tiene bitacora. Se advierte en amarillo y no se le pone "en meta" encima.
+const WARNING_STATUSES = new Set(['bitacora_parcial'])
+
 export default function ExpectedVsRealPanel({ shiftId, typo }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -81,7 +85,11 @@ export default function ExpectedVsRealPanel({ shiftId, typo }) {
 
 function LineRow({ line, typo }) {
   const neutral = NEUTRAL_STATUSES.has(line.status)
-  const color = neutral ? TOKENS.colors.textMuted : (STATUS_COLORS[line.status] || TOKENS.colors.textMuted)
+  const color = neutral
+    ? TOKENS.colors.textMuted
+    : WARNING_STATUSES.has(line.status)
+      ? TOKENS.colors.warning
+      : (STATUS_COLORS[line.status] || TOKENS.colors.textMuted)
   const hasExpected = line.expected_kg !== null && line.expected_kg !== undefined
   const hasReal = line.real_kg !== null && line.real_kg !== undefined
 
@@ -118,6 +126,13 @@ function LineRow({ line, typo }) {
           color={line.gap_pct === null || line.gap_pct === undefined ? null : color}
         />
       </div>
+
+      {line.compressor_hours_fully_covered === false && (
+        <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+          &#x26A0; Bitacora parcial: {Number(line.compressor_hours_uncovered || 0).toFixed(1)} h
+          del turno sin registro. El esperado esta subestimado.
+        </p>
+      )}
 
       {line.expected_kg_by_cycles !== null && line.expected_kg_by_cycles !== undefined && (
         <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>

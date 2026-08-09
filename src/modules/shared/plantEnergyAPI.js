@@ -55,12 +55,18 @@ export async function getCompressorStatus(shiftId) {
   return unwrap(res, 'No se pudo leer el estado de los compresores')
 }
 
-/** Enciende o apaga. El timestamp y el guard de doble-encendido son del backend. */
-export async function toggleCompressor({ shiftId, machineId, action, notes }) {
+/**
+ * Enciende, apaga o DECLARA EL ESTADO INICIAL (`seed`).
+ *
+ * El timestamp, el guard de doble-encendido y la exigencia de declarar el
+ * estado inicial antes del primer on/off son del backend.
+ */
+export async function toggleCompressor({ shiftId, machineId, action, seed, notes }) {
   const res = await api('POST', '/api/production/compressor/toggle', {
     shift_id: shiftId,
     machine_id: machineId,
     action,
+    seed: seed ? true : undefined,
     notes: notes || undefined,
   })
   return unwrap(res, 'No se pudo registrar el evento del compresor')
