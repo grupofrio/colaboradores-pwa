@@ -1,7 +1,8 @@
 import { api } from '../../lib/api.js'
 
 const FORBIDDEN_AUTHORITY_FIELDS = new Set([
-  'company_id', 'employee_id', 'warehouse_id', 'actor_id', 'operating_actor_id',
+  'company_id', 'operating_company_id', 'operating_plaza_id',
+  'employee_id', 'warehouse_id', 'actor_id', 'operating_actor_id',
   'approval_state', 'approver_id', 'approved_by_id', 'self_approval_bypass',
   'buyer_self_approval_enabled', 'requested_by_employee_id',
 ])
