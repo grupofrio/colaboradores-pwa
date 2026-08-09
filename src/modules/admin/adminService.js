@@ -14,7 +14,7 @@ import {
   createRequisition as apiCreateRequisition,
   createCashClosing as apiCreateCashClosing,
   getCapabilities as apiGetCapabilities,
-} from './api'
+} from './api.js'
 import {
   buildSessionIdentity,
   readSessionRaw,

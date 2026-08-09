@@ -18,14 +18,14 @@ const controllerEnvelope = {
   },
 }
 
-test('mobile cash closing consumes the controller expense envelope and total_amount', () => {
+test('mobile cash closing delegates to the current cash-shift controller flow', () => {
   const expenses = normalizeTodayExpensesControllerResponse(controllerEnvelope)
   assert.deepEqual(expenses, controllerEnvelope.data.expenses)
   assert.equal(sumTodayExpensesControllerResponse(controllerEnvelope), 145.5)
 
   const source = readSource('src/modules/admin/ScreenCierreCaja.jsx')
-  assert.match(source, /normalizeTodayExpensesControllerResponse\(e\)/)
-  assert.match(source, /sumTodayExpensesControllerResponse\(expenses\)/)
+  assert.match(source, /CashShiftDashboard/)
+  assert.doesNotMatch(source, /getTodayExpenses/)
 })
 
 test('mobile admin panel counts expenses from the controller envelope', () => {
