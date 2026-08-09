@@ -770,6 +770,11 @@ export default function App() {
                 pero gated por el módulo de supervisión (el supervisor no pertenece a
                 registro_produccion). El shift viaja por navegación (location.state.shift). */}
             <Route path="/supervision/checklist" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenChecklist /></ModuleRoleRoute>} />
+            {/* Tanque en solo lectura para el supervisor. La tarjeta del hub
+                navegaba a /produccion/tanque/:id, que su rol NO puede abrir
+                (registro_produccion no incluye supervisor_produccion): era un
+                botón muerto. Mismo screen, sin las acciones del operador. */}
+            <Route path="/supervision/tanque/:machineId" element={<ModuleRoleRoute moduleId="supervision_produccion"><ScreenTanque readOnly /></ModuleRoleRoute>} />
 
             {/* ── Admin Sucursal (POS + Gastos + Requisiciones) ────────── */}
             <Route path="/admin" element={<ModuleRoleRoute moduleId="admin_sucursal"><AdminThemeScope /></ModuleRoleRoute>}>

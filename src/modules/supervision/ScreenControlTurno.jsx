@@ -6,7 +6,7 @@ import { listTanks } from '../produccion/barraService'
 import { getActiveShift, createShift, startShift, getEnergyReadings, createBrineReading } from './api'
 import { resolveSupervisionWarehouseId } from './shiftContext'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
-import { closeShiftServerSide } from '../shared/supervisorAuth'
+import { closeShiftServerSide, validateSupervisorPin } from '../shared/supervisorAuth'
 import {
   loadIncidents, registerIncident, markIncidentResolved,
   INCIDENT_TYPES, INCIDENT_SEVERITIES, INCIDENT_STATES,
@@ -131,6 +131,9 @@ export default function ScreenControlTurno() {
   const [shift, setShift] = useState(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  // PIN de cierre: `validateSupervisorPin` ya existia y nadie la llamaba.
+  const [closePin, setClosePin] = useState('')
+  const [pinError, setPinError] = useState('')
   const [msg, setMsg] = useState(null)
   const [formData, setFormData] = useState({ shift_code: '', warehouse_id: supervisionWarehouseId })
   const [confirmClose, setConfirmClose] = useState(false)
@@ -333,8 +336,19 @@ export default function ScreenControlTurno() {
       setMsg({ type: 'error', text: readiness.blockers?.[0] || 'No se puede cerrar: hay bloqueos pendientes' })
       return
     }
+    // PIN del supervisor antes del cierre. La validacion es de Odoo
+    // (/api/production/validate-pin contra el hash de hr.employee): aqui no
+    // hay comparacion local ni fallback. Si el backend dice que no, no se
+    // cierra.
+    setPinError('')
     setSubmitting(true)
     try {
+      const pinResult = await validateSupervisorPin(closePin, session?.employee_id)
+      if (!pinResult.ok) {
+        setPinError(pinResult.error || 'PIN incorrecto')
+        setSubmitting(false)
+        return
+      }
       const result = await closeShiftServerSide({ shift_id: shift.id })
       if (!result.ok) {
         throw new Error(result.error || 'Error cerrando turno')
@@ -347,6 +361,8 @@ export default function ScreenControlTurno() {
       setMsg({ type: 'success', text: handoverPendingMsg })
       setConfirmClose(false)
       setCloseReadiness(null)
+      setClosePin('')
+      setPinError('')
       await loadData()
     } catch (err) { setMsg({ type: 'error', text: err.message || 'Error al cerrar turno' }) }
     finally { setSubmitting(false) }
@@ -910,14 +926,40 @@ export default function ScreenControlTurno() {
                     </div>
                   ) : null}
 
+                  {/* PIN del supervisor — lo valida Odoo, no el navegador */}
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
+                      PIN de supervisor <span style={{ color: TOKENS.colors.error }}>*</span>
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={6}
+                      value={closePin}
+                      onChange={(e) => { setClosePin(e.target.value.replace(/\D/g, '')); setPinError('') }}
+                      placeholder="••••"
+                      style={{
+                        width: '100%', padding: '12px', borderRadius: TOKENS.radius.sm,
+                        background: 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${pinError ? TOKENS.colors.error : TOKENS.colors.border}`,
+                        color: 'white', fontSize: 18, fontFamily: 'inherit',
+                        letterSpacing: '0.4em', textAlign: 'center',
+                      }}
+                    />
+                    {pinError && (
+                      <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '6px 0 0' }}>{pinError}</p>
+                    )}
+                  </div>
+
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => { setConfirmClose(false); setCloseReadiness(null) }}
+                    <button onClick={() => { setConfirmClose(false); setCloseReadiness(null); setClosePin(''); setPinError('') }}
                       style={{ flex: 1, padding: '10px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, color: TOKENS.colors.textMuted, fontSize: 13, fontWeight: 600 }}>
                       Cancelar
                     </button>
                     <button
                       onClick={handleClose}
-                      disabled={submitting || loadingReadiness || !closeReadiness || !closeReadiness.canClose}
+                      disabled={submitting || loadingReadiness || !closeReadiness || !closeReadiness.canClose || closePin.length < 4}
                       style={{
                         flex: 1, padding: '10px', borderRadius: TOKENS.radius.sm,
                         background: (closeReadiness && closeReadiness.canClose)

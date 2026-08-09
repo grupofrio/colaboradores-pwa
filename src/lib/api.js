@@ -97,6 +97,20 @@ const N8N_BASE = '/api-n8n'
 const ODOO_BASE = '/odoo-api'
 const NO_DIRECT = Symbol('no_direct')
 
+// Fase 1 Produccion (gf_plant_energy). Controladores `type="json"` de Odoo:
+// se llaman con envoltura JSON-RPC (odooJson) y devuelven {ok, message, data}.
+// La identidad viaja en `X-GF-Employee-Token` (buildBaseHeaders); el backend
+// resuelve al empleado y el rol. Aqui NO se decide nada.
+const PLANT_ENERGY_ROUTES = new Set([
+  '/api/production/energy/periods/create',
+  '/api/production/energy/summary',
+  '/api/production/compressor/status',
+  '/api/production/compressor/toggle',
+  '/api/production/compressor/oil',
+  '/api/production/expected-vs-real',
+  '/api/production/brine/reading',
+])
+
 // ─── Error estructurado ─────────────────────────────────────────────────────
 // ApiError lleva status y code para que los consumidores puedan tomar decisiones
 // sin parsear mensajes de error con regex.
@@ -4135,6 +4149,13 @@ async function directProduction(method, path, body) {
   // sino bridge: la logica de negocio vive en Odoo, el frontend solo consume.
   // ══════════════════════════════════════════════════════════════════════════════
 
+  // ── Fase 1 Produccion: energia por periodos, compresores, esperado vs real ──
+  // gf_plant_energy. Contrato {ok, message, data}. NO se toca ORM aqui: el
+  // backend valida rol (token), turno y payload. El frontend solo transporta.
+  if (PLANT_ENERGY_ROUTES.has(cleanPath) && method === 'POST') {
+    return odooJson(cleanPath, body || {})
+  }
+
   // ── Close-Check: readiness real del turno (Odoo _get_close_readiness) ──────
   if (cleanPath === '/api/production/shift/close-check' && method === 'POST') {
     const shiftId = Number(body?.shift_id || 0)
@@ -5445,6 +5466,9 @@ async function directSupervision(method, path, body) {
       total_scrap_kg: dash.total_scrap_kg ?? null,
       total_downtime_min: dash.total_downtime_min ?? null,
       energy_kwh: dash.energy_kwh ?? null,
+      // El dashboard ya calculaba kWh/kg y el hub lo tiraba. Con el
+      // multiplicador del medidor (x1200 en Iguala) el numero ya es real.
+      energy_kwh_per_kg: dash.energy_kwh_per_kg ?? null,
       energy_start_id: toMany2oneId(data.energy_start_id ?? dash.energy_start_id),
       energy_end_id: toMany2oneId(data.energy_end_id ?? dash.energy_end_id),
       yield_pct: dash.yield_pct ?? null,

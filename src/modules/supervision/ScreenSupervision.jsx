@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
-import { createBrineReading, getActiveShift } from './api'
+import { getActiveShift } from './api'
 import { resolveSupervisionWarehouseId } from './shiftContext'
 import BrineReadingModal from './BrineReadingModal'
 import {
@@ -19,6 +19,9 @@ import {
   resolveSupervisionShift,
   savePersistedTurnControlShift,
 } from './turnControlShift'
+import CompresoresSection from '../shared/compresores/CompresoresSection'
+import ExpectedVsRealPanel from './ExpectedVsRealPanel'
+import { createBrineReadingWithHistory } from '../shared/plantEnergyAPI'
 
 // Hub de Supervisor — backend-first.
 //
@@ -221,8 +224,18 @@ export default function ScreenSupervision() {
     setSavingReading(true)
     setSaveError('')
     try {
-      const updatedTank = await createBrineReading(buildBrineReadingPayload(readingForm))
-      setTanks((prev) => prev.map((tank) => tank.id === updatedTank?.id ? updatedTank : tank))
+      // Endpoint server-side: guarda el HISTORICO ademas del ultimo valor.
+      // Antes esto escribia `gf.production.machine` desde el navegador y la
+      // lectura anterior se perdia sin dejar rastro.
+      const payload = buildBrineReadingPayload(readingForm)
+      await createBrineReadingWithHistory({
+        shiftId: shift?.id,
+        machineId: payload.machine_id,
+        saltLevel: payload.salt_level,
+        brineTemp: payload.brine_temp,
+      })
+      const tanksRes = await listTanks().catch(() => null)
+      if (tanksRes?.tanks) setTanks(tanksRes.tanks)
 
       // Voice feedback fire-and-forget: diff AI vs humano -> W122.
       if (voiceContext?.trace_id) {
@@ -367,12 +380,19 @@ export default function ScreenSupervision() {
                     key={t.id}
                     t={t}
                     typo={typo}
-                    onClick={() => navigate(`/produccion/tanque/${t.id}`)}
+                    onClick={() => navigate(`/supervision/tanque/${t.id}`)}
                     onRegisterSalt={() => openBrineReading(t)}
                   />
                 ))}
               </div>
             )}
+
+            {/* Real vs esperado por línea — fórmula server-side, `null` ≠ 0 */}
+            <ExpectedVsRealPanel shiftId={shift.id} typo={typo} />
+
+            {/* Compresores — misma sección que ve el operador de barra.
+                Decisión de dirección: quien apaga, registra. */}
+            <CompresoresSection shiftId={shift.id} typo={typo} screenName="ScreenSupervision" />
 
             {/* Navegación secundaria — acceso directo a cada screen */}
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 24, marginBottom: 12 }}>GESTIÓN</p>
@@ -513,6 +533,9 @@ function KpiPanel({ shift, summary, typo }) {
   const openCy = num(summary.open_cycles)
   const balance = num(summary.balance_pct)
   const score = num(summary.compliance_score ?? shift.x_compliance_score)
+  // kWh/kg ya venia del dashboard de Odoo y el hub lo tiraba. Se muestra tal
+  // cual: `null` (sin lecturas o sin produccion) se pinta como "—", no 0.
+  const kwhPerKg = num(summary.energy_kwh_per_kg ?? shift.energy_kwh_per_kg)
   return (
     <div style={{
       marginTop: 12, padding: 14, borderRadius: TOKENS.radius.xl,
@@ -531,6 +554,7 @@ function KpiPanel({ shift, summary, typo }) {
         <Kpi label="Ciclos" value={cycles === null ? '—' : String(cycles)} typo={typo} />
         <Kpi label="Abiertos" value={openCy === null ? '—' : String(openCy)} warn={openCy > 0} typo={typo} />
         <Kpi label="Paros abr." value={openDt === null ? '—' : String(openDt)} warn={openDt > 0} typo={typo} />
+        <Kpi label="kWh/kg" value={kwhPerKg === null || kwhPerKg === 0 ? '—' : kwhPerKg.toFixed(2)} typo={typo} />
       </div>
       {balance !== null && (
         <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: TOKENS.radius.sm, background: TOKENS.glass.panelSoft, border: `1px solid ${TOKENS.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
