@@ -18,6 +18,10 @@ import {
 import { attachExpense, createFuelExpense, getFuelRoutes } from '../api'
 import { api, todayLocal } from '../../../lib/api'
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
+import {
+  buildAdminExpenseControllerPayload,
+  normalizeTodayExpensesControllerResponse,
+} from '../adminExpenseControllerAdapter'
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024 // 8 MB
 
@@ -129,8 +133,7 @@ export default function AdminGastosForm() {
     setLoading(true)
     try {
       const data = await getTodayExpenses({ companyId, warehouseId })
-      const list = data?.data ?? data
-      setExpenses(Array.isArray(list) ? list : [])
+      setExpenses(normalizeTodayExpensesControllerResponse(data))
     } catch {
       // silent
     } finally {
@@ -219,12 +222,12 @@ export default function AdminGastosForm() {
       }
       const res = expenseMode === 'fuel'
         ? await createFuelExpense({ ...functionalPayload, route_plan_id: Number(fuelRouteId) })
-        : await createExpense({
+        : await createExpense(buildAdminExpenseControllerPayload({
           ...functionalPayload,
           company_id: companyId,
           warehouse_id: warehouseId || undefined,
           sucursal_code: sucursal || undefined,
-        })
+        }))
 
       // Fallback legacy: si el evidence/upload no funcionó pero expense-attach
       // sí, intentamos adjuntar por separado. Solo para montos bajos donde
