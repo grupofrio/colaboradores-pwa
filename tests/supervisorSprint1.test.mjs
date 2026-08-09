@@ -202,10 +202,16 @@ test('P2: el chip nuevo no cambia en silencio los conteos existentes', () => {
   assert.equal(seg.sin_cliente.length, 1)
 })
 
-test('P1-3: un plan de SEGMENTO no elige zona arbitraria ni sugiere mezclando', () => {
+test('P1-3: un plan de SEGMENTO planea por su lista curada (ya no se bloquea)', () => {
+  // Antes este test consagraba el WORKAROUND: bloquear la sugerencia segmento-solo
+  // porque no existía server-side. Ya existe (BE plan_route_by_segment), así que la
+  // aserción se invierte: SO planea por segmento y NO cae a una zona arbitraria.
   const s = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
   assert.match(s, /segmentOnlyPlan/, 'distingue el plan por segmento')
   assert.match(s, /if \(segmentOnlyPlan\) return ''/, 'no preselecciona un polígono cualquiera')
-  assert.match(s, /segmentOnlyPlan && !polygonId/, 'bloquea la sugerencia en vez de mezclar')
-  assert.match(s, /clientes ajenos al segmento/, 'explica el motivo a la supervisora')
+  assert.doesNotMatch(s, /clientes ajenos al segmento/, 'el aviso bloqueante viejo se retiró')
+  assert.doesNotMatch(s, /agrega los clientes a mano por ahora/, 'ya no se pide agregar a mano')
+  // La propuesta se habilita con el segmento (sin exigir polígono).
+  assert.match(s, /disabled=\{segmentOnlyPlan \? !segmentId : !polygonId\}/,
+    'SO sugiere por segmento; el segmento manda, no la zona')
 })

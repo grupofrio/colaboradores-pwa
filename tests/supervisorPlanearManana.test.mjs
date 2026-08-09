@@ -286,3 +286,52 @@ test('wiring: la selección de segmento viaja en el criterio del plan', () => {
   assert.ok(/segment_id: segmentId \? Number\(segmentId\)/.test(rp), 'criteria payload envía segment_id')
   assert.ok(/segment_id: segmentId \? toNumber\(segmentId\)/.test(rp), 'preview payload envía segment_id')
 })
+
+// ── Flujo por SEGMENTO (plan tipo "Mercado") — Codex + dirección ─────────────
+
+test('segmento-solo: el shim reenvía segment_id a ensure y a preview', () => {
+  const lib = src('lib/api.js')
+  // Dos shims (ensure + preview) deben reenviar segment_id al backend.
+  const hits = lib.split(/segment_id: Number\(body\?\.segment_id/).length - 1
+  assert.ok(hits >= 2, `segment_id reenviado en ambos shims (encontrados: ${hits})`)
+})
+
+test('segmento-solo: ya NO se bloquea la propuesta con el aviso viejo', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  // El bloqueo "agrega los clientes a mano por ahora" se retiró.
+  assert.doesNotMatch(tab, /agrega los clientes a mano por ahora/, 'el aviso bloqueante viejo se eliminó')
+  // handlePreview deja pasar segment-only sin polígono.
+  assert.match(tab, /if \(segmentOnlyPlan\) \{/, 'segment-only tiene su rama propia en preview')
+})
+
+test('segmento-solo: el botón de sugerir NO exige polígono (sí segmento)', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.match(tab, /disabled=\{segmentOnlyPlan \? !segmentId : !polygonId\}/,
+    'SO se habilita con segmento; SP/P siguen exigiendo polígono')
+  assert.match(tab, /Sugerir clientes del segmento/, 'la etiqueta contextualiza el segmento')
+})
+
+test('segmento-solo: cabecera y criterios contextualizados; sin selector de zona', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.match(tab, /planear-plan-contexto/, 'la cabecera muestra el chip del plan Segmento')
+  assert.match(tab, /Plan por segmento \(lista curada\)/, 'la tarjeta de criterios habla del segmento')
+  // Los selectores de zona/segmento/demanda se ocultan para SO.
+  assert.match(tab, /segmentOnlyPlan \? null : !showZoneSelectors/, 'zona oculta para SO')
+  assert.match(tab, /!segmentOnlyPlan && \(/, 'selector de segmento/demanda oculto para SO')
+})
+
+test('SP/P sin regresión: el flujo por zona sigue exigiendo polígono', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  // La rama else de handlePreview mantiene "Elige una zona".
+  assert.match(tab, /Elige una zona para generar la propuesta/, 'zona sigue siendo requisito para SP/P')
+  assert.match(tab, /Sugerir clientes de la zona/, 'la etiqueta de zona se mantiene para SP/P')
+})
+
+test('segmento-solo: segmentId se inicializa SÍNCRONO desde initialSegmentId (Codex P1 carrera)', () => {
+  // La autoapertura (handlePrepare al cargar rutas) corre antes del fetch de
+  // segmentos; si segmentId arrancara vacío, el primer ensure de un plan SO iría
+  // sin segment_id → polygon_required, y autoOpenedRef bloquea el reintento.
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.match(tab, /useState\(initialSegmentId \? String\(initialSegmentId\) : ''\)/,
+    'segmentId nace del initialSegmentId, no vacío')
+})

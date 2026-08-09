@@ -8470,6 +8470,8 @@ async function directSupervisorVentas(method, path, body) {
         date_target: body?.date_target || undefined,
         polygon_id: Number(body?.polygon_id || 0) || undefined,
         subpolygon_ids: cleanNumberList(body?.subpolygon_ids),
+        // segment_id: plan por segmento (sin polígono ⇒ propuesta = miembros del segmento).
+        segment_id: Number(body?.segment_id || 0) || undefined,
         channel_ids: cleanNumberList(body?.channel_ids),
         visit_days: Array.isArray(body?.visit_days) ? body.visit_days.filter(Boolean) : [],
         time_window_id: body?.time_window_id ? Number(body.time_window_id) : null,
@@ -8677,6 +8679,9 @@ async function directSupervisorVentas(method, path, body) {
           date_target: dateTarget,
           polygon_id: Number(body?.polygon_id || 0) || undefined,
           subpolygon_id: body?.subpolygon_id ? Number(body.subpolygon_id) : null,
+          // segment_id: plan tipo "Mercado" (lista curada). Sin polígono, el backend
+          // arma la propuesta con los miembros del segmento (branch-scoped).
+          segment_id: Number(body?.segment_id || 0) || undefined,
           channel_ids: Array.isArray(body?.channel_ids) ? body.channel_ids.map(Number).filter(Boolean) : [],
           visit_days: Array.isArray(body?.visit_days) ? body.visit_days.filter(Boolean) : [],
           time_window_id: body?.time_window_id ? Number(body.time_window_id) : null,

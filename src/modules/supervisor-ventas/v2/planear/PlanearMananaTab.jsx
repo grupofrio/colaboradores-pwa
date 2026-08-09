@@ -373,7 +373,12 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
 
   const [polygonId, setPolygonId] = useState('')
   const [subpolygonId, setSubpolygonId] = useState('')
-  const [segmentId, setSegmentId] = useState('')
+  // Se inicializa SÍNCRONO desde initialSegmentId (Codex P1): la autoapertura
+  // (handlePrepare al cargar rutas) corre ANTES de que resuelva el fetch de
+  // segmentos; si segmentId arrancara vacío, el primer ensure de un plan SO iría
+  // sin polígono ni segmento ⇒ polygon_required, y autoOpenedRef bloquea el
+  // reintento. Con el valor ya puesto, el primer ensure lleva su segment_id.
+  const [segmentId, setSegmentId] = useState(initialSegmentId ? String(initialSegmentId) : '')
   const [demandClasses, setDemandClasses] = useState([])
 
   const [preparing, setPreparing] = useState(null)   // route_id en preparación
@@ -431,10 +436,10 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       setResources(resRows?.data ?? resRows ?? null)
       // La zona heredada de la fila gana la preselección del polígono; si no vino
       // (o ya no existe), se conserva la actual o se cae al primero.
-      // EXCEPCIÓN (Codex P1-3): si se entró por un SEGMENTO operativo, NO se elige
-      // un polígono arbitrario. El backend SUMA (no intersecta) los clientes del
-      // polígono con los del segmento, así que preseleccionar "el primero" metería
-      // clientes ajenos al segmento en la propuesta.
+      // Si se entró por un SEGMENTO operativo (plan SO), NO se preselecciona un
+      // polígono: la propuesta la arma la lista curada del segmento (server-side),
+      // no una zona. Preseleccionar "el primero" armaría por zona, que no es el
+      // plan. El polígono queda vacío a propósito.
       setPolygonId((cur) => {
         if (initialPolygonId && normPolys.some((p) => Number(optionId(p)) === Number(initialPolygonId))) return String(initialPolygonId)
         if (segmentOnlyPlan) return ''
@@ -602,15 +607,17 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
 
   async function handlePreview() {
     if (!selectedRoute) { flash('Selecciona una ruta'); return }
-    // Codex P1-3: planear SOLO por segmento todavía no existe server-side, y el
-    // backend SUMA los clientes del polígono con los del segmento. Elegir una zona
-    // aquí traería clientes que NO son del segmento, en silencio. Se bloquea con
-    // motivo en vez de armar una propuesta contaminada.
-    if (segmentOnlyPlan && !polygonId) {
-      flash('Este plan es un segmento (lista curada). Sugerir por zona traería clientes ajenos al segmento: agrega los clientes a mano por ahora.', 7000)
-      return
+    // Plan por SEGMENTO (lista curada): ya existe server-side. Sin polígono, el
+    // backend propone los MIEMBROS del segmento (no clientes ajenos). Antes esto
+    // se bloqueaba porque el server viejo no sabía planear por segmento; ahora se
+    // deja pasar con segment_id y sin zona. Si el backend desplegado aún fuera el
+    // viejo, responderá polygon_required y la vista lo muestra como error honesto.
+    if (segmentOnlyPlan) {
+      if (!segmentId) { flash('Este plan no trae segmento resoluble.'); return }
+      // sigue sin polígono: la propuesta la arma el segmento.
+    } else if (!polygonId) {
+      flash('Elige una zona para generar la propuesta'); return
     }
-    if (!polygonId) { flash('Elige una zona para generar la propuesta'); return }
     const reqId = ++previewReq.current
     invalidateResourceReadiness()
     setPreviewing(true)
@@ -798,12 +805,25 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     return shell(
       <>
         <Card testid="planear-detalle-cabecera">
+          {/* Contexto del PLAN por segmento (SO): antes se entraba a la lista
+              genérica de rutas sin señal de que era "para armar Mercado". */}
+          {segmentOnlyPlan && (
+            <div data-testid="planear-plan-contexto" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#7c3aed', border: '1px solid #7c3aed', borderRadius: R.pill, padding: '2px 8px', whiteSpace: 'nowrap' }}>Segmento</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>
+                Plan: {currentSegLabel || 'Segmento'}
+                {previewCustomers.length > 0 ? <span style={{ fontWeight: 600, color: C.textMuted }}> · {previewCustomers.length} clientes</span> : null}
+              </span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{selectedRoute.route_name || `Ruta #${selectedRoute.route_id}`}</div>
             <Chip text={readiness.stateLabel} tone={readiness.published ? 'ok' : 'info'} />
           </div>
           <div style={{ fontSize: 12, color: C.textMuted, marginTop: 3 }}>
-            Asigna abajo la <strong>unidad</strong>, el <strong>chofer</strong> y el <strong>vendedor</strong> de esta ruta; luego arma la lista de clientes y publica.
+            {segmentOnlyPlan
+              ? <>Esta es la ruta/vendedor que ejecutará el plan <strong>{currentSegLabel || 'del segmento'}</strong> mañana. Asigna <strong>unidad</strong>, <strong>chofer</strong> y <strong>vendedor</strong>, arma la lista del segmento y publica.</>
+              : <>Asigna abajo la <strong>unidad</strong>, el <strong>chofer</strong> y el <strong>vendedor</strong> de esta ruta; luego arma la lista de clientes y publica.</>}
           </div>
         </Card>
 
@@ -828,14 +848,31 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
           )
         )}
 
-        {/* ¿De qué zona propongo los clientes? (antes "Criterios de la propuesta") */}
+        {/* Criterios de la propuesta. Para un plan por SEGMENTO no hay zona: la
+            lista es la curada del segmento. Para SP/P sigue siendo la zona. */}
         <Card testid="planear-criterios">
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>¿De qué zona propongo los clientes?</div>
-          <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 10, lineHeight: 1.5 }}>
-            La zona geográfica de donde se arma la lista sugerida de clientes.
-          </div>
-          {/* Zona heredada de la fila: se muestra como DATO, no como pregunta. */}
-          {!showZoneSelectors ? (
+          {segmentOnlyPlan ? (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>
+                Plan por segmento (lista curada)
+              </div>
+              <div data-testid="planear-segmento-so" style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 10, lineHeight: 1.5 }}>
+                Se proponen los clientes del segmento
+                {currentSegLabel ? <b style={{ color: C.text }}> {currentSegLabel}</b> : ''}.
+                No hay zona que elegir: la lista es la del segmento.
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>¿De qué zona propongo los clientes?</div>
+              <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 10, lineHeight: 1.5 }}>
+                La zona geográfica de donde se arma la lista sugerida de clientes.
+              </div>
+            </>
+          )}
+          {/* Selectores de zona/segmento/demanda: solo para planes por ZONA. En un
+              plan por segmento no aplican (la lista curada manda). */}
+          {segmentOnlyPlan ? null : !showZoneSelectors ? (
             <div data-testid="planear-zona-heredada" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div>
                 <div style={{ fontSize: 11, color: C.textMuted }}>{currentSegLabel ? 'Segmento' : 'Zona'}</div>
@@ -866,7 +903,10 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
               )}
             </>
           )}
-          {/* Segmento operativo de la sucursal (lista curada). Escopado server-side. */}
+          {/* Segmento operativo de la sucursal (lista curada). Escopado server-side.
+              En un plan por segmento (SO) no se ofrece: el segmento ya está fijo. */}
+          {!segmentOnlyPlan && (
+          <>
           <label style={{ display: 'block', fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Segmento operativo (opcional)</label>
           {segments.length === 0 ? (
             <div data-testid="planear-segmentos-vacio" style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
@@ -892,8 +932,13 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
               )
             })}
           </div>
-          <PrimaryButton testid="planear-generar" onClick={handlePreview} busy={previewing} disabled={!polygonId}>
-            {previewCustomers.length > 0 ? 'Volver a sugerir clientes' : 'Sugerir clientes de la zona'}
+          </>
+          )}
+          <PrimaryButton testid="planear-generar" onClick={handlePreview} busy={previewing}
+            disabled={segmentOnlyPlan ? !segmentId : !polygonId}>
+            {previewCustomers.length > 0
+              ? 'Volver a sugerir clientes'
+              : (segmentOnlyPlan ? 'Sugerir clientes del segmento' : 'Sugerir clientes de la zona')}
           </PrimaryButton>
         </Card>
 
