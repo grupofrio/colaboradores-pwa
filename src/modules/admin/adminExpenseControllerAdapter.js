@@ -12,3 +12,12 @@ export function normalizeTodayExpensesControllerResponse(response) {
   if (Array.isArray(data)) return data
   return Array.isArray(data?.expenses) ? data.expenses : []
 }
+
+export function getTodayExpenseAmount(expense = {}) {
+  return Number(expense?.total_amount ?? expense?.amount ?? 0)
+}
+
+export function sumTodayExpensesControllerResponse(response) {
+  return normalizeTodayExpensesControllerResponse(response)
+    .reduce((total, expense) => total + getTodayExpenseAmount(expense), 0)
+}

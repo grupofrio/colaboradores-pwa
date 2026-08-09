@@ -10,6 +10,7 @@ import { useSession } from '../../App'
 import { getEffectiveJobKeys } from '../../lib/roleContext'
 import { isCashShiftNavigationVisible } from '../../lib/navModel.js'
 import { getTodaySales, getTodayExpenses } from './api'
+import { normalizeTodayExpensesControllerResponse } from './adminExpenseControllerAdapter'
 import { logScreenError } from '../shared/logScreenError'
 import { AdminProvider, useAdmin } from './AdminContext'
 import { BACKEND_CAPS } from './adminService.js'
@@ -68,7 +69,7 @@ function MobileAdminHub() {
         ])
         if (!alive) return
         setSalesCount(Array.isArray(sales) ? sales.length : 0)
-        setExpensesCount(Array.isArray(expenses) ? expenses.length : 0)
+        setExpensesCount(normalizeTodayExpensesControllerResponse(expenses).length)
       } catch (e) { logScreenError('ScreenAdminPanel', 'loadData', e) }
       finally { if (alive) setLoading(false) }
     }
