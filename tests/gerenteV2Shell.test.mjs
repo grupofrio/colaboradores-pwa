@@ -44,10 +44,11 @@ test('isGerenteV2Active default-off sin flags (el hub legacy sigue)', () => {
 
 // ── Las 6 pestañas ───────────────────────────────────────────────────────────
 
-test('el shell declara exactamente las 6 pestañas del puesto, en orden', () => {
+test('el shell declara exactamente las 7 pestañas del puesto, en orden', () => {
+  // Fase 3 añade "Controles" como 7ª pestaña, antes de "Más".
   assert.deepEqual(
     GERENTE_V2_TABS.map((t) => t.key),
-    ['hoy', 'equipo', 'admin', 'produccion', 'inventario', 'mas'],
+    ['hoy', 'equipo', 'admin', 'produccion', 'inventario', 'controles', 'mas'],
   )
   // Cada pestaña tiene ruta y etiqueta.
   for (const t of GERENTE_V2_TABS) {
@@ -74,7 +75,7 @@ test('el shell usa el tema claro BRAND_TOKENS, como el de supervisor', () => {
 
 // ── Cableado de rutas ────────────────────────────────────────────────────────
 
-test('App.jsx monta las 6 pestañas del gerente detrás del gate V2', () => {
+test('App.jsx monta las 7 pestañas del gerente detrás del gate V2', () => {
   const app = src('../src/App.jsx')
   for (const [route, tab] of [
     ['/gerente', 'HoyGerenteTab'],
@@ -82,6 +83,7 @@ test('App.jsx monta las 6 pestañas del gerente detrás del gate V2', () => {
     ['/gerente/admin', 'AdminGerenteTab'],
     ['/gerente/produccion', 'ProduccionGerenteTab'],
     ['/gerente/inventario', 'InventarioGerenteTab'],
+    ['/gerente/controles', 'ControlesGerenteTab'],
     ['/gerente/mas', 'MasGerenteTab'],
   ]) {
     const re = new RegExp(`path="${route}"[^]*?${tab}`)
@@ -94,8 +96,8 @@ test('App.jsx monta las 6 pestañas del gerente detrás del gate V2', () => {
 
 test('las pestañas nuevas se montan solo para el módulo gerente', () => {
   const app = src('../src/App.jsx')
-  const lines = app.split('\n').filter((l) => /path="\/gerente\/(equipo|admin|produccion|inventario|mas)"/.test(l))
-  assert.equal(lines.length, 5, 'las 5 pestañas nuevas están montadas')
+  const lines = app.split('\n').filter((l) => /path="\/gerente\/(equipo|admin|produccion|inventario|controles|mas)"/.test(l))
+  assert.equal(lines.length, 6, 'las 6 pestañas nuevas están montadas')
   for (const l of lines) {
     assert.match(l, /moduleId="gerente"/, `pestaña fuera del módulo gerente: ${l.trim().slice(0, 80)}`)
   }

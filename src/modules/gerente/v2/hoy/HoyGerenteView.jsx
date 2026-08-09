@@ -37,7 +37,7 @@ function Unavailable({ reason }) {
   return <p style={{ fontSize: 13, color: C.textMuted, margin: 0 }}>«—» {human}</p>
 }
 
-export default function HoyGerenteView({ data, scope, onRefresh }) {
+export default function HoyGerenteView({ data, scope, onRefresh, controlsCount, onOpenControls }) {
   if (!data) {
     return <p style={{ color: C.textMuted, padding: 20 }}>Sin datos del día.</p>
   }
@@ -45,6 +45,27 @@ export default function HoyGerenteView({ data, scope, onRefresh }) {
 
   return (
     <div>
+      {/* Contador rojo de controles: solo cuando hay hallazgos (count>0). Un 0
+          real o un dato ausente NO pintan banner (null ≠ 0). Lleva al panel. */}
+      {Number(controlsCount) > 0 && (
+        <button
+          onClick={onOpenControls}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', cursor: 'pointer',
+            background: 'rgba(185,28,28,0.08)', border: `1px solid ${C.error}40`, borderRadius: TOKENS.radius.lg,
+            padding: '10px 14px', marginBottom: 12,
+          }}
+        >
+          <span style={{
+            minWidth: 26, height: 26, borderRadius: 13, background: C.error, color: '#fff',
+            fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>{controlsCount}</span>
+          <span style={{ fontSize: 13, color: C.error, fontWeight: 700 }}>
+            {controlsCount === 1 ? 'hallazgo de control por revisar' : 'hallazgos de control por revisar'}
+          </span>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: C.error, fontWeight: 700 }}>Ver ›</span>
+        </button>
+      )}
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
         <div>
           <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', color: C.textLow, margin: 0 }}>
