@@ -1451,20 +1451,13 @@ async function directAdmin(method, path, body) {
     }
   }
 
-  const hasOperatingScopePair = (values) => {
-    const company = Number(values?.operating_company_id || 0)
-    const plaza = Number(values?.operating_plaza_id || 0)
-    return Number.isInteger(company) && company > 0 && Number.isInteger(plaza) && plaza > 0
-  }
-
-  // One-ficha expenses are authorized solely by the Odoo controller.  These
-  // must run before the historical sudo/model adapters below so the selected
-  // Empresa--Plaza pair reaches the server unchanged.  An incomplete/absent
-  // pair remains on the legacy admin path for backwards compatibility.
-  if (cleanPath === '/pwa-admin/today-expenses' && method === 'GET' && hasOperatingScopePair(Object.fromEntries(query.entries()))) {
+  // Expense authorization is exclusively controller-side.  Routing every
+  // request here closes the missing/partial scope escape hatch: a browser
+  // payload must never choose the historical sudo/model adapter.
+  if (cleanPath === '/pwa-admin/today-expenses' && method === 'GET') {
     return odooHttp('GET', cleanPath, Object.fromEntries(query.entries()))
   }
-  if (cleanPath === '/pwa-admin/expense-create' && method === 'POST' && hasOperatingScopePair(body)) {
+  if (cleanPath === '/pwa-admin/expense-create' && method === 'POST') {
     const { account_id, ...functionalBody } = body || {}
     return odooJson(cleanPath, functionalBody)
   }

@@ -61,7 +61,7 @@ test('expense create sends allowed amounts without employee identity to the auth
     const payload = options.body ? JSON.parse(options.body) : null
     calls.push({ url, payload })
 
-    if (url === '/odoo-api/api/create_update') {
+    if (url === '/odoo-api/pwa-admin/expense-create') {
       return createJsonResponse(200, {
         result: { ok: true, data: { id: 123 } },
       })
