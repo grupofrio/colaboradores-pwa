@@ -1451,6 +1451,17 @@ async function directAdmin(method, path, body) {
     }
   }
 
+  // One-ficha expenses are authorized solely by the Odoo controller.  These
+  // must run before the historical sudo/model adapters below so the selected
+  // Empresa--Plaza pair reaches the server unchanged.
+  if (cleanPath === '/pwa-admin/today-expenses' && method === 'GET') {
+    return odooHttp('GET', cleanPath, Object.fromEntries(query.entries()))
+  }
+  if (cleanPath === '/pwa-admin/expense-create' && method === 'POST') {
+    const { account_id, ...functionalBody } = body || {}
+    return odooJson(cleanPath, functionalBody)
+  }
+
   if (cleanPath === '/pwa-admin/pos-products' && method === 'GET') {
     return forwardGetQuery('/pwa-admin/pos-products')
   }

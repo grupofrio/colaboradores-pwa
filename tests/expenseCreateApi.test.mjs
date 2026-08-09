@@ -55,6 +55,35 @@ test.afterEach(() => {
   globalThis.window = originalWindow
 })
 
+test('one-ficha expenses delegate today and create to secured Odoo routes with the exact scope pair', async () => {
+  setSession({ odoo_employee_token: 'employee-token' })
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return createJsonResponse(200, { result: { ok: true, data: {} } })
+  }
+
+  await api('GET', '/pwa-admin/today-expenses?operating_company_id=35&operating_plaza_id=8')
+  await api('POST', '/pwa-admin/expense-create', {
+    operating_company_id: 35,
+    operating_plaza_id: 8,
+    name: 'Caseta',
+    total_amount: 120,
+  })
+
+  assert.equal(calls[0].url, '/odoo-api/pwa-admin/today-expenses?operating_company_id=35&operating_plaza_id=8')
+  assert.equal(calls[0].options.method, 'GET')
+  assert.equal(calls[1].url, '/odoo-api/pwa-admin/expense-create')
+  assert.equal(calls[1].options.method, 'POST')
+  assert.deepEqual(JSON.parse(calls[1].options.body).params, {
+    operating_company_id: 35,
+    operating_plaza_id: 8,
+    name: 'Caseta',
+    total_amount: 120,
+  })
+  assert.equal(calls.some((call) => call.url === '/odoo-api/api/create_update'), false)
+})
+
 test('expense create omits account_id when the user did not select one explicitly', async () => {
   setSession()
   const controllerCalls = []
