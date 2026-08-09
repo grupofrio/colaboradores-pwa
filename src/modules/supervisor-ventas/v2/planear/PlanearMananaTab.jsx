@@ -373,7 +373,12 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
 
   const [polygonId, setPolygonId] = useState('')
   const [subpolygonId, setSubpolygonId] = useState('')
-  const [segmentId, setSegmentId] = useState('')
+  // Se inicializa SÍNCRONO desde initialSegmentId (Codex P1): la autoapertura
+  // (handlePrepare al cargar rutas) corre ANTES de que resuelva el fetch de
+  // segmentos; si segmentId arrancara vacío, el primer ensure de un plan SO iría
+  // sin polígono ni segmento ⇒ polygon_required, y autoOpenedRef bloquea el
+  // reintento. Con el valor ya puesto, el primer ensure lleva su segment_id.
+  const [segmentId, setSegmentId] = useState(initialSegmentId ? String(initialSegmentId) : '')
   const [demandClasses, setDemandClasses] = useState([])
 
   const [preparing, setPreparing] = useState(null)   // route_id en preparación

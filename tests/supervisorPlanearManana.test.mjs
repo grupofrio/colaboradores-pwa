@@ -326,3 +326,12 @@ test('SP/P sin regresión: el flujo por zona sigue exigiendo polígono', () => {
   assert.match(tab, /Elige una zona para generar la propuesta/, 'zona sigue siendo requisito para SP/P')
   assert.match(tab, /Sugerir clientes de la zona/, 'la etiqueta de zona se mantiene para SP/P')
 })
+
+test('segmento-solo: segmentId se inicializa SÍNCRONO desde initialSegmentId (Codex P1 carrera)', () => {
+  // La autoapertura (handlePrepare al cargar rutas) corre antes del fetch de
+  // segmentos; si segmentId arrancara vacío, el primer ensure de un plan SO iría
+  // sin segment_id → polygon_required, y autoOpenedRef bloquea el reintento.
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.match(tab, /useState\(initialSegmentId \? String\(initialSegmentId\) : ''\)/,
+    'segmentId nace del initialSegmentId, no vacío')
+})
