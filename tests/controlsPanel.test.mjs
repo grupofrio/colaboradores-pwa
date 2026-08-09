@@ -17,15 +17,24 @@ const src = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 
 
 // ── Catálogo ─────────────────────────────────────────────────────────────────
 
-test('las 14 reglas están, con las claves exactas del backend', () => {
-  assert.equal(CONTROL_RULES.length, 14)
+test('las 15 reglas están, con las claves exactas del backend', () => {
+  assert.equal(CONTROL_RULES.length, 15)
   assert.deepEqual(CONTROL_RULE_KEYS, [
     'expense_duplicate', 'expense_splitting', 'expense_no_receipt',
     'expense_backdating', 'expense_looks_deposit', 'expense_no_dimension',
     'pos_cancellations', 'pos_underprice', 'pos_off_hours',
     'cash_recurring_diff', 'cash_reopens', 'cash_manual_adjust',
     'requis_stuck_receipt', 'fuel_no_route',
+    'sale_in_cut_and_route',
   ])
+})
+
+test('la regla 15 (cruce de canales) está bien declarada', () => {
+  const r = ruleMeta('sale_in_cut_and_route')
+  assert.ok(r, 'sale_in_cut_and_route debe existir en el catálogo')
+  assert.equal(r.category, 'cruce')
+  assert.equal(r.severity, 'error')
+  assert.equal(r.unit, 'money')
 })
 
 test('cada regla tiene categoría, etiqueta, descripción y unidad', () => {
