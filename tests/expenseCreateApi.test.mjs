@@ -84,6 +84,25 @@ test('one-ficha expenses delegate today and create to secured Odoo routes with t
   assert.equal(calls.some((call) => call.url === '/odoo-api/api/create_update'), false)
 })
 
+test('non-scoped admin expenses retain legacy adapters instead of being treated as one-ficha', async () => {
+  setSession({ warehouse_id: 94 })
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return createJsonResponse(200, { result: { id: 903, response: [] } })
+  }
+
+  await api('GET', '/pwa-admin/today-expenses?company_id=34&warehouse_id=94')
+  await api('POST', '/pwa-admin/expense-create', {
+    company_id: 34, warehouse_id: 94, name: 'Gasto administrativo', total_amount: 50,
+  })
+
+  assert.equal(calls[0].url, '/odoo-api/get_records_sorted')
+  assert.equal(calls[1].url, '/odoo-api/api/create_update')
+  assert.equal(calls.some((call) => call.url === '/odoo-api/pwa-admin/today-expenses'), false)
+  assert.equal(calls.some((call) => call.url === '/odoo-api/pwa-admin/expense-create'), false)
+})
+
 test('expense create omits account_id when the user did not select one explicitly', async () => {
   setSession()
   const controllerCalls = []
