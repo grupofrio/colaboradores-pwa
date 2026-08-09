@@ -37,7 +37,11 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
   assert.ok(LIGHT_FILES.length > 0, 'hay archivos con tema claro')
 
   for (const f of LIGHT_FILES) {
-    if (f.startsWith('modules/supervisor-ventas/') || f.startsWith('theme/')) continue
+    // Superficies DEDICADAS de tema claro: solo se montan bajo su propio
+    // moduleId (supervisor_ventas / gerente), así que importar BRAND_TOKENS a
+    // nivel de módulo es seguro. El shell del gerente V2 (Fase 2) es el mismo
+    // caso que el de supervisor: rail claro que solo ve el gerente.
+    if (f.startsWith('modules/supervisor-ventas/') || f.startsWith('modules/gerente/v2/') || f.startsWith('theme/')) continue
 
     // Un archivo COMPARTIDO puede usar el tema claro, pero solo si lo elige por
     // ROL en tiempo de ejecución (la nav global es el caso: la ve todo mundo).

@@ -32,15 +32,18 @@ test('supervisor_ventas (Aida): Equipo y Brief prioritarios y directos; universa
   assert.ok(!ids(nav).includes('gerente'))
 })
 
-test('gerente_sucursal (Angélica): Admin Sucursal + Gerente directos; Brief y universales a Más', () => {
+test('gerente_sucursal (Angélica): "Mi Sucursal" lidera; Equipo directo; Admin/Brief a Más', () => {
+  // Fase 2 de Gerente: "Mi Sucursal" (gerente, navPriority 8) es la puerta del
+  // shell y lidera la barra; Equipo (supervisor_ventas, 10) queda de acceso
+  // directo porque el gerente ahora ve el módulo completo. En móvil solo hay 2
+  // ranuras directas + "Más", así que Admin(10) cae a overflow — sigue
+  // accesible desde la pestaña Admin del shell y desde "Más".
   const session = s('gerente_sucursal')
   const m = buildMobileNav(session, '/')
-  // El Brief de gerencia (navPriority 16) entra DESPUÉS de Admin(10) y
-  // Gerente(12): no les quita su lugar en la barra.
-  assert.deepEqual(ids(m.primary), ['admin_sucursal', 'gerente'])
-  assert.deepEqual(ids(m.overflow), ['brief_gerencia', 'kpis', 'encuestas', 'logros'])
+  assert.deepEqual(ids(m.primary), ['gerente', 'supervisor_ventas'])
+  assert.deepEqual(ids(m.overflow), ['admin_sucursal', 'brief_gerencia', 'kpis', 'encuestas', 'logros'])
   assert.equal(m.hasMore, true)
-  assert.ok(!ids(getNavModules(session)).includes('supervisor_ventas'), 'no ve Equipo')
+  assert.ok(ids(getNavModules(session)).includes('supervisor_ventas'), 'ahora SÍ ve Equipo (decisión de dirección)')
 })
 
 test('usuario común (solo universales): 3 módulos directos, sin "Más"', () => {
@@ -130,10 +133,15 @@ test('moreActive: el activo dentro del overflow marca "Más" (sin doble activo)'
   assert.equal(m.activeId, 'kpis')
   assert.equal(m.moreActive, true)
   assert.ok(!m.primary.some((x) => x.id === m.activeId), 'el activo no está en las pestañas directas')
-  // /admin está directo → Más NO activo
-  const m2 = buildMobileNav(s('gerente_sucursal'), '/admin/gastos')
-  assert.equal(m2.activeId, 'admin_sucursal')
+  // Fase 2: la barra directa del gerente es ['gerente','supervisor_ventas'].
+  // /equipo (Equipo) está directo → Más NO activo.
+  const m2 = buildMobileNav(s('gerente_sucursal'), '/equipo')
+  assert.equal(m2.activeId, 'supervisor_ventas')
   assert.equal(m2.moreActive, false)
+  // /admin ahora cae a overflow (2 ranuras) → Más SÍ activo. Sigue accesible.
+  const m3 = buildMobileNav(s('gerente_sucursal'), '/admin/gastos')
+  assert.equal(m3.activeId, 'admin_sucursal')
+  assert.equal(m3.moreActive, true)
 })
 
 // ── Política de navegación oculta (rutas full-screen) ───────────────────────

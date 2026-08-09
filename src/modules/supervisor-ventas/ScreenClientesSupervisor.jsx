@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TOKENS, getTypo } from '../../tokens'
 import { ScreenShell, EmptyState } from '../entregas/components'
 import { logScreenError } from '../shared/logScreenError'
+import { useSession } from '../../App'
+import { getEffectiveJobKeys } from '../../lib/roleContext'
 import { getSupervisorCustomers, updateSupervisorCustomer } from './api'
 import {
   buildCustomerEditorDraft,
@@ -51,6 +53,14 @@ export default function ScreenClientesSupervisor() {
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+
+  // RED Codex P2 (Fase 2): solo un supervisor REAL edita clientes. El gerente
+  // ve el directorio en solo lectura — el backend ya lo niega en
+  // /supervisor/v2/customers/update (rol de ESCRITURA), esto evita presentarle
+  // un formulario editable que terminaría en error y contradice "gerente no
+  // escribe". Fail-closed: sin rol resoluble, no se edita.
+  const { session } = useSession()
+  const canEdit = getEffectiveJobKeys(session).includes('supervisor_ventas')
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -109,10 +119,10 @@ export default function ScreenClientesSupervisor() {
   }, [loadCustomers, query])
 
   const validationError = useMemo(() => getCustomerEditorValidationError(draft), [draft])
-  const showUpdateButton = selectedCustomer && hasCustomerEditorChanges(selectedCustomer, draft)
+  const showUpdateButton = canEdit && selectedCustomer && hasCustomerEditorChanges(selectedCustomer, draft)
 
   async function handleSave() {
-    if (!selectedCustomer || validationError) return
+    if (!canEdit || !selectedCustomer || validationError) return
     setSaving(true)
     setError('')
     setMessage('')
@@ -244,37 +254,49 @@ export default function ScreenClientesSupervisor() {
             flexDirection: 'column',
             gap: 12,
           }}>
-            <Field
-              label="Nombre"
-              value={draft.name}
-              onChange={(value) => setDraft((current) => ({ ...current, name: value }))}
-            />
-            <Field
-              label="Telefono"
-              value={draft.phone}
-              onChange={(value) => setDraft((current) => ({ ...current, phone: value }))}
-            />
-            <Field
-              label="Mail"
-              value={draft.email}
-              onChange={(value) => setDraft((current) => ({ ...current, email: value }))}
-            />
-            <Field
-              label="Latitud"
-              value={draft.latitude}
-              onChange={(value) => setDraft((current) => ({ ...current, latitude: value }))}
-              inputMode="decimal"
-            />
-            <Field
-              label="Longitud"
-              value={draft.longitude}
-              onChange={(value) => setDraft((current) => ({ ...current, longitude: value }))}
-              inputMode="decimal"
-            />
+            {canEdit ? (
+              <>
+                <Field
+                  label="Nombre"
+                  value={draft.name}
+                  onChange={(value) => setDraft((current) => ({ ...current, name: value }))}
+                />
+                <Field
+                  label="Telefono"
+                  value={draft.phone}
+                  onChange={(value) => setDraft((current) => ({ ...current, phone: value }))}
+                />
+                <Field
+                  label="Mail"
+                  value={draft.email}
+                  onChange={(value) => setDraft((current) => ({ ...current, email: value }))}
+                />
+                <Field
+                  label="Latitud"
+                  value={draft.latitude}
+                  onChange={(value) => setDraft((current) => ({ ...current, latitude: value }))}
+                  inputMode="decimal"
+                />
+                <Field
+                  label="Longitud"
+                  value={draft.longitude}
+                  onChange={(value) => setDraft((current) => ({ ...current, longitude: value }))}
+                  inputMode="decimal"
+                />
+              </>
+            ) : (
+              <>
+                <ReadOnlyField label="Nombre" value={selectedCustomer.name || 'Sin nombre'} />
+                <ReadOnlyField label="Telefono" value={selectedCustomer.phone || 'Sin telefono'} />
+                <ReadOnlyField label="Mail" value={selectedCustomer.email || 'Sin mail'} />
+                <ReadOnlyField label="Latitud" value={selectedCustomer.latitude ?? 'Sin latitud'} />
+                <ReadOnlyField label="Longitud" value={selectedCustomer.longitude ?? 'Sin longitud'} />
+              </>
+            )}
             <ReadOnlyField label="Direccion" value={selectedCustomer.address || 'Sin direccion capturada'} />
             <ReadOnlyField label="Referencia" value={selectedCustomer.reference || 'Sin referencia'} />
 
-            {validationError && (
+            {canEdit && validationError && (
               <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>{validationError}</p>
             )}
 
@@ -301,7 +323,7 @@ export default function ScreenClientesSupervisor() {
               </button>
             ) : (
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
-                Sin cambios pendientes.
+                {canEdit ? 'Sin cambios pendientes.' : 'Directorio en solo lectura para tu puesto.'}
               </p>
             )}
           </div>

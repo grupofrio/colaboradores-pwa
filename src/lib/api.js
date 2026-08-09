@@ -1336,6 +1336,48 @@ async function directGerente(method, path, body) {
     return { success: true, data: res.data }
   }
 
+  // ── Fase 2 · tablero read-only (Hoy · Inventario · Producción) ────────────
+  if (path === '/pwa-gerente/today' && method === 'GET') {
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/today`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: null },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, data: null }
+    return { success: true, data: res.data, scope: res.meta?.scope || null }
+  }
+
+  if (path === '/pwa-gerente/inventory' && method === 'GET') {
+    const warehouseId = Number(body?.warehouse_id || 0) || undefined
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/inventory`, {
+        meta: gerenteMeta(),
+        data: warehouseId ? { warehouse_id: warehouseId } : {},
+      }),
+      { onEmpty: { warehouses: [] } },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, warehouses: [] }
+    return { success: true, ...res.data }
+  }
+
+  if (path === '/pwa-gerente/production' && method === 'GET') {
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/production`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: null },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, data: null }
+    return { success: true, data: res.data }
+  }
+
+  // Pendientes (tareas + notas) SOLO LECTURA de la sucursal.
+  if (path === '/pwa-gerente/pendientes' && method === 'GET') {
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/pendientes`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: { tasks: [], notes: [] } },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, data: null }
+    return { success: true, data: res.data }
+  }
+
   return NO_DIRECT
 }
 

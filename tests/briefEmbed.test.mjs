@@ -343,7 +343,8 @@ test('cada quien ve su brief en la barra sin perder su superficie operativa', ()
   assert.deepEqual(nav('supervisor_ventas', 718).slice(0, 2), ['supervisor_ventas', 'brief_dia'])
   assert.deepEqual(nav('supervisor_produccion', 577).slice(0, 2), ['supervision_produccion', 'brief_produccion'])
 
-  // Gerencia: Admin(10) y Gerente(12) conservan la barra; el brief entra después.
+  // Gerencia (Fase 2): "Mi Sucursal"(8) lidera, Equipo(10) y Admin(10) siguen;
+  // el brief de gerencia entra después sin desplazar a las operativas.
   const gerente = nav('gerente_sucursal', 699)
-  assert.deepEqual(gerente.slice(0, 3), ['admin_sucursal', 'gerente', 'brief_gerencia'])
+  assert.deepEqual(gerente.slice(0, 4), ['gerente', 'supervisor_ventas', 'admin_sucursal', 'brief_gerencia'])
 })
