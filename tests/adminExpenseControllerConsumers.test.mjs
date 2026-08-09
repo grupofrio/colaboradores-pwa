@@ -41,3 +41,10 @@ test('activity feed consumes controller envelope expenses', () => {
   const source = readSource('src/modules/admin/components/ActivityFeed.jsx')
   assert.match(source, /expenses:\s*normalizeTodayExpensesControllerResponse\(expensesRaw\)/)
 })
+
+test('shared mobile expense screen consumes the controller envelope for admin and gerente', () => {
+  assert.deepEqual(normalizeTodayExpensesControllerResponse(controllerEnvelope), controllerEnvelope.data.expenses)
+
+  const source = readSource('src/modules/shared/GastosScreenBase.jsx')
+  assert.match(source, /setExpenses\(normalizeTodayExpensesControllerResponse\(data\)\)/)
+})
