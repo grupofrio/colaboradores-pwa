@@ -11,7 +11,7 @@ Usage:
     py scripts/odoo_audit.py --check-modules   # Lists installed kold modules
 
 Environment variables required:
-    ODOO_URL        - Odoo base URL (default: https://grupofrio.odoo.com if unset)
+    ODOO_URL        - Odoo base URL (default: https://grupofrio-gf.odoo.com if unset)
     ODOO_DB         - Odoo database identifier (no default; must be set explicitly)
     ODOO_USER       - Odoo login (email). Also accepts ODOO_USERNAME as alias.
     ODOO_PASSWORD   - Odoo password (NEVER ODOO_PASS, prohibited per project standard)
@@ -46,7 +46,7 @@ PROHIBITED_PATTERNS = (
     'button_', 'do_', 'execute', 'run', 'cancel', 'confirm',
 )
 
-ODOO_URL = os.environ.get('ODOO_URL', 'https://grupofrio.odoo.com')
+ODOO_URL = os.environ.get('ODOO_URL', 'https://grupofrio-gf.odoo.com')
 ODOO_DB = os.environ.get('ODOO_DB', '')
 
 SCRIPT_DIR = Path(__file__).resolve().parent

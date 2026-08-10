@@ -113,12 +113,12 @@ export default defineConfig(({ command, mode }) => {
           rewrite: (path) => path.replace(/^\/api-n8n/, '')
         },
         '/api-odoo': {
-          target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
+          target: env.VITE_ODOO_URL || 'https://grupofrio-gf.odoo.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api-odoo/, '/api')
         },
         '/odoo-api': {
-          target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
+          target: env.VITE_ODOO_URL || 'https://grupofrio-gf.odoo.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/odoo-api/, '')
         }
