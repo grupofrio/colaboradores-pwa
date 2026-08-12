@@ -58,6 +58,7 @@ import {
   derivePlanAssignment,
   resourceOptions,
   resourceReadiness,
+  interpretOptimizeResponse,
   COVERAGE_TONE,
 } from './planearModel'
 
@@ -723,35 +724,20 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   }
 
   // Corre el optimizador (B5) sobre el plan y guarda la revisión + métricas.
-  // Devuelve { revision, blocked }: `blocked` = el optimizador CORRIÓ pero no pudo
-  // secuenciar (solver caído) ⇒ no se debe publicar (D1). Un endpoint ausente o
-  // sin capacidad (backend viejo) NO bloquea: revision=null y se degrada a publicar
-  // directo (retrocompatible mientras B5 no esté desplegado).
+  // Contrato optimize↔publish (Codex P1): SOLO un éxito con `plan_revision`
+  // habilita publicar. Cualquier otro desenlace BLOQUEA la publicación:
+  //   · error explícito del backend (FORBIDDEN/LOCKED/VALIDATION/NOT_FOUND/
+  //     CONFLICT/CAPABILITY_UNAVAILABLE/red) — incluido el solver caído;
+  //   · un "éxito" malformado SIN revisión (contrato incompleto).
+  // No degradamos a publicar directo: con el flag de publish apagado eso dejaría
+  // publicar una ruta que no podemos anclar a una revisión verificable, y
+  // CAPABILITY_UNAVAILABLE es ambiguo en el front (optimizador ausente vs
+  // autoridad de sucursal rota comparten code y el shim no expone el motivo).
   async function runOptimize(planId) {
     const opt = await optimizeRoutePlan(planId)
-    const isErr = opt?.ok === false || String(opt?.status || '').toLowerCase() === 'error'
-    if (!isErr) {
-      const d = opt?.data || opt || {}
-      const revision = d.plan_revision || null
-      setOptimizeResult({
-        stops: (d.stops_count ?? null), km: (d.distance_km ?? null),
-        min: (d.duration_min ?? null), revision,
-        demandKg: (d.demand_kg ?? null), capacityKg: (d.capacity_kg ?? null),
-        utilizationPct: (d.utilization_pct ?? null),
-        unassigned: (Number(d.unassigned_count ?? 0) || 0),
-      })
-      return { revision, blocked: false }
-    }
-    const code = String(opt?.code || opt?.data?.code || '').toUpperCase()
-    // El optimizador corrió y no entregó secuencia (solver): no se publica.
-    if (code === 'OPTIMIZER_UNAVAILABLE' || code === 'OPTIMIZE_FAILED') {
-      setOptimizeResult(null)
-      return { revision: null, blocked: true, message: opt?.message }
-    }
-    // Endpoint ausente/sin capacidad (backend viejo) u otro estado: se degrada —
-    // publish re-valida el alcance/estado y devuelve el motivo real si aplica.
-    setOptimizeResult(null)
-    return { revision: null, blocked: false, degraded: true }
+    const { revision, blocked, message, metrics } = interpretOptimizeResponse(opt)
+    setOptimizeResult(metrics)
+    return { revision, blocked, message }
   }
 
   async function handlePublish() {
