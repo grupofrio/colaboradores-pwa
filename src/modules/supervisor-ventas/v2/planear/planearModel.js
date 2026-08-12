@@ -242,3 +242,41 @@ export function interpretOptimizeResponse(opt = {}) {
     : 'El optimizador respondió sin una revisión verificable; no se publica.'
   return { revision: null, blocked: true, message, metrics: null }
 }
+
+// Contrato optimize→review→publish (B5+ · absorbe el review de Sebas). Interpreta
+// la respuesta de `route-plan-review`: readiness ready/warning/blocked + bloqueos/
+// avisos/geo/sobrecapacidad + la revisión POST-review (la que publish exigirá).
+// `failed` = el ENDPOINT de review falló (no confundir con readiness 'blocked'):
+// backend viejo/red ⇒ se deja que el publish del servidor gatee la readiness.
+export function interpretReviewResponse(resp = {}) {
+  const isErr = resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error'
+  const d = isErr ? {} : (resp?.data || resp || {})
+  return {
+    failed: isErr,
+    message: isErr ? (resp?.message || resp?.data?.message || 'No se pudo revisar el plan.') : '',
+    state: String((isErr ? '' : d.readiness_state) || 'ready').toLowerCase(),
+    blockers: Array.isArray(d.blockers) ? d.blockers : [],
+    warnings: Array.isArray(d.warnings) ? d.warnings : [],
+    missingGeo: (Number(d.missing_geo_count ?? 0) || 0),
+    overcapacity: Boolean(d.overcapacity),
+    revision: d.plan_revision || null,
+  }
+}
+
+// Interpreta la respuesta de `route-plan-publish` (B5+). El envelope MANDA: los
+// códigos accionables (readiness_blocked/readiness_warnings/demand_snapshot_required/
+// revision_mismatch) NO son "éxito". Devuelve una decisión tipada para la UI.
+export function interpretPublishResponse(resp = {}) {
+  const isErr = resp?.ok === false
+    || String(resp?.status || '').toLowerCase() === 'error'
+    || String(resp?.data?.status || '').toLowerCase() === 'error'
+  const code = String(resp?.code || resp?.data?.code || '').toLowerCase()
+  const d = resp?.data || {}
+  return {
+    ok: !isErr && !code,
+    code,
+    blockers: Array.isArray(d.blockers) ? d.blockers : [],
+    warnings: Array.isArray(d.warnings) ? d.warnings : [],
+    message: resp?.message || resp?.data?.message || '',
+  }
+}

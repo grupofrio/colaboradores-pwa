@@ -8586,6 +8586,36 @@ async function directSupervisorVentas(method, path, body) {
     }
   }
 
+  if (cleanPath === '/pwa-supv/route-plan-review' && method === 'POST') {
+    const routePlanId = Number(body?.route_plan_id || 0)
+    if (!routePlanId) {
+      return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'route_plan_id requerido' }
+    }
+    // Revisión pre-publicación (B5+): corre action_review_optimized_route y devuelve
+    // el veredicto readiness + blockers/warnings + plan_revision. El envelope MANDA.
+    let revRes
+    try {
+      revRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/route_plan/review', {
+        meta: supervisorMeta(),
+        data: { route_plan_id: routePlanId },
+      }), null)
+    } catch (e) {
+      revRes = normalizeWriteResponse(null, e)
+    }
+    if (!revRes.ok) {
+      return {
+        ok: false, status: 'error', phase: revRes.phase, code: revRes.code,
+        message: revRes.message || 'No se pudo revisar el plan.', retryable: revRes.retryable,
+        data: revRes.data || {},
+      }
+    }
+    return {
+      ok: true, status: 'ok', phase: revRes.phase, message: 'Revisión completa',
+      data: (revRes.data && (revRes.data.readiness_state !== undefined || revRes.data.route_plan_id ? revRes.data : revRes.data.data)) || { route_plan_id: routePlanId },
+      meta: supervisorMeta(),
+    }
+  }
+
   if (cleanPath === '/pwa-supv/route-plan-publish' && method === 'POST') {
     const routePlanId = Number(body?.route_plan_id || 0)
     if (!routePlanId) {
@@ -8613,16 +8643,26 @@ async function directSupervisorVentas(method, path, body) {
         meta: supervisorMeta(),
         // plan_revision (B5.2): la revisión con la que se optimizó. El backend la
         // exige solo con el flag de publicación optimizada ON; sin flag la ignora.
-        data: { route_plan_id: routePlanId, ...(body?.plan_revision ? { plan_revision: String(body.plan_revision) } : {}) },
+        // plan_revision (B5.2) + confirm_readiness_warnings (B5+): la revisión
+        // post-review y la confirmación explícita de avisos. El backend corre la
+        // revisión y gatea (readiness_blocked/readiness_warnings/demand_snapshot_
+        // required/revision_mismatch).
+        data: {
+          route_plan_id: routePlanId,
+          ...(body?.plan_revision ? { plan_revision: String(body.plan_revision) } : {}),
+          ...(body?.confirm_readiness_warnings ? { confirm_readiness_warnings: true } : {}),
+        },
       }), null)
     } catch (e) {
       publishRes = normalizeWriteResponse(null, e)
     }
     if (!publishRes.ok) {
-      // Estado previo intacto (no se marca publicado, no se borra nada).
+      // Estado previo intacto (no se marca publicado, no se borra nada). Se
+      // REENVÍA `data` (blockers/warnings del review) para que la UI los muestre.
       return {
         ok: false, status: 'error', phase: publishRes.phase, code: publishRes.code,
         message: publishRes.message || 'No se pudo publicar el plan.', retryable: publishRes.retryable,
+        data: publishRes.data || {},
       }
     }
     // §8: tras publicar con éxito, invalida la caché compartida de day-control
