@@ -421,3 +421,18 @@ test('F5: handlePublish optimiza antes de publicar y maneja revision_mismatch', 
   assert.ok(/blocked: true/.test(runOpt), 'marca blocked cuando el solver no secuencia (no publica)')
   assert.ok(/planear-optimizacion/.test(tab), 'muestra paradas · km · min tras optimizar')
 })
+
+test('F5: la optimización muestra carga esperada, utilización y clientes no asignados', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  // runOptimize captura los campos net-new del DTO de B5.
+  const runOpt = tab.slice(tab.indexOf('async function runOptimize'), tab.indexOf('async function handlePublish'))
+  assert.ok(/demandKg: \(d\.demand_kg/.test(runOpt), 'captura demand_kg (carga esperada)')
+  assert.ok(/capacityKg: \(d\.capacity_kg/.test(runOpt), 'captura capacity_kg (capacidad de la unidad)')
+  assert.ok(/utilizationPct: \(d\.utilization_pct/.test(runOpt), 'captura utilization_pct')
+  assert.ok(/unassigned: \(Number\(d\.unassigned_count/.test(runOpt), 'captura unassigned_count (no cupieron)')
+  // La tarjeta los presenta; null ≠ 0 (no se inventa un 0 de kilos si no viene).
+  assert.ok(/planear-optimizacion-carga/.test(tab), 'muestra la línea de carga/capacidad')
+  assert.ok(/optimizeResult\.demandKg != null/.test(tab), 'la carga solo se muestra si el backend la mandó')
+  assert.ok(/planear-optimizacion-noasignadas/.test(tab), 'advierte clientes que no cupieron')
+  assert.ok(/optimizeResult\.unassigned > 0/.test(tab), 'la advertencia solo aparece si hay no asignados')
+})

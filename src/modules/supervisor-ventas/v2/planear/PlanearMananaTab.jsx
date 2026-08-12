@@ -736,6 +736,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       setOptimizeResult({
         stops: (d.stops_count ?? null), km: (d.distance_km ?? null),
         min: (d.duration_min ?? null), revision,
+        demandKg: (d.demand_kg ?? null), capacityKg: (d.capacity_kg ?? null),
+        utilizationPct: (d.utilization_pct ?? null),
+        unassigned: (Number(d.unassigned_count ?? 0) || 0),
       })
       return { revision, blocked: false }
     }
@@ -1083,6 +1086,23 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
                 optimizeResult.km != null ? `${optimizeResult.km} km` : null,
                 optimizeResult.min != null ? `${optimizeResult.min} min de trayecto` : null,
               ].filter(Boolean).join(' · ') || 'Ruta optimizada'}
+              {/* Carga esperada vs capacidad de la unidad (null ≠ 0: si el backend no
+                  lo manda, no se inventa un 0). Utilización > 100% ⇒ no cabe. */}
+              {(optimizeResult.demandKg != null || optimizeResult.capacityKg != null || optimizeResult.utilizationPct != null) && (
+                <div data-testid="planear-optimizacion-carga" style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
+                  {[
+                    optimizeResult.demandKg != null
+                      ? `Carga ${optimizeResult.demandKg} kg${optimizeResult.capacityKg != null ? ` de ${optimizeResult.capacityKg} kg` : ''}`
+                      : (optimizeResult.capacityKg != null ? `Capacidad ${optimizeResult.capacityKg} kg` : null),
+                    optimizeResult.utilizationPct != null ? `${optimizeResult.utilizationPct}% de la unidad` : null,
+                  ].filter(Boolean).join(' · ')}
+                </div>
+              )}
+              {optimizeResult.unassigned > 0 && (
+                <div data-testid="planear-optimizacion-noasignadas" style={{ fontSize: 11.5, fontWeight: 700, color: C.warning, marginTop: 3 }}>
+                  {optimizeResult.unassigned} {optimizeResult.unassigned === 1 ? 'cliente no cupo' : 'clientes no cupieron'} en esta unidad
+                </div>
+              )}
               {optimizeResult.revision ? <div style={{ fontSize: 10.5, color: C.textLow, marginTop: 2 }}>Revisión {optimizeResult.revision} — se publica exactamente esta secuencia</div> : null}
             </div>
           )}
