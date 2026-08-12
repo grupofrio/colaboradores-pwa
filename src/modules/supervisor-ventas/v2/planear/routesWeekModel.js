@@ -84,8 +84,21 @@ export function typeLabel(tipo) {
   return TYPE_LABEL[tipo] || 'Plan'
 }
 
-/** route_id de la fila para el flujo de asignar (tomorrow plan o la ruta base). */
+/** ¿La fila tiene VARIOS planes de mañana (varias rutas)? Entonces no hay una ruta
+ *  accionable única — el detalle debe pedir elegir cuál, no autoabrir una arbitraria.
+ *  Se dispara con el flag nuevo del backend (B2: requires_route_selection) O con
+ *  plan_count > 1 — así es seguro también contra un backend PRE-B2 que trae dos
+ *  planes mañana y una row.route arbitraria (Codex P1). */
+export function rowRequiresRouteSelection(row) {
+  return Boolean(row?.tomorrow?.requires_route_selection)
+    || Number(row?.tomorrow?.plan_count || 0) > 1
+}
+
+/** route_id de la fila para el flujo de asignar (tomorrow plan o la ruta base).
+ *  0 en multiplicidad (varios planes mañana): el detalle abre el SELECTOR de ruta,
+ *  no autoabre una ruta arbitraria según el orden del backend (Codex P1 / B2). */
 export function rowRouteId(row) {
+  if (rowRequiresRouteSelection(row)) return 0
   return Number(row?.route?.id || 0) || 0
 }
 
