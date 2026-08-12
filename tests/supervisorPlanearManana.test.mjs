@@ -384,8 +384,11 @@ test('F2 P1 (Codex): multiplicidad de rutas mañana NO autoabre una arbitraria',
   // Con requires_route_selection, rowRouteId es 0 ⇒ el detalle NO autoabre; pide elegir.
   assert.equal(model.rowRouteId({ tomorrow: { requires_route_selection: true }, route: { id: 7 } }), 0)
   assert.equal(model.rowRequiresRouteSelection({ tomorrow: { requires_route_selection: true } }), true)
+  // Seguro contra backend PRE-B2: plan_count>1 (sin el flag) también pide selección.
+  assert.equal(model.rowRequiresRouteSelection({ tomorrow: { plan_count: 2 } }), true)
+  assert.equal(model.rowRouteId({ tomorrow: { plan_count: 2 }, route: { id: 7 } }), 0)
   // Un solo plan: se conserva la ruta accionable.
-  assert.equal(model.rowRouteId({ tomorrow: { requires_route_selection: false }, route: { id: 7 } }), 7)
+  assert.equal(model.rowRouteId({ tomorrow: { requires_route_selection: false, plan_count: 1 }, route: { id: 7 } }), 7)
   // La matriz muestra el estado explícito de selección.
   const matriz = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
   assert.ok(/rw-elegir-ruta/.test(matriz) && /Elegir ruta/.test(matriz), 'la celda ofrece "Elegir ruta" en multiplicidad')
