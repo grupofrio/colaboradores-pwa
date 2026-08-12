@@ -208,18 +208,45 @@ test('guard: publicar exige readiness (no botón siempre activo)', () => {
   assert.ok(/readiness\?\.publishable|readiness\.publishable/.test(tab), 'publish gateado por readiness')
 })
 
-test('guard: publicar espera una cobertura vigente y ninguna asignación en vuelo', () => {
+test('F1: la readiness NO se lee con un POST vacío a assign-resources (bug de "asignar varias veces")', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
-  assert.ok(/async function refreshResourceReadiness/.test(tab), 'refresca la validación autoritativa')
-  assert.ok(/await refreshResourceReadiness\(routePlanId\)/.test(tab), 'refresca después de cambiar clientes')
-  assert.ok(/publishing \|\| assignBusy \|\| rowBusy \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante una asignación')
-  assert.ok(/disabled=\{!readiness\.publishable \|\| Boolean\(assignBusy \|\| rowBusy\)\}/.test(tab), 'el botón queda deshabilitado durante una asignación')
+  // El POST vacío a assign-resources devolvía VALIDATION_ERROR ("Nada que
+  // asignar") y dejaba el semáforo en `blocked` con los tres selectores llenos.
+  // F1 lo elimina: sin recursos NO se llama al write para "leer".
+  assert.ok(!/refreshResourceReadiness/.test(tab), 'no existe el refresh por POST vacío')
+  assert.ok(!/assignRoutePlanResources\(\s*(?:planId|routePlanId)\s*\)/.test(tab), 'no hay assign-resources con payload vacío')
+  // Codex P1 (3ª): invalidar deja 'blocked' (verificando), NO null — así no se cae a
+  // la derivación local mientras B1 está en vuelo (evita habilitar publish por local).
+  assert.ok(/function invalidateResourceReadiness\(\)\s*\{[\s\S]*?coverage_state: 'blocked'[\s\S]*?\n  \}/.test(tab), 'invalidar deja la readiness en blocked (verificando), no null')
+  assert.ok(/const coverage = assignReadiness \|\| resourceReadiness\(assignment\)/.test(tab), 'coverage cae a resourceReadiness(assignment) local solo si assignReadiness es null')
+  // El guard de publicación bloquea también durante preparar/previsualizar.
+  assert.ok(/publishing \|\| assignBusy \|\| rowBusy \|\| preparing \|\| previewing \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante preparar/previsualizar')
+  assert.ok(/disabled=\{!readiness\.publishable \|\| Boolean\(assignBusy \|\| rowBusy \|\| preparing \|\| previewing\)\}/.test(tab), 'el botón queda deshabilitado durante preparar/previsualizar')
+})
+
+test('F1↔B1 (Codex P1): tras una mutación se refresca la readiness AUTORITATIVA del servidor', () => {
+  const api = src('modules/supervisor-ventas/api.js')
+  assert.ok(/export function getRoutePlanReadiness/.test(api), 'wrapper getRoutePlanReadiness')
+  assert.ok(/\/pwa-supv\/route-plan-readiness/.test(api), 'ruta pwa-supv del readiness')
+  const lib = src('lib/api.js')
+  assert.ok(/\/pwa-supv\/route-plan-readiness/.test(lib) && /route_plan\/readiness/.test(lib), 'shim readiness → controller B1')
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/async function refreshReadinessFromServer/.test(tab), 'existe el refresh autoritativo')
+  assert.ok(/getRoutePlanReadiness\(planId\)/.test(tab), 'llama al GET readiness del servidor')
+  // Se llama tras add/remove/preview/prepare (no queda solo la derivación local).
+  assert.ok((tab.match(/refreshReadinessFromServer\(/g) || []).length >= 4, 'se refresca tras cada mutación')
+  // Codex P1 (2ª): un error NO autoritativo BLOQUEA (no habilita por derivación local).
+  const fn = tab.slice(tab.indexOf('async function refreshReadinessFromServer'), tab.indexOf('async function handlePrepare'))
+  assert.ok(/coverage_state: 'blocked'/.test(fn), 'ante error no autoritativo, estado blocked (publish deshabilitado)')
+  // La derivación local SOLO se activa por la señal explícita de capacidad ausente (404).
+  assert.ok(/status === 404/.test(fn), 'la compatibilidad local requiere HTTP 404 (endpoint ausente)')
+  assert.ok(/if \(status === 404\)[\s\S]*?setAssignReadiness\(null\)/.test(fn), 'solo el 404 degrada a local; el resto bloquea')
 })
 
 test('guard: publicar espera que termine una modificación de clientes', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
-  assert.ok(/assignBusy \|\| rowBusy \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante una modificación')
-  assert.ok(/Boolean\(assignBusy \|\| rowBusy\)/.test(tab), 'el botón queda deshabilitado durante una modificación')
+  assert.ok(/assignBusy \|\| rowBusy \|\| preparing \|\| previewing \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante una modificación')
+  assert.ok(/Boolean\(assignBusy \|\| rowBusy \|\| preparing \|\| previewing\)/.test(tab), 'el botón queda deshabilitado durante una modificación')
 })
 
 test('guard: serializa la validación de recursos y falla cerrado sin readiness', () => {

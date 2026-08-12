@@ -33,6 +33,7 @@ import {
   publishRoutePlan,
   searchPlanningCustomers,
   getRouteStops,
+  getRoutePlanReadiness,
   getAvailableResources,
   assignRoutePlanResources,
 } from '../../api'
@@ -536,44 +537,58 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     }
   }
 
+  // F1: invalidar la readiness cacheada del backend ⇒ null, para que `coverage`
+  // (línea ~411) caiga a la derivación LOCAL `resourceReadiness(assignment)` —
+  // presencia de unidad/chofer/vendedor, ya reflejada en `resources`. Antes se
+  // hacía un POST a assign-resources con payload vacío para "leer" la readiness;
+  // pero ese endpoint responde VALIDATION_ERROR ("Nada que asignar") sin recursos
+  // ⇒ el semáforo quedaba en `blocked` con los tres selectores llenos (el bug de
+  // "asignar varias veces"). La readiness autoritativa del servidor (con
+  // sobrecapacidad) vuelve con el DTO de un assign real (handleAssign); el GET
+  // readiness dedicado (B1) la restituirá para add/remove/preview.
   function invalidateResourceReadiness() {
     resourceReq.current += 1
-    setAssignReadiness({
-      coverage_state: 'blocked',
-      blockers: ['Validando la cobertura de recursos antes de publicar.'],
-    })
+    // Codex P1 (3ª): estado 'blocked' (verificando) mientras se pide la readiness
+    // AUTORITATIVA (B1). NO se cae a la derivación local en la ventana EN VUELO — si
+    // no, tras preparar/previsualizar y antes de que responda B1, publish podría
+    // habilitarse por la derivación local (que no conoce sobrecapacidad server-side).
+    // refreshReadinessFromServer lo resuelve: authoritative, blocked (error real), o
+    // null/local SOLO con 404 (capacidad ausente, backend pre-B1).
+    setAssignReadiness({ coverage_state: 'blocked', blockers: ['Verificando la cobertura con el servidor…'] })
   }
 
-  async function refreshResourceReadiness(planId) {
-    if (!planId) return false
+  // B1 (F1↔B1, Codex P1): tras una mutación lee la readiness AUTORITATIVA del
+  // servidor (conoce sobrecapacidad y bloqueos que la derivación local NO ve, y que
+  // podrían habilitar publicar por error). Si el endpoint aún no está desplegado o no
+  // devuelve readiness, degrada a la derivación local (setAssignReadiness(null) ⇒
+  // coverage local) — sigue mejor que el POST vacío, y se cierra al desplegar B1.
+  async function refreshReadinessFromServer(planId) {
+    if (!planId) return
     const reqId = ++resourceReq.current
-    setAssignBusy('validation')
+    // Codex P1 (2ª): un resultado NO autoritativo NO debe habilitar publicar por la
+    // derivación local (que no conoce sobrecapacidad ni bloqueos del backend). Se
+    // BLOQUEA. La única excepción es la señal EXPLÍCITA de capacidad ausente: la ruta
+    // B1 no existe (HTTP 404 ⇒ backend pre-B1) ⇒ compatibilidad transitoria con la
+    // derivación local. Cualquier otro error (500, red, FORBIDDEN, envelope de error,
+    // ok:false) bloquea.
+    const blocked = { coverage_state: 'blocked', blockers: ['No se pudo verificar la cobertura con el servidor. Reintenta.'] }
     try {
-      // Sin recursos en el payload, el endpoint no reasigna: sólo devuelve la
-      // readiness autoritativa del plan después de cambiar sus clientes.
-      const resp = await assignRoutePlanResources(planId)
-      const status = String(resp?.status || (resp?.ok === false ? 'error' : 'ok')).toLowerCase()
+      const resp = await getRoutePlanReadiness(planId)
+      if (reqId !== resourceReq.current) return
+      const isErr = resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error'
       const data = resp?.data || resp || {}
-      if (reqId !== resourceReq.current) return false
-      if (status === 'error' || resp?.ok === false || !data.readiness) {
-        setAssignReadiness({
-          coverage_state: 'blocked',
-          blockers: [resp?.user_message || resp?.message || 'No se pudo validar la cobertura de recursos.'],
-        })
-        return false
-      }
-      setAssignReadiness(data.readiness)
-      return true
+      if (!isErr && data.readiness) { setAssignReadiness(data.readiness); return }
+      setAssignReadiness(blocked)
     } catch (e) {
-      if (reqId !== resourceReq.current) return false
-      logScreenError('PlanearManana', 'refreshResourceReadiness', e)
-      setAssignReadiness({
-        coverage_state: 'blocked',
-        blockers: ['No se pudo validar la cobertura de recursos.'],
-      })
-      return false
-    } finally {
-      if (reqId === resourceReq.current) setAssignBusy(null)
+      if (reqId !== resourceReq.current) return
+      const status = Number(e?.status || 0)
+      if (status === 404) {
+        // Capacidad ausente (endpoint B1 no desplegado): derivación local transitoria.
+        setAssignReadiness(null)
+        return
+      }
+      logScreenError('PlanearManana', 'getRoutePlanReadiness', e)
+      setAssignReadiness(blocked)
     }
   }
 
@@ -595,7 +610,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       await loadData()
       if (planId) {
         await loadPlanCustomers(planId)
-        await refreshResourceReadiness(planId)
+        await refreshReadinessFromServer(planId)
       }
     } catch (e) {
       logScreenError('PlanearManana', 'ensureDailyRoutePlan', e)
@@ -638,7 +653,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       const rows = Array.isArray(data) ? data : (data.customers || data.items || data.records || [])
       setPreviewCustomers(rows.map(normalizeRoutePlanCustomer))
       await loadData()
-      if (planId) await refreshResourceReadiness(planId)
+      if (planId) await refreshReadinessFromServer(planId)
       if (previewReq.current === reqId) flash('Propuesta generada')
     } catch (e) {
       if (previewReq.current !== reqId) return
@@ -667,7 +682,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
         return [...cur, added]
       })
       setQuery(''); setResults([])
-      await refreshResourceReadiness(routePlanId)
+      await refreshReadinessFromServer(routePlanId)
     } catch (e) {
       logScreenError('PlanearManana', 'addCustomerToRoutePlan', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
@@ -684,7 +699,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       setPreviewCustomers((cur) => cur.filter((it) => customer.stop_id
         ? String(it.stop_id || '') !== String(customer.stop_id)
         : String(it.customer_id || it.id || '') !== String(customer.customer_id || customer.id || '')))
-      await refreshResourceReadiness(routePlanId)
+      await refreshReadinessFromServer(routePlanId)
     } catch (e) {
       logScreenError('PlanearManana', 'removeCustomerFromRoutePlan', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
@@ -692,10 +707,14 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   }
 
   async function handlePublish() {
-    if (publishing || assignBusy || rowBusy || !routePlanId) {
+    // Codex P1 (3ª): tampoco publicar mientras se prepara/previsualiza (readiness
+    // autoritativa en vuelo). El estado 'blocked' de invalidate ya deshabilita el
+    // botón; esto cierra también la ruta programática.
+    if (publishing || assignBusy || rowBusy || preparing || previewing || !routePlanId) {
       if (!routePlanId) flash('Genera primero la propuesta')
       else if (assignBusy) flash('Espera la validación de recursos antes de publicar')
       else if (rowBusy) flash('Espera que termine la modificación de clientes')
+      else if (preparing || previewing) flash('Espera a que termine de verificarse el plan')
       return
     }
     if (!readiness?.publishable) { flash('Este plan no se puede publicar en su estado actual'); return }
@@ -984,7 +1003,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>{readiness.reasons[0] || 'Completa la preparación para publicar.'}</div>
           )}
           {!readiness.published && (
-            <PrimaryButton testid="planear-publicar" tone="green" onClick={handlePublish} busy={publishing} disabled={!readiness.publishable || Boolean(assignBusy || rowBusy)}>
+            <PrimaryButton testid="planear-publicar" tone="green" onClick={handlePublish} busy={publishing} disabled={!readiness.publishable || Boolean(assignBusy || rowBusy || preparing || previewing)}>
               Publicar ruta de mañana
             </PrimaryButton>
           )}
