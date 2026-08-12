@@ -240,6 +240,9 @@ export default function ScreenEnergia() {
           <>
             <ConsumptionPanel summary={summary} typo={typo} />
 
+            {/* El supervisor se gestiona por kWh y kg/kWh. El valorizado en $
+                se calcula igual server-side, pero solo viaja a gerencia:
+                el $ depende de la tarifa CFE, no de su desempeño. */}
             {!summary?.meter_configured && (
               <Notice
                 tone="warning"
@@ -337,29 +340,11 @@ function ConsumptionPanel({ summary, typo }) {
               <span style={{ ...typo.caption, color: TOKENS.colors.blue2, fontWeight: 700 }}>
                 {formatNumber(p.kwh, 0)} kWh
               </span>
-              <span style={{ ...typo.caption, color: p.cost === null ? TOKENS.colors.textMuted : TOKENS.colors.success, fontWeight: 700, minWidth: 78, textAlign: 'right' }}>
-                {p.cost === null || p.cost === undefined ? 'sin tarifa' : formatMoney(p.cost)}
-              </span>
             </div>
           ))}
         </div>
       )}
 
-      <div style={{
-        marginTop: 12, paddingTop: 10, borderTop: `1px solid ${TOKENS.colors.border}`,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      }}>
-        <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Valorizado</span>
-        <span style={{
-          ...typo.caption, fontWeight: 700,
-          color: summary.total_cost === null || summary.total_cost === undefined
-            ? TOKENS.colors.textMuted : TOKENS.colors.success,
-        }}>
-          {summary.total_cost === null || summary.total_cost === undefined
-            ? 'Sin tarifa configurada'
-            : formatMoney(summary.total_cost)}
-        </span>
-      </div>
     </div>
   )
 }
@@ -516,13 +501,6 @@ function formatNumber(value, decimals) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '—'
   return n.toLocaleString('es-MX', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-}
-
-function formatMoney(value) {
-  if (value === null || value === undefined) return '—'
-  const n = Number(value)
-  if (!Number.isFinite(n)) return '—'
-  return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })
 }
 
 function readFileAsDataUrl(file) {
