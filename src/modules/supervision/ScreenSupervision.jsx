@@ -21,6 +21,7 @@ import {
 } from './turnControlShift'
 import CompresoresSection from '../shared/compresores/CompresoresSection'
 import ExpectedVsRealPanel from './ExpectedVsRealPanel'
+import MolidoDelDiaCard from './MolidoDelDiaCard'
 import { createBrineReadingWithHistory } from '../shared/plantEnergyAPI'
 
 // Hub de Supervisor — backend-first.
@@ -389,6 +390,11 @@ export default function ScreenSupervision() {
 
             {/* Real vs esperado por línea — fórmula server-side, `null` ≠ 0 */}
             <ExpectedVsRealPanel shiftId={shift.id} typo={typo} />
+
+            {/* Molido del día — visibilidad diaria de la conversión.
+                Se enciende antes que el candado: no depende de que el dato
+                sea confiable, y hace evidente que se está mirando. */}
+            <MolidoDelDiaCard warehouseId={supervisionWarehouseId} typo={typo} />
 
             {/* Compresores — misma sección que ve el operador de barra.
                 Decisión de dirección: quien apaga, registra. */}

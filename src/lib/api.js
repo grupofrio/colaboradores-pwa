@@ -101,6 +101,14 @@ const NO_DIRECT = Symbol('no_direct')
 // se llaman con envoltura JSON-RPC (odooJson) y devuelven {ok, message, data}.
 // La identidad viaja en `X-GF-Employee-Token` (buildBaseHeaders); el backend
 // resuelve al empleado y el rol. Aqui NO se decide nada.
+// Control de conversion de molido (gf_milling_control). Mismo trato que las
+// rutas de energia: JSON-RPC a Odoo, identidad por token, cero decisiones aqui.
+const MILLING_ROUTES = new Set([
+  '/api/production/milling/evaluate',
+  '/api/production/milling/record-counts',
+  '/api/production/milling/daily-summary',
+])
+
 const PLANT_ENERGY_ROUTES = new Set([
   '/api/production/energy/periods/create',
   '/api/production/energy/summary',
@@ -4153,6 +4161,10 @@ async function directProduction(method, path, body) {
   // gf_plant_energy. Contrato {ok, message, data}. NO se toca ORM aqui: el
   // backend valida rol (token), turno y payload. El frontend solo transporta.
   if (PLANT_ENERGY_ROUTES.has(cleanPath) && method === 'POST') {
+    return odooJson(cleanPath, body || {})
+  }
+
+  if (MILLING_ROUTES.has(cleanPath) && method === 'POST') {
     return odooJson(cleanPath, body || {})
   }
 
