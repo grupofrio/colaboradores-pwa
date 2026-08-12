@@ -362,3 +362,19 @@ test('segmento-solo: segmentId se inicializa SÍNCRONO desde initialSegmentId (C
   assert.match(tab, /useState\(initialSegmentId \? String\(initialSegmentId\) : ''\)/,
     'segmentId nace del initialSegmentId, no vacío')
 })
+
+// ── (F2) Zona honesta + selector de ruta (consume B2) ────────────────────────
+
+test('F2.2: sin default silencioso de polígono; zona heredada que no resuelve es honesta', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(!/normPolys\[0\]/.test(tab), 'eliminado el fallback normPolys[0] (armar con otra zona en silencio)')
+  assert.ok(/const zoneUnresolved = /.test(tab), 'deriva zoneUnresolved')
+  assert.ok(/showZoneSelectors = !zoneInherited \|\| showZoneEditor \|\| zoneUnresolved/.test(tab), 'la zona sin resolver revela el selector')
+  assert.ok(/planear-zona-sin-resolver/.test(tab), 'muestra el estado honesto "no pude resolver la zona"')
+})
+
+test('F2.1: entrar desde la matriz sin ruta ofrece elegir ruta (no lista sin contexto)', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/planear-elegir-ruta/.test(tab), 'banner de "elige la ruta" en la vista lista')
+  assert.ok(/zoneInherited && !initialRouteId/.test(tab), 'solo cuando vino de la matriz sin route.id')
+})

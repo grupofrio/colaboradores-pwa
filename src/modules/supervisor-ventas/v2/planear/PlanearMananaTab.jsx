@@ -420,7 +420,11 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const currentPolyLabel = optionLabel(polygons.find((p) => optionId(p) === String(polygonId)) || {})
   const currentSubLabel = subpolygonId ? optionLabel(subpolygons.find((s) => optionId(s) === String(subpolygonId)) || {}) : ''
   const currentSegLabel = segmentId ? optionLabel(segments.find((s) => optionId(s) === String(segmentId)) || {}) : ''
-  const showZoneSelectors = !zoneInherited || showZoneEditor
+  // F2.2: la fila heredó un polígono que NO resuelve entre los disponibles. No se
+  // arma con otra zona en silencio: se pide elegirla (estado honesto + selector).
+  const zoneUnresolved = Boolean(initialPolygonId) && !segmentOnlyPlan && polygons.length > 0
+    && !polygons.some((p) => Number(optionId(p)) === Number(initialPolygonId))
+  const showZoneSelectors = !zoneInherited || showZoneEditor || zoneUnresolved
 
   const loadData = useCallback(async () => {
     setPhase((p) => (p === 'ready' ? 'ready' : 'loading'))
@@ -442,9 +446,17 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       // no una zona. Preseleccionar "el primero" armaría por zona, que no es el
       // plan. El polígono queda vacío a propósito.
       setPolygonId((cur) => {
-        if (initialPolygonId && normPolys.some((p) => Number(optionId(p)) === Number(initialPolygonId))) return String(initialPolygonId)
+        // Zona heredada de la fila: úsala SOLO si resuelve entre los polígonos
+        // disponibles. Si NO resuelve, queda vacío y se marca "zona sin resolver"
+        // (F2.2) — jamás se arma con OTRA zona en silencio.
+        if (initialPolygonId) {
+          return normPolys.some((p) => Number(optionId(p)) === Number(initialPolygonId)) ? String(initialPolygonId) : ''
+        }
         if (segmentOnlyPlan) return ''
-        return (cur && normPolys.some((p) => optionId(p) === cur)) ? cur : (normPolys[0] ? optionId(normPolys[0]) : '')
+        // Sin herencia: conserva la elección actual; NO preselecciona "el primero"
+        // (default silencioso del primer polígono eliminado). El selector arranca
+        // vacío y la supervisora elige la zona.
+        return (cur && normPolys.some((p) => optionId(p) === cur)) ? cur : ''
       })
       setPhase('ready')
       setLoadError(null)
@@ -889,6 +901,13 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
               </div>
             </>
           )}
+          {/* F2.2: la zona heredada no resolvió ⇒ estado honesto, no se arma con
+              otra en silencio. Se muestra el mensaje y el selector queda visible. */}
+          {zoneUnresolved && (
+            <div data-testid="planear-zona-sin-resolver" style={{ fontSize: 12.5, color: C.warning, fontWeight: 700, marginBottom: 8, lineHeight: 1.5 }}>
+              No pude resolver la zona de este plan — elígela abajo para armar la propuesta.
+            </div>
+          )}
           {/* Selectores de zona/segmento/demanda: solo para planes por ZONA. En un
               plan por segmento no aplican (la lista curada manda). */}
           {segmentOnlyPlan ? null : !showZoneSelectors ? (
@@ -1015,6 +1034,15 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   // Vista lista
   return shell(
     <>
+      {/* F2.1: se entró desde la matriz para un plan operativo SIN ruta (has_route
+          false ⇒ no hay route.id que autoabrir). En vez de aterrizar sin contexto,
+          se enmarca la lista como el SELECTOR de ruta para armar ese plan. */}
+      {zoneInherited && !initialRouteId && (
+        <Card testid="planear-elegir-ruta" style={{ borderColor: 'rgba(0,119,187,0.35)', background: 'rgba(0,119,187,0.06)', marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.blue3, marginBottom: 2 }}>Este plan aún no tiene ruta</div>
+          <div style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.5 }}>Elige abajo con qué ruta armar el plan de mañana. Al abrirla se hereda la zona{currentSegLabel ? ' / segmento' : ''} de este plan.</div>
+        </Card>
+      )}
       {resources && <ResourcesSummary resources={resources} />}
       <div>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.text, margin: '2px 0 10px' }}>Rutas para mañana</div>
