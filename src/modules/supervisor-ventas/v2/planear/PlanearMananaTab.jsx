@@ -31,6 +31,7 @@ import {
   addCustomerToRoutePlan,
   removeCustomerFromRoutePlan,
   optimizeRoutePlan,
+  reviewRoutePlan,
   publishRoutePlan,
   searchPlanningCustomers,
   getRouteStops,
@@ -59,6 +60,8 @@ import {
   resourceOptions,
   resourceReadiness,
   interpretOptimizeResponse,
+  interpretReviewResponse,
+  interpretPublishResponse,
   COVERAGE_TONE,
 } from './planearModel'
 
@@ -390,6 +393,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   // Resultado de la última optimización (F5/B5): paradas · km · min + revisión.
   // Se muestra tras "Optimizar y publicar" para que el número sea visible.
   const [optimizeResult, setOptimizeResult] = useState(null)
+  const [reviewResult, setReviewResult] = useState(null)
   const [rowBusy, setRowBusy] = useState(null)        // add-/remove-<id>
   const [assignBusy, setAssignBusy] = useState(null)  // vehicle_id | driver_employee_id | salesperson_employee_id
   const [assignReadiness, setAssignReadiness] = useState(null)  // readiness del backend (incluye sobrecapacidad)
@@ -740,7 +744,17 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     return { revision, blocked, message }
   }
 
-  async function handlePublish() {
+  async function runReview(planId) {
+    // Revisión pre-publicación (B5+): veredicto ready/warning/blocked + revisión
+    // POST-review. Si el endpoint no está disponible, `failed`=true y el flujo
+    // deja que el gate server-side del publish decida.
+    return interpretReviewResponse(await reviewRoutePlan(planId))
+  }
+
+  // optimize → review → publish (B5+, absorbe el flujo de Sebas):
+  //   ready   → publica; warning → exige confirmación explícita; blocked → no publica.
+  async function handlePublish(opts = {}) {
+    const confirmWarnings = opts?.confirmWarnings === true
     // Codex P1 (3ª): tampoco publicar mientras se prepara/previsualiza (readiness
     // autoritativa en vuelo). El estado 'blocked' de invalidate ya deshabilita el
     // botón; esto cierra también la ruta programática.
@@ -754,30 +768,54 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     if (!readiness?.publishable) { flash('Este plan no se puede publicar en su estado actual'); return }
     setPublishing(true)
     try {
-      // 1) Optimizar (reordena + revisión). Si el optimizador falla de verdad, NO
-      //    se publica una ruta sin secuencia.
-      const first = await runOptimize(routePlanId)
-      if (first.blocked) {
-        flash(first.message || 'El optimizador no pudo secuenciar la ruta. Intenta de nuevo o avisa a soporte.', 6000)
-        return
-      }
-      // 2) Publicar con la revisión. Un revision_mismatch (alguien mutó el plan
-      //    entre optimizar y publicar) ⇒ reoptimiza UNA vez y reintenta.
-      let resp = await publishRoutePlan(routePlanId, first.revision)
-      if (String(resp?.code || resp?.data?.code || '').toLowerCase() === 'revision_mismatch') {
-        const again = await runOptimize(routePlanId)
-        if (again.blocked) {
-          flash(again.message || 'El optimizador no pudo secuenciar la ruta.', 6000)
-          return
+      // Corre optimize→review y devuelve { stop, revision } o null si se bloqueó.
+      const prepare = async () => {
+        const opt = await runOptimize(routePlanId)
+        if (opt.blocked) { flash(opt.message || 'El optimizador no pudo secuenciar la ruta.', 6000); return null }
+        const review = await runReview(routePlanId)
+        if (!review.failed) {
+          setReviewResult(review)
+          if (review.state === 'blocked') { flash('La ruta tiene bloqueos; corrígelos antes de publicar.', 6000); return null }
+          if (review.state === 'warning' && !confirmWarnings) { flash('La ruta tiene avisos; revísalos y confirma para publicar.', 6000); return null }
+        } else {
+          setReviewResult(null)
         }
-        resp = await publishRoutePlan(routePlanId, again.revision)
+        return { revision: review.revision || opt.revision, warning: review.state === 'warning' }
       }
-      if (resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error' || String(resp?.data?.status || '').toLowerCase() === 'error') throw resp
+
+      // 1) Optimizar + revisar.
+      let ready = await prepare()
+      if (!ready) return
+      // 2) Publicar (revisión post-review + confirmación de avisos).
+      let pub = interpretPublishResponse(
+        await publishRoutePlan(routePlanId, ready.revision, confirmWarnings || ready.warning))
+      // revision_mismatch (alguien mutó el plan entre revisar y publicar) ⇒
+      // reoptimiza + revisa + reintenta UNA vez.
+      if (pub.code === 'revision_mismatch') {
+        ready = await prepare()
+        if (!ready) return
+        pub = interpretPublishResponse(
+          await publishRoutePlan(routePlanId, ready.revision, confirmWarnings || ready.warning))
+      }
+      // Códigos accionables del gate server-side (por si el review local no corrió
+      // o el estado del servidor difiere).
+      if (pub.code === 'readiness_blocked') {
+        setReviewResult((r) => ({ ...(r || {}), state: 'blocked', blockers: pub.blockers }))
+        flash('La ruta tiene bloqueos; corrígelos antes de publicar.', 6000); return
+      }
+      if (pub.code === 'readiness_warnings') {
+        setReviewResult((r) => ({ ...(r || {}), state: 'warning', warnings: pub.warnings }))
+        flash('La ruta tiene avisos; revísalos y confirma para publicar.', 6000); return
+      }
+      if (pub.code === 'demand_snapshot_required') {
+        flash('Falta generar el snapshot del plan antes de publicar.', 6000); return
+      }
+      if (!pub.ok) throw pub
       flash('Ruta optimizada y publicada para mañana')
       await loadData()
-      setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([]); setOptimizeResult(null)
+      setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([]); setOptimizeResult(null); setReviewResult(null)
     } catch (e) {
-      logScreenError('PlanearManana', 'optimizeAndPublish', e)
+      logScreenError('PlanearManana', 'optimizeReviewPublish', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
     } finally { setPublishing(false) }
   }
@@ -1061,9 +1099,31 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>{readiness.reasons[0] || 'Completa la preparación para publicar.'}</div>
           )}
           {!readiness.published && (
-            <PrimaryButton testid="planear-publicar" tone="green" onClick={handlePublish} busy={publishing} disabled={!readiness.publishable || Boolean(assignBusy || rowBusy || preparing || previewing)}>
+            <PrimaryButton testid="planear-publicar" tone="green" onClick={() => handlePublish()} busy={publishing} disabled={!readiness.publishable || Boolean(assignBusy || rowBusy || preparing || previewing)}>
               Optimizar y publicar
             </PrimaryButton>
+          )}
+          {/* Veredicto de la revisión (B5+): bloqueos (rojo, no publica) o avisos
+              (ámbar, exige confirmación explícita). Se listan para que la
+              supervisora sepa QUÉ corregir, no solo que "no se pudo". */}
+          {reviewResult && reviewResult.state === 'blocked' && (reviewResult.blockers || []).length > 0 && (
+            <div data-testid="planear-review-blocked" style={{ marginTop: 10, padding: '10px 12px', borderRadius: R.md, background: C.errorSoft, border: '1px solid rgba(185,28,28,0.30)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.error, marginBottom: 4 }}>No se puede publicar todavía</div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+                {reviewResult.blockers.map((b, i) => <li key={i}>{b}</li>)}
+              </ul>
+            </div>
+          )}
+          {!readiness.published && reviewResult && reviewResult.state === 'warning' && (reviewResult.warnings || []).length > 0 && (
+            <div data-testid="planear-review-warning" style={{ marginTop: 10, padding: '10px 12px', borderRadius: R.md, background: C.warningSoft, border: '1px solid rgba(180,83,9,0.30)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.warning, marginBottom: 4 }}>Avisos de la revisión</div>
+              <ul style={{ margin: '0 0 8px', paddingLeft: 18, fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+                {reviewResult.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+              <PrimaryButton testid="planear-publicar-confirmar" tone="green" onClick={() => handlePublish({ confirmWarnings: true })} busy={publishing} disabled={Boolean(assignBusy || rowBusy || preparing || previewing)}>
+                Publicar de todos modos
+              </PrimaryButton>
+            </div>
           )}
           {optimizeResult && (
             <div data-testid="planear-optimizacion" style={{ marginTop: 10, fontSize: 12, color: C.textMuted, textAlign: 'center', lineHeight: 1.5 }}>
