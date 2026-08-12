@@ -10,7 +10,7 @@ import { BRAND_TOKENS as T } from '../../../../theme/brandTokens'
 import StateScreen from '../../../../components/kold/StateScreen'
 import { logScreenError } from '../../../shared/logScreenError'
 import { getRoutesWeek } from '../../api'
-import { weekdayLabel, toneWord, cellLabel, cellTone, isCurrentDay, todayFromTomorrow, tomorrowSummary, rowName, rowRouteId, rowZone, TYPE_SHORT } from './routesWeekModel'
+import { weekdayLabel, toneWord, cellLabel, cellTone, isCurrentDay, todayFromTomorrow, tomorrowSummary, rowName, rowRouteId, rowRequiresRouteSelection, rowZone, TYPE_SHORT } from './routesWeekModel'
 
 const C = T.colors
 const R = T.radius
@@ -55,9 +55,20 @@ function DayCell({ cell, todayIso }) {
 
 function TomorrowCell({ row, onOpen }) {
   const s = tomorrowSummary(row?.tomorrow)
+  const multi = rowRequiresRouteSelection(row)
   return (
     <td data-testid="rw-tomorrow" style={{ padding: '6px 8px', borderTop: `1px solid ${C.border}`, minWidth: 150 }}>
-      {s.assigned ? (
+      {multi ? (
+        // MULTIPLICIDAD (B2/Codex P1): varios planes/rutas mañana ⇒ no se autoabre
+        // una arbitraria; se pide elegir cuál (el detalle abre el selector de ruta).
+        <div style={{ display: 'grid', gap: 4 }}>
+          <span data-testid="rw-varias-rutas" style={{ fontSize: 11, fontWeight: 700, color: C.blue3 }}>Varias rutas mañana</span>
+          <button type="button" data-testid="rw-elegir-ruta" onClick={() => onOpen(row)}
+            style={{ minHeight: 32, borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.blue3, fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}>
+            Elegir ruta
+          </button>
+        </div>
+      ) : s.assigned ? (
         <div style={{ display: 'grid', gap: 4 }}>
           <span data-testid="rw-assigned" style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{s.text}</span>
           <button type="button" data-testid="rw-reasignar" onClick={() => onOpen(row)}

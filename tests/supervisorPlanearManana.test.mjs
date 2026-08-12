@@ -378,3 +378,15 @@ test('F2.1: entrar desde la matriz sin ruta ofrece elegir ruta (no lista sin con
   assert.ok(/planear-elegir-ruta/.test(tab), 'banner de "elige la ruta" en la vista lista')
   assert.ok(/zoneInherited && !initialRouteId/.test(tab), 'solo cuando vino de la matriz sin route.id')
 })
+
+test('F2 P1 (Codex): multiplicidad de rutas mañana NO autoabre una arbitraria', async () => {
+  const model = await import('../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js')
+  // Con requires_route_selection, rowRouteId es 0 ⇒ el detalle NO autoabre; pide elegir.
+  assert.equal(model.rowRouteId({ tomorrow: { requires_route_selection: true }, route: { id: 7 } }), 0)
+  assert.equal(model.rowRequiresRouteSelection({ tomorrow: { requires_route_selection: true } }), true)
+  // Un solo plan: se conserva la ruta accionable.
+  assert.equal(model.rowRouteId({ tomorrow: { requires_route_selection: false }, route: { id: 7 } }), 7)
+  // La matriz muestra el estado explícito de selección.
+  const matriz = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.ok(/rw-elegir-ruta/.test(matriz) && /Elegir ruta/.test(matriz), 'la celda ofrece "Elegir ruta" en multiplicidad')
+})
