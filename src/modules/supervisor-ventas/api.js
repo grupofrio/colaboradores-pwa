@@ -101,6 +101,14 @@ export function getRouteStopsV2(planId) {
   return api('GET', `/pwa-supv/route-stops-v2?plan_id=${Number(planId || 0)}`)
 }
 
+/** Readiness AUTORITATIVA de un plan (recursos + cobertura + estado), LECTURA PURA
+ *  (B1). Devuelve el envelope {status,data:{readiness,...}}. Reemplaza el uso del
+ *  write assign-resources como lectura; conoce señales que sólo el servidor tiene
+ *  (p.ej. sobrecapacidad). */
+export function getRoutePlanReadiness(planId) {
+  return api('GET', `/pwa-supv/route-plan-readiness?route_plan_id=${Number(planId || 0)}`)
+}
+
 // ── Pronóstico ───────────────────────────────────────────────────────────────
 
 /** Productos disponibles para forecast */

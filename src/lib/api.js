@@ -8320,6 +8320,15 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  // B1: readiness autoritativa de un plan (lectura pura). Reemplaza el POST vacío a
+  // assign-resources. Devuelve el envelope {status,data:{readiness,...}}.
+  if (cleanPath === '/pwa-supv/route-plan-readiness' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/route_plan/readiness', {
+      meta: supervisorMeta(),
+      data: { route_plan_id: Number(query.get('route_plan_id') || 0) },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/customers/search' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/customers/search', {
       meta: supervisorMeta(),

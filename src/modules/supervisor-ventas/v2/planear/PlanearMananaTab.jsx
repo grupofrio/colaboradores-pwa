@@ -33,6 +33,7 @@ import {
   publishRoutePlan,
   searchPlanningCustomers,
   getRouteStops,
+  getRoutePlanReadiness,
   getAvailableResources,
   assignRoutePlanResources,
 } from '../../api'
@@ -550,6 +551,28 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     setAssignReadiness(null)
   }
 
+  // B1 (F1↔B1, Codex P1): tras una mutación lee la readiness AUTORITATIVA del
+  // servidor (conoce sobrecapacidad y bloqueos que la derivación local NO ve, y que
+  // podrían habilitar publicar por error). Si el endpoint aún no está desplegado o no
+  // devuelve readiness, degrada a la derivación local (setAssignReadiness(null) ⇒
+  // coverage local) — sigue mejor que el POST vacío, y se cierra al desplegar B1.
+  async function refreshReadinessFromServer(planId) {
+    if (!planId) return
+    const reqId = ++resourceReq.current
+    try {
+      const resp = await getRoutePlanReadiness(planId)
+      if (reqId !== resourceReq.current) return
+      const isErr = resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error'
+      const data = resp?.data || resp || {}
+      if (!isErr && data.readiness) { setAssignReadiness(data.readiness); return }
+      setAssignReadiness(null)
+    } catch (e) {
+      if (reqId !== resourceReq.current) return
+      logScreenError('PlanearManana', 'getRoutePlanReadiness', e)
+      setAssignReadiness(null)
+    }
+  }
+
   async function handlePrepare(route) {
     if (!route?.route_id) return
     setPreparing(route.route_id)
@@ -568,6 +591,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       await loadData()
       if (planId) {
         await loadPlanCustomers(planId)
+        await refreshReadinessFromServer(planId)
       }
     } catch (e) {
       logScreenError('PlanearManana', 'ensureDailyRoutePlan', e)
@@ -610,6 +634,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       const rows = Array.isArray(data) ? data : (data.customers || data.items || data.records || [])
       setPreviewCustomers(rows.map(normalizeRoutePlanCustomer))
       await loadData()
+      if (planId) await refreshReadinessFromServer(planId)
       if (previewReq.current === reqId) flash('Propuesta generada')
     } catch (e) {
       if (previewReq.current !== reqId) return
@@ -638,6 +663,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
         return [...cur, added]
       })
       setQuery(''); setResults([])
+      await refreshReadinessFromServer(routePlanId)
     } catch (e) {
       logScreenError('PlanearManana', 'addCustomerToRoutePlan', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
@@ -654,6 +680,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       setPreviewCustomers((cur) => cur.filter((it) => customer.stop_id
         ? String(it.stop_id || '') !== String(customer.stop_id)
         : String(it.customer_id || it.id || '') !== String(customer.customer_id || customer.id || '')))
+      await refreshReadinessFromServer(routePlanId)
     } catch (e) {
       logScreenError('PlanearManana', 'removeCustomerFromRoutePlan', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)

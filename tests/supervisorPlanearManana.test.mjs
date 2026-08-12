@@ -224,6 +224,21 @@ test('F1: la readiness NO se lee con un POST vacío a assign-resources (bug de "
   assert.ok(/disabled=\{!readiness\.publishable \|\| Boolean\(assignBusy \|\| rowBusy\)\}/.test(tab), 'el botón queda deshabilitado durante una asignación')
 })
 
+test('F1↔B1 (Codex P1): tras una mutación se refresca la readiness AUTORITATIVA del servidor', () => {
+  const api = src('modules/supervisor-ventas/api.js')
+  assert.ok(/export function getRoutePlanReadiness/.test(api), 'wrapper getRoutePlanReadiness')
+  assert.ok(/\/pwa-supv\/route-plan-readiness/.test(api), 'ruta pwa-supv del readiness')
+  const lib = src('lib/api.js')
+  assert.ok(/\/pwa-supv\/route-plan-readiness/.test(lib) && /route_plan\/readiness/.test(lib), 'shim readiness → controller B1')
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/async function refreshReadinessFromServer/.test(tab), 'existe el refresh autoritativo')
+  assert.ok(/getRoutePlanReadiness\(planId\)/.test(tab), 'llama al GET readiness del servidor')
+  // Se llama tras add/remove/preview/prepare (no queda solo la derivación local).
+  assert.ok((tab.match(/refreshReadinessFromServer\(/g) || []).length >= 4, 'se refresca tras cada mutación')
+  // Degrada a local si el endpoint no está: NO reintroduce el POST vacío.
+  assert.ok(/setAssignReadiness\(null\)/.test(tab.slice(tab.indexOf('async function refreshReadinessFromServer'))), 'degrada a local si el servidor no da readiness')
+})
+
 test('guard: publicar espera que termine una modificación de clientes', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
   assert.ok(/assignBusy \|\| rowBusy \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante una modificación')
