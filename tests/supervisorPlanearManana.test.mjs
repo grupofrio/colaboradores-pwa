@@ -363,6 +363,7 @@ test('segmento-solo: segmentId se inicializa SÍNCRONO desde initialSegmentId (C
     'segmentId nace del initialSegmentId, no vacío')
 })
 
+<<<<<<< HEAD
 // ── (F2) Zona honesta + selector de ruta (consume B2) ────────────────────────
 
 test('F2.2: sin default silencioso de polígono; zona heredada que no resuelve es honesta', () => {
@@ -392,4 +393,31 @@ test('F2 P1 (Codex): multiplicidad de rutas mañana NO autoabre una arbitraria',
   // La matriz muestra el estado explícito de selección.
   const matriz = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
   assert.ok(/rw-elegir-ruta/.test(matriz) && /Elegir ruta/.test(matriz), 'la celda ofrece "Elegir ruta" en multiplicidad')
+})
+
+// ── (F5) Optimizar y publicar (contrato B5) ──────────────────────────────────
+
+test('F5: optimize+publish — wrapper, shim y revisión', () => {
+  const api = src('modules/supervisor-ventas/api.js')
+  assert.ok(/export function optimizeRoutePlan/.test(api), 'wrapper optimizeRoutePlan')
+  assert.ok(/\/pwa-supv\/route-plan-optimize/.test(api), 'usa la ruta pwa-supv del optimize')
+  assert.ok(/export function publishRoutePlan\(routePlanId, planRevision\)/.test(api), 'publishRoutePlan acepta planRevision')
+  assert.ok(/plan_revision: String\(planRevision\)/.test(api), 'publish envía plan_revision cuando la hay')
+  const lib = src('lib/api.js')
+  assert.ok(/\/pwa-supv\/route-plan-optimize/.test(lib) && /route_plan\/optimize/.test(lib), 'shim optimize → controller dedicado')
+  assert.ok(/body\?\.plan_revision \? \{ plan_revision:/.test(lib), 'el shim de publish reenvía plan_revision')
+})
+
+test('F5: handlePublish optimiza antes de publicar y maneja revision_mismatch', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/Optimizar y publicar/.test(tab), 'el botón dice "Optimizar y publicar"')
+  const handler = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('// Vista lista'))
+  assert.ok(/runOptimize\(routePlanId\)/.test(handler), 'optimiza antes de publicar')
+  assert.ok(/publishRoutePlan\(routePlanId, (first|again)\.revision\)/.test(handler), 'publica con la revisión de la optimización')
+  assert.ok(/revision_mismatch/.test(handler), 'maneja revision_mismatch (reoptimiza y reintenta una vez)')
+  // El optimizador caído NO publica una ruta sin secuencia (D1).
+  const runOpt = tab.slice(tab.indexOf('async function runOptimize'), tab.indexOf('async function handlePublish'))
+  assert.ok(/OPTIMIZER_UNAVAILABLE|OPTIMIZE_FAILED/.test(runOpt), 'distingue el fallo real del optimizador')
+  assert.ok(/blocked: true/.test(runOpt), 'marca blocked cuando el solver no secuencia (no publica)')
+  assert.ok(/planear-optimizacion/.test(tab), 'muestra paradas · km · min tras optimizar')
 })

@@ -8556,6 +8556,36 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/route-plan-optimize' && method === 'POST') {
+    const routePlanId = Number(body?.route_plan_id || 0)
+    if (!routePlanId) {
+      return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'route_plan_id requerido' }
+    }
+    // Optimización server-side (B5): corre el solver externo, reordena el plan y
+    // devuelve la revisión + métricas. Alcance/estado los valida el controller
+    // dedicado (route_plan/optimize); el envelope MANDA (todos los estados ⇒ no éxito).
+    let optRes
+    try {
+      optRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/route_plan/optimize', {
+        meta: supervisorMeta(),
+        data: { route_plan_id: routePlanId },
+      }), null)
+    } catch (e) {
+      optRes = normalizeWriteResponse(null, e)
+    }
+    if (!optRes.ok) {
+      return {
+        ok: false, status: 'error', phase: optRes.phase, code: optRes.code,
+        message: optRes.message || 'No se pudo optimizar el plan.', retryable: optRes.retryable,
+      }
+    }
+    return {
+      ok: true, status: 'ok', phase: optRes.phase, message: 'Plan optimizado',
+      data: (optRes.data && (optRes.data.route_plan_id ? optRes.data : optRes.data.data)) || { route_plan_id: routePlanId },
+      meta: supervisorMeta(),
+    }
+  }
+
   if (cleanPath === '/pwa-supv/route-plan-publish' && method === 'POST') {
     const routePlanId = Number(body?.route_plan_id || 0)
     if (!routePlanId) {
@@ -8581,7 +8611,9 @@ async function directSupervisorVentas(method, path, body) {
     try {
       publishRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/route_plan/publish', {
         meta: supervisorMeta(),
-        data: { route_plan_id: routePlanId },
+        // plan_revision (B5.2): la revisión con la que se optimizó. El backend la
+        // exige solo con el flag de publicación optimizada ON; sin flag la ignora.
+        data: { route_plan_id: routePlanId, ...(body?.plan_revision ? { plan_revision: String(body.plan_revision) } : {}) },
       }), null)
     } catch (e) {
       publishRes = normalizeWriteResponse(null, e)
