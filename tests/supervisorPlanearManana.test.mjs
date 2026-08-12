@@ -235,8 +235,12 @@ test('F1↔B1 (Codex P1): tras una mutación se refresca la readiness AUTORITATI
   assert.ok(/getRoutePlanReadiness\(planId\)/.test(tab), 'llama al GET readiness del servidor')
   // Se llama tras add/remove/preview/prepare (no queda solo la derivación local).
   assert.ok((tab.match(/refreshReadinessFromServer\(/g) || []).length >= 4, 'se refresca tras cada mutación')
-  // Degrada a local si el endpoint no está: NO reintroduce el POST vacío.
-  assert.ok(/setAssignReadiness\(null\)/.test(tab.slice(tab.indexOf('async function refreshReadinessFromServer'))), 'degrada a local si el servidor no da readiness')
+  // Codex P1 (2ª): un error NO autoritativo BLOQUEA (no habilita por derivación local).
+  const fn = tab.slice(tab.indexOf('async function refreshReadinessFromServer'), tab.indexOf('async function handlePrepare'))
+  assert.ok(/coverage_state: 'blocked'/.test(fn), 'ante error no autoritativo, estado blocked (publish deshabilitado)')
+  // La derivación local SOLO se activa por la señal explícita de capacidad ausente (404).
+  assert.ok(/status === 404/.test(fn), 'la compatibilidad local requiere HTTP 404 (endpoint ausente)')
+  assert.ok(/if \(status === 404\)[\s\S]*?setAssignReadiness\(null\)/.test(fn), 'solo el 404 degrada a local; el resto bloquea')
 })
 
 test('guard: publicar espera que termine una modificación de clientes', () => {

@@ -559,17 +559,30 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   async function refreshReadinessFromServer(planId) {
     if (!planId) return
     const reqId = ++resourceReq.current
+    // Codex P1 (2ª): un resultado NO autoritativo NO debe habilitar publicar por la
+    // derivación local (que no conoce sobrecapacidad ni bloqueos del backend). Se
+    // BLOQUEA. La única excepción es la señal EXPLÍCITA de capacidad ausente: la ruta
+    // B1 no existe (HTTP 404 ⇒ backend pre-B1) ⇒ compatibilidad transitoria con la
+    // derivación local. Cualquier otro error (500, red, FORBIDDEN, envelope de error,
+    // ok:false) bloquea.
+    const blocked = { coverage_state: 'blocked', blockers: ['No se pudo verificar la cobertura con el servidor. Reintenta.'] }
     try {
       const resp = await getRoutePlanReadiness(planId)
       if (reqId !== resourceReq.current) return
       const isErr = resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error'
       const data = resp?.data || resp || {}
       if (!isErr && data.readiness) { setAssignReadiness(data.readiness); return }
-      setAssignReadiness(null)
+      setAssignReadiness(blocked)
     } catch (e) {
       if (reqId !== resourceReq.current) return
+      const status = Number(e?.status || 0)
+      if (status === 404) {
+        // Capacidad ausente (endpoint B1 no desplegado): derivación local transitoria.
+        setAssignReadiness(null)
+        return
+      }
       logScreenError('PlanearManana', 'getRoutePlanReadiness', e)
-      setAssignReadiness(null)
+      setAssignReadiness(blocked)
     }
   }
 
