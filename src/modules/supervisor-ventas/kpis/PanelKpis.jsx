@@ -305,7 +305,7 @@ function ProductDelta({ row }) {
   return <span data-testid="product-delta" style={{ fontSize: 10, fontWeight: 700, color: up ? C.success : C.error }}>{up ? '▲' : '▼'} {Math.abs(row.amount_delta_pct)}%</span>
 }
 
-function ProductsSection({ period }) {
+export function ProductsSection({ period }) {
   const [st, setState] = useState({ status: 'loading', data: null, error: null })
   useEffect(() => {
     let cancelled = false
