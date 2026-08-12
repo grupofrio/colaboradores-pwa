@@ -30,6 +30,7 @@ import {
   previewRoutePlanCustomers,
   addCustomerToRoutePlan,
   removeCustomerFromRoutePlan,
+  optimizeRoutePlan,
   publishRoutePlan,
   searchPlanningCustomers,
   getRouteStops,
@@ -57,6 +58,7 @@ import {
   derivePlanAssignment,
   resourceOptions,
   resourceReadiness,
+  interpretOptimizeResponse,
   COVERAGE_TONE,
 } from './planearModel'
 
@@ -385,6 +387,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const [preparing, setPreparing] = useState(null)   // route_id en preparación
   const [previewing, setPreviewing] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  // Resultado de la última optimización (F5/B5): paradas · km · min + revisión.
+  // Se muestra tras "Optimizar y publicar" para que el número sea visible.
+  const [optimizeResult, setOptimizeResult] = useState(null)
   const [rowBusy, setRowBusy] = useState(null)        // add-/remove-<id>
   const [assignBusy, setAssignBusy] = useState(null)  // vehicle_id | driver_employee_id | salesperson_employee_id
   const [assignReadiness, setAssignReadiness] = useState(null)  // readiness del backend (incluye sobrecapacidad)
@@ -718,6 +723,23 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     } finally { setRowBusy(null) }
   }
 
+  // Corre el optimizador (B5) sobre el plan y guarda la revisión + métricas.
+  // Contrato optimize↔publish (Codex P1): SOLO un éxito con `plan_revision`
+  // habilita publicar. Cualquier otro desenlace BLOQUEA la publicación:
+  //   · error explícito del backend (FORBIDDEN/LOCKED/VALIDATION/NOT_FOUND/
+  //     CONFLICT/CAPABILITY_UNAVAILABLE/red) — incluido el solver caído;
+  //   · un "éxito" malformado SIN revisión (contrato incompleto).
+  // No degradamos a publicar directo: con el flag de publish apagado eso dejaría
+  // publicar una ruta que no podemos anclar a una revisión verificable, y
+  // CAPABILITY_UNAVAILABLE es ambiguo en el front (optimizador ausente vs
+  // autoridad de sucursal rota comparten code y el shim no expone el motivo).
+  async function runOptimize(planId) {
+    const opt = await optimizeRoutePlan(planId)
+    const { revision, blocked, message, metrics } = interpretOptimizeResponse(opt)
+    setOptimizeResult(metrics)
+    return { revision, blocked, message }
+  }
+
   async function handlePublish() {
     // Codex P1 (3ª): tampoco publicar mientras se prepara/previsualiza (readiness
     // autoritativa en vuelo). El estado 'blocked' de invalidate ya deshabilita el
@@ -732,13 +754,30 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     if (!readiness?.publishable) { flash('Este plan no se puede publicar en su estado actual'); return }
     setPublishing(true)
     try {
-      const resp = await publishRoutePlan(routePlanId)
+      // 1) Optimizar (reordena + revisión). Si el optimizador falla de verdad, NO
+      //    se publica una ruta sin secuencia.
+      const first = await runOptimize(routePlanId)
+      if (first.blocked) {
+        flash(first.message || 'El optimizador no pudo secuenciar la ruta. Intenta de nuevo o avisa a soporte.', 6000)
+        return
+      }
+      // 2) Publicar con la revisión. Un revision_mismatch (alguien mutó el plan
+      //    entre optimizar y publicar) ⇒ reoptimiza UNA vez y reintenta.
+      let resp = await publishRoutePlan(routePlanId, first.revision)
+      if (String(resp?.code || resp?.data?.code || '').toLowerCase() === 'revision_mismatch') {
+        const again = await runOptimize(routePlanId)
+        if (again.blocked) {
+          flash(again.message || 'El optimizador no pudo secuenciar la ruta.', 6000)
+          return
+        }
+        resp = await publishRoutePlan(routePlanId, again.revision)
+      }
       if (resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error' || String(resp?.data?.status || '').toLowerCase() === 'error') throw resp
-      flash('Ruta publicada para mañana')
+      flash('Ruta optimizada y publicada para mañana')
       await loadData()
-      setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([])
+      setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([]); setOptimizeResult(null)
     } catch (e) {
-      logScreenError('PlanearManana', 'publishRoutePlan', e)
+      logScreenError('PlanearManana', 'optimizeAndPublish', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
     } finally { setPublishing(false) }
   }
@@ -1023,8 +1062,35 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
           )}
           {!readiness.published && (
             <PrimaryButton testid="planear-publicar" tone="green" onClick={handlePublish} busy={publishing} disabled={!readiness.publishable || Boolean(assignBusy || rowBusy || preparing || previewing)}>
-              Publicar ruta de mañana
+              Optimizar y publicar
             </PrimaryButton>
+          )}
+          {optimizeResult && (
+            <div data-testid="planear-optimizacion" style={{ marginTop: 10, fontSize: 12, color: C.textMuted, textAlign: 'center', lineHeight: 1.5 }}>
+              {[
+                optimizeResult.stops != null ? `${optimizeResult.stops} paradas` : null,
+                optimizeResult.km != null ? `${optimizeResult.km} km` : null,
+                optimizeResult.min != null ? `${optimizeResult.min} min de trayecto` : null,
+              ].filter(Boolean).join(' · ') || 'Ruta optimizada'}
+              {/* Carga esperada vs capacidad de la unidad (null ≠ 0: si el backend no
+                  lo manda, no se inventa un 0). Utilización > 100% ⇒ no cabe. */}
+              {(optimizeResult.demandKg != null || optimizeResult.capacityKg != null || optimizeResult.utilizationPct != null) && (
+                <div data-testid="planear-optimizacion-carga" style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
+                  {[
+                    optimizeResult.demandKg != null
+                      ? `Carga ${optimizeResult.demandKg} kg${optimizeResult.capacityKg != null ? ` de ${optimizeResult.capacityKg} kg` : ''}`
+                      : (optimizeResult.capacityKg != null ? `Capacidad ${optimizeResult.capacityKg} kg` : null),
+                    optimizeResult.utilizationPct != null ? `${optimizeResult.utilizationPct}% de la unidad` : null,
+                  ].filter(Boolean).join(' · ')}
+                </div>
+              )}
+              {optimizeResult.unassigned > 0 && (
+                <div data-testid="planear-optimizacion-noasignadas" style={{ fontSize: 11.5, fontWeight: 700, color: C.warning, marginTop: 3 }}>
+                  {optimizeResult.unassigned} {optimizeResult.unassigned === 1 ? 'cliente no cupo' : 'clientes no cupieron'} en esta unidad
+                </div>
+              )}
+              {optimizeResult.revision ? <div style={{ fontSize: 10.5, color: C.textLow, marginTop: 2 }}>Revisión {optimizeResult.revision} — se publica exactamente esta secuencia</div> : null}
+            </div>
           )}
         </Card>
       </>,

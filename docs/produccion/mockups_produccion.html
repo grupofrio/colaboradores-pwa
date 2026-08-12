@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PWA Colaboradores — Supervisor de Producción · Propuesta visual · Grupo Frío</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..800&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;font-family:'DM Sans',-apple-system,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+:root{
+  /* Tema claro institucional Grupo Frío (brandTokens.js de la PWA supervisor_ventas) */
+  --bg0:#F0F9FF;--bg1:#F0F9FF;--bg2:#E0F3FC;
+  --surface:#FFFFFF;--surface-soft:#F7FCFF;--surface-strong:#E0F3FC;
+  --border:#DBEFF9;--border-blue:rgba(0,119,187,0.18);
+  --blue:#0077BB;--blue2:#00B8D4;--blue3:#005A8D;--glow:rgba(0,119,187,0.10);
+  --text:#0F2A3D;--text-soft:#0F2A3D;--text-muted:#5B7285;--text-low:#5B7285;
+  --success:#166534;--success-soft:rgba(22,101,52,0.10);
+  --warning:#b45309;--warning-soft:rgba(180,83,9,0.10);
+  --error:#b91c1c;--error-soft:rgba(185,28,28,0.10);
+  --cta:linear-gradient(90deg,#005A8D,#0077BB);
+  --hero:linear-gradient(135deg,#005A8D 0%,#00B8D4 100%);
+  --sh-soft:0 1px 2px rgba(15,42,61,0.06);
+  --sh-md:0 2px 8px rgba(15,42,61,0.08);
+  --sh-lg:0 8px 24px rgba(15,42,61,0.10);
+}
+body{background:linear-gradient(160deg,#F0F9FF 0%,#E0F3FC 100%);color:var(--text);min-height:100vh;padding:28px 16px 60px}
+.wrap{max-width:1200px;margin:0 auto}
+.pagehdr{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.logo-lockup{display:flex;align-items:center;gap:10px}
+.logo-lockup svg{height:44px;width:auto}
+.logo-word{line-height:1.02;color:#1852A2;letter-spacing:.06em}
+.logo-word .w1{font-size:13px;font-weight:300;display:block}
+.logo-word .w2{font-size:16px;font-weight:800;display:block;letter-spacing:.09em}
+h1{font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#0F2A3D}
+.sub{color:var(--text-muted);font-size:13px;margin-top:6px;max-width:760px;line-height:1.5}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 26px}
+.tab{padding:9px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--blue3);font-size:12.5px;font-weight:700;cursor:pointer;transition:all .18s ease;box-shadow:var(--sh-soft)}
+.tab.on{background:var(--cta);border-color:transparent;box-shadow:var(--sh-md);color:#fff}
+.stage{display:flex;gap:36px;align-items:flex-start;flex-wrap:wrap}
+.note{flex:1;min-width:280px;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:20px 22px;position:sticky;top:20px;box-shadow:var(--sh-md)}
+.note h2{font-size:15px;font-weight:800;margin-bottom:10px;color:var(--blue3)}
+.note p{font-size:13px;color:var(--text-soft);line-height:1.6;margin-bottom:10px}
+.note .fix{font-size:12px;color:var(--text-muted);line-height:1.55;padding:8px 0 8px 12px;border-left:2px solid var(--blue);margin-bottom:8px}
+.note .fix b{color:var(--text-soft)}
+/* ---- phone frame ---- */
+.phone{width:390px;height:800px;border-radius:44px;border:1px solid #CBE4F2;background:linear-gradient(160deg,#F0F9FF 0%,#F0F9FF 55%,#E0F3FC 100%);box-shadow:0 30px 80px rgba(15,42,61,.18),inset 0 1px 0 rgba(255,255,255,.8);overflow:hidden;position:relative;flex-shrink:0}
+.screen{height:100%;display:flex;flex-direction:column}
+.body{flex:1;overflow-y:auto;padding:0 16px;scrollbar-width:none}
+.body::-webkit-scrollbar{display:none}
+.statusbar{display:flex;justify-content:space-between;padding:14px 24px 4px;font-size:12px;font-weight:600;color:var(--text-muted)}
+.hdr{display:flex;align-items:center;gap:10px;padding:12px 16px 10px}
+.iconbtn{width:38px;height:38px;border-radius:18px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--blue3);font-size:16px;flex-shrink:0;box-shadow:var(--sh-soft)}
+.hdr .t{font-size:16px;font-weight:700;letter-spacing:-0.01em;color:var(--text)}
+.hdr .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.gf-mini{height:26px;width:auto;flex-shrink:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:15px 17px;margin-bottom:12px;box-shadow:var(--sh-soft)}
+.hero{background:var(--hero);border:none;border-radius:24px;padding:16px;margin-bottom:12px;color:#fff;box-shadow:var(--sh-md)}
+.hero .hmut{color:rgba(255,255,255,.75)!important}
+.hero b{color:#fff!important}
+.overline{font-size:10px;font-weight:700;letter-spacing:.18em;color:var(--text-low);text-transform:uppercase;margin:14px 2px 8px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
+.chip.info{color:#005A8D;background:#E0F3FC;border:1px solid rgba(0,119,187,.25)}
+.chip.ok{color:#166534;background:var(--success-soft);border:1px solid rgba(22,101,52,.28)}
+.chip.warn{color:#b45309;background:var(--warning-soft);border:1px solid rgba(180,83,9,.28)}
+.chip.err{color:#b91c1c;background:var(--error-soft);border:1px solid rgba(185,28,28,.28)}
+.chip.mut{color:var(--text-muted);background:#F7FCFF;border:1px solid var(--border)}
+.chip.onhero{color:#fff;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4)}
+.cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;border:none;border-radius:999px;background:var(--cta);color:#fff;font-size:14px;font-weight:700;box-shadow:var(--sh-md);cursor:pointer}
+.cta.dis{background:#E4EEF5;color:#8FA5B5;box-shadow:none}
+.ghost{display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;border-radius:999px;background:var(--surface);color:var(--blue3);border:1px solid var(--border-blue);font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--sh-soft)}
+.step{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:22px;background:var(--surface);border:1px solid var(--border);margin-bottom:6px;box-shadow:var(--sh-soft)}
+.step .dot{width:30px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;border:2px solid}
+.step .tt{font-size:13.5px;font-weight:700;color:var(--text)}
+.step .dd{font-size:11.5px;color:var(--text-muted);margin-top:1px}
+.step .st{margin-left:auto;flex-shrink:0}
+.step.active{background:#EAF6FE;border-color:rgba(0,119,187,.35)}
+.step.pend{opacity:.6}
+.navbar{display:flex;border-top:1px solid var(--border);background:rgba(255,255,255,.96);backdrop-filter:blur(20px);padding:6px 4px 14px}
+.navbar .nv{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--text-low);font-size:10px;font-weight:500;padding-top:6px}
+.navbar .nv.on{color:var(--blue);font-weight:700}
+.navbar .nv svg{width:20px;height:20px}
+.kpi{flex:1;padding:8px 10px;border-radius:18px;background:#F7FCFF;border:1px solid var(--border)}
+.rowline{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #EAF3F9;font-size:13px}
+.rowline:last-child{border-bottom:none}
+.rowline .l{color:var(--text-muted)}
+.rowline .r{font-weight:700;color:var(--text)}
+/* venta steppers */
+.pline{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #EAF3F9}
+.pline .pi{width:40px;height:40px;border-radius:14px;background:#E0F3FC;border:1px solid var(--border-blue);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.pline .pn{font-size:13px;font-weight:700;color:var(--text)}
+.pline .pp{font-size:11px;color:var(--text-muted)}
+.stepper{display:flex;align-items:center;gap:6px;margin-left:auto}
+.stepper .sb{width:46px;height:46px;border-radius:16px;border:1px solid rgba(0,119,187,.30);background:#EAF6FE;color:var(--blue3);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.stepper .sq{width:36px;text-align:center;font-size:16px;font-weight:800}
+.fixedbar{border-top:1px solid var(--border);background:rgba(255,255,255,.97);backdrop-filter:blur(16px);padding:12px 16px 16px;box-shadow:0 -6px 20px rgba(15,42,61,.06)}
+.fixedbar .tot{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.fixedbar .tot .tl{font-size:12px;color:var(--text-muted);font-weight:700}
+.fixedbar .tot .tv{font-size:24px;font-weight:800;color:#166534;letter-spacing:-0.02em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px;border-radius:22px;background:var(--surface);border:1px solid var(--border);cursor:pointer;min-height:88px;justify-content:center;box-shadow:var(--sh-soft)}
+.act .ai{font-size:24px}
+.act .al{font-size:12px;font-weight:700;color:var(--text);text-align:center}
+.act .as{font-size:10px;color:var(--text-muted);text-align:center}
+.act.main{background:linear-gradient(180deg,#E0F3FC,#F0F9FF);border-color:rgba(0,119,187,.35)}
+.photo{border:1.5px dashed rgba(0,119,187,.4);border-radius:18px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--blue3);font-size:12.5px;font-weight:700;background:#F3FAFE}
+.reason{display:inline-flex;padding:11px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text);margin:0 6px 8px 0;cursor:pointer;box-shadow:var(--sh-soft)}
+.reason.on{background:#E0F3FC;border-color:rgba(0,119,187,.45);color:var(--blue3);font-weight:700}
+textarea.mock,input.mock{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px 14px;color:var(--text);font-size:14px;resize:none;outline:none;box-shadow:var(--sh-soft)}
+.money{font-variant-numeric:tabular-nums}
+/* map */
+.mapbox{position:relative;height:100%;background:#E8F4FB;overflow:hidden}
+.mapbox svg.mapsvg{position:absolute;inset:0;width:100%;height:100%}
+.pin{position:absolute;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2.5px solid;transform:translate(-50%,-50%);box-shadow:var(--sh-md)}
+.floating-top{position:absolute;top:12px;left:12px;right:12px;z-index:5}
+.panel{position:absolute;left:10px;right:10px;bottom:10px;background:rgba(255,255,255,.98);border:1px solid var(--border);border-radius:24px;padding:14px 16px;z-index:5;backdrop-filter:blur(16px);box-shadow:var(--sh-lg)}
+@media(max-width:900px){.note{position:static}}
+</style>
+</head>
+<body>
+
+<!-- Logo Grupo Frío (marca oficial: cubo isométrico, public/icons/logo-grupo-frio.svg de la PWA) -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="gf-mark" viewBox="100 15 460 480">
+    <g transform="translate(40,25)">
+      <polygon points="290,0 400,64 400,190 290,126" fill="#B8BAC1"/>
+      <polygon points="290,0 180,64 180,190 290,126" fill="#C5C7CD"/>
+      <polygon points="430,78 510,125 510,255 430,208" fill="#B8BAC1"/>
+      <polygon points="150,78 70,125 70,255 150,208" fill="#C5C7CD"/>
+      <polygon points="290,132 400,196 400,332 290,268" fill="#C7CCD1"/>
+      <polygon points="290,132 180,196 180,332 290,268" fill="#D2D7DB"/>
+      <polygon points="150,208 70,255 70,385 150,338" fill="#1A4F9C"/>
+      <polygon points="290,268 180,332 180,463 290,399" fill="#1A4F9C"/>
+      <polygon points="430,208 510,255 510,385 430,338" fill="#1A4F9C"/>
+      <polygon points="290,126 372,173 290,220 208,173" fill="#D8DDE0"/>
+      <g fill="none" stroke="#F5F7F8" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="290" y1="0" x2="290" y2="126" stroke-width="10"/>
+        <line x1="180" y1="64" x2="180" y2="463" stroke-width="10"/>
+        <line x1="400" y1="64" x2="400" y2="332" stroke-width="10"/>
+        <line x1="70" y1="255" x2="180" y2="332" stroke-width="10"/>
+        <line x1="400" y1="196" x2="510" y2="255" stroke-width="10"/>
+        <line x1="180" y1="196" x2="70" y2="125" stroke-width="10"/>
+        <line x1="400" y1="190" x2="510" y2="125" stroke-width="10"/>
+        <line x1="180" y1="190" x2="290" y2="126" stroke-width="10"/>
+        <line x1="290" y1="126" x2="400" y2="190" stroke-width="10"/>
+        <line x1="180" y1="332" x2="70" y2="255" stroke-width="10"/>
+        <line x1="180" y1="332" x2="290" y2="399" stroke-width="10"/>
+        <line x1="290" y1="399" x2="400" y2="332" stroke-width="10"/>
+        <line x1="400" y1="332" x2="510" y2="255" stroke-width="10"/>
+      </g>
+    </g>
+  </symbol>
+</svg>
+
+<div class="wrap">
+  <div class="pagehdr">
+    <div class="logo-lockup">
+      <svg viewBox="0 0 460 480"><use href="#gf-mark"/></svg>
+      <div class="logo-word"><span class="w1">GRUPO</span><span class="w2">FRÍO</span></div>
+    </div>
+  </div>
+  <h1>Supervisor de Producción — Propuesta visual (PWA Colaboradores)</h1>
+  <p class="sub">Las 20 pantallas del día de producción, en orden cronológico: apertura → checklists → operación (cosecha, ciclos, molido, almacén de PT, paros) → máquinas y energía → cierre. Barra de navegación de 5 pestañas: <b>Turno</b> (hub contextual del día), <b>Producción</b> (operadores, tanques/cosecha, ciclos, molido, almacén de PT), <b>Máquinas</b> (compresores, checklists de equipo, paros, mantenimiento, esperado vs real), <b>Energía</b> (lecturas y kg/kWh — su indicador), <b>Más</b> (brief, alertas, merma, historial). Tema claro institucional + logo Grupo Frío. El $ vive con gerencia.</p>
+  <div class="tabs" id="tabs"></div>
+  <div class="stage" id="stage"></div>
+</div>
+
+<template id="screens">
+
+<section data-name="1 · Apertura de turno" data-note='<h2>Los gates duros se conservan — y la energía crece a 3 registros</h2><p>Abrir turno ya exige lectura inicial de energía y sal en todos los tanques (eso funciona y se queda). Lo nuevo: la lectura inicial pasa de 1 número a los 3 registros tarifarios.</p><div class="fix"><b>Gate por palabra:</b> cada requisito declara su estado (✓ Listo · ⚠ Falta 1 tanque · ▢ Pendiente), no solo un color.</div><div class="fix"><b>El botón no se habilita</b> hasta que todos los gates pasan — pero existe el camino de EXCEPCIÓN para la operación real (medidor inaccesible, tanque en mantenimiento, arranque urgente): con causa, evidencia, vencimiento y responsable, y alerta posterior al gerente. Nunca un bypass silencioso — ni un turno físico detenido por el wifi.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>06:52</span><span>Planta Iguala · Wifi</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Abrir turno</span><div class="right"><svg class="gf-mini" viewBox="0 0 460 480"><use href="#gf-mark"/></svg></div></div>
+    <div class="body">
+      <div class="hero"><div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:16px;font-weight:800">Turno matutino · 10 ago</div><div class="hmut" style="font-size:11.5px;margin-top:2px">Miguel Morales · Líneas Barras y Rolito</div></div>
+        <span class="chip onhero">◈ Por abrir</span></div></div>
+      <div class="overline">Requisitos para abrir</div>
+      <div class="step"><div class="dot" style="border-color:var(--success);color:var(--success);background:var(--success-soft)">✓</div><div><div class="tt">Lectura inicial de energía</div><div class="dd">Base · Intermedia · Punta + foto del medidor</div></div><span class="st chip ok">✓ Listo</span></div>
+      <div class="step active"><div class="dot" style="border-color:var(--blue);color:var(--blue);background:#E0F3FC">2</div><div><div class="tt">Sal y temperatura de tanques</div><div class="dd">3 de 4 tanques capturados</div></div><span class="st chip warn">⚠ Falta Tanque 3</span></div>
+      <div class="step pend"><div class="dot" style="border-color:#9FB4C2;color:#7C93A3">3</div><div><div class="tt">Estado de compresores</div><div class="dd">Declara si cada compresor está encendido o apagado</div></div><span class="st chip mut">▢ Pendiente</span></div>
+      <div class="step"><div class="dot" style="border-color:var(--success);color:var(--success);background:var(--success-soft)">✓</div><div><div class="tt">Operadores del turno</div><div class="dd">Rolito: J. Estrada · Barra: M. Ríos</div></div><span class="st chip ok">✓ 2 de 2</span></div>
+      <div style="height:14px"></div>
+      <button class="cta dis">Abrir turno</button>
+      <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:8px">Captura el Tanque 3 y declara los compresores para abrir</div>
+      <button class="ghost" style="margin-top:10px;min-height:40px;font-size:12px">Abrir con excepción (causa + evidencia + responsable)</button>
+      <div style="height:20px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="2 · Checklist de equipo" data-note='<h2>Sí ya lo trabajaron en Odoo — se reusa, no se reinventa</h2><p>El motor de checklists YA existe: es el checklist HACCP del turno (`gf` production checklist, endpoints /pwa-prod/checklist y /api/production/haccp/check) con plantillas por línea (barras · rolito · transformación). Lo que falta es pequeño: ligar plantillas a una MÁQUINA (gf.production.machine) para tener checklist por equipo — compresores, molino, evaporadores.</p><div class="fix"><b>Puntos con rango numérico</b> (ya soportado: checklistNumericRange): presión y temperatura fuera de rango marcan el punto en rojo y piden foto.</div><div class="fix"><b>Punto reprobado → solicitud de mantenimiento</b> con un tap (maintenance.request ya está integrado; hoy sin liga a equipo ni turno — se le agrega).</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>07:10</span><span>Checklist de arranque</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Checklist de equipo</span></div>
+    <div class="body">
+      <div style="margin-bottom:8px"><span class="reason on">Compresor 1</span><span class="reason">Compresor 2</span><span class="reason">Molino</span><span class="reason">Evaporador 1</span></div>
+      <div class="card" style="padding:10px 15px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:700">Compresor 1 · Línea Barras</span><span class="chip info">4 de 6 puntos</span></div>
+      <div class="card" style="padding:11px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12.5px;font-weight:700">Presión de aceite</div><div style="font-size:10.5px;color:var(--text-muted)">Rango: 2.0 – 4.5 bar</div></div><input class="mock money" style="width:90px;text-align:right;font-weight:800" value="3.2"></div></div>
+      <div class="card" style="padding:11px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12.5px;font-weight:700">Temp. de descarga</div><div style="font-size:10.5px;color:var(--text-muted)">Rango: ≤ 95 °C</div></div><input class="mock money" style="width:90px;text-align:right;font-weight:800" value="88"></div></div>
+      <div class="card" style="border-color:rgba(185,28,28,.35);padding:11px 15px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:12.5px;font-weight:700">Fugas visibles de aceite</div><div style="display:flex;gap:8px"><span class="reason" style="margin:0;padding:8px 14px">No</span><span class="reason on" style="margin:0;padding:8px 14px;background:var(--error-soft);border-color:rgba(185,28,28,.4);color:#b91c1c">Sí</span></div></div>
+        <div style="font-size:11px;color:#b91c1c;margin-top:8px">Punto reprobado: foto obligatoria y se genera aviso.</div>
+        <div class="photo" style="margin-top:8px;padding:12px">📷 Foto de la fuga</div>
+        <button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px">🔧 Crear solicitud de mantenimiento (Compresor 1)</button>
+      </div>
+      <div class="card" style="padding:11px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:12.5px;font-weight:700">Ruido / vibración anormal</div><div style="display:flex;gap:8px"><span class="reason on" style="margin:0;padding:8px 14px">No</span><span class="reason" style="margin:0;padding:8px 14px">Sí</span></div></div></div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Completar checklist del equipo</button></div>
+  </div>
+</section>
+
+<section data-name="3 · Hub del turno (honesto)" data-note='<h2>El score deja de mentir: sin datos completos, no hay score</h2><p>Hoy el hub muestra "Score 100" junto a "Desbalance 30.2%". La corrección (ajustada tras la auditoría de Codex): el score SOLO se calcula cuando cierran sus componentes mínimos — producción, recepción PT, energía comparable y horas confiables. Mientras falte uno: "Sin calificación · falta X", nunca un número aparentemente preciso sobre datos incompletos. Y "por recibir" no penaliza score ni inventario: es un estado, no una merma.</p><div class="fix"><b>Real vs esperado por línea</b> (la fórmula de la auditoría: nominal × horas de compresor) con la brecha en palabra.</div><div class="fix"><b>Su indicador es kg/kWh, no dinero:</b> kilos producidos capturados entre el diferencial de lecturas (× multiplicador) — cuántos kilos de hielo da cada kWh; mientras más alto, mejor. Se compara contra su propio promedio. El $ con la tarifa vive en las vistas de gerencia/dirección, alimentado por los mismos datos.</div><div class="fix"><b>Lo sin cuadrar es un pendiente accionable,</b> no un número rojo decorativo.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>12:40</span><span>Turno en curso · 7:00–15:00</span></div>
+    <div class="hdr"><span class="t">Mi turno</span><div class="right"><svg class="gf-mini" viewBox="0 0 460 480"><use href="#gf-mark"/></svg><div class="iconbtn">⟳</div></div></div>
+    <div class="body">
+      <div class="hero"><div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:16px;font-weight:800">Score del turno: 84</div><div class="hmut" style="font-size:11.5px;margin-top:2px">Penalizado por desbalance · antes marcaba 100</div></div>
+        <span class="chip onhero">⚠ Desbalance 30.2%</span></div>
+        <div class="hmut" style="font-size:11px;margin-top:10px">Producción ✓ · Energía ✓ · Horas de máquina ⚠ parcial · Recepción PT ⚠ <b>392.5 kg por recibir</b></div>
+      </div>
+      <div class="overline">Real vs esperado (por línea)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Barras · esperado 2,560 kg (9.6 t/d × 6.4 h)</span><span class="r money">2,310 kg</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Brecha</span><span class="r"><span class="chip warn">⚠ −9.8% · Revisar</span></span></div>
+      </div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Rolito · esperado 8,750 kg (30 t/d × 7 h)</span><span class="r money">9,120 kg</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Brecha</span><span class="r"><span class="chip ok">✓ +4.2% · En meta</span></span></div>
+      </div>
+      <div class="overline">Tu eficiencia</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="kpi" style="border-color:rgba(0,119,187,.35);background:#EAF6FE"><div style="font-size:10px;color:var(--text-muted)">ENERGÍA</div><div style="font-size:17px;font-weight:800;margin-top:2px">12.2 kg/kWh</div><div style="margin-top:4px"><span class="chip ok" style="font-size:9px;padding:1px 7px">✓ Mejor que tu 7d: 11.2</span></div></div>
+        <div class="kpi"><div style="font-size:10px;color:var(--text-muted)">RENDIMIENTO MOLIDO</div><div style="font-size:17px;font-weight:800;margin-top:2px">93.9%</div><div style="margin-top:4px"><span class="chip warn" style="font-size:9px;padding:1px 7px">⚠ Merma 6.1% · estándar 4%</span></div></div>
+      </div>
+      <div class="card" style="margin-top:10px;padding:10px 14px;font-size:11px;color:var(--text-muted);line-height:1.5">Tu kg/kWh = <b style="color:var(--text)">13,370 kg</b> producidos ÷ <b style="color:var(--text)">1,093 kWh</b> (diferencial de lecturas × multiplicador). Mientras más alto, mejor. El costo en $ lo ven gerencia y dirección con estos mismos datos.</div>
+      <div class="overline">Pendientes del turno</div>
+      <div class="card" style="border-color:rgba(180,83,9,.3);padding:10px 15px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;font-weight:700">Conciliar 392.5 kg sin cuadrar</span><span style="color:var(--blue)">→</span></div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="4 · Operadores del turno" data-note='<h2>La gente del turno, en vivo</h2><p>El supervisor responde por dos operadores (Rolito y Barra). Esta vista hace visible la cascada que ya existe en el backend: quién capturó, cuándo fue su última captura y qué falta para que el turno pueda cerrar.</p><div class="fix"><b>Operador sin captura reciente = foco,</b> no acusación: "Sin captura desde 10:15" con palabra, para ir a ver qué pasa antes de que truene el cierre.</div><div class="fix"><b>El estado de entrega viene del servidor</b> (muere el localStorage) — lo mismo que el cierre en cascada.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>12:35</span><span>Turno en curso</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Operadores del turno</span></div>
+    <div class="body">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13.5px;font-weight:800">J. Estrada · Rolito</div><div style="font-size:11px;color:var(--text-muted)">3 ciclos · 9,120 kg vaciados · última captura 12:28</div></div><span class="chip ok">✓ Al día</span></div>
+        <div class="rowline" style="margin-top:6px;border-bottom:none"><span class="l">Entrega de turno</span><span class="r"><span class="chip mut">▢ Pendiente (cierra 15:00)</span></span></div>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.35)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13.5px;font-weight:800">M. Ríos · Barra</div><div style="font-size:11px;color:var(--text-muted)">41 barras cosechadas · 2,057 kg</div></div><span class="chip warn">⚠ Sin captura desde 10:15</span></div>
+        <div style="font-size:11px;color:#b45309;margin-top:8px">2 h 20 min sin registrar cosecha con 24 canastillas listas en Tanque 1.</div>
+        <button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px">Ver Tanque 1 →</button>
+      </div>
+      <div class="overline">Para cerrar el turno (del servidor)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Entregas de operadores</span><span class="r">0 de 2</span></div>
+        <div class="rowline"><span class="l">Checklist HACCP del turno</span><span class="r"><span class="chip ok">✓ Completo</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Lectura fin de energía</span><span class="r"><span class="chip mut">▢ Desde las 14:30</span></span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="5 · Cosecha de tanque · Barras" data-note='<h2>La cosecha con sus gates y su merma en el momento</h2><p>La cosecha por slot ya existe en Odoo (canastillas listas, gates de temperatura/sal, merma de barras). La pantalla la vuelve guiada: solo se cosechan slots que cumplen su tiempo, y las barras quebradas se registran ahí mismo con causa — no al final del turno de memoria.</p><div class="fix"><b>Gate por palabra:</b> "✓ Salmuera −7.0 °C · apta" — si no cumple, la cosecha se bloquea explicando por qué.</div><div class="fix"><b>Merma de cosecha con causa,</b> ligada al slot: alimenta la merma del turno sin captura doble.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>10:20</span><span>Tanque 1 · Barras</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Cosechar · Tanque 1</span><span class="right"><span class="chip ok" style="align-self:center">✓ Salmuera −7.0 °C · apta</span></span></div>
+    <div class="body">
+      <div class="overline">Slots listos (cumplieron 25 h)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">S-03 · 26.1 h</span><span class="r"><span class="chip ok">✓ Listo · 8 canastillas</span></span></div>
+        <div class="rowline"><span class="l">S-07 · 25.4 h</span><span class="r"><span class="chip ok">✓ Listo · 8 canastillas</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">S-11 · 22.8 h</span><span class="r"><span class="chip mut">▢ Faltan 2.2 h</span></span></div>
+      </div>
+      <div class="overline">Cosechando ahora</div>
+      <div class="card"><div class="pline" style="border-bottom:none"><div class="pi">🧊</div><div><div class="pn">Canastillas del S-03</div><div class="pp money">= 16 barras · 800 kg</div></div><div class="stepper"><div class="sb">−</div><div class="sq">8</div><div class="sb">+</div></div></div></div>
+      <div class="overline">Barras quebradas (merma de cosecha)</div>
+      <div class="card" style="border-color:rgba(180,83,9,.3)">
+        <div class="pline" style="border-bottom:none"><div class="pi">⚠️</div><div><div class="pn">Barras quebradas</div><div class="pp money">= 50 kg · se registra al slot</div></div><div class="stepper"><div class="sb">−</div><div class="sq">1</div><div class="sb">+</div></div></div>
+        <div style="margin-top:8px"><span class="reason on">Golpe al izar</span><span class="reason">Pegada a la canastilla</span><span class="reason">Otra</span></div>
+      </div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Registrar cosecha del S-03</button></div>
+  </div>
+</section>
+
+<section data-name="6 · Ciclos del evaporador · Rolito" data-note='<h2>El ciclo guiado, con hora del servidor</h2><p>Los ciclos ya existen (655 históricos, 412,700 kg en Evaporador 1) con congelado → deshielo → vaciado. La pantalla guía la fase actual con UN botón grande y compara el tiempo contra el promedio del equipo.</p><div class="fix"><b>Una fase, un botón:</b> el operador no elige entre 6 acciones — la app sabe en qué fase va el ciclo.</div><div class="fix"><b>Tiempo vs promedio con palabra:</b> un congelado 30 min más largo que el promedio es señal temprana de compresor o salmuera.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>12:46</span><span>Evaporador 1 · Rolito</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Ciclo #656</span></div>
+    <div class="body">
+      <div class="hero" style="padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:15px;font-weight:800">Congelando</div><div class="hmut" style="font-size:11.5px;margin-top:2px">Inició 10:12 · lleva 2 h 34 min</div></div>
+          <span class="chip onhero">🕑 Promedio: 2 h 50 min</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+          <div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.25);overflow:hidden"><div style="width:90%;height:100%;background:#fff"></div></div>
+          <span class="hmut" style="font-size:11px;font-weight:700">~16 min</span>
+        </div>
+      </div>
+      <button class="cta">Iniciar deshielo</button>
+      <div style="text-align:center;font-size:10.5px;color:var(--text-muted);margin-top:8px">La hora la pone el servidor al confirmar</div>
+      <div class="overline">Hoy en este evaporador</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Ciclo #654 · vaciado 08:05</span><span class="r money">1,420 kg · 2 h 48 min</span></div>
+        <div class="rowline"><span class="l">Ciclo #655 · vaciado 10:02</span><span class="r money">1,435 kg · 2 h 52 min</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l" style="font-weight:700;color:var(--text)">Acumulado del turno</span><span class="r money">2,855 kg · 2 ciclos</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="7 · Tanques y salmuera" data-note='<h2>El mapa físico se queda; la salmuera gana historia</h2><p>El mapa de albercas con canastillas, temperatura y sal ya está muy completo — se conserva. Lo que cambia: cada lectura de sal/temperatura CREA un registro en vez de sobreescribir el anterior, para ver la degradación del tanque en el tiempo.</p><div class="fix"><b>Navegación arreglada:</b> el botón de la tarjeta ya no manda a una ruta prohibida que redirige al inicio.</div><div class="fix"><b>Gate de cosecha por palabra:</b> "✓ Apto para cosecha" o "⛔ Salmuera fuera de rango", con los mínimos visibles.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>12:50</span><span>Planta Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Tanque 1 · Barras</span></div>
+    <div class="body">
+      <div class="hero" style="padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:15px;font-weight:800">24 de 16+8 canastillas listas</div><div class="hmut" style="font-size:11.5px;margin-top:2px">Nominal 9.6 t/día · 25 h congelado · 50 kg/barra</div></div>
+          <span class="chip onhero">✓ Apto para cosecha</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="kpi"><div style="font-size:10px;color:var(--text-muted)">SALMUERA</div><div style="font-size:16px;font-weight:800;margin-top:2px">−7.0 °C</div></div>
+        <div class="kpi"><div style="font-size:10px;color:var(--text-muted)">NIVEL DE SAL</div><div style="font-size:16px;font-weight:800;margin-top:2px">65</div></div>
+      </div>
+      <div class="overline">Historial de salmuera (ya no se sobreescribe)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Hoy 06:58 · M. Morales</span><span class="r money">−7.0 °C · sal 65</span></div>
+        <div class="rowline"><span class="l">Ayer 14:40</span><span class="r money">−6.8 °C · sal 66</span></div>
+        <div class="rowline"><span class="l">Ayer 07:02</span><span class="r money">−6.5 °C · sal 68</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Tendencia 7 días</span><span class="r"><span class="chip warn">⚠ Sal bajando · programar reposición</span></span></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="ghost" style="flex:1">Registrar lectura</button>
+        <button class="cta" style="flex:1;min-height:46px">Cosechar slots</button>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="8 · Molido · captura (Almacenista PT)" data-note='<h2>Quien captura es el ALMACENISTA DE PT — el supervisor supervisa</h2><p>La transformación no la hace el supervisor: la hace el almacenista de producto terminado (la PWA ya tiene su ruta <b>/almacen-pt/transformacion</b>), pero depende de él. Esta es la pantalla del almacenista. La regla nueva: la merma nunca se captura a mano — es la resta automática entrada − salida (hoy la pantalla existente valida el balance pero la merma se teclea). El lote no se registra sin cuadrar.</p><div class="fix"><b>Entrada en barras, salida en bolsas,</b> con steppers grandes; los kg los calcula la app (barra 50 kg, bolsa 5 kg).</div><div class="fix"><b>Semáforo contra el estándar de conversión</b> (p. ej. 4%): si el lote lo excede, la causa es obligatoria — eso convierte la merma en dato accionable (molino desajustado, espera/derretimiento, astillado).</div><div class="fix"><b>El rendimiento del turno alimenta el score</b> y el hub — mejorar la conversión se vuelve parte del trabajo, no un regaño a fin de mes.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>11:20</span><span>Almacén PT · Lote 3 de molido</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Molido · barra a bolsa</span></div>
+    <div class="body">
+      <div class="card" style="padding:10px 14px;font-size:11px;color:var(--text-muted)">Estándar de conversión: barra 50 kg → bolsas de 5 kg · merma estándar <b style="color:var(--text)">4%</b></div>
+      <div class="overline">Entra al molino</div>
+      <div class="card"><div class="pline" style="border-bottom:none"><div class="pi">🧊</div><div><div class="pn">Barras de 50 kg</div><div class="pp money">= 600 kg de entrada</div></div><div class="stepper"><div class="sb">−</div><div class="sq">12</div><div class="sb">+</div></div></div></div>
+      <div class="overline">Sale embolsado</div>
+      <div class="card"><div class="pline" style="border-bottom:none"><div class="pi">🛍️</div><div><div class="pn">Bolsas de molido 5 kg</div><div class="pp money">= 545 kg de salida</div></div><div class="stepper"><div class="sb">−</div><div class="sq">109</div><div class="sb">+</div></div></div></div>
+      <div class="overline">Merma del lote (calculada)</div>
+      <div class="card" style="border-color:rgba(180,83,9,.35);padding:13px 15px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:11px;color:var(--text-muted)">600 − 545 kg</div><div style="font-size:20px;font-weight:800;margin-top:2px">55 kg · 9.2%</div></div>
+          <span class="chip warn">⚠ Excede estándar 4%</span>
+        </div>
+        <div style="font-size:11px;color:#b45309;margin-top:8px">Causa obligatoria por exceder el estándar:</div>
+        <div style="margin-top:8px"><span class="reason on">Molino desajustado</span><span class="reason">Espera / derretimiento</span><span class="reason">Astillado</span><span class="reason">Báscula</span><span class="reason">Otra</span></div>
+      </div>
+      <div class="overline">Acumulado del turno</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Entrada</span><span class="r money">1,800 kg (36 barras)</span></div>
+        <div class="rowline"><span class="l">Salida</span><span class="r money">1,690 kg (338 bolsas)</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l" style="font-weight:700;color:var(--text)">Rendimiento</span><span class="r"><span class="chip warn">⚠ 93.9% · merma 6.1%</span></span></div>
+      </div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Registrar lote de molido</button></div>
+  </div>
+</section>
+
+<section data-name="9 · Molido · supervisión (Supervisor)" data-note='<h2>Lo que ve el supervisor: rendimiento, causas y visto bueno</h2><p>El almacenista de PT captura; el supervisor responde por el resultado. Su vista es el rendimiento por lote con la causa tipificada, y el visto bueno de los lotes que excedieron el estándar.</p><div class="fix"><b>Lote fuera de estándar = pendiente del supervisor:</b> lo valida con causa o SOLICITA RECUENTO — el supervisor nunca edita el conteo ni ajusta stock (segregación de funciones: quien captura no aprueba, quien aprueba no captura).</div><div class="fix"><b>Causas repetidas generan acción:</b> tres lotes con "molino desajustado" arman la solicitud de mantenimiento con un tap.</div><div class="fix"><b>El rendimiento acumulado alimenta el hub y el score</b> del turno.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>13:30</span><span>Turno en curso</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Molido · supervisión</span></div>
+    <div class="body">
+      <div class="hero" style="padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:15px;font-weight:800">Rendimiento del turno: 93.9%</div><div class="hmut" style="font-size:11.5px;margin-top:2px">1,800 kg en barras → 1,690 kg en bolsas</div></div>
+          <span class="chip onhero">⚠ Merma 6.1% · estándar 4%</span>
+        </div>
+      </div>
+      <div class="overline">Lotes del turno (capturó: J. Peña · Almacén PT)</div>
+      <div class="card" style="padding:10px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12.5px;font-weight:700">Lote 1 · 10:12</div><div style="font-size:10.5px;color:var(--text-muted)">600 kg → 578 kg</div></div><span class="chip ok">✓ 96.3% · En estándar</span></div></div>
+      <div class="card" style="padding:10px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12.5px;font-weight:700">Lote 2 · 11:48</div><div style="font-size:10.5px;color:var(--text-muted)">600 kg → 567 kg</div></div><span class="chip ok">✓ 94.5% · En estándar</span></div></div>
+      <div class="card" style="border-color:rgba(180,83,9,.35)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12.5px;font-weight:700">Lote 3 · 13:05</div><div style="font-size:10.5px;color:var(--text-muted)">600 kg → 545 kg · causa: molino desajustado</div></div><span class="chip warn">⚠ 90.8% · Excede</span></div>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <button class="ghost" style="flex:1;min-height:40px;font-size:12px;color:#b91c1c;border-color:rgba(185,28,28,.35)">Solicitar recuento</button>
+          <button class="cta" style="flex:1;min-height:40px;font-size:12.5px">Validar con causa</button>
+        </div>
+      </div>
+      <div class="card" style="background:#FFFBF5;border-color:rgba(180,83,9,.3);padding:11px 14px">
+        <div style="font-size:11.5px;color:#b45309;line-height:1.5">⚠ 3 lotes con "molino desajustado" esta semana ≈ 110 kg/día que no llegan a bolsa.</div>
+        <button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px">🔧 Generar solicitud de mantenimiento</button>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="10 · Almacén PT · recepción (Almacenista PT)" data-note='<h2>Donde lo producido se vuelve inventario</h2><p>El almacén de producto terminado es parte de producción: lo que producción cosecha y embolsa se RECIBE aquí con conteo. Captura el almacenista de PT (el módulo almacen-pt ya existe en la PWA); el supervisor depende del resultado.</p><div class="fix"><b>Recepción con conteo, no en bloque:</b> el almacenista confirma lo que de verdad entró; la diferencia contra lo declarado por producción queda registrada con motivo.</div><div class="fix"><b>Este acuse es la pieza que explica el desbalance:</b> producido − recibido en PT = lo que anda en piso. Deja de ser un misterio del 30%.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>13:50</span><span>Almacén PT · turno matutino</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Recibir de producción</span></div>
+    <div class="body">
+      <div class="card" style="padding:10px 14px;font-size:11px;color:var(--text-muted)">Entrega: cosecha S-03 + molido lote 3 · declara producción · recibe: J. Peña (Almacén PT)</div>
+      <div class="overline">Declarado por producción</div>
+      <div class="card">
+        <div class="pline"><div class="pi">🧊</div><div><div class="pn">Barra chica 50 kg</div><div class="pp money">Declaradas: 16 · = 800 kg</div></div><div class="stepper"><div class="sb">−</div><div class="sq">16</div><div class="sb">+</div></div></div>
+        <div class="pline" style="border-bottom:none"><div class="pi">🛍️</div><div><div class="pn">Bolsa molido 5 kg</div><div class="pp money">Declaradas: 109 · = 545 kg</div></div><div class="stepper"><div class="sb">−</div><div class="sq">107</div><div class="sb">+</div></div></div>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.35);padding:12px 15px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:12.5px;font-weight:700">Diferencia: 2 bolsas (−10 kg)</div><span class="chip warn">⚠ Declara motivo</span></div>
+        <div style="margin-top:8px"><span class="reason on">Bolsa rota en traslado</span><span class="reason">Conteo de producción</span><span class="reason">Otra</span></div>
+      </div>
+      <div class="overline">Al confirmar</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Entra a existencia de PT</span><span class="r money">16 barras · 107 bolsas</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">La diferencia</span><span class="r"><span class="chip warn">⚠ Queda en disputa · recuento</span></span></div>
+      </div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Confirmar recepción en PT</button></div>
+  </div>
+</section>
+
+<section data-name="11 · Almacén PT · existencias y conciliación" data-note='<h2>La vista del supervisor: cuánto PT hay y cuánto falta por llegar</h2><p>El ciclo completo a la vista: producido → recibido en PT → surtido a rutas. El desbalance del hub (30.2%) aterriza aquí con nombre: lo que producción declaró y PT aún no recibe. La reconciliación de PT ya existe en la PWA (ScreenReconciliacionPT) — se conecta a este flujo.</p><div class="fix"><b>"En piso / por recibir" es un estado visible,</b> no un hueco: 392.5 kg con botón para reclamar la recepción.</div><div class="fix"><b>Existencias por producto</b> con lo comprometido para rutas de mañana — el puente con el forecast del supervisor de ventas.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>14:05</span><span>Almacén PT · Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Almacén de PT</span><div class="right"><div class="iconbtn">⟳</div></div></div>
+    <div class="body">
+      <div class="overline">Flujo del turno</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Producido (declarado)</span><span class="r money">1,300 kg</span></div>
+        <div class="rowline"><span class="l">Recibido en PT</span><span class="r money">907.5 kg</span></div>
+        <div class="rowline"><span class="l">Surtido a rutas</span><span class="r money">610 kg</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l" style="font-weight:700;color:var(--text)">En piso / por recibir</span><span class="r"><span class="chip warn">⚠ 392.5 kg</span></span></div>
+      </div>
+      <button class="ghost" style="border-color:rgba(180,83,9,.35);color:#b45309">Reclamar recepción pendiente a Almacén PT</button>
+      <div class="overline">Existencias de PT</div>
+      <div class="card">
+        <div class="pline"><div class="pi">🧊</div><div><div class="pn">Barra chica 50 kg</div><div class="pp">Comprometido mañana: 60</div></div><span class="chip ok" style="margin-left:auto">84 disp.</span></div>
+        <div class="pline"><div class="pi">🧊</div><div><div class="pn">Barra grande 75 kg</div><div class="pp">Comprometido mañana: 20</div></div><span class="chip ok" style="margin-left:auto">31 disp.</span></div>
+        <div class="pline" style="border-bottom:none"><div class="pi">🛍️</div><div><div class="pn">Bolsa molido 5 kg</div><div class="pp">Comprometido mañana: 400</div></div><span class="chip warn" style="margin-left:auto">⚠ Quedan 352</span></div>
+      </div>
+      <div class="card" style="background:#FFFBF5;border-color:rgba(180,83,9,.3);padding:10px 14px;font-size:11.5px;color:#b45309;line-height:1.5">⚠ Bolsa de molido por debajo de lo comprometido para mañana. ¿Programar molido extra hoy?</div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="12 · Paros de línea" data-note='<h2>El paro se registra cuando pasa, con su categoría</h2><p>gf.production.downtime ya existe con categorías. Lo que se agrega: liga a la MÁQUINA y al esperado vs real — un paro registrado justifica la brecha de esa línea, en lugar de aparecer como "producción baja" sin explicación.</p><div class="fix"><b>Registrar en 3 taps:</b> equipo → categoría → confirmar (inicio con hora del servidor; el fin se registra al reanudar).</div><div class="fix"><b>El tiempo parado del turno se acumula visible</b> — es la otra mitad de las horas de compresor.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>11:32</span><span>Turno en curso</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Paros de línea</span></div>
+    <div class="body">
+      <div class="card" style="border-color:rgba(185,28,28,.35)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:800">Paro activo · Molino</div><div style="font-size:11px;color:var(--text-muted)">Falla mecánica · inició 11:20 · lleva 12 min</div></div><span class="chip err">⛔ Parado</span></div>
+        <button class="cta" style="margin-top:10px;min-height:44px">Reanudar · fin del paro</button>
+      </div>
+      <div class="overline">Registrar paro nuevo</div>
+      <div style="margin-bottom:4px"><span class="reason">Compresor 1</span><span class="reason">Compresor 2</span><span class="reason on">Molino</span><span class="reason">Evaporador 1</span><span class="reason">Empaque</span></div>
+      <div style="margin-bottom:8px"><span class="reason on">Falla mecánica</span><span class="reason">Falla eléctrica</span><span class="reason">Falta de material</span><span class="reason">Limpieza</span><span class="reason">Otra</span></div>
+      <div class="overline">Paros del turno</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Molino · falla mecánica</span><span class="r">11:20 → en curso</span></div>
+        <div class="rowline"><span class="l">Empaque · falta de material</span><span class="r">08:40 → 09:15 · 35 min</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l" style="font-weight:700;color:var(--text)">Tiempo parado del turno</span><span class="r"><span class="chip warn">⚠ 47 min</span></span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="13 · Bitácora de compresores" data-note='<h2>Cada tap registra CUÁL compresor, con hora del servidor</h2><p>Exacto como lo planteas: cada tarjeta ES un compresor específico (ligada a su gf.production.machine), y el botón registra el arranque o el paro DE ESE equipo. La bitácora de eventos guarda compresor + evento + hora del servidor, y de ahí se derivan las horas de trabajo por compresor por turno — la pieza que falta para el esperado vs real.</p><div class="fix"><b>Día uno:</b> si no hay punto de partida, la tarjeta pide declarar "Está encendido / Está apagado" en vez de ofrecer el toggle (sin punto de partida no se cuentan horas).</div><div class="fix"><b>Bitácora parcial advertida:</b> si arrancó a mitad del turno, la tarjeta dice desde cuándo hay registro y cuántas horas quedaron sin bitácora — el esperado se marca subestimado, en amarillo, con palabra.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>12:44</span><span>Turno en curso</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Compresores</span></div>
+    <div class="body">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:14px;font-weight:800">Compresor 1 · Línea Barras</div><div style="font-size:11px;color:var(--text-muted)">Encendido desde 07:02 · 5.7 h este turno</div></div>
+          <span class="chip ok">● Encendido</span>
+        </div>
+        <button class="ghost" style="margin-top:10px;color:#b91c1c;border-color:rgba(185,28,28,.35)">Registrar paro</button>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.3)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:14px;font-weight:800">Compresor 2 · Línea Rolito</div><div style="font-size:11px;color:var(--text-muted)">Registro desde 09:20 · 2.3 h del turno sin bitácora</div></div>
+          <span class="chip warn">⚠ Bitácora parcial</span>
+        </div>
+        <div style="font-size:11px;color:#b45309;margin-top:8px;line-height:1.45">El esperado de Rolito está subestimado: no hay registro de 7:00 a 9:20.</div>
+        <button class="ghost" style="margin-top:10px;color:#b91c1c;border-color:rgba(185,28,28,.35)">Registrar paro</button>
+      </div>
+      <div class="card" style="background:#F3FAFE;border-color:var(--border-blue)">
+        <div style="font-size:13px;font-weight:800;margin-bottom:4px">Compresor 3 · Reserva</div>
+        <div style="font-size:11.5px;color:var(--blue3);line-height:1.5">Día uno: declara el punto de partida para empezar a contar horas.</div>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <button class="ghost" style="flex:1">Está apagado</button>
+          <button class="cta" style="flex:1;min-height:44px">Está encendido</button>
+        </div>
+      </div>
+      <div class="overline">Bitácora de eventos (hora del servidor)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">07:02 · ▶ Arrancó</span><span class="r">Compresor 1 · Barras</span></div>
+        <div class="rowline"><span class="l">09:20 · ▶ Arrancó</span><span class="r">Compresor 2 · Rolito</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">11:20 · ⏸ Paró</span><span class="r">Compresor 2 · Rolito</span></div>
+      </div>
+      <div class="overline">Horas del turno</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Compresor 1 (Barras)</span><span class="r money">5.7 h</span></div>
+        <div class="rowline"><span class="l">Compresor 2 (Rolito)</span><span class="r money">3.4 h <span class="chip warn" style="font-size:9px;padding:1px 7px">parcial</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Compresor 3</span><span class="r"><span class="chip mut">▢ Sin punto de partida</span></span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="14 · Esperado vs real" data-note='<h2>La productividad se vuelve gestionable</h2><p>Esperado = capacidad nominal × horas de compresor (Barras por tanques, Rolito por su evaporador de 30 t/día). El panel compara por turno y por línea, y muestra la eficiencia real de la máquina: kg por hora-compresor.</p><div class="fix"><b>bitacora_parcial en amarillo con advertencia,</b> no neutro ni tapado con "en meta": los números se muestran igual, la palabra advierte que el esperado está subestimado.</div><div class="fix"><b>Tendencia 7 días</b> con mejor y peor turno — de aquí salen las decisiones de horario.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>12:47</span><span>Turno en curso</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Esperado vs real</span></div>
+    <div class="body">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13.5px;font-weight:800">Línea Barras</div><span class="chip warn">⚠ −9.8% · Revisar</span></div>
+        <div class="rowline" style="margin-top:6px"><span class="l">Esperado (9.6 t/d × 5.7 h)</span><span class="r money">2,280 kg</span></div>
+        <div class="rowline"><span class="l">Real</span><span class="r money">2,057 kg</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Eficiencia</span><span class="r money">361 kg / h-compresor</span></div>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.3)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13.5px;font-weight:800">Línea Rolito</div><span class="chip warn">⚠ Bitácora parcial</span></div>
+        <div class="rowline" style="margin-top:6px"><span class="l">Esperado (30 t/d × 3.4 h registradas)</span><span class="r money">4,250 kg</span></div>
+        <div class="rowline"><span class="l">Real</span><span class="r money">9,120 kg</span></div>
+        <div style="font-size:11px;color:#b45309;margin-top:8px;line-height:1.45">⚠ El esperado está subestimado: 2.3 h del turno sin bitácora de compresor. No se marca "en meta" sobre esta advertencia.</div>
+      </div>
+      <div class="overline">Últimos 7 días · planta</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Cumplimiento promedio</span><span class="r">93%</span></div>
+        <div class="rowline"><span class="l">Mejor turno</span><span class="r">Jue 7 · 104% · 14.1 kg/kWh</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Peor turno</span><span class="r">Lun 4 · 78% · <span class="chip warn" style="font-size:9px;padding:1px 7px">⚠ paro 2.1 h</span></span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="15 · Mantenimiento" data-note='<h2>Todo lo que se descompone llega al mismo lugar</h2><p>maintenance.request ya está integrado (solo lectura). Se le agrega lo que la auditoría marcó: liga a equipo, a turno y al ORIGEN — el checklist reprobado, la causa repetida de molido y el paro generan la solicitud solos.</p><div class="fix"><b>Cada solicitud dice de dónde nació</b> (checklist · molido · paro · manual) — trazabilidad sin retrabajos.</div><div class="fix"><b>Filtro por equipo</b> para ver el historial de la máquina antes de decidir si es ajuste o reemplazo.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>13:40</span><span>Planta Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Mantenimiento</span><div class="right"><div class="iconbtn">+</div></div></div>
+    <div class="body">
+      <div style="margin-bottom:8px"><span class="reason on">Todos</span><span class="reason">Compresores</span><span class="reason">Molino</span><span class="reason">Evaporadores</span></div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:800">Compresor 1 · fuga de aceite</div><span class="chip err">⛔ Nueva</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Origen: checklist de equipo · hoy 07:14 · con foto</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:800">Molino · desajuste de cuchillas</div><span class="chip warn">⚠ En proceso</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Origen: 3 lotes de molido fuera de estándar · ayer</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:800">Evaporador 1 · limpieza programada</div><span class="chip info">◈ Programada · jue 13</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Origen: plan preventivo · responsable: mantenimiento</div>
+      </div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Abiertas</span><span class="r">2</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Cerradas este mes</span><span class="r">7 · tiempo medio 1.8 días</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="16 · Energía · 3 registros" data-note='<h2>La lectura que sí sirve para costear</h2><p>De 1 número a los 3 registros tarifarios de CFE (base / intermedia / punta), en inicio y fin de turno, con foto obligatoria del medidor. El multiplicador se aplica en el servidor — la pantalla NO multiplica ni suma para decidir.</p><div class="fix"><b>Validación espejo del backend:</b> los 3 obligatorios, no negativos, cada fin ≥ su inicio.</div><div class="fix"><b>El indicador del supervisor es kg/kWh:</b> kilos producidos ÷ diferencial de lecturas (× multiplicador versionado por medidor) — mientras más alto, mejor. Sin dos lecturas comparables (mismo medidor, misma unidad, multiplicador vigente, delta plausible) la pantalla dice <b>"Eficiencia no disponible"</b>, nunca un número ni la comparación 7d. Aquí no se muestran pesos: la tarifa y el $ los calcula Odoo con estos mismos datos para gerencia.</div><div class="fix"><b>Captura por voz</b> disponible (era la única captura sin voz).</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>14:52</span><span>Lectura de FIN de turno</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Energía · Medidor planta</span><div class="right"><div class="iconbtn">🎙</div></div></div>
+    <div class="body">
+      <div class="card" style="padding:10px 14px;font-size:11px;color:var(--text-muted)">Multiplicador del medidor: <b style="color:var(--text)">×1000</b> (configurado en Odoo) · el servidor calcula consumo y costo</div>
+      <div class="overline">Lectura de fin (kWh de display)</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="card" style="padding:10px 15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0"><span style="font-size:12.5px;font-weight:700">Base</span><input class="mock money" style="width:130px;text-align:right;font-weight:800" value="1298.4"></div>
+        <div class="card" style="padding:10px 15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0"><span style="font-size:12.5px;font-weight:700">Intermedia</span><input class="mock money" style="width:130px;text-align:right;font-weight:800" value="864.1"></div>
+        <div class="card" style="padding:10px 15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0"><span style="font-size:12.5px;font-weight:700">Punta</span><input class="mock money" style="width:130px;text-align:right;font-weight:800" value="211.9"></div>
+      </div>
+      <div class="overline">Evidencia</div>
+      <div class="photo">📷 Foto del medidor — obligatoria</div>
+      <div class="overline">El servidor calcula (turno)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Base (fin − inicio)</span><span class="r money">412 kWh</span></div>
+        <div class="rowline"><span class="l">Intermedia</span><span class="r money">505 kWh</span></div>
+        <div class="rowline"><span class="l">Punta</span><span class="r money">176 kWh</span></div>
+        <div class="rowline"><span class="l" style="font-weight:700;color:var(--text)">Consumo total</span><span class="r money" style="font-size:14px">1,093 kWh</span></div>
+      </div>
+      <div class="overline">Tu indicador del turno</div>
+      <div class="card" style="border-color:rgba(0,119,187,.35);background:#EAF6FE;padding:13px 15px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:11px;color:var(--text-muted)">13,370 kg producidos ÷ 1,093 kWh</div><div style="font-size:22px;font-weight:800;margin-top:2px">12.2 kg/kWh</div></div>
+          <span class="chip ok">✓ Mejor que tu 7d: 11.2</span>
+        </div>
+      </div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Guardar lectura de fin</button></div>
+  </div>
+</section>
+
+<section data-name="17 · Merma conciliada" data-note='<h2>La pantalla de merma deja de decir "todo bien"</h2><p>Hoy la captura muestra "0.0 kg ✓" mientras el brief del mismo día detecta 530 kg escondidos en transformaciones. El foco del brief aterriza AQUÍ como pendiente accionable — el supervisor ve lo mismo que dirección.</p><div class="fix"><b>Dos números lado a lado:</b> capturada a mano vs detectada por el dato, con la diferencia declarada.</div><div class="fix"><b>Merma por pieza con campos propios</b> (producto, piezas, kg, causa) — ya no codificada en un prefijo de texto en las notas.</div><div class="fix"><b>La merma de molido llega sola desde la pantalla de transformación</b> (calculada por lote) — aquí solo se concilia lo que el dato delate fuera de eso.</div><div class="fix"><b>Límite operativo 1%</b> con estado por palabra contra la producción del turno.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>13:02</span><span>Turno en curso</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Merma del turno</span></div>
+    <div class="body">
+      <div class="card" style="border-color:rgba(185,28,28,.3);background:#FEF7F7">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:13px;font-weight:800">Merma sin conciliar</div><div style="font-size:11px;color:var(--text-muted)">Detectada en transformaciones del 9-ago</div></div>
+          <span class="chip err">⛔ 530 kg</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:8px;line-height:1.5">Capturada a mano: 0.0 kg · el dato delata 530 kg. Concíliala: registra la merma real o corrige la transformación.</div>
+        <button class="cta" style="margin-top:10px;min-height:44px">Conciliar ahora</button>
+      </div>
+      <div class="overline">Capturar merma</div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <input class="mock" value="Barra 50 kg — quebrada en cosecha">
+          <div style="display:flex;gap:8px">
+            <input class="mock money" style="flex:1" value="4 piezas">
+            <input class="mock money" style="flex:1" value="200 kg">
+          </div>
+          <input class="mock" placeholder="Causa" value="Golpe de canastilla al izar">
+        </div>
+        <button class="ghost" style="margin-top:10px;min-height:42px">+ Registrar merma</button>
+      </div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Merma del turno</span><span class="r money">200 kg</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Límite operativo (1% de 13,370 kg)</span><span class="r"><span class="chip err">⛔ 1.5% · Excedido</span></span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="18 · Brief de planta" data-note='<h2>El brief ya existe — y sus focos aterrizan</h2><p>El brief de planta (n8n, con selector de día) ya funciona. Lo que cambia: se restyle al tema claro y cada foco trae el botón que lleva a la pantalla donde se resuelve — el mismo principio que la merma conciliada.</p><div class="fix"><b>Un foco sin botón es un regaño;</b> un foco con botón es trabajo asignable.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>07:05</span><span>Brief del 10 ago</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Brief de planta</span><div class="right"><div class="iconbtn">📅</div></div></div>
+    <div class="body">
+      <div class="hero" style="padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:15px;font-weight:800">Ayer: 13,370 kg</div><div class="hmut" style="font-size:11.5px;margin-top:2px">11.2 kg/kWh · rendimiento molido 94.8%</div></div>
+          <span class="chip onhero">2 focos</span>
+        </div>
+      </div>
+      <div class="overline">Focos accionables</div>
+      <div class="card" style="border-color:rgba(185,28,28,.3)">
+        <div style="font-size:13px;font-weight:800">⛔ Merma escondida en transformaciones: 530 kg</div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;line-height:1.5">Transformaciones de ayer no cuadran contra lo capturado a mano.</div>
+        <button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px">Ir a conciliar →</button>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.3)">
+        <div style="font-size:13px;font-weight:800">⚠ Barras −9.8% vs esperado, 3 turnos seguidos</div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;line-height:1.5">Coincide con sal a la baja en Tanque 1.</div>
+        <button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px">Ver Tanque 1 →</button>
+      </div>
+      <div class="overline">Sin pendiente</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">HACCP</span><span class="r"><span class="chip ok">✓ Completo</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Paros</span><span class="r">35 min · dentro de rango</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="19 · Alertas de eficiencia" data-note='<h2>Los focos de eficiencia, en su idioma</h2><p>Fase 3 de la auditoría: alertas accionables derivadas de la bitácora de compresores, la energía y el molido. Para el supervisor hablan en kWh, horas y kilos — la versión en pesos de estas mismas alertas la ve gerencia.</p><div class="fix"><b>Cada alerta trae su acción</b> (registrar paro, crear mantenimiento, ver lote, conciliar) — un diagnóstico sin botón es un regaño, no una alerta.</div><div class="fix"><b>Mismos endpoints alimentan la pestaña Producción del Gerente</b> — una sola fuente de verdad. Los mantenimientos generados se deduplican por máquina + tipo + ventana temporal.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>15:10</span><span>Planta Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Alertas de producción</span></div>
+    <div class="body">
+      <div class="card" style="border-color:rgba(185,28,28,.35)">
+        <div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:800">⛔ Compresor sin producción</div><span class="chip err">Crítica</span></div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;line-height:1.5">Compresor 2 encendido 1.8 h sin ciclos de evaporador registrados (11:20–13:08): <b style="color:#b91c1c">≈ 96 kWh sin producto</b>.</div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:38px;font-size:12px">Registrar paro</button><button class="ghost" style="flex:1;min-height:38px;font-size:12px">Ver bitácora</button></div>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.35)">
+        <div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:800">⚠ Consumo en punta</div><span class="chip warn">Advertencia</span></div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;line-height:1.5">34% del consumo del turno fue en horario punta (umbral: 25%). Mueve cosecha y empaque fuera de 18:00–22:00 — es el horario más caro del día.</div>
+        <button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px">Ver consumo por periodo</button>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.35)">
+        <div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:800">⚠ Esperado incumplido</div><span class="chip warn">Advertencia</span></div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;line-height:1.5">Línea Barras por debajo del esperado 3 turnos seguidos (−9.8%, −7.1%, −11.4%). Revisar salmuera del Tanque 1 (sal a la baja).</div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:38px;font-size:12px">Ver Tanque 1</button><button class="ghost" style="flex:1;min-height:38px;font-size:12px">Crear mantenimiento</button></div>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.35)">
+        <div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:800">⚠ Merma de molido arriba del estándar</div><span class="chip warn">Advertencia</span></div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;line-height:1.5">3 lotes seguidos con causa "molino desajustado" (6.1% vs 4%). Son ≈ <b>110 kg/día</b> que no llegan a bolsa.</div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:38px;font-size:12px">Ver lotes</button><button class="ghost" style="flex:1;min-height:38px;font-size:12px">Crear mantenimiento</button></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:800">◈ Merma escondida recurrente</div><span class="chip info">Señal</span></div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;line-height:1.5">2 de los últimos 5 turnos con merma detectada en transformaciones sin captura manual.</div>
+        <button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px">Conciliar</button>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+    <div class="navbar">
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>Turno</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/><path d="M12 12l8-5M12 12L4 7M12 12v10"/></svg>Producción</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M8 7V4h8v3M8 13h8"/></svg>Máquinas</div>
+      <div class="nv"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>Energía</div>
+      <div class="nv on"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</div>
+    </div>
+  </div>
+</section>
+
+<section data-name="20 · Cierre de turno con PIN" data-note='<h2>Cierre en cascada, oficial y con firma</h2><p>La cascada ya existe (no cierra hasta que Rolito y Barra entreguen) — se conserva. Lo que cambia: el estado de entrega viene del BACKEND (muere el localStorage), el handover se vuelve registro oficial con endpoint, y el PIN del supervisor por fin se pide (la función existe y nadie la llama).</p><div class="fix"><b>Cada gate del cierre por palabra,</b> incluida la lectura de fin de energía en 3 registros.</div><div class="fix"><b>El handover queda en Odoo</b> ligado al turno — deja de vivir en el navegador.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>15:04</span><span>Cerrando turno matutino</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Cerrar turno</span><div class="right"><svg class="gf-mini" viewBox="0 0 460 480"><use href="#gf-mark"/></svg></div></div>
+    <div class="body">
+      <div class="overline">Requisitos de cierre (del servidor)</div>
+      <div class="step"><div class="dot" style="border-color:var(--success);color:var(--success);background:var(--success-soft)">✓</div><div><div class="tt">Rolito entregó</div><div class="dd">J. Estrada · 14:48 · 9,120 kg</div></div><span class="st chip ok">✓ Backend</span></div>
+      <div class="step"><div class="dot" style="border-color:var(--success);color:var(--success);background:var(--success-soft)">✓</div><div><div class="tt">Barra entregó</div><div class="dd">M. Ríos · 14:55 · 2,057 kg</div></div><span class="st chip ok">✓ Backend</span></div>
+      <div class="step"><div class="dot" style="border-color:var(--success);color:var(--success);background:var(--success-soft)">✓</div><div><div class="tt">Lectura fin de energía</div><div class="dd">Base · Intermedia · Punta + foto</div></div><span class="st chip ok">✓ Listo</span></div>
+      <div class="step active"><div class="dot" style="border-color:var(--blue);color:var(--blue);background:#E0F3FC">4</div><div><div class="tt">Notas de handover</div><div class="dd">Queda registrado en el turno (Odoo), no en el navegador</div></div><span class="st chip warn">⚠ Por escribir</span></div>
+      <textarea class="mock" rows="3" placeholder="Para el turno vespertino: Tanque 3 sin nominal capturada, sal del T1 a la baja…"></textarea>
+      <div class="overline">Confirma con tu PIN</div>
+      <input class="mock" style="font-size:20px;text-align:center;letter-spacing:.4em;padding:14px" value="• • • •">
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar">
+      <button class="cta">Cerrar turno</button>
+      <div style="text-align:center;font-size:10.5px;color:var(--text-muted);margin-top:8px">Score final y desbalance se calculan en el servidor al cerrar</div>
+    </div>
+  </div>
+</section>
+
+</template>
+
+<script>
+const tpl=document.getElementById('screens');
+const sections=[...tpl.content.querySelectorAll('section')];
+const tabs=document.getElementById('tabs');
+const stage=document.getElementById('stage');
+function show(i){
+  [...tabs.children].forEach((t,j)=>t.classList.toggle('on',i===j));
+  stage.innerHTML='';
+  const s=sections[i];
+  const phone=document.createElement('div');phone.className='phone';
+  phone.innerHTML=s.innerHTML;
+  const note=document.createElement('div');note.className='note';
+  note.innerHTML=s.dataset.note;
+  stage.appendChild(phone);stage.appendChild(note);
+}
+sections.forEach((s,i)=>{
+  const b=document.createElement('button');b.className='tab';b.textContent=s.dataset.name;
+  b.onclick=()=>show(i);tabs.appendChild(b);
+});
+show(0);
+</script>
+</body>
+</html>

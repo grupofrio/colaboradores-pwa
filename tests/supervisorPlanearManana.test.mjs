@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
   routeReadiness, summarizeResources, capacityLabel, personRolesLabel, planStateLabel,
-  derivePlanAssignment, resourceOptions, resourceReadiness,
+  derivePlanAssignment, resourceOptions, resourceReadiness, interpretOptimizeResponse,
 } from '../src/modules/supervisor-ventas/v2/planear/planearModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -392,4 +392,80 @@ test('F2 P1 (Codex): multiplicidad de rutas mañana NO autoabre una arbitraria',
   // La matriz muestra el estado explícito de selección.
   const matriz = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
   assert.ok(/rw-elegir-ruta/.test(matriz) && /Elegir ruta/.test(matriz), 'la celda ofrece "Elegir ruta" en multiplicidad')
+})
+
+// ── (F5) Optimizar y publicar (contrato B5) ──────────────────────────────────
+
+test('F5: optimize+publish — wrapper, shim y revisión', () => {
+  const api = src('modules/supervisor-ventas/api.js')
+  assert.ok(/export function optimizeRoutePlan/.test(api), 'wrapper optimizeRoutePlan')
+  assert.ok(/\/pwa-supv\/route-plan-optimize/.test(api), 'usa la ruta pwa-supv del optimize')
+  assert.ok(/export function publishRoutePlan\(routePlanId, planRevision\)/.test(api), 'publishRoutePlan acepta planRevision')
+  assert.ok(/plan_revision: String\(planRevision\)/.test(api), 'publish envía plan_revision cuando la hay')
+  const lib = src('lib/api.js')
+  assert.ok(/\/pwa-supv\/route-plan-optimize/.test(lib) && /route_plan\/optimize/.test(lib), 'shim optimize → controller dedicado')
+  assert.ok(/body\?\.plan_revision \? \{ plan_revision:/.test(lib), 'el shim de publish reenvía plan_revision')
+})
+
+test('F5: handlePublish optimiza antes de publicar y maneja revision_mismatch', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/Optimizar y publicar/.test(tab), 'el botón dice "Optimizar y publicar"')
+  const handler = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('function toggleDemand'))
+  assert.ok(/runOptimize\(routePlanId\)/.test(handler), 'optimiza antes de publicar')
+  assert.ok(/publishRoutePlan\(routePlanId, (first|again)\.revision\)/.test(handler), 'publica con la revisión de la optimización')
+  assert.ok(/revision_mismatch/.test(handler), 'maneja revision_mismatch (reoptimiza y reintenta una vez)')
+  assert.ok(/if \(first\.blocked\)/.test(handler), 'si el optimizador bloquea, NO publica')
+  // runOptimize delega la decisión a la función pura (contrato optimize↔publish).
+  const runOpt = tab.slice(tab.indexOf('async function runOptimize'), tab.indexOf('async function handlePublish'))
+  assert.ok(/interpretOptimizeResponse\(opt\)/.test(runOpt), 'runOptimize usa la función pura del contrato')
+  assert.ok(/planear-optimizacion/.test(tab), 'muestra paradas · km · min tras optimizar')
+  // Codex P1 (F5): tampoco publica mientras se prepara/previsualiza.
+  assert.ok(/preparing \|\| previewing/.test(handler), 'bloquea publish con readiness en vuelo')
+})
+
+// Codex P1 (F5): la degradación amplia dejaba publicar sin revisión. SOLO un
+// éxito con plan_revision habilita publicar; todo lo demás bloquea.
+test('F5: contrato optimize↔publish — SOLO éxito con revisión habilita publicar', () => {
+  // Éxito con revisión ⇒ publica esa secuencia.
+  const ok = interpretOptimizeResponse({ ok: true, status: 'ok', data: { plan_revision: 'abc123', stops_count: 12, distance_km: 45.2, duration_min: 130 } })
+  assert.equal(ok.blocked, false)
+  assert.equal(ok.revision, 'abc123')
+  assert.equal(ok.metrics.stops, 12)
+
+  // Éxito MALFORMADO sin revisión ⇒ bloquea (no se ancla la secuencia).
+  const noRev = interpretOptimizeResponse({ ok: true, status: 'ok', data: { stops_count: 9 } })
+  assert.equal(noRev.blocked, true)
+  assert.equal(noRev.revision, null)
+  assert.equal(noRev.metrics, null)
+
+  // Cualquier error de negocio ⇒ bloquea (NO degrada a publicar directo).
+  for (const code of ['FORBIDDEN', 'LOCKED', 'VALIDATION_ERROR', 'NOT_FOUND', 'CONFLICT', 'CAPABILITY_UNAVAILABLE', 'OPTIMIZER_UNAVAILABLE']) {
+    const err = interpretOptimizeResponse({ ok: false, status: 'error', code, message: `falló: ${code}` })
+    assert.equal(err.blocked, true, `${code} debe bloquear`)
+    assert.equal(err.revision, null, `${code} sin revisión`)
+    assert.equal(err.metrics, null, `${code} sin métricas`)
+  }
+})
+
+test('F5: la optimización muestra carga esperada, utilización y clientes no asignados', () => {
+  // La función pura extrae los campos net-new del DTO de B5; null ≠ 0.
+  const r = interpretOptimizeResponse({ ok: true, status: 'ok', data: {
+    plan_revision: 'r1', demand_kg: 1240, capacity_kg: 1500, utilization_pct: 82.7, unassigned_count: 2,
+  } })
+  assert.equal(r.metrics.demandKg, 1240)
+  assert.equal(r.metrics.capacityKg, 1500)
+  assert.equal(r.metrics.utilizationPct, 82.7)
+  assert.equal(r.metrics.unassigned, 2)
+  // Sin datos de carga: null ≠ 0 (no se inventa un 0 de kilos), unassigned ⇒ 0.
+  const bare = interpretOptimizeResponse({ ok: true, status: 'ok', data: { plan_revision: 'r2' } })
+  assert.equal(bare.metrics.demandKg, null)
+  assert.equal(bare.metrics.capacityKg, null)
+  assert.equal(bare.metrics.utilizationPct, null)
+  assert.equal(bare.metrics.unassigned, 0)
+  // La tarjeta los presenta condicionalmente.
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/planear-optimizacion-carga/.test(tab), 'muestra la línea de carga/capacidad')
+  assert.ok(/optimizeResult\.demandKg != null/.test(tab), 'la carga solo se muestra si el backend la mandó')
+  assert.ok(/planear-optimizacion-noasignadas/.test(tab), 'advierte clientes que no cupieron')
+  assert.ok(/optimizeResult\.unassigned > 0/.test(tab), 'la advertencia solo aparece si hay no asignados')
 })

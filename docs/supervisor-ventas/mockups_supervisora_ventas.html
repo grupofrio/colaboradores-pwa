@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PWA Colaboradores — Supervisora de Ventas · Estado actual para revisión · Grupo Frío</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..800&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;font-family:'DM Sans',-apple-system,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+:root{
+  /* Tema claro institucional Grupo Frío (brandTokens.js de la PWA supervisor_ventas) */
+  --bg0:#F0F9FF;--bg1:#F0F9FF;--bg2:#E0F3FC;
+  --surface:#FFFFFF;--surface-soft:#F7FCFF;--surface-strong:#E0F3FC;
+  --border:#DBEFF9;--border-blue:rgba(0,119,187,0.18);
+  --blue:#0077BB;--blue2:#00B8D4;--blue3:#005A8D;--glow:rgba(0,119,187,0.10);
+  --text:#0F2A3D;--text-soft:#0F2A3D;--text-muted:#5B7285;--text-low:#5B7285;
+  --success:#166534;--success-soft:rgba(22,101,52,0.10);
+  --warning:#b45309;--warning-soft:rgba(180,83,9,0.10);
+  --error:#b91c1c;--error-soft:rgba(185,28,28,0.10);
+  --cta:linear-gradient(90deg,#005A8D,#0077BB);
+  --hero:linear-gradient(135deg,#005A8D 0%,#00B8D4 100%);
+  --sh-soft:0 1px 2px rgba(15,42,61,0.06);
+  --sh-md:0 2px 8px rgba(15,42,61,0.08);
+  --sh-lg:0 8px 24px rgba(15,42,61,0.10);
+}
+body{background:linear-gradient(160deg,#F0F9FF 0%,#E0F3FC 100%);color:var(--text);min-height:100vh;padding:28px 16px 60px}
+.wrap{max-width:1200px;margin:0 auto}
+.pagehdr{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.logo-lockup{display:flex;align-items:center;gap:10px}
+.logo-lockup svg{height:44px;width:auto}
+.logo-word{line-height:1.02;color:#1852A2;letter-spacing:.06em}
+.logo-word .w1{font-size:13px;font-weight:300;display:block}
+.logo-word .w2{font-size:16px;font-weight:800;display:block;letter-spacing:.09em}
+h1{font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#0F2A3D}
+.sub{color:var(--text-muted);font-size:13px;margin-top:6px;max-width:760px;line-height:1.5}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 26px}
+.tab{padding:9px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--blue3);font-size:12.5px;font-weight:700;cursor:pointer;transition:all .18s ease;box-shadow:var(--sh-soft)}
+.tab.on{background:var(--cta);border-color:transparent;box-shadow:var(--sh-md);color:#fff}
+.stage{display:flex;gap:36px;align-items:flex-start;flex-wrap:wrap}
+.note{flex:1;min-width:280px;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:20px 22px;position:sticky;top:20px;box-shadow:var(--sh-md)}
+.note h2{font-size:15px;font-weight:800;margin-bottom:10px;color:var(--blue3)}
+.note p{font-size:13px;color:var(--text-soft);line-height:1.6;margin-bottom:10px}
+.note .fix{font-size:12px;color:var(--text-muted);line-height:1.55;padding:8px 0 8px 12px;border-left:2px solid var(--blue);margin-bottom:8px}
+.note .fix b{color:var(--text-soft)}
+/* ---- phone frame ---- */
+.phone{width:390px;height:800px;border-radius:44px;border:1px solid #CBE4F2;background:linear-gradient(160deg,#F0F9FF 0%,#F0F9FF 55%,#E0F3FC 100%);box-shadow:0 30px 80px rgba(15,42,61,.18),inset 0 1px 0 rgba(255,255,255,.8);overflow:hidden;position:relative;flex-shrink:0}
+.screen{height:100%;display:flex;flex-direction:column}
+.body{flex:1;overflow-y:auto;padding:0 16px;scrollbar-width:none}
+.body::-webkit-scrollbar{display:none}
+.statusbar{display:flex;justify-content:space-between;padding:14px 24px 4px;font-size:12px;font-weight:600;color:var(--text-muted)}
+.hdr{display:flex;align-items:center;gap:10px;padding:12px 16px 10px}
+.iconbtn{width:38px;height:38px;border-radius:18px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--blue3);font-size:16px;flex-shrink:0;box-shadow:var(--sh-soft)}
+.hdr .t{font-size:16px;font-weight:700;letter-spacing:-0.01em;color:var(--text)}
+.hdr .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.gf-mini{height:26px;width:auto;flex-shrink:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:15px 17px;margin-bottom:12px;box-shadow:var(--sh-soft)}
+.hero{background:var(--hero);border:none;border-radius:24px;padding:16px;margin-bottom:12px;color:#fff;box-shadow:var(--sh-md)}
+.hero .hmut{color:rgba(255,255,255,.75)!important}
+.hero b{color:#fff!important}
+.overline{font-size:10px;font-weight:700;letter-spacing:.18em;color:var(--text-low);text-transform:uppercase;margin:14px 2px 8px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
+.chip.info{color:#005A8D;background:#E0F3FC;border:1px solid rgba(0,119,187,.25)}
+.chip.ok{color:#166534;background:var(--success-soft);border:1px solid rgba(22,101,52,.28)}
+.chip.warn{color:#b45309;background:var(--warning-soft);border:1px solid rgba(180,83,9,.28)}
+.chip.err{color:#b91c1c;background:var(--error-soft);border:1px solid rgba(185,28,28,.28)}
+.chip.mut{color:var(--text-muted);background:#F7FCFF;border:1px solid var(--border)}
+.chip.onhero{color:#fff;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4)}
+.cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;border:none;border-radius:999px;background:var(--cta);color:#fff;font-size:14px;font-weight:700;box-shadow:var(--sh-md);cursor:pointer}
+.cta.dis{background:#E4EEF5;color:#8FA5B5;box-shadow:none}
+.ghost{display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;border-radius:999px;background:var(--surface);color:var(--blue3);border:1px solid var(--border-blue);font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--sh-soft)}
+.step{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:22px;background:var(--surface);border:1px solid var(--border);margin-bottom:6px;box-shadow:var(--sh-soft)}
+.step .dot{width:30px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;border:2px solid}
+.step .tt{font-size:13.5px;font-weight:700;color:var(--text)}
+.step .dd{font-size:11.5px;color:var(--text-muted);margin-top:1px}
+.step .st{margin-left:auto;flex-shrink:0}
+.step.active{background:#EAF6FE;border-color:rgba(0,119,187,.35)}
+.step.pend{opacity:.6}
+.navbar{display:flex;border-top:1px solid var(--border);background:rgba(255,255,255,.96);backdrop-filter:blur(20px);padding:6px 4px 14px}
+.navbar .nv{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--text-low);font-size:10px;font-weight:500;padding-top:6px}
+.navbar .nv.on{color:var(--blue);font-weight:700}
+.navbar .nv svg{width:20px;height:20px}
+.kpi{flex:1;padding:8px 10px;border-radius:18px;background:#F7FCFF;border:1px solid var(--border)}
+.rowline{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #EAF3F9;font-size:13px}
+.rowline:last-child{border-bottom:none}
+.rowline .l{color:var(--text-muted)}
+.rowline .r{font-weight:700;color:var(--text)}
+/* venta steppers */
+.pline{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #EAF3F9}
+.pline .pi{width:40px;height:40px;border-radius:14px;background:#E0F3FC;border:1px solid var(--border-blue);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.pline .pn{font-size:13px;font-weight:700;color:var(--text)}
+.pline .pp{font-size:11px;color:var(--text-muted)}
+.stepper{display:flex;align-items:center;gap:6px;margin-left:auto}
+.stepper .sb{width:46px;height:46px;border-radius:16px;border:1px solid rgba(0,119,187,.30);background:#EAF6FE;color:var(--blue3);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.stepper .sq{width:36px;text-align:center;font-size:16px;font-weight:800}
+.fixedbar{border-top:1px solid var(--border);background:rgba(255,255,255,.97);backdrop-filter:blur(16px);padding:12px 16px 16px;box-shadow:0 -6px 20px rgba(15,42,61,.06)}
+.fixedbar .tot{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.fixedbar .tot .tl{font-size:12px;color:var(--text-muted);font-weight:700}
+.fixedbar .tot .tv{font-size:24px;font-weight:800;color:#166534;letter-spacing:-0.02em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px;border-radius:22px;background:var(--surface);border:1px solid var(--border);cursor:pointer;min-height:88px;justify-content:center;box-shadow:var(--sh-soft)}
+.act .ai{font-size:24px}
+.act .al{font-size:12px;font-weight:700;color:var(--text);text-align:center}
+.act .as{font-size:10px;color:var(--text-muted);text-align:center}
+.act.main{background:linear-gradient(180deg,#E0F3FC,#F0F9FF);border-color:rgba(0,119,187,.35)}
+.photo{border:1.5px dashed rgba(0,119,187,.4);border-radius:18px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--blue3);font-size:12.5px;font-weight:700;background:#F3FAFE}
+.reason{display:inline-flex;padding:11px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text);margin:0 6px 8px 0;cursor:pointer;box-shadow:var(--sh-soft)}
+.reason.on{background:#E0F3FC;border-color:rgba(0,119,187,.45);color:var(--blue3);font-weight:700}
+textarea.mock,input.mock{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px 14px;color:var(--text);font-size:14px;resize:none;outline:none;box-shadow:var(--sh-soft)}
+.money{font-variant-numeric:tabular-nums}
+/* map */
+.mapbox{position:relative;height:100%;background:#E8F4FB;overflow:hidden}
+.mapbox svg.mapsvg{position:absolute;inset:0;width:100%;height:100%}
+.pin{position:absolute;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2.5px solid;transform:translate(-50%,-50%);box-shadow:var(--sh-md)}
+.floating-top{position:absolute;top:12px;left:12px;right:12px;z-index:5}
+.panel{position:absolute;left:10px;right:10px;bottom:10px;background:rgba(255,255,255,.98);border:1px solid var(--border);border-radius:24px;padding:14px 16px;z-index:5;backdrop-filter:blur(16px);box-shadow:var(--sh-lg)}
+@media(max-width:900px){.note{position:static}}
+
+.rail2{display:flex;gap:6px;padding:12px 14px 4px;overflow-x:auto;scrollbar-width:none}
+.rail2::-webkit-scrollbar{display:none}
+.rt{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 13px;border-radius:18px;font-size:13px;color:var(--text-muted);font-weight:500;white-space:nowrap;flex-shrink:0}
+.rt.on{background:#E0F3FC;color:#0F2A3D;font-weight:700}
+.rt .g{color:var(--blue3);font-size:15px}
+.demo{margin:8px 16px 0;padding:7px 12px;border-radius:14px;background:rgba(109,40,217,0.08);border:1px solid rgba(109,40,217,0.25);color:#6d28d9;font-size:10.5px;font-weight:700}
+.tile{background:#F7FCFF;border:1px solid var(--border);border-radius:14px;padding:8px 6px;text-align:center}
+.tile .v{font-size:19px;font-weight:800}
+.tile .k{font-size:10px;color:var(--text-muted);margin-top:2px}
+.flagline{font-size:10.5px;font-weight:800;margin-bottom:4px}
+.tl{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;border-bottom:1px solid #EAF3F9}
+.tl:last-child{border-bottom:none}
+.tl .tg{width:18px;text-align:center;font-weight:800}
+.pillw{display:inline-flex;align-items:center;font-size:10px;font-weight:800;padding:2px 9px;border-radius:999px;border:1.5px solid}
+</style>
+</head>
+<body>
+
+<!-- Logo Grupo Frío (marca oficial: cubo isométrico, public/icons/logo-grupo-frio.svg de la PWA) -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="gf-mark" viewBox="100 15 460 480">
+    <g transform="translate(40,25)">
+      <polygon points="290,0 400,64 400,190 290,126" fill="#B8BAC1"/>
+      <polygon points="290,0 180,64 180,190 290,126" fill="#C5C7CD"/>
+      <polygon points="430,78 510,125 510,255 430,208" fill="#B8BAC1"/>
+      <polygon points="150,78 70,125 70,255 150,208" fill="#C5C7CD"/>
+      <polygon points="290,132 400,196 400,332 290,268" fill="#C7CCD1"/>
+      <polygon points="290,132 180,196 180,332 290,268" fill="#D2D7DB"/>
+      <polygon points="150,208 70,255 70,385 150,338" fill="#1A4F9C"/>
+      <polygon points="290,268 180,332 180,463 290,399" fill="#1A4F9C"/>
+      <polygon points="430,208 510,255 510,385 430,338" fill="#1A4F9C"/>
+      <polygon points="290,126 372,173 290,220 208,173" fill="#D8DDE0"/>
+      <g fill="none" stroke="#F5F7F8" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="290" y1="0" x2="290" y2="126" stroke-width="10"/>
+        <line x1="180" y1="64" x2="180" y2="463" stroke-width="10"/>
+        <line x1="400" y1="64" x2="400" y2="332" stroke-width="10"/>
+        <line x1="70" y1="255" x2="180" y2="332" stroke-width="10"/>
+        <line x1="400" y1="196" x2="510" y2="255" stroke-width="10"/>
+        <line x1="180" y1="196" x2="70" y2="125" stroke-width="10"/>
+        <line x1="400" y1="190" x2="510" y2="125" stroke-width="10"/>
+        <line x1="180" y1="190" x2="290" y2="126" stroke-width="10"/>
+        <line x1="290" y1="126" x2="400" y2="190" stroke-width="10"/>
+        <line x1="180" y1="332" x2="70" y2="255" stroke-width="10"/>
+        <line x1="180" y1="332" x2="290" y2="399" stroke-width="10"/>
+        <line x1="290" y1="399" x2="400" y2="332" stroke-width="10"/>
+        <line x1="400" y1="332" x2="510" y2="255" stroke-width="10"/>
+      </g>
+    </g>
+  </symbol>
+</svg>
+
+<div class="wrap">
+  <div class="pagehdr"><div class="logo-lockup"><svg viewBox="0 0 460 480"><use href="#gf-mark"/></svg><div class="logo-word"><span class="w1">GRUPO</span><span class="w2">FRÍO</span></div></div></div>
+  <h1>Supervisora de Ventas — FIXES del plan v3 (post-Codex)</h1>
+  <p class="sub">El puesto con los fixes del plan v3 + las 4 decisiones endurecidas tras el veredicto Codex: rail de 7 pestañas (Hoy · Radar · Rutas · <b>Planes</b> · <b>Prospectos</b> · Clientes · Más), el bug de recursos muerto (F1), "Optimizar y publicar" versionado con revisión y lock (F5+D4), <b>optimización universal sin bandera de escape</b> — la contingencia es una transición autorizada en servidor (D1), <b>Prospectos por polígono/subpolígono del plan operativo</b> — el servidor jamás muestra otra plaza (D2), una sola máquina de estados draft → optimized → published → amendment_pending (D3), Recuperación con el modal honesto (F3), Productos con denominador vendible (F4) y pendientes tipados (F7).</p>
+  <div class="tabs" id="tabs"></div>
+  <div class="stage" id="stage"></div>
+</div>
+
+<template id="screens">
+
+<section data-name="1 · Hoy (shell V2)" data-note='<h2>La portada del puesto</h2><p>Rail superior de 6 pestañas (sin barra inferior propia) y la superficie "Hoy": venta del día, situación de la jornada en 11 tiles, pendientes prioritarios, cierre de rutas y radar resumido. Estados honestos: null = "Sin dato", parciales declarados.</p><div class="fix"><b>Revisar:</b> ¿11 tiles es lo correcto o sobran/faltan? ¿El orden refleja lo que ella mira primero en la mañana?</div><div class="fix"><b>Revisar:</b> la línea de alcance (fecha · sucursal · zona horaria · act.) — ¿le dice algo útil o es ruido?</div><div class="fix"><b>F7 (Codex):</b> los pendientes dejan el texto crudo del servidor — formato qué ocurrió / por qué importa / acción (ver pantalla 6).</div><div class="fix"><b>Nota Codex para construcción:</b> reorganizar la portada en 3 bloques — Atender ahora · Rutas en curso · Resumen del día — y el resto bajo "Ver detalle".</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>09:42</span><span>Supervisor de ventas</span></div>
+    <div class="rail2">
+      <span class="rt on"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">◎</span>Radar</span><span class="rt"><span class="g">⋔</span>Rutas</span><span class="rt"><span class="g">▤</span>Planes</span><span class="rt"><span class="g">◈</span>Prospectos</span><span class="rt"><span class="g">⚇</span>Clientes</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="demo">◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.</div>
+    <div class="body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 2px">
+        <span style="font-size:20px;font-weight:800">Hoy</span>
+        <span style="display:flex;gap:6px;align-items:center"><span class="chip warn">Datos parciales</span><button class="ghost" style="width:auto;min-height:30px;padding:0 12px;font-size:12px">Actualizar</button></span>
+      </div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">2026-01-15 · BR-DEMO Sucursal Demo · Zona horaria de la sucursal · act. 15:05</div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Venta del día</div><div style="font-size:22px;font-weight:800" class="money">2,800.50 XTS</div></div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:8px">Situación de la jornada</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          <div class="tile"><div class="v">4</div><div class="k">Planeadas</div></div>
+          <div class="tile"><div class="v" style="color:var(--success)">3</div><div class="k">Salieron</div></div>
+          <div class="tile"><div class="v" style="color:#b45309">1</div><div class="k">Tarde</div></div>
+          <div class="tile"><div class="v" style="color:#b45309">1</div><div class="k">Sin salir</div></div>
+          <div class="tile"><div class="v" style="color:var(--blue)">2</div><div class="k">Activas</div></div>
+          <div class="tile"><div class="v">1</div><div class="k">Cerradas</div></div>
+          <div class="tile"><div class="v" style="color:#b45309">1</div><div class="k">Con incidencia</div></div>
+          <div class="tile"><div class="v" style="color:var(--text-muted)">1</div><div class="k">Sin señal</div></div>
+          <div class="tile"><div class="v" style="color:#b45309">2</div><div class="k">Cargas pend.</div></div>
+          <div class="tile"><div class="v" style="color:#b45309">1</div><div class="k">Cierres pend.</div></div>
+          <div class="tile"><div class="v" style="color:var(--text-muted)">—</div><div class="k">Sin dato salida</div><div style="font-size:9px;color:var(--text-muted)">Sin dato</div></div>
+        </div>
+      </div>
+      <div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;font-weight:800">Pendientes prioritarios</span><span style="font-size:12px;color:var(--blue3);font-weight:700">Ver todos →</span></div>
+        <div style="margin-bottom:6px"><span class="chip err">Críticas · 2</span></div>
+        <div style="font-size:12px;padding:6px 0;border-bottom:1px solid #EAF3F9">Ruta Ruta Demo Tres sin salida registrada después de la hora objetivo (+10 min de tolerancia). <span style="float:right;color:var(--text-muted)">›</span></div>
+        <div style="font-size:12px;padding:6px 0;border-bottom:1px solid #EAF3F9">Ruta Ruta Demo Cuatro en etapa &apos;corte_done&apos; sin validación final y con caja pendiente. <span style="float:right;color:var(--text-muted)">›</span></div>
+        <div style="margin:8px 0 6px"><span class="chip warn">Advertencias · 2</span></div>
+        <div style="font-size:12px;padding:6px 0">2 refills pendientes de aceptación del chofer en la ruta Ruta Demo Dos. <span class="chip mut" style="font-size:9px;padding:1px 7px">×2</span></div>
+      </div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:8px">Cierre de rutas</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip mut">Abierta: 3</span><span class="chip mut">Corte hecho: 1</span></div>
+        <div style="font-size:12px;margin-top:8px">Caja pendiente: <b style="color:#b45309" class="money">750 XTS</b></div>
+      </div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:8px">Radar</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip info">Con señal: 2</span><span class="chip mut">Sin señal: 1</span><span class="chip mut">Unidades: 3</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="2 · Radar" data-note='<h2>Última posición conocida, con leyenda por palabra</h2><p>Selector de plan diario, rastro GPS del día, marcadores con estado (azul normal, ámbar señal vieja) y leyenda que distingue Vendió / No venta / Pendiente / Posición planeada. Lista de unidades con 7 órdenes.</p><div class="fix"><b>Revisar:</b> ¿el orden por defecto ("Urgente") es el que ella usaría? ¿Sobran opciones de orden?</div><div class="fix"><b>Revisar:</b> "Última señal: hace N min" — ¿el umbral de "Señal retrasada" está bien calibrado para la operación?</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>10:15</span><span>Supervisor de ventas</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt on"><span class="g">◎</span>Radar</span><span class="rt"><span class="g">⋔</span>Rutas</span><span class="rt"><span class="g">▤</span>Planes</span><span class="rt"><span class="g">◈</span>Prospectos</span><span class="rt"><span class="g">⚇</span>Clientes</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="demo">◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.</div>
+    <div class="body">
+      <div style="font-size:20px;font-weight:800;margin:10px 0 2px">Radar</div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">Última posición conocida del dispositivo del responsable — puede tener retraso.</div>
+      <div class="card" style="padding:11px 15px"><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip info">Con señal: 2</span><span class="chip mut">Sin señal: 1</span><span class="chip mut">Unidades: 3</span></div></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 15px"><span style="font-size:13px;font-weight:800">Mapa de posiciones</span><button class="ghost" style="width:auto;min-height:30px;padding:0 12px;font-size:11px">Ampliar mapa</button></div>
+        <div style="padding:0 15px 8px"><span class="reason on" style="font-size:11px;padding:7px 12px">Ruta Demo Uno · Chofer Demo Uno · Unidad Demo A</span></div>
+        <div style="height:190px;background:#E9EEF2;position:relative">
+          <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 358 190">
+            <rect width="358" height="190" fill="#E9EEF2"/>
+            <g stroke="#fff" stroke-width="10"><line x1="0" y1="60" x2="358" y2="60"/><line x1="0" y1="130" x2="358" y2="130"/><line x1="110" y1="0" x2="110" y2="190"/><line x1="240" y1="0" x2="240" y2="190"/></g>
+            <path d="M20 170 L110 170 L110 130 L200 130 L200 60 L240 60" fill="none" stroke="#005A8D" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+          <div style="position:absolute;left:35px;top:160px;width:14px;height:14px;border-radius:50%;background:#166534;border:2px solid #fff"></div>
+          <div style="position:absolute;left:150px;top:122px;width:16px;height:16px;border-radius:50%;border:2.5px dashed #b91c1c;background:#fff"></div>
+          <div style="position:absolute;left:240px;top:52px;width:18px;height:18px;border-radius:50%;background:#0077BB;border:3px solid #013F5E"></div>
+          <div style="position:absolute;left:300px;top:100px;width:10px;height:10px;border-radius:50%;background:#5B7285"></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;padding:9px 15px;font-size:10.5px;color:var(--text-muted)">
+          <span>🟢 Vendió</span><span>⭕ No venta</span><span>• Pendiente</span><span style="color:#5B7285">◌ Posición planeada</span>
+        </div>
+      </div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:13px;font-weight:800">Unidades</span><span class="chip mut">Orden: Urgente</span></div>
+        <div style="padding:8px 0;border-bottom:1px solid #EAF3F9"><div style="font-size:13.5px;font-weight:800">Ruta Demo Dos</div><div style="font-size:11px;color:var(--text-muted)">Chofer Demo Dos · Unidad Demo B · Última señal: hace 22 min</div><div style="display:flex;gap:5px;margin-top:5px"><span class="chip warn">Señal retrasada</span><span class="chip mut">Avance 2/8</span><span class="chip mut">1 sin coord.</span></div></div>
+        <div style="padding:8px 0;border-bottom:1px solid #EAF3F9"><div style="font-size:13.5px;font-weight:800">Ruta Demo Uno</div><div style="font-size:11px;color:var(--text-muted)">Chofer Demo Uno · Unidad Demo A · Última señal: hace 3 min</div><div style="display:flex;gap:5px;margin-top:5px"><span class="chip ok">Señal reciente</span><span class="chip mut">Avance 4/10</span></div></div>
+        <div style="padding:8px 0"><div style="font-size:13.5px;font-weight:800">Ruta Demo Tres</div><div style="font-size:11px;color:var(--text-muted)">Chofer Demo Tres · Unidad Demo C · sin señal registrada</div><div style="display:flex;gap:5px;margin-top:5px"><span class="chip mut">Sin señal</span><span class="chip mut">Avance 0/6</span></div></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="3 · Rutas (lista)" data-note='<h2>Ordenadas por lo corregible AHORA</h2><p>La jerarquía routeAttention manda: No ha salido &gt; Caja pendiente &gt; Salió tarde &gt; Con incidencia &gt; Cierre sin validar &gt; Sin señal &gt; Sin visitas aún. Cada tarjeta declara su motivo con ⚑ y palabra, nunca solo color. Arriba, el acceso a "Planear mañana".</p><div class="fix"><b>Revisar:</b> ¿la jerarquía de atención coincide con su criterio real de la mañana?</div><div class="fix"><b>Revisar:</b> densidad de chips por tarjeta (7 posibles) — ¿cuáles mira de verdad?</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>10:30</span><span>Supervisor de ventas</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">◎</span>Radar</span><span class="rt on"><span class="g">⋔</span>Rutas</span><span class="rt"><span class="g">▤</span>Planes</span><span class="rt"><span class="g">◈</span>Prospectos</span><span class="rt"><span class="g">⚇</span>Clientes</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="demo">◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.</div>
+    <div class="body">
+      <button class="ghost" style="margin:10px 0;background:rgba(0,119,187,0.08);border:none;font-weight:800">Planear mañana →</button>
+      <div style="font-size:20px;font-weight:800;margin-bottom:8px">Rutas</div>
+      <div class="card" style="border-color:rgba(185,28,28,.3)">
+        <span class="chip mut" style="font-size:9.5px">Sin plan operativo</span>
+        <div class="flagline" style="color:#b91c1c;margin-top:6px">⚑ No ha salido</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px;font-weight:800">Ruta Demo Tres</span><span class="chip warn">Sin salir</span></div>
+        <div style="font-size:11.5px;color:var(--text-muted)">Chofer Demo Tres · Unidad Demo C</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px"><span class="chip mut">0/6 paradas</span><span class="chip mut">Venta: Sin dato</span><span class="chip mut">Sin señal</span><span class="chip mut">Abierta</span></div>
+      </div>
+      <div class="card" style="border-color:rgba(185,28,28,.3)">
+        <span class="chip mut" style="font-size:9.5px">Sin plan operativo</span>
+        <div class="flagline" style="color:#b91c1c;margin-top:6px">⚑ Caja pendiente</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px;font-weight:800">Ruta Demo Cuatro</span><span class="chip ok">A tiempo</span></div>
+        <div style="font-size:11.5px;color:var(--text-muted)">Chofer Demo Cuatro · Unidad Demo D</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px"><span class="chip mut">5/5 paradas</span><span class="chip mut">Venta: 320 XTS</span><span class="chip warn">Corte hecho</span><span class="chip warn" class="money">Caja: 750</span></div>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.3)">
+        <span class="chip info" style="font-size:9.5px">Subpolígono: Centro Norte</span>
+        <div class="flagline" style="color:#b45309;margin-top:6px">⚑ Salió tarde</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px;font-weight:800">Ruta Demo Dos</span><span class="chip warn">Tarde</span></div>
+        <div style="font-size:11.5px;color:var(--text-muted)">Chofer Demo Dos · Unidad Demo B</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px"><span class="chip mut">2/8 paradas</span><span class="chip mut">Venta: 980 XTS</span><span class="chip warn">+25 min</span><span class="chip warn">1 incidencia</span><span class="chip warn">Cargas pend.: 2</span></div>
+        <div style="font-size:11.5px;color:var(--text-low);margin-top:5px">Siguiente: Cliente Demo Doce</div>
+      </div>
+      <div class="card">
+        <span class="chip info" style="font-size:9.5px">Segmento: Mercado</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span style="font-size:15px;font-weight:800">Ruta Demo Uno</span><span class="chip ok">A tiempo</span></div>
+        <div style="font-size:11.5px;color:var(--text-muted)">Chofer Demo Uno · Unidad Demo A</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px"><span class="chip mut">4/10 paradas</span><span class="chip mut">Venta: 1,500.50 XTS</span><span class="chip ok">+5 min</span><span class="chip ok">Señal reciente</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="4 · Ruta · detalle" data-note='<h2>La biografía de una ruta</h2><p>Resumen de actividades (checador vs primera visita vs arranque), línea de tiempo de 14 hitos, y las paradas en orden de EJECUCIÓN con marcas: "↓ bajó en secuencia" (solo el descenso, con tooltip de que puede ser legítimo) y "⚠ revisar" (visita &lt;1 min con check-in lejos).</p><div class="fix"><b>Revisar:</b> ¿14 hitos de línea de tiempo se consultan o estorban? ¿Cuáles ampliaría/quitaría?</div><div class="fix"><b>Revisar:</b> "Sin checador" vs "Sin registro" — ¿la distinción le queda clara a ella?</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>10:35</span><span>Supervisor de ventas</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">◎</span>Radar</span><span class="rt on"><span class="g">⋔</span>Rutas</span><span class="rt"><span class="g">▤</span>Planes</span><span class="rt"><span class="g">◈</span>Prospectos</span><span class="rt"><span class="g">⚇</span>Clientes</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="body">
+      <div style="font-size:12px;color:var(--blue3);font-weight:700;margin:10px 0 4px">← Rutas</div>
+      <div style="font-size:20px;font-weight:800">Ruta Demo Dos</div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">Chofer Demo Dos · Unidad Demo B · Tarde · Abierta</div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:8px">Resumen de actividades</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+          <div class="tile"><div class="k">ENTRADA (CHECADOR)</div><div class="v" style="font-size:13px">Sin checador</div></div>
+          <div class="tile"><div class="k">PRIMERA VISITA</div><div class="v" style="font-size:13px">09:12</div></div>
+          <div class="tile"><div class="k">ARRANQUE</div><div class="v" style="font-size:13px">tardó 47m</div></div>
+        </div>
+        <div style="font-size:10.5px;color:var(--text-muted);margin-top:6px">Sin fuente de asistencia (checador) en este entorno.</div>
+      </div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Línea de tiempo de la ruta</div>
+        <div class="tl"><span class="tg" style="color:var(--success)">✓</span>Checklist de unidad</div>
+        <div class="tl"><span class="tg" style="color:var(--success)">✓</span>Kilometraje inicial</div>
+        <div class="tl"><span class="tg" style="color:var(--success)">✓</span>Carga preparada</div>
+        <div class="tl"><span class="tg" style="color:var(--success)">✓</span>Carga aceptada</div>
+        <div class="tl"><span class="tg" style="color:var(--success)">✓</span>Salida <span style="margin-left:auto;color:#b45309;font-size:11px">+25 min</span></div>
+        <div class="tl"><span class="tg" style="color:var(--success)">✓</span>Primera visita</div>
+        <div class="tl"><span class="tg" style="color:#b45309">○</span>Ventas / no ventas <span style="margin-left:auto;color:var(--text-muted);font-size:11px">2/8</span></div>
+        <div class="tl"><span class="tg" style="color:#b45309">○</span>Refill <span style="margin-left:auto;color:#b45309;font-size:11px">2 pendientes</span></div>
+        <div class="tl"><span class="tg" style="color:var(--text-muted)">—</span>Regreso · Kilometraje final · Cierre · Corte…</div>
+      </div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Paradas</div>
+        <div style="padding:7px 0;border-bottom:1px solid #EAF3F9"><div style="font-size:12.5px;font-weight:700">#1 · Cliente Demo Once <span class="chip ok" style="font-size:9px;padding:1px 7px">venta realizada</span></div><div style="font-size:10.5px;color:var(--text-muted)">🕒 09:12 · Visita: 14 min · Check-in: 18 m · Venta: 520 XTS</div></div>
+        <div style="padding:7px 0;border-bottom:1px solid #EAF3F9"><div style="font-size:12.5px;font-weight:700">#3 · Cliente Demo Tres <span class="pillw" style="color:var(--blue3);border-color:var(--blue3)">↓ bajó en secuencia</span> <span class="chip mut" style="font-size:9px;padding:1px 7px">no venta</span></div><div style="font-size:10.5px;color:var(--text-muted)">🕒 09:58 · Visita: 6 min · cerrado</div></div>
+        <div style="padding:7px 0;border-bottom:1px solid #EAF3F9"><div style="font-size:12.5px;font-weight:700">#2 · Cliente Demo Dos <span class="pillw" style="color:#b45309;border-color:#b45309">⚠ revisar</span> <span class="chip mut" style="font-size:9px;padding:1px 7px">no venta</span></div><div style="font-size:10.5px;color:var(--text-muted)">🕒 10:20 · Visita: 0 min · Check-in: 320 m · <i>sin motivo capturado</i></div></div>
+        <div style="padding:7px 0"><div style="font-size:12.5px;font-weight:700">#4 · Cliente Demo Doce <span class="chip mut" style="font-size:9px;padding:1px 7px">pendiente de visita</span></div></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="5 · Clientes" data-note='<h2>Las paradas de hoy, segmentadas</h2><p>9 segmentos en chips con conteo (incluye "Prospectos" y la anomalía "Sin cliente ni prospecto"). Vista de solo lectura del resultado de cada visita.</p><div class="fix"><b>Revisar:</b> ¿9 segmentos se usan? ¿Cuáles consulta ella de verdad y cuáles podrían ir en un "más"?</div><div class="fix"><b>Revisar:</b> la nota de prospección (recuadro rojo) — ¿el tono educativo ayuda o ya estorba?</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>11:00</span><span>Supervisor de ventas</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">◎</span>Radar</span><span class="rt"><span class="g">⋔</span>Rutas</span><span class="rt"><span class="g">▤</span>Planes</span><span class="rt"><span class="g">◈</span>Prospectos</span><span class="rt on"><span class="g">⚇</span>Clientes</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="demo">◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.</div>
+    <div class="body">
+      <div style="font-size:20px;font-weight:800;margin:10px 0 2px">Clientes</div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">Segmentación de las paradas de hoy (gf.route.stop). Vista de solo lectura del resultado de cada visita.</div>
+      <div style="display:flex;gap:5px;overflow-x:auto;padding-bottom:6px;margin-bottom:6px">
+        <span class="reason" style="margin:0;white-space:nowrap;font-size:11px;padding:8px 12px">Planeados <b>29</b></span>
+        <span class="reason on" style="margin:0;white-space:nowrap;font-size:11px;padding:8px 12px">Visitados <b>11</b></span>
+        <span class="reason" style="margin:0;white-space:nowrap;font-size:11px;padding:8px 12px">Pendientes <b>18</b></span>
+        <span class="reason" style="margin:0;white-space:nowrap;font-size:11px;padding:8px 12px">No venta <b>3</b></span>
+        <span class="reason" style="margin:0;white-space:nowrap;font-size:11px;padding:8px 12px">Con venta <b>7</b></span>
+        <span class="reason" style="margin:0;white-space:nowrap;font-size:11px;padding:8px 12px">Prospectos <b>2</b></span>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;font-weight:800">Visitados</span><span style="font-size:11px;color:var(--text-muted)">11 clientes</span></div>
+        <div style="padding:8px 0;border-bottom:1px solid #EAF3F9"><div style="font-size:14px;font-weight:700">Cliente Demo Uno</div><div style="font-size:11px;color:var(--text-muted)">Ruta Demo Uno · parada 1 · Av. Demo 123</div><div style="display:flex;gap:5px;margin-top:4px"><span class="chip ok">Resultado: Con venta</span><span class="chip mut">Check-in</span></div></div>
+        <div style="padding:8px 0;border-bottom:1px solid #EAF3F9"><div style="font-size:14px;font-weight:700">Cliente Demo Tres</div><div style="font-size:11px;color:var(--text-muted)">Ruta Demo Dos · parada 3</div><div style="display:flex;gap:5px;margin-top:4px"><span class="chip warn">Resultado: No venta</span><span class="chip mut">Motivo: cerrado</span><span class="chip mut">Check-in</span></div></div>
+        <div style="padding:8px 0"><div style="font-size:14px;font-weight:700">Prospecto Miscelánea Portal <span class="chip info" style="font-size:9px;padding:1px 7px">Prospecto</span></div><div style="font-size:11px;color:var(--text-muted)">Ruta Demo Uno · parada 7</div><div style="display:flex;gap:5px;margin-top:4px"><span class="chip ok">Resultado: Con venta</span><span class="chip mut">Sin check-in</span></div></div>
+      </div>
+      <div class="card" style="border-color:rgba(185,28,28,.25);background:#FEF7F7;padding:10px 14px;font-size:11px;color:var(--text-muted);line-height:1.5">Visitas de PROSPECCIÓN: clientes potenciales (leads), todavía no son clientes de cartera. Cuentan en visitados/pendientes como cualquier parada, pero su venta no es recompra.</div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="6 · Pendientes (bajo Más)" data-note='<h2>Se conserva íntegra — ahora vive bajo Más (F6)</h2><p>Arriba el veredicto M1 en hero degradado ("Tienes N rutas listas para cerrar"), luego gestión agrupada por acción recomendada, riesgo y rezago. Abajo, los pendientes del día con filtros por tipo y severidad en palabra.</p><div class="fix"><b>Revisar:</b> ¿el veredicto de arriba es la primera pregunta de su día o preferiría otro?</div><div class="fix"><b>Revisar:</b> dos bloques en una pestaña — ¿se entiende la diferencia entre backlog (histórico) y pendientes (hoy)?</div><div class="fix"><b>F7 (Codex P1-9):</b> cada pendiente ahora es tipado — qué ocurrió / por qué importa / acción disponible; el texto crudo del servidor queda plegado en "Detalle para soporte".</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>11:20</span><span>Supervisor de ventas</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">◎</span>Radar</span><span class="rt"><span class="g">⋔</span>Rutas</span><span class="rt"><span class="g">▤</span>Planes</span><span class="rt"><span class="g">◈</span>Prospectos</span><span class="rt"><span class="g">⚇</span>Clientes</span><span class="rt on"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="demo">◈ Datos de DEMOSTRACIÓN sintéticos — no reflejan operación real.</div>
+    <div class="body">
+      <div class="hero" style="margin-top:10px"><div style="font-size:16px;font-weight:800">Tienes 2 rutas listas para cerrar.</div><div class="hmut" style="font-size:11.5px;margin-top:3px">5 rutas abiertas · caja pendiente $3,420</div><div class="hmut" style="font-size:10px;margin-top:6px">Registrado por el servidor: 2026-01-15</div></div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:2px">Listas para cerrar</div><div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px">Caja ya validada por el sistema. El cierre se hace fuera de esta pantalla.</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #EAF3F9"><div><div style="font-size:12.5px;font-weight:700">Ruta Demo Cuatro</div><div style="font-size:10.5px;color:var(--text-muted)">2 días · caja pendiente $750</div></div><button class="ghost" style="width:auto;min-height:32px;padding:0 12px;font-size:11px">Ver ruta</button></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0"><div><div style="font-size:12.5px;font-weight:700">Ruta Demo Seis</div><div style="font-size:10.5px;color:var(--text-muted)">1 día · caja pendiente $1,240</div></div><button class="ghost" style="width:auto;min-height:32px;padding:0 12px;font-size:11px">Ver ruta</button></div>
+      </div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Nivel de riesgo</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+          <div class="tile" style="border-color:rgba(185,28,28,.3)"><div class="v" style="color:#b91c1c">1</div><div class="k">Alto</div></div>
+          <div class="tile" style="border-color:rgba(180,83,9,.3)"><div class="v" style="color:#b45309">2</div><div class="k">Medio</div></div>
+          <div class="tile"><div class="v">2</div><div class="k">Bajo</div></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin:4px 0 6px"><span style="font-size:18px;font-weight:800">Pendientes</span><span style="font-size:11px;color:var(--text-muted)">4 pendientes</span></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px"><span class="reason on" style="margin:0;font-size:10.5px;padding:7px 11px">Todos · 4</span><span class="reason" style="margin:0;font-size:10.5px;padding:7px 11px">Ruta sin salida · 1</span><span class="reason" style="margin:0;font-size:10.5px;padding:7px 11px">Sin señal · 1</span><span class="reason" style="margin:0;font-size:10.5px;padding:7px 11px">Carga/refill pendiente · 2</span></div>
+      <div class="card" style="padding:11px 15px"><div style="font-size:12.5px;font-weight:800">Ruta sin salida <span class="chip err" style="font-size:9px;padding:1px 7px">Incumplimiento</span></div>
+        <div style="font-size:11.5px;margin-top:5px;line-height:1.5"><b>Qué ocurrió:</b> <span style="color:var(--text-muted)">la Ruta Demo Tres no registró salida y ya pasó su hora objetivo (hace 45 min).</span></div>
+        <div style="font-size:11.5px;margin-top:2px;line-height:1.5"><b>Por qué importa:</b> <span style="color:var(--text-muted)">sus 8 clientes de hoy quedarían sin visita y la carga ya está preparada.</span></div>
+        <div style="display:flex;gap:8px;margin-top:7px"><button class="ghost" style="flex:1;min-height:34px;font-size:11px">Llamar al chofer</button><button class="ghost" style="flex:1;min-height:34px;font-size:11px">Ver ruta</button></div>
+        <div style="font-size:10px;color:var(--text-low);margin-top:6px">Detalle para soporte ▸ Ruta 103 · datos al 2026-01-15 · fuente: day_summary</div></div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="7 · Más" data-note='<h2>Los accesos agrupados por tarea</h2><p>Dos grupos: Desempeño (Integridad, Metas, Score, Dashboard) y Clientes (Recuperación). Desde aquí se llega a lo recién construido.</p><div class="fix"><b>Revisar:</b> ¿"Recuperación" merece subir a pestaña propia o chip en Hoy, dado el peso que le están dando?</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>11:40</span><span>Supervisor de ventas</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">◎</span>Radar</span><span class="rt"><span class="g">⋔</span>Rutas</span><span class="rt"><span class="g">▤</span>Planes</span><span class="rt"><span class="g">◈</span>Prospectos</span><span class="rt"><span class="g">⚇</span>Clientes</span><span class="rt on"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="body">
+      <div style="font-size:20px;font-weight:800;margin:10px 0 2px">Más</div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">Accesos del equipo agrupados por tarea.</div>
+      <div class="overline">Desempeño</div>
+      <div class="grid2">
+        <div class="act" style="min-height:74px;align-items:flex-start"><span class="al">Integridad</span><span class="as" style="text-align:left">Cuánto del trabajo se puede verificar</span></div>
+        <div class="act" style="min-height:74px;align-items:flex-start"><span class="al">Metas</span><span class="as" style="text-align:left">Metas de venta y cobranza del mes</span></div>
+        <div class="act" style="min-height:74px;align-items:flex-start"><span class="al">Score</span><span class="as" style="text-align:left">Cumplimiento semanal por vendedor</span></div>
+        <div class="act" style="min-height:74px;align-items:flex-start"><span class="al">Dashboard</span><span class="as" style="text-align:left">Indicadores del equipo</span></div>
+      </div>
+      <div class="overline">Clientes</div>
+      <div class="grid2">
+        <div class="act" style="min-height:74px;align-items:flex-start"><span class="al">Recuperación</span><span class="as" style="text-align:left">Clientes por recuperar</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="8 · Planes · matriz semanal" data-note='<h2>La semana por plan operativo (lo más nuevo)</h2><p>Matriz de cumplimiento: cada fila un plan (chip Segmento / Subpolígono / Polígono), cada día un círculo con % y su palabra (Bien · Parcial · Bajo · Sin ruta · En curso · Planeado), y la columna MAÑANA con asignación o "⚑ Sin asignar → Asignar".</p><div class="fix"><b>Revisar:</b> en móvil la tabla scrollea horizontal (mín. 720px) — ¿le funciona o necesita una vista por día?</div><div class="fix"><b>Fix F5 aplicado:</b> los planes publicados muestran sus valores de optimización (paradas · km · tiempo) directo en la columna MAÑANA — de un vistazo sabes cuáles nacieron optimizados.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>16:00</span><span>Planear mañana</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Mis planes de mañana</span></div>
+    <div class="body">
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">Cumplimiento de la semana por plan operativo. Asigna y publica el de mañana.</div>
+      <div class="card" style="padding:10px 8px;overflow-x:auto">
+        <table style="border-collapse:collapse;font-size:10px;min-width:430px">
+          <tr style="color:var(--text-low);font-weight:700"><td style="padding:4px 6px">PLAN OPERATIVO</td><td style="padding:4px">lun 9</td><td style="padding:4px">mar 10</td><td style="padding:4px;font-weight:800;color:var(--text)">MAÑANA</td></tr>
+          <tr>
+            <td style="padding:6px"><span class="pillw" style="color:#005A8D;border-color:#005A8D">Segmento</span><div style="font-size:11px;font-weight:700;margin-top:3px">Mercado</div><div style="color:var(--text-muted)">Semana: 82%</div></td>
+            <td style="padding:4px;text-align:center"><div style="width:38px;height:38px;border-radius:50%;border:2.5px solid #166534;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:10px">91%</div><div style="color:#166534;font-weight:700">Bien</div></td>
+            <td style="padding:4px;text-align:center"><div style="width:38px;height:38px;border-radius:50%;border:2.5px solid #0077BB;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:10px">54%</div><div style="color:var(--blue3);font-weight:700">En curso</div></td>
+            <td style="padding:4px"><div style="font-size:10px">Unidad A · Chofer Uno</div><div style="font-size:9px;color:#166534;font-weight:700">✓ 28 paradas · 41 km · 5.2 h</div><button class="ghost" style="min-height:28px;font-size:10px;margin-top:3px">Reasignar</button></td>
+          </tr>
+          <tr>
+            <td style="padding:6px"><span class="pillw" style="color:#0F2A3D;border-color:#0F2A3D">Subpolígono</span><div style="font-size:11px;font-weight:700;margin-top:3px">Centro Norte</div><div style="color:var(--text-muted)">Semana: 64%</div></td>
+            <td style="padding:4px;text-align:center"><div style="width:38px;height:38px;border-radius:50%;border:2.5px solid #b45309;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:10px">68%</div><div style="color:#b45309;font-weight:700">Parcial</div></td>
+            <td style="padding:4px;text-align:center"><div style="width:38px;height:38px;border-radius:50%;border:2.5px solid #b91c1c;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:10px">41%</div><div style="color:#b91c1c;font-weight:700">Bajo</div></td>
+            <td style="padding:4px"><div style="color:#b45309;font-weight:800;font-size:10px">⚑ Sin asignar</div><button class="cta" style="min-height:28px;font-size:10px;margin-top:3px;padding:0 10px;width:auto">Asignar →</button></td>
+          </tr>
+          <tr>
+            <td style="padding:6px"><span class="pillw" style="color:#7c3aed;border-color:#7c3aed">Polígono</span><div style="font-size:11px;font-weight:700;margin-top:3px">Zona Sur</div><div style="color:var(--text-muted)">Semana: 77%</div></td>
+            <td style="padding:4px;text-align:center"><div style="width:38px;height:38px;border-radius:50%;border:2.5px solid #9FB4C2;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:8.5px;color:var(--text-muted)">Sin ruta</div><div style="color:var(--text-muted);font-weight:700">Sin ruta</div></td>
+            <td style="padding:4px;text-align:center"><div style="width:38px;height:38px;border-radius:50%;border:2.5px solid #166534;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:10px">88%</div><div style="color:#166534;font-weight:700">Bien</div></td>
+            <td style="padding:4px"><div style="font-size:10px">Unidad D · Chofer Cuatro</div><button class="ghost" style="min-height:28px;font-size:10px;margin-top:3px">Reasignar</button></td>
+          </tr>
+        </table>
+      </div>
+      <div style="font-size:10.5px;color:var(--text-muted)">← desliza para ver toda la semana →</div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="9 · Planes · detalle (F1+F5)" data-note='<h2>Los fixes F1 + F5 aplicados</h2><p>El bug de "asignar varias veces" muere: los recursos se asignan UNA vez y la readiness lee el mismo estado que los selectores (sin el POST vacío que re-bloqueaba). Y todas las rutas nacen optimizadas: el botón es <b>Optimizar y publicar</b> — corre el OSRM, persiste la secuencia y muestra los valores (paradas · km · tiempo).</p><div class="fix"><b>F1:</b> readiness local + GET del servidor — selectores llenos y semáforo verde son EL MISMO estado; agregar/quitar clientes ya no re-bloquea.</div><div class="fix"><b>F5+D4:</b> optimize devuelve la <b>revisión del plan</b> (hash de paradas+recursos); publicar exige la MISMA revisión bajo lock — si alguien mutó el plan en medio, revision_mismatch y se reoptimiza. Nadie publica una secuencia calculada para otra lista.</div><div class="fix"><b>D1:</b> se eliminó la bandera "publicar sin optimizar". Si el optimizador falla, la única vía es la contingencia autorizada EN SERVIDOR: permiso de grupo, razón obligatoria, actor+hora y marca "⚠ contingencia — orden manual" persistente en matriz, detalle y Torre.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>16:10</span><span>Planear mañana</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Planear mañana</span><span class="right" style="font-size:11px;color:var(--text-muted)">Martes 11 de agosto</span></div>
+    <div class="body">
+      <div class="card">
+        <span class="pillw" style="color:#7c3aed;border-color:#7c3aed">Segmento</span>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Plan: <b style="color:var(--text)">Mercado</b> · 34 clientes</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span style="font-size:16px;font-weight:800">Ruta Demo Uno</span><span class="chip mut">Borrador</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">Esta es la ruta/vendedor que ejecutará el plan <b>Mercado</b> mañana. Asigna <b>unidad</b>, <b>chofer</b> y <b>vendedor</b>, arma la lista del segmento y publica.</div>
+      </div>
+      <div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;font-weight:800">Recursos de esta ruta</span><span class="chip ok">✓ Lista</span></div>
+        <div class="rowline"><span class="l">Unidad</span><span class="r">Unidad Demo A · 1,200 kg</span></div>
+        <div class="rowline"><span class="l">Chofer</span><span class="r">Chofer Demo Uno</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Vendedor</span><span class="r">Estevan Valerio Guzmán</span></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:6px">Reasignar aquí cambia la unidad/persona del plan (incluso a última hora). Un recurso ya en otra ruta del día aparece deshabilitado para no doblarlo.</div>
+      </div>
+      <div class="card"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Plan por segmento (lista curada)</div>
+        <div style="font-size:11.5px;color:var(--text-muted);line-height:1.5">Se proponen los clientes del segmento <b>Mercado</b>. No hay zona que elegir: la lista es la del segmento.</div>
+        <button class="cta" style="margin-top:10px;min-height:46px">Sugerir clientes del segmento</button>
+      </div>
+      <div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;font-weight:800">Clientes del día</span><span class="chip info">28 en ruta</span></div>
+        <input class="mock" placeholder="Buscar cliente para agregar…" style="font-size:12px;margin-bottom:6px">
+        <div class="rowline"><span class="l" style="color:var(--text);font-weight:600">Abarrotes Doña Mary</span><span class="r" style="color:var(--blue3);font-size:11px">Quitar</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l" style="color:var(--text);font-weight:600">Cremería San José</span><span class="r" style="color:var(--blue3);font-size:11px">Quitar</span></div>
+      </div>
+      <div class="card" style="border-color:rgba(22,101,52,.35);padding:12px 15px">
+        <div style="font-size:12px;color:#166534;font-weight:700">✓ Lista para publicar: 28 clientes · recursos completos</div>
+        <button class="cta" style="margin-top:8px">Optimizar y publicar</button>
+        <div style="display:flex;justify-content:center;gap:10px;margin-top:8px;font-size:11px;color:var(--text-muted)"><span>tras optimizar:</span><b style="color:var(--text)">28 paradas · 41 km · 5.2 h de trayecto</b></div>
+        <div style="text-align:center;font-size:10px;color:var(--text-muted);margin-top:4px">Revisión <b>#7</b> — publicar usa exactamente esta secuencia; si el plan cambia, se reoptimiza</div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="10 · Prospectos (NUEVA · datos reales)" data-note='<h2>El prospectador de Odoo, en la bolsa de la supervisora</h2><p>Superficie nueva junto a Planes (F6), envolviendo lo VALIDADO en producción: gf_lead_map (1,959 leads, 98% con geo, 100% clasificados AA/A/B) + gf_prospector (24 zonas, búsquedas Google Places, 14 reglas que estiman kg/semana y valor, dedupe contra Odoo, 240 competidores).</p><div class="fix"><b>D2 · Scope por polígono:</b> el filtro primario es el polígono/subpolígono de SUS planes operativos — el servidor deriva la plaza del token y solo entrega prospectos dentro de esos polígonos. Una supervisora de Iguala no ve (ni puede pedir) GDL o CDMX. Fail-closed: lead sin coordenadas no aparece.</div><div class="fix"><b>Ordenado por valor × cercanía:</b> estimación de kg/sem (14 reglas de consumo) × distancia a SUS planes — se prospecta donde hay kilos, dentro del territorio.</div><div class="fix"><b>Dedupe honesto:</b> "Ya es cliente" en gris — nunca tocas la puerta de tu propio cliente.</div><div class="fix"><b>CTA con confirmación (Codex UX):</b> "Agregar al plan…" siempre abre confirmación con el estado del plan y el efecto — nunca escritura directa desde la tarjeta; el plan mostrado pudo dejar de ser editable.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>12:20</span><span>Supervisor de ventas</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">◎</span>Radar</span><span class="rt"><span class="g">⋔</span>Rutas</span><span class="rt"><span class="g">▤</span>Planes</span><span class="rt on"><span class="g">◈</span>Prospectos</span><span class="rt"><span class="g">⚇</span>Clientes</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="body">
+      <div style="font-size:20px;font-weight:800;margin:10px 0 2px">Prospectos</div>
+      <div style="display:flex;gap:5px;margin:8px 0"><span class="reason on" style="margin:0;font-size:11px;padding:7px 11px">Prospectar</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Por recuperar · 14</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Inactivos (+60d)</span></div>
+      <div style="display:flex;gap:6px;margin-bottom:4px">
+        <span class="reason on" style="margin:0;font-size:11px;padding:7px 12px">Polígono: Mercado (Iguala Centro)</span>
+        <span class="reason" style="margin:0;font-size:11px;padding:7px 12px">Subpolígono: Insurgentes</span>
+        <span class="reason" style="margin:0;font-size:11px;padding:7px 12px">Todos los míos</span>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px">Solo los polígonos de TUS planes operativos — el servidor no entrega otra plaza.</div>
+      <div class="card" style="padding:10px 15px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11.5px;color:var(--text-muted)">18 resultados · por valor × cercanía · dentro de tu polígono</span><span class="chip info">◈ 3 competidores en zona</span></div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:13.5px;font-weight:800">Mariscos El Faro <span class="pillw" style="color:#005A8D;border-color:#005A8D">AA</span></div><div style="font-size:10.5px;color:var(--text-muted)">★ 4.5 (230 reseñas) · Restaurante · abre 11-22 h</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:800;color:#166534">~120 kg/sem</div><div style="font-size:9.5px;color:var(--text-muted)">est. $3,000/mes</div></div></div>
+        <div style="font-size:11px;color:var(--blue3);margin-top:5px">📍 a 400 m de la ruta Mercado (mañana)</div>
+        <button class="cta" style="margin-top:8px;min-height:40px;font-size:12.5px">Agregar al plan Mercado…</button>
+      </div>
+      <div class="card" style="border-color:rgba(0,119,187,.35);background:#EAF6FE">
+        <div style="font-size:12.5px;font-weight:800">Confirmar: Mariscos El Faro → plan Mercado</div>
+        <div class="rowline" style="margin-top:4px"><span class="l">Estado del plan</span><span class="r"><span class="chip mut">Borrador · editable</span></span></div>
+        <div class="rowline"><span class="l">Dentro del polígono</span><span class="r" style="color:#166534">✓ Sí (Iguala Centro)</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Efecto</span><span class="r">quedará <b>pendiente de reoptimizar</b></span></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="cta" style="flex:1;min-height:38px;font-size:12px">Confirmar</button><button class="ghost" style="flex:1;min-height:38px;font-size:12px">Cancelar</button></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:13.5px;font-weight:800">Taquería El Paisa <span class="pillw" style="color:#005A8D;border-color:#005A8D">A</span></div><div style="font-size:10.5px;color:var(--text-muted)">★ 4.2 (85) · Taquería</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:800;color:#166534">~45 kg/sem</div><div style="font-size:9.5px;color:var(--text-muted)">est. $1,100/mes</div></div></div>
+        <div style="font-size:11px;color:var(--blue3);margin-top:5px">📍 a 1.1 km de la ruta Centro Norte</div>
+        <button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px">Agregar a un plan…</button>
+      </div>
+      <div class="card" style="opacity:.6">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13.5px;font-weight:700">Abarrotes Doña Mary</div><div style="font-size:10.5px;color:var(--text-muted)">★ 4.6 (120) · Abarrotes</div></div><span class="chip mut">Ya es cliente</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="11 · Prospectos · Por recuperar (F3+D3)" data-note='<h2>Fix F3: el modal habla la máquina de estados D3</h2><p>Recuperación se muda a la superficie Prospectos (F6). Una sola política (D3): borrador y enmienda son editables; una publicada SIN carga admite enmienda (pasa a amendment_pending y exige reoptimizar); una publicada CON carga NO se toca — se rechaza con causa humana y se ofrece el siguiente plan editable.</p><div class="fix"><b>Adiós "reabrir" y "re-draft":</b> solo existe la enmienda controlada — invalida la optimización y no se republica sin reoptimizar.</div><div class="fix"><b>Tras agregar:</b> el resultado se declara ("Quedó en Mercado — pendiente de reoptimizar") — nada de adds a ciegas al final.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>17:00</span><span>Gestión comercial</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Gestión comercial</span></div>
+    <div class="body">
+      <div style="display:flex;background:#F7FCFF;border:1px solid var(--border);border-radius:999px;padding:3px;gap:3px;margin:8px 0 10px">
+        <span style="flex:1;text-align:center;padding:8px;border-radius:999px;background:#00B8D422;border:1px solid var(--blue2);font-size:12px;font-weight:800;color:var(--blue3)">Por recuperar</span>
+        <span style="flex:1;text-align:center;padding:8px;font-size:12px;font-weight:700;color:var(--text-muted)">Inactivos (+60d)</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">14 clientes de tu sucursal · página 1</div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:800">Abarrotes El Faro</span><span class="chip err">112 días</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">📍 Iguala · 📅 Última: 2026-04-21</div>
+        <button class="cta" style="margin-top:8px;min-height:42px;font-size:13px">Agregar a mañana</button>
+      </div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:800">Cremería Lupita</span><span class="chip warn">74 días</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">📍 Iguala · 📅 Última: 2026-05-29</div>
+        <button class="cta" style="margin-top:8px;min-height:42px;font-size:13px">Agregar a mañana</button>
+      </div>
+      <div class="card" style="border-color:rgba(0,119,187,.35);background:#EAF6FE">
+        <div style="font-size:13px;font-weight:800">Agregar a un plan de mañana</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Abarrotes El Faro — elige a qué ruta de mañana entra.</div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+          <button class="ghost" style="justify-content:space-between;padding:0 14px"><span>Mercado</span><span style="font-size:10px;color:var(--text-muted)">Borrador · editable</span></button>
+          <button class="ghost" style="justify-content:space-between;padding:0 14px"><span>Centro Norte</span><span style="font-size:10px;color:#b45309">Publicada sin carga — pasa a enmienda y se reoptimiza</span></button>
+          <button class="ghost" style="justify-content:space-between;padding:0 14px;opacity:.5"><span>Ruta Sur</span><span style="font-size:10px;color:#b91c1c">Ya tiene carga preparada — usa el plan del jueves</span></button>
+        </div>
+        <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:8px">Cancelar</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--blue3);font-weight:700;padding:4px 2px"><span>← Anterior</span><span>Siguiente →</span></div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="12 · Productos del CEDIS (F4)" data-note='<h2>La sección que ya existía, por fin visible</h2><p>La vista de productos vendidos (SKU, cantidad, importe, delta y cobertura del portafolio) YA existía en /kpis sin enlace desde el shell. F4 la conecta: acceso en Más + chip en Hoy, con el comparativo catálogo vs vendido.</p><div class="fix"><b>Denominador honesto (Codex P1-7):</b> "sin vender" se mide contra el catálogo VENDIBLE de hoy — descuenta inactivos, sin existencia, reservados o fuera de temporada. Sin vender ≠ oportunidad perdida si no se podía surtir.</div><div class="fix"><b>"Del portafolio, sin vender" es el foco accionable:</b> lo que el CEDIS sí podía surtir y las rutas no ofrecieron — para pedir que lo carguen y lo ofrezcan.</div><div class="fix"><b>Producto+cantidad por parada</b> llega al detalle de ruta cuando backend agregue sale_lines (B4.1) — sin inventar mientras tanto.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>13:00</span><span>Supervisor de ventas</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">◎</span>Radar</span><span class="rt"><span class="g">⋔</span>Rutas</span><span class="rt"><span class="g">▤</span>Planes</span><span class="rt"><span class="g">◈</span>Prospectos</span><span class="rt"><span class="g">⚇</span>Clientes</span><span class="rt on"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="body">
+      <div style="font-size:20px;font-weight:800;margin:10px 0 2px">Productos del CEDIS</div>
+      <div style="display:flex;gap:5px;margin:8px 0"><span class="reason on" style="margin:0;font-size:11px;padding:7px 11px">Hoy</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Semana</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Mes</span></div>
+      <div class="card" style="padding:11px 15px"><div class="rowline"><span class="l">Cobertura del portafolio</span><span class="r"><span class="chip warn">⚠ 9 de 14 SKUs vendibles · 64%</span></span></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:5px">El denominador es lo <b>vendible hoy</b>: 2 SKUs excluidos (1 inactivo · 1 sin existencia). Sin vender ≠ oportunidad si no se podía surtir.</div></div>
+      <div class="overline">Del portafolio, sin vender hoy</div>
+      <div class="card" style="border-color:rgba(180,83,9,.3)">
+        <div class="rowline"><span class="l">Helado 4 L vainilla</span><span class="r"><span class="chip warn">0 vendidos · 31 en PT</span></span></div>
+        <div class="rowline"><span class="l">Bolsa premium 3 kg</span><span class="r"><span class="chip warn">0 vendidos · 120 en PT</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Barra grande 75 kg</span><span class="r"><span class="chip warn">0 vendidos · 18 en PT</span></span></div>
+        <div style="font-size:11px;color:#b45309;margin-top:8px">Estos 3 SKUs están en almacén y ninguna ruta los ofreció. ¿Pedir que los carguen mañana?</div>
+      </div>
+      <div class="overline">Vendidos hoy</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Bolsa hielo 5 kg</span><span class="r money">1,240 pzas · $31,000 <span style="color:#166534;font-size:10px">▲12%</span></span></div>
+        <div class="rowline"><span class="l">Barra 50 kg</span><span class="r money">96 pzas · $17,280 <span style="color:#b91c1c;font-size:10px">▼8%</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Hielo frappe 10 kg</span><span class="r money">210 pzas · $8,400</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="13 · Torre" data-note='<h2>Envejecimiento y caja atada</h2><p>Recién corregida: abre en la semana en curso (antes abría en el histórico y "no veías tu operación") y la semana se calcula en la zona horaria de la sucursal. KPI protagonista: "Abiertas con más de 7 días". Riesgo con palabra (Alto/Medio/Bajo/Sin evaluar) y cobertura declarada ("Mostrando 8 de 23").</p><div class="fix"><b>Revisar:</b> ¿los tres KPIs del header son los que ella necesita ver primero?</div><div class="fix"><b>Revisar:</b> 4 filas de filtros — ¿cuáles usa de verdad? ¿Se puede simplificar a 2?</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>17:20</span><span>Torre de control</span></div>
+    <div style="background:linear-gradient(135deg,#005A8D,#00B8D4);color:#fff;padding:16px 18px 18px;border-radius:0 0 24px 24px">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.14em;opacity:.8">TORRE DE CONTROL</div>
+      <div style="display:flex;gap:16px;align-items:flex-end;margin-top:8px">
+        <div><div style="font-size:36px;font-weight:800;line-height:1">3</div><div style="font-size:9.5px;opacity:.85;margin-top:3px">Abiertas con más<br>de 7 días</div></div>
+        <div><div style="font-size:20px;font-weight:800" class="money">$3,420</div><div style="font-size:9.5px;opacity:.85">Caja pendiente<br>(abiertas)</div></div>
+        <div><div style="font-size:20px;font-weight:800" class="money">$750</div><div style="font-size:9.5px;opacity:.85">Caja pendiente<br>(ya cerradas)</div></div>
+      </div>
+      <div style="font-size:9.5px;opacity:.7;margin-top:8px">Datos al 11/08 17:18</div>
+    </div>
+    <div class="body">
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin:10px 0 4px"><span class="reason on" style="margin:0;font-size:11px;padding:8px 12px">Semana en curso</span><span class="reason" style="margin:0;font-size:11px;padding:8px 12px">Histórico (+7 días)</span></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px"><span class="reason on" style="margin:0;font-size:11px;padding:8px 12px">Abiertas</span><span class="reason" style="margin:0;font-size:11px;padding:8px 12px">Draft</span><span class="reason" style="margin:0;font-size:11px;padding:8px 12px">Cerradas con caja</span></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Mostrando 8 de 23 · los totales de arriba son de toda tu sucursal, no de esta página</div>
+      <div class="card"><div style="display:flex;justify-content:space-between">
+        <div style="flex:1"><div style="font-size:14.5px;font-weight:800">Ruta Demo Dos <span class="pillw" style="color:#b91c1c;border-color:#FEE2E2;background:#FEE2E2">Alto</span></div>
+          <div style="font-size:10.5px;color:var(--text-muted);margin-top:3px">Abierta · avance 2/8</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px"><div style="flex:1;height:5px;border-radius:3px;background:#EAF3F9;overflow:hidden"><div style="width:25%;height:100%;background:#00B8D4"></div></div></div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:5px">ÚLTIMA ACTIVIDAD 11/08 12:40 · EDAD <b style="color:#b45309">9 días</b></div>
+        </div>
+        <div style="text-align:right;padding-left:10px"><div style="font-size:9.5px;color:var(--text-muted)">CAJA PENDIENTE</div><div style="font-size:16px;font-weight:800" class="money">$1,820</div><button class="ghost" style="width:auto;min-height:30px;padding:0 12px;font-size:11px;margin-top:6px">Ver ruta</button></div>
+      </div></div>
+      <div class="card"><div style="display:flex;justify-content:space-between">
+        <div style="flex:1"><div style="font-size:14.5px;font-weight:800">Ruta Demo Cinco <span class="pillw" style="color:#166534;border-color:#DCFCE7;background:#DCFCE7">Bajo</span></div>
+          <div style="font-size:10.5px;color:var(--text-muted);margin-top:3px">Abierta · avance 6/6 ✓ terminada en piso</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:5px">ÚLTIMA ACTIVIDAD 10/08 19:02 · EDAD 1 día</div>
+        </div>
+        <div style="text-align:right;padding-left:10px"><div style="font-size:9.5px;color:var(--text-muted)">CAJA PENDIENTE</div><div style="font-size:16px;font-weight:800" class="money">$640</div><button class="ghost" style="width:auto;min-height:30px;padding:0 12px;font-size:11px;margin-top:6px">Ver ruta</button></div>
+      </div></div>
+      <div style="font-size:10px;color:var(--text-muted);line-height:1.5;padding:4px 2px"><b>Caja pendiente</b> es el monto que la ruta trae sin conciliar en el sistema; no afirma si está por recibir o por validar. Esta vista es de consulta: los cierres se hacen donde siempre.</div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="14 · Integridad de ejecución" data-note='<h2>Verificable, no culpable</h2><p>Los dos porcentajes (Verificadas y Con evidencia) viven en el mismo componente a propósito — no hay forma de pintar uno sin el otro. "Sin evidencia" tiene tono propio (azul, ceguera): ni verde ni rojo. El orden lo fija el servidor: primero la ceguera, luego lo peor verificado.</p><div class="fix"><b>Revisar:</b> ¿el mensaje de ceguera ("lo que sabemos no representa la ruta") se entiende sin explicación?</div><div class="fix"><b>Revisar:</b> los umbrales vienen del payload (50 m · 1 min) — ¿son los correctos para la operación?</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>17:35</span><span>Supervisor de ventas</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Integridad de ejecución</span></div>
+    <div class="body">
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">Cuánto del trabajo reportado se puede verificar. Los dos porcentajes se leen juntos.</div>
+      <div style="display:flex;gap:5px;margin-bottom:10px"><span class="reason" style="margin:0;font-size:11px;padding:7px 13px">Hoy</span><span class="reason on" style="margin:0;font-size:11px;padding:7px 13px;background:#0077BB;color:#fff;border-color:#0077BB">Semana</span><span class="reason" style="margin:0;font-size:11px;padding:7px 13px">Mes</span></div>
+      <div class="card"><div style="font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--text-low);margin-bottom:8px">TODA LA SUCURSAL · Del 2026-08-04 al 2026-08-10</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          <div class="tile"><div class="k">VERIFICADAS</div><div class="v">72%</div><div style="font-size:8.5px;color:var(--text-muted)">31 de 43 evaluables</div></div>
+          <div class="tile"><div class="k">CON EVIDENCIA</div><div class="v">61%</div><div style="font-size:8.5px;color:var(--text-muted)">43 de 70 visitas</div></div>
+          <div class="tile"><div class="k">A REVISAR</div><div class="v">12</div></div>
+          <div class="tile"><div class="k">NO VERIFICABLES</div><div class="v">27</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:8px">Verificada = tiene cliente o prospecto, check-in a 50 m o menos y al menos 1 minuto de visita.</div>
+      </div>
+      <div class="card" style="border-left:3px solid var(--blue3)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13.5px;font-weight:800">Vendedor Demo Dos</span><span class="pillw" style="color:var(--blue3);border-color:var(--blue3)">Sin evidencia</span></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px">
+          <div class="tile"><div class="k">VERIFICADAS</div><div class="v">—</div></div>
+          <div class="tile"><div class="k">CON EVIDENCIA</div><div class="v">28%</div><div style="font-size:8.5px;color:var(--text-muted)">5 de 18</div></div>
+          <div class="tile"><div class="k">A REVISAR</div><div class="v">2</div></div>
+          <div class="tile"><div class="k">NO VERIFICABLES</div><div class="v">13</div></div>
+        </div>
+        <div style="background:rgba(15,42,61,0.04);border-radius:12px;padding:8px 12px;margin-top:8px;font-size:11px;font-weight:700;color:var(--blue3)">Menos de la mitad del trabajo dejó rastro: lo que sabemos no representa la ruta.</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px"><span class="chip mut">8 sin check-in</span><span class="chip mut">5 sin duración medida</span></div>
+      </div>
+      <div class="card" style="border-left:3px solid #166534">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13.5px;font-weight:800">Vendedor Demo Uno</span><span class="pillw" style="color:#166534;border-color:#166534">Confiable</span></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px">
+          <div class="tile"><div class="k">VERIFICADAS</div><div class="v">89%</div><div style="font-size:8.5px;color:var(--text-muted)">24 de 27</div></div>
+          <div class="tile"><div class="k">CON EVIDENCIA</div><div class="v">93%</div><div style="font-size:8.5px;color:var(--text-muted)">27 de 29</div></div>
+          <div class="tile"><div class="k">A REVISAR</div><div class="v">3</div></div>
+          <div class="tile"><div class="k">NO VERIFICABLES</div><div class="v">2</div></div>
+        </div>
+        <div style="font-size:10.5px;color:var(--text-muted);margin-top:6px">27 de 29 visitas terminadas dejaron rastro suficiente para juzgarlas.</div>
+      </div>
+      <div style="font-size:10.5px;color:var(--text-muted);line-height:1.5;padding:2px 2px">Una visita sin cliente, sin check-in o sin duración medida no se acusa: se cuenta como no verificable, que es distinto de mal hecha.</div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+</template>
+
+<script>
+const tpl=document.getElementById('screens');
+const sections=[...tpl.content.querySelectorAll('section')];
+const tabs=document.getElementById('tabs');
+const stage=document.getElementById('stage');
+function show(i){
+  [...tabs.children].forEach((t,j)=>t.classList.toggle('on',i===j));
+  stage.innerHTML='';
+  const s=sections[i];
+  const phone=document.createElement('div');phone.className='phone';
+  phone.innerHTML=s.innerHTML;
+  const note=document.createElement('div');note.className='note';
+  note.innerHTML=s.dataset.note;
+  stage.appendChild(phone);stage.appendChild(note);
+}
+sections.forEach((s,i)=>{
+  const b=document.createElement('button');b.className='tab';b.textContent=s.dataset.name;
+  b.onclick=()=>show(i);tabs.appendChild(b);
+});
+show(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PWA Colaboradores — Gerente de Sucursal · Rediseño del puesto · Grupo Frío</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..800&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;font-family:'DM Sans',-apple-system,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+:root{
+  /* Tema claro institucional Grupo Frío (brandTokens.js de la PWA supervisor_ventas) */
+  --bg0:#F0F9FF;--bg1:#F0F9FF;--bg2:#E0F3FC;
+  --surface:#FFFFFF;--surface-soft:#F7FCFF;--surface-strong:#E0F3FC;
+  --border:#DBEFF9;--border-blue:rgba(0,119,187,0.18);
+  --blue:#0077BB;--blue2:#00B8D4;--blue3:#005A8D;--glow:rgba(0,119,187,0.10);
+  --text:#0F2A3D;--text-soft:#0F2A3D;--text-muted:#5B7285;--text-low:#5B7285;
+  --success:#166534;--success-soft:rgba(22,101,52,0.10);
+  --warning:#b45309;--warning-soft:rgba(180,83,9,0.10);
+  --error:#b91c1c;--error-soft:rgba(185,28,28,0.10);
+  --cta:linear-gradient(90deg,#005A8D,#0077BB);
+  --hero:linear-gradient(135deg,#005A8D 0%,#00B8D4 100%);
+  --sh-soft:0 1px 2px rgba(15,42,61,0.06);
+  --sh-md:0 2px 8px rgba(15,42,61,0.08);
+  --sh-lg:0 8px 24px rgba(15,42,61,0.10);
+}
+body{background:linear-gradient(160deg,#F0F9FF 0%,#E0F3FC 100%);color:var(--text);min-height:100vh;padding:28px 16px 60px}
+.wrap{max-width:1200px;margin:0 auto}
+.pagehdr{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.logo-lockup{display:flex;align-items:center;gap:10px}
+.logo-lockup svg{height:44px;width:auto}
+.logo-word{line-height:1.02;color:#1852A2;letter-spacing:.06em}
+.logo-word .w1{font-size:13px;font-weight:300;display:block}
+.logo-word .w2{font-size:16px;font-weight:800;display:block;letter-spacing:.09em}
+h1{font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#0F2A3D}
+.sub{color:var(--text-muted);font-size:13px;margin-top:6px;max-width:760px;line-height:1.5}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 26px}
+.tab{padding:9px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--blue3);font-size:12.5px;font-weight:700;cursor:pointer;transition:all .18s ease;box-shadow:var(--sh-soft)}
+.tab.on{background:var(--cta);border-color:transparent;box-shadow:var(--sh-md);color:#fff}
+.stage{display:flex;gap:36px;align-items:flex-start;flex-wrap:wrap}
+.note{flex:1;min-width:280px;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:20px 22px;position:sticky;top:20px;box-shadow:var(--sh-md)}
+.note h2{font-size:15px;font-weight:800;margin-bottom:10px;color:var(--blue3)}
+.note p{font-size:13px;color:var(--text-soft);line-height:1.6;margin-bottom:10px}
+.note .fix{font-size:12px;color:var(--text-muted);line-height:1.55;padding:8px 0 8px 12px;border-left:2px solid var(--blue);margin-bottom:8px}
+.note .fix b{color:var(--text-soft)}
+/* ---- phone frame ---- */
+.phone{width:390px;height:800px;border-radius:44px;border:1px solid #CBE4F2;background:linear-gradient(160deg,#F0F9FF 0%,#F0F9FF 55%,#E0F3FC 100%);box-shadow:0 30px 80px rgba(15,42,61,.18),inset 0 1px 0 rgba(255,255,255,.8);overflow:hidden;position:relative;flex-shrink:0}
+.screen{height:100%;display:flex;flex-direction:column}
+.body{flex:1;overflow-y:auto;padding:0 16px;scrollbar-width:none}
+.body::-webkit-scrollbar{display:none}
+.statusbar{display:flex;justify-content:space-between;padding:14px 24px 4px;font-size:12px;font-weight:600;color:var(--text-muted)}
+.hdr{display:flex;align-items:center;gap:10px;padding:12px 16px 10px}
+.iconbtn{width:38px;height:38px;border-radius:18px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--blue3);font-size:16px;flex-shrink:0;box-shadow:var(--sh-soft)}
+.hdr .t{font-size:16px;font-weight:700;letter-spacing:-0.01em;color:var(--text)}
+.hdr .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.gf-mini{height:26px;width:auto;flex-shrink:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:15px 17px;margin-bottom:12px;box-shadow:var(--sh-soft)}
+.hero{background:var(--hero);border:none;border-radius:24px;padding:16px;margin-bottom:12px;color:#fff;box-shadow:var(--sh-md)}
+.hero .hmut{color:rgba(255,255,255,.75)!important}
+.hero b{color:#fff!important}
+.overline{font-size:10px;font-weight:700;letter-spacing:.18em;color:var(--text-low);text-transform:uppercase;margin:14px 2px 8px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
+.chip.info{color:#005A8D;background:#E0F3FC;border:1px solid rgba(0,119,187,.25)}
+.chip.ok{color:#166534;background:var(--success-soft);border:1px solid rgba(22,101,52,.28)}
+.chip.warn{color:#b45309;background:var(--warning-soft);border:1px solid rgba(180,83,9,.28)}
+.chip.err{color:#b91c1c;background:var(--error-soft);border:1px solid rgba(185,28,28,.28)}
+.chip.mut{color:var(--text-muted);background:#F7FCFF;border:1px solid var(--border)}
+.chip.onhero{color:#fff;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4)}
+.cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;border:none;border-radius:999px;background:var(--cta);color:#fff;font-size:14px;font-weight:700;box-shadow:var(--sh-md);cursor:pointer}
+.cta.dis{background:#E4EEF5;color:#8FA5B5;box-shadow:none}
+.ghost{display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;border-radius:999px;background:var(--surface);color:var(--blue3);border:1px solid var(--border-blue);font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--sh-soft)}
+.step{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:22px;background:var(--surface);border:1px solid var(--border);margin-bottom:6px;box-shadow:var(--sh-soft)}
+.step .dot{width:30px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;border:2px solid}
+.step .tt{font-size:13.5px;font-weight:700;color:var(--text)}
+.step .dd{font-size:11.5px;color:var(--text-muted);margin-top:1px}
+.step .st{margin-left:auto;flex-shrink:0}
+.step.active{background:#EAF6FE;border-color:rgba(0,119,187,.35)}
+.step.pend{opacity:.6}
+.navbar{display:flex;border-top:1px solid var(--border);background:rgba(255,255,255,.96);backdrop-filter:blur(20px);padding:6px 4px 14px}
+.navbar .nv{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--text-low);font-size:10px;font-weight:500;padding-top:6px}
+.navbar .nv.on{color:var(--blue);font-weight:700}
+.navbar .nv svg{width:20px;height:20px}
+.kpi{flex:1;padding:8px 10px;border-radius:18px;background:#F7FCFF;border:1px solid var(--border)}
+.rowline{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #EAF3F9;font-size:13px}
+.rowline:last-child{border-bottom:none}
+.rowline .l{color:var(--text-muted)}
+.rowline .r{font-weight:700;color:var(--text)}
+/* venta steppers */
+.pline{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #EAF3F9}
+.pline .pi{width:40px;height:40px;border-radius:14px;background:#E0F3FC;border:1px solid var(--border-blue);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.pline .pn{font-size:13px;font-weight:700;color:var(--text)}
+.pline .pp{font-size:11px;color:var(--text-muted)}
+.stepper{display:flex;align-items:center;gap:6px;margin-left:auto}
+.stepper .sb{width:46px;height:46px;border-radius:16px;border:1px solid rgba(0,119,187,.30);background:#EAF6FE;color:var(--blue3);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.stepper .sq{width:36px;text-align:center;font-size:16px;font-weight:800}
+.fixedbar{border-top:1px solid var(--border);background:rgba(255,255,255,.97);backdrop-filter:blur(16px);padding:12px 16px 16px;box-shadow:0 -6px 20px rgba(15,42,61,.06)}
+.fixedbar .tot{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.fixedbar .tot .tl{font-size:12px;color:var(--text-muted);font-weight:700}
+.fixedbar .tot .tv{font-size:24px;font-weight:800;color:#166534;letter-spacing:-0.02em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px;border-radius:22px;background:var(--surface);border:1px solid var(--border);cursor:pointer;min-height:88px;justify-content:center;box-shadow:var(--sh-soft)}
+.act .ai{font-size:24px}
+.act .al{font-size:12px;font-weight:700;color:var(--text);text-align:center}
+.act .as{font-size:10px;color:var(--text-muted);text-align:center}
+.act.main{background:linear-gradient(180deg,#E0F3FC,#F0F9FF);border-color:rgba(0,119,187,.35)}
+.photo{border:1.5px dashed rgba(0,119,187,.4);border-radius:18px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--blue3);font-size:12.5px;font-weight:700;background:#F3FAFE}
+.reason{display:inline-flex;padding:11px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text);margin:0 6px 8px 0;cursor:pointer;box-shadow:var(--sh-soft)}
+.reason.on{background:#E0F3FC;border-color:rgba(0,119,187,.45);color:var(--blue3);font-weight:700}
+textarea.mock,input.mock{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px 14px;color:var(--text);font-size:14px;resize:none;outline:none;box-shadow:var(--sh-soft)}
+.money{font-variant-numeric:tabular-nums}
+/* map */
+.mapbox{position:relative;height:100%;background:#E8F4FB;overflow:hidden}
+.mapbox svg.mapsvg{position:absolute;inset:0;width:100%;height:100%}
+.pin{position:absolute;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2.5px solid;transform:translate(-50%,-50%);box-shadow:var(--sh-md)}
+.floating-top{position:absolute;top:12px;left:12px;right:12px;z-index:5}
+.panel{position:absolute;left:10px;right:10px;bottom:10px;background:rgba(255,255,255,.98);border:1px solid var(--border);border-radius:24px;padding:14px 16px;z-index:5;backdrop-filter:blur(16px);box-shadow:var(--sh-lg)}
+@media(max-width:900px){.note{position:static}}
+
+.rail2{display:flex;gap:6px;padding:12px 14px 4px;overflow-x:auto;scrollbar-width:none}
+.rail2::-webkit-scrollbar{display:none}
+.rt{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 13px;border-radius:18px;font-size:13px;color:var(--text-muted);font-weight:500;white-space:nowrap;flex-shrink:0}
+.rt.on{background:#E0F3FC;color:#0F2A3D;font-weight:700}
+.rt .g{color:var(--blue3);font-size:15px}
+.demo{margin:8px 16px 0;padding:7px 12px;border-radius:14px;background:rgba(109,40,217,0.08);border:1px solid rgba(109,40,217,0.25);color:#6d28d9;font-size:10.5px;font-weight:700}
+.tile{background:#F7FCFF;border:1px solid var(--border);border-radius:14px;padding:8px 6px;text-align:center}
+.tile .v{font-size:19px;font-weight:800}
+.tile .k{font-size:10px;color:var(--text-muted);margin-top:2px}
+.flagline{font-size:10.5px;font-weight:800;margin-bottom:4px}
+.tl{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;border-bottom:1px solid #EAF3F9}
+.tl:last-child{border-bottom:none}
+.tl .tg{width:18px;text-align:center;font-weight:800}
+.pillw{display:inline-flex;align-items:center;font-size:10px;font-weight:800;padding:2px 9px;border-radius:999px;border:1.5px solid}
+</style>
+</head>
+<body>
+
+<!-- Logo Grupo Frío (marca oficial: cubo isométrico, public/icons/logo-grupo-frio.svg de la PWA) -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="gf-mark" viewBox="100 15 460 480">
+    <g transform="translate(40,25)">
+      <polygon points="290,0 400,64 400,190 290,126" fill="#B8BAC1"/>
+      <polygon points="290,0 180,64 180,190 290,126" fill="#C5C7CD"/>
+      <polygon points="430,78 510,125 510,255 430,208" fill="#B8BAC1"/>
+      <polygon points="150,78 70,125 70,255 150,208" fill="#C5C7CD"/>
+      <polygon points="290,132 400,196 400,332 290,268" fill="#C7CCD1"/>
+      <polygon points="290,132 180,196 180,332 290,268" fill="#D2D7DB"/>
+      <polygon points="150,208 70,255 70,385 150,338" fill="#1A4F9C"/>
+      <polygon points="290,268 180,332 180,463 290,399" fill="#1A4F9C"/>
+      <polygon points="430,208 510,255 510,385 430,338" fill="#1A4F9C"/>
+      <polygon points="290,126 372,173 290,220 208,173" fill="#D8DDE0"/>
+      <g fill="none" stroke="#F5F7F8" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="290" y1="0" x2="290" y2="126" stroke-width="10"/>
+        <line x1="180" y1="64" x2="180" y2="463" stroke-width="10"/>
+        <line x1="400" y1="64" x2="400" y2="332" stroke-width="10"/>
+        <line x1="70" y1="255" x2="180" y2="332" stroke-width="10"/>
+        <line x1="400" y1="196" x2="510" y2="255" stroke-width="10"/>
+        <line x1="180" y1="196" x2="70" y2="125" stroke-width="10"/>
+        <line x1="400" y1="190" x2="510" y2="125" stroke-width="10"/>
+        <line x1="180" y1="190" x2="290" y2="126" stroke-width="10"/>
+        <line x1="290" y1="126" x2="400" y2="190" stroke-width="10"/>
+        <line x1="180" y1="332" x2="70" y2="255" stroke-width="10"/>
+        <line x1="180" y1="332" x2="290" y2="399" stroke-width="10"/>
+        <line x1="290" y1="399" x2="400" y2="332" stroke-width="10"/>
+        <line x1="400" y1="332" x2="510" y2="255" stroke-width="10"/>
+      </g>
+    </g>
+  </symbol>
+</svg>
+
+<div class="wrap">
+  <div class="pagehdr"><div class="logo-lockup"><svg viewBox="0 0 460 480"><use href="#gf-mark"/></svg><div class="logo-word"><span class="w1">GRUPO</span><span class="w2">FRÍO</span></div></div></div>
+  <h1>Gerente de Sucursal — Rediseño del puesto (visión objetivo)</h1>
+  <p class="sub">El puesto completo a partir de su día real: la gerente es responsable de TODA la operación — ve a sus tres puestos (supervisor de ventas, supervisor de producción, aux de admin) y puede sustituirlos. 17 pantallas: la ronda de la mañana, la administración completa (gastos con matriz, historial, aprobar/asentar, depósitos, POS, corte de sucursal, arqueos de vendedores, requisiciones), Controles (ya construido), cotejo físico vs sistema, inventarios de todos los almacenes, y Talento (asistencias + pre-nómina semanal). Respeta el rail de 7 pestañas de los PRs draft.</p>
+  <div class="tabs" id="tabs"></div>
+  <div class="stage" id="stage"></div>
+</div>
+
+<template id="screens">
+
+<section data-name="1 · Hoy · la mañana de la gerente" data-note='<h2>Su rutina real, en una pantalla</h2><p>Del relato del puesto: llega → ¿salieron las unidades a vender? → ¿producción está trabajando? → ¿caja/mostrador operando? → pendientes de administración. El hub ES esa rutina: cada verificación con su estado por palabra y su botón para profundizar en la vista del puesto correspondiente.</p><div class="fix"><b>Principio del puesto:</b> la gerente es responsable de TODA la operación — su app es el superconjunto: ve los tres puestos (supervisor ventas, supervisor producción, aux admin) y puede ejecutar lo de admin cuando la auxiliar no está.</div><div class="fix"><b>El selector de razón social es un FILTRO, no una autoridad</b> (auditoría YELLOW): el token trae el ScopeContext autorizado y cada endpoint deriva compañía/sucursal/almacenes server-side.</div><div class="fix"><b>Frescura POR TARJETA:</b> caja, producción y rutas tienen cadencias distintas — cada verificación declara su propia hora de corte, nunca un "actualizado" global.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>07:45</span><span>Gerente · Iguala</span></div>
+    <div class="rail2">
+      <span class="rt on"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">⚇</span>Equipo</span><span class="rt"><span class="g">▤</span>Admin</span><span class="rt"><span class="g">⚙</span>Producción</span><span class="rt"><span class="g">▦</span>Inventario</span><span class="rt"><span class="g">⚐</span>Controles</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 2px"><span style="font-size:20px;font-weight:800">Hoy</span><span class="chip mut">Glaciem (34) ▾</span></div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">2026-08-11 · Sucursal Iguala · frescura por tarjeta ↓</div>
+      <div class="overline">Tu ronda de la mañana</div>
+      <div class="card" style="padding:12px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13.5px;font-weight:800">🚚 ¿Salieron las unidades a vender?</div><div style="font-size:11px;color:var(--text-muted)">4 de 5 en calle · Ruta Demo Tres sin salir · <span style="color:var(--blue3)">radar 07:41</span></div></div><span class="chip warn">⚠ 1 sin salir</span></div><button class="ghost" style="margin-top:8px;min-height:36px;font-size:12px">Ver rutas del equipo →</button></div>
+      <div class="card" style="padding:12px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13.5px;font-weight:800">🧊 ¿Producción está trabajando?</div><div style="font-size:11px;color:var(--text-muted)">Turno abierto 07:02 · compresores 2/2 · 0 paros · <span style="color:var(--blue3)">turno 07:40</span></div></div><span class="chip ok">✓ En marcha</span></div><button class="ghost" style="margin-top:8px;min-height:36px;font-size:12px">Ver turno de producción →</button></div>
+      <div class="card" style="padding:12px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13.5px;font-weight:800">💵 ¿Caja y mostrador operando?</div><div style="font-size:11px;color:var(--text-muted)">Turno POS abierto · fondo $2,000 contado ✓ · <span style="color:var(--blue3)">caja 07:35</span></div></div><span class="chip ok">✓ Abierta</span></div></div>
+      <div class="overline">Pendientes de administración</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Gastos por aprobar y asentar</span><span class="r"><span class="chip warn">⚠ 14</span></span></div>
+        <div class="rowline"><span class="l">Arqueos de vendedores por validar</span><span class="r"><span class="chip warn">⚠ 2 rutas</span></span></div>
+        <div class="rowline"><span class="l">Cotejo físico vs sistema de ayer</span><span class="r"><span class="chip mut">▢ Pendiente</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Controles</span><span class="r"><span class="chip err">⛔ 3 por revisar</span></span></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div class="kpi"><div style="font-size:10px;color:var(--text-muted)">VENTA REAL</div><div style="font-size:14px;font-weight:800;margin-top:2px" class="money">$38,240</div></div>
+        <div class="kpi"><div style="font-size:10px;color:var(--text-muted)">GASTOS</div><div style="font-size:14px;font-weight:800;margin-top:2px" class="money">$4,110</div></div>
+        <div class="kpi"><div style="font-size:10px;color:var(--text-muted)">CAJA</div><div style="font-size:14px;font-weight:800;margin-top:2px" class="money">$12,380</div></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="2 · Captura de gasto (la estrella)" data-note='<h2>4 datos y todo lo demás se arma solo</h2><p>El modelo definitivo: el ARTÍCULO del catálogo trae cuenta contable, impuestos, unidad de medida y la regla de centro de costo (la matriz, pantalla 3). La captura solo pide: artículo · cantidad · monto · <b>¿para qué es?</b> — y el "para qué" (la unidad 265, el Compresor 2) termina de armar las dimensiones.</p><div class="fix"><b>El ejemplo capturado aquí:</b> Combustible Magna · 25 L · $500 · unidad 265 (Valerio). Pega en: cuenta <b>Combustibles y lubricantes</b> (del artículo) · Plaza <b>Iguala Glaciem [931]</b> (del token) · CC <b>Logística/Transporte</b> (regla del artículo: aplica a vehículo) · dimensión <b>Vehículo: 265</b> (el plan analítico Vehículo YA existe en Odoo) · UN CEDIS cuando Fase 0 la habilite.</div><div class="fix"><b>Bonus de control:</b> el gasto ligado a la 265 alimenta el costo por unidad y cruza con la regla "Gasolina sin ruta" del panel de Controles — si la 265 no salió ese día, salta sola.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>10:30</span><span>Gastos · Sucursal Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Registrar gasto</span></div>
+    <div class="body">
+      <div class="overline">Artículo (catálogo de gastos)</div>
+      <input class="mock" value="combustible mag" style="margin-bottom:6px">
+      <div class="card" style="padding:10px 15px;border-color:rgba(0,119,187,.35);background:#EAF6FE"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:800">Combustible Magna</div><div style="font-size:10.5px;color:var(--text-muted)">Litros · cuenta: Combustibles y lubricantes · pide vehículo</div></div><span class="chip ok">✓ Elegido</span></div></div>
+      <div class="overline">Cantidad y monto</div>
+      <div style="display:flex;gap:8px">
+        <input class="mock money" style="flex:1;font-size:18px;font-weight:800;text-align:center" value="25 L">
+        <input class="mock money" style="flex:1.4;font-size:18px;font-weight:800;text-align:center" value="$500.00">
+      </div>
+      <div class="overline">¿Para qué es? (lo pide este artículo)</div>
+      <div style="margin-bottom:6px"><span class="reason on">Unidad 265 · Valerio</span><span class="reason">Unidad 103</span><span class="reason">Unidad 107</span><span class="reason">Otra…</span></div>
+      <div class="overline">Comprobante</div>
+      <div class="photo" style="padding:12px">📷 Foto del ticket — obligatoria</div>
+      <div class="overline">Así queda (lo estampa el servidor)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Cuenta contable</span><span class="r">Combustibles y lubricantes</span></div>
+        <div class="rowline"><span class="l">Plaza</span><span class="r"><span class="chip ok">✓ Iguala Glaciem [931]</span></span></div>
+        <div class="rowline"><span class="l">Centro de costo</span><span class="r">Logística / Transporte IGU</span></div>
+        <div class="rowline"><span class="l">Vehículo</span><span class="r">Unidad 265</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Unidad de negocio</span><span class="r"><span class="chip mut">▢ Pendiente de Fase 0</span></span></div>
+      </div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Registrar gasto · $500.00</button></div>
+  </div>
+</section>
+
+<section data-name="3 · La matriz del artículo" data-note='<h2>Se configura UNA vez; la captura la hereda siempre</h2><p>Cada artículo de gasto se da de alta con todo lo que la captura ya no tendrá que preguntar: cuenta contable, impuestos, unidad de medida, la REGLA de centro de costo, y qué pide en captura (cantidad, activo destino, evidencia).</p><div class="fix"><b>El segundo ejemplo, armado por la matriz:</b> "Pistón tipo B Mycom" → cuenta <b>Refacciones de maquinaria</b> · pide MÁQUINA · al capturarlo eligiendo <b>Compresor 2</b> + tipo <b>correctivo</b>, deriva: CC <b>Producción Línea 2</b> (el compresor pertenece a la línea Rolito), dimensión <b>Línea de producción</b>, UN <b>Planta</b> (no CEDIS — la determina el activo), y se liga a la solicitud de mantenimiento del Compresor 2 — el costo cae al historial de ESA máquina.</div><div class="fix"><b>Quién la mantiene:</b> contabilidad central, versionada (vigencia + responsable + bitácora). Regla ausente o ambigua = rechazo duro de la captura, nunca adivinar. El cliente solo manda ids — las dimensiones SIEMPRE se arman en el servidor.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>Admin central</span><span>Catálogo de artículos de gasto</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Artículo: Pistón tipo B Mycom</span><span class="right"><span class="chip mut" style="align-self:center">v3 · vigente desde 01-sep</span></span></div>
+    <div class="body">
+      <div class="overline">Contabilidad (fijo por artículo)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Cuenta contable</span><span class="r">Refacciones de maquinaria</span></div>
+        <div class="rowline"><span class="l">Impuestos</span><span class="r">IVA 16% acreditable</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Unidad de medida</span><span class="r">Pieza</span></div>
+      </div>
+      <div class="overline">Regla de dimensiones</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Centro de costo</span><span class="r">Según la máquina destino</span></div>
+        <div class="rowline"><span class="l">Unidad de negocio</span><span class="r">Según el activo (Planta/CEDIS)</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Plaza</span><span class="r">Siempre del token del capturista</span></div>
+      </div>
+      <div class="overline">Qué pide en captura</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Cantidad</span><span class="r"><span class="chip ok">✓ Sí (piezas)</span></span></div>
+        <div class="rowline"><span class="l">Activo destino</span><span class="r"><span class="chip ok">✓ Máquina (obligatorio)</span></span></div>
+        <div class="rowline"><span class="l">Tipo de mantenimiento</span><span class="r"><span class="chip ok">✓ Correctivo / Preventivo</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Evidencia</span><span class="r"><span class="chip ok">✓ Foto siempre</span></span></div>
+      </div>
+      <div class="card" style="background:#F3FAFE;border-color:var(--border-blue);padding:10px 14px;font-size:11px;color:var(--blue3);line-height:1.5">◈ Al capturar "Pistón tipo B · Compresor 2 · correctivo · $3,200": cuenta Refacciones · Plaza Iguala · CC Producción L2 · UN Planta · máquina Compresor 2 → historial de mantenimiento y costo por equipo. La capturista solo eligió artículo, máquina, tipo y monto.</div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="4 · Historial de gastos" data-note='<h2>Lo que capturaste, dónde va y en qué estado está</h2><p>La pantalla existente (442 líneas) se conserva y se lleva a móvil: filtros de fecha/compañía/estado, la cadena borrador → reportado → aprobado → asentado, y el comprobante a un tap. Con la matriz, cada fila ya muestra su artículo y sus dimensiones.</p><div class="fix"><b>El combustible por ruta ya está cubierto en la captura:</b> el flujo especial existente (selector de rutas del día) se absorbe en el "¿para qué es?" del artículo — el ejemplo de la 265 ES ese flujo.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>12:30</span><span>Gastos · Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Historial de gastos</span></div>
+    <div class="body">
+      <div style="display:flex;gap:5px;margin:8px 0"><span class="reason on" style="margin:0;font-size:11px;padding:7px 11px">Esta semana</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Mes</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Por estado ▾</span></div>
+      <div class="card" style="padding:10px 15px"><div style="display:flex;justify-content:space-between"><div><div style="font-size:13px;font-weight:700">Combustible Magna · 25 L · Unidad 265</div><div style="font-size:10.5px;color:var(--text-muted)">Hoy 10:30 · Plaza Iguala · CC Logística · foto ✓</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:800" class="money">$500</div><span class="chip ok" style="font-size:9px;padding:1px 7px">✓ Asentado</span></div></div></div>
+      <div class="card" style="padding:10px 15px"><div style="display:flex;justify-content:space-between"><div><div style="font-size:13px;font-weight:700">Pistón tipo B Mycom · Compresor 2</div><div style="font-size:10.5px;color:var(--text-muted)">Ayer · CC Producción L2 · correctivo · foto ✓</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:800" class="money">$3,200</div><span class="chip warn" style="font-size:9px;padding:1px 7px">⚠ Por aprobar</span></div></div></div>
+      <div class="card" style="padding:10px 15px"><div style="display:flex;justify-content:space-between"><div><div style="font-size:13px;font-weight:700">Otros (por clasificar)</div><div style="font-size:10.5px;color:var(--text-muted)">Ayer · nota: "grúa emergencia" · en cola de contabilidad</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:800" class="money">$1,800</div><span class="chip mut" style="font-size:9px;padding:1px 7px">▢ Por clasificar</span></div></div></div>
+      <div class="card" style="padding:11px 15px"><div class="rowline"><span class="l">Total de la semana</span><span class="r money">$18,940 · 23 gastos</span></div><div class="rowline" style="border-bottom:none"><span class="l">Sin asentar</span><span class="r"><span class="chip warn">⚠ $6,450 · 8</span></span></div></div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="5 · Aprobar y asentar" data-note='<h2>El hallazgo #1 de la auditoría: 1,296 reportes ($3.11M) muertos en borrador</h2><p>El flujo estaba cortado a la mitad: se aprobaba el gasto individual pero los REPORTES jamás avanzaban — y el P&L no incluye ni un peso de eso. Esta pantalla cierra el ciclo: aprobar → asentar (póliza) en una acción, con el backlog visible.</p><div class="fix"><b>Transacción idempotente</b> (auditoría YELLOW): lock por reporte, clave única reporte→póliza (doble toque o reintento tras timeout jamás duplica), validación de período contable abierto, botón deshabilitado en vuelo, estados separados aprobar/contabilizar/rechazar.</div><div class="fix"><b>El backlog histórico se maneja aparte</b> según la decisión pendiente: retroactivo vs corte de fecha (pregunta 8.2 de la auditoría — sigue abierta).</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>11:00</span><span>Gastos · Sucursal Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Aprobar y asentar</span></div>
+    <div class="body">
+      <div class="card" style="border-color:rgba(180,83,9,.35);padding:11px 15px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12.5px;font-weight:800">Backlog histórico</span><span class="chip warn">⚠ 627 reportes · $2.33M</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">En borrador desde antes del corte. Se regularizan por separado (decisión de dirección pendiente).</div>
+      </div>
+      <div class="overline">Por aprobar de esta semana (14)</div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">Combustible · $1,450 · A. Jaimes</div><div style="font-size:10.5px;color:var(--text-muted)">Hoy 10:30 · Plaza Iguala Glaciem · foto ✓</div></div><span class="chip ok" style="font-size:9px;padding:1px 7px">Genera póliza · 1:1</span></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:38px;font-size:12px;color:#b91c1c;border-color:rgba(185,28,28,.35)">Rechazar</button><button class="cta" style="flex:2;min-height:38px;font-size:12.5px">Aprobar y asentar</button></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">Fletes · $2,800 · A. Jaimes</div><div style="font-size:10.5px;color:var(--text-muted)">Ayer 16:12 · <b style="color:#b91c1c">sin comprobante</b></div></div><span class="chip err" style="font-size:9px;padding:1px 7px">⛔ Bloqueado</span></div>
+        <div style="font-size:11px;color:#b91c1c;margin-top:6px">No se puede aprobar sin foto del comprobante. Pide la evidencia o rechaza.</div>
+      </div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Asentados esta semana</span><span class="r">22 · $31,480 · 22 pólizas</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Tiempo medio captura → póliza</span><span class="r">1.2 días</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="6 · Depósitos y retiros" data-note='<h2>Los depósitos dejan de contaminar gastos</h2><p>La auditoría encontró depósitos OXXO capturados como gastos — si algún día se asientan, inflan el costo. Flujo aparte: depósito / retiro de caja con su propio registro, ligado al corte.</p><div class="fix"><b>Resuelve:</b> el depósito OXXO capturado como gasto — y tras la auditoría YELLOW, con CICLO DE CUSTODIA: declarado → contado → en tránsito → confirmado por banco (→ disputado/revertido), evidencia por transición, y segregación entre quien cuenta y quien autoriza. La caja solo descuenta cuando el banco confirma.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>12:00</span><span>Caja · Sucursal Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Depósitos y retiros</span></div>
+    <div class="body">
+      <div class="overline">Movimiento</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px"><span class="reason on" style="flex:1;text-align:center;justify-content:center">Depósito a banco</span><span class="reason" style="flex:1;text-align:center;justify-content:center">Retiro de caja</span></div>
+      <input class="mock money" style="font-size:24px;font-weight:800;text-align:center;padding:14px" value="$7,034.00">
+      <div style="height:8px"></div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Destino</span><span class="r">BBVA ·1234 (vía OXXO)</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Se descuenta de</span><span class="r">Caja del corte de hoy</span></div>
+      </div>
+      <div class="overline">Evidencia</div>
+      <div class="photo">📷 Foto del comprobante de depósito — obligatoria</div>
+      <div class="overline">Ciclo de custodia</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Declarado (tú)</span><span class="r"><span class="chip ok">✓ Ahora</span></span></div>
+        <div class="rowline"><span class="l">Contado (aux admin)</span><span class="r"><span class="chip mut">▢ Pendiente</span></span></div>
+        <div class="rowline"><span class="l">En tránsito</span><span class="r"><span class="chip mut">▢</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Confirmado por banco</span><span class="r"><span class="chip mut">▢ La caja descuenta AQUÍ</span></span></div>
+      </div>
+      <div class="card" style="background:#F3FAFE;border-color:var(--border-blue);padding:10px 14px;font-size:11px;color:var(--blue3)">◈ No es gasto (no toca P&L). Registrarlo NO cierra caja: descuenta al confirmar el banco. Quien cuenta ≠ quien autoriza.</div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Registrar depósito</button></div>
+  </div>
+</section>
+
+<section data-name="7 · Venta mostrador (POS)" data-note='<h2>El ingreso con las mismas dimensiones que el gasto</h2><p>Hoy la venta no lleva NINGUNA dimensión (asimetría que rompe el P&L por plaza), el precio viaja desde el navegador y el total se muestra sin IVA. La versión corregida: precio re-calculado por el servidor, IVA en el total, dimensiones estampadas, y umbrales de autorización que sí bloquean.</p><div class="fix"><b>Resuelve:</b> hallazgo 3.4 completo (dimensiones, re-precio, IVA, umbrales decorativos).</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>13:20</span><span>Mostrador · Sucursal Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Venta mostrador</span></div>
+    <div class="body">
+      <div class="overline">Productos</div>
+      <div class="card">
+        <div class="pline"><div class="pi">🧊</div><div><div class="pn">Bolsa hielo 5 kg</div><div class="pp money">$25.00 · precio del servidor</div></div><div class="stepper"><div class="sb">−</div><div class="sq">40</div><div class="sb">+</div></div></div>
+        <div class="pline" style="border-bottom:none"><div class="pi">🧊</div><div><div class="pn">Barra 50 kg</div><div class="pp money">$180.00</div></div><div class="stepper"><div class="sb">−</div><div class="sq">2</div><div class="sb">+</div></div></div>
+      </div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Subtotal</span><span class="r money">$1,360.00</span></div>
+        <div class="rowline"><span class="l">IVA (16%)</span><span class="r money">$217.60</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l" style="font-weight:700;color:var(--text)">Total</span><span class="r money" style="font-size:15px">$1,577.60</span></div>
+      </div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Dimensiones del ingreso</span><span class="r"><span class="chip ok">✓ Plaza Iguala Glaciem</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Autorización</span><span class="r"><span class="chip mut">No requerida (&lt; $5,000)</span></span></div>
+      </div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><div class="tot"><span class="tl">TOTAL CON IVA</span><span class="tv money">$1,577.60</span></div><button class="cta">Cobrar e imprimir ticket</button></div>
+  </div>
+</section>
+
+<section data-name="8 · Corte de sucursal (caja POS)" data-note='<h2>El mejor subsistema de la casa, completo y en móvil</h2><p>El corte de caja ya tiene arqueo por denominación, ajustes, re-cierre, reapertura y autorización de DOS niveles (gerencia y dirección) — nada de eso se rediseña, se conserva y se lleva a móvil. La autorización del corte es LA acción distintiva de la gerente sobre caja.</p><div class="fix"><b>Se conserva:</b> arqueos pendientes separados por el servidor (turno noche), historial operativo + cierres legacy, e impresión del corte.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>19:30</span><span>Caja · Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Corte del turno</span></div>
+    <div class="body">
+      <div class="overline">Arqueo por denominación</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">$500 × 18</span><span class="r money">$9,000</span></div>
+        <div class="rowline"><span class="l">$200 × 12</span><span class="r money">$2,400</span></div>
+        <div class="rowline"><span class="l">$100 × 8 · $50 × 6 · monedas</span><span class="r money">$1,180</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l" style="font-weight:700;color:var(--text)">Contado</span><span class="r money" style="font-size:15px">$12,580</span></div>
+      </div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Esperado (ventas − gastos − retiros + fondo)</span><span class="r money">$12,380</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Diferencia</span><span class="r"><span class="chip warn">⚠ +$200 · sobrante</span></span></div>
+      </div>
+      <div class="overline">Autorización (dos niveles)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Cerró: A. Jaimes (aux admin)</span><span class="r"><span class="chip ok">✓ 19:24</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Autoriza: Gerente</span><span class="r"><span class="chip warn">⚠ Tu turno</span></span></div>
+      </div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Autorizar corte (con nota por la diferencia)</button><button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px;border:none;box-shadow:none">Reabrir para recontar · Imprimir corte</button></div>
+  </div>
+</section>
+
+<section data-name="9 · Arqueo de vendedores (rutas)" data-note='<h2>"Les hace corte a los vendedores" — hoy es desktop-only</h2><p>Cuando las rutas regresan, la gerente (o la aux) valida la liquidación de cada vendedor: efectivo contado vs esperado, crédito, inventario en cero. Hoy esta pantalla solo existe en escritorio ≥1024px; se lleva a móvil, que es donde ocurre — en la cortina, con el vendedor enfrente.</p><div class="fix"><b>Se conservan los 6 formatos imprimibles</b> (Resumen · Ventas · Inventario cargado · Mermas · Corte · Liquidación) y la firma del cierre del día del vendedor.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>18:10</span><span>Arqueos de ruta · Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Arqueos de vendedores</span></div>
+    <div class="body">
+      <div style="display:flex;gap:5px;margin:8px 0"><span class="reason on" style="margin:0;font-size:11px;padding:7px 11px">Por validar · 2</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Validadas hoy · 3</span></div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13.5px;font-weight:800">Ruta Norte · Valerio</div><div style="font-size:11px;color:var(--text-muted)">Regresó 17:52 · inventario 0 ✓</div></div><span class="chip warn">⚠ Por validar</span></div>
+        <div class="rowline" style="margin-top:6px"><span class="l">Efectivo entregado</span><span class="r money">$5,240 · sin diferencia</span></div>
+        <div class="rowline"><span class="l">Crédito</span><span class="r money">$3,180</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Devolución</span><span class="r">11 pzas aceptadas</span></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:38px;font-size:12px">Ver formatos (6)</button><button class="cta" style="flex:1.4;min-height:38px;font-size:12.5px">Validar liquidación</button></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13.5px;font-weight:800">Ruta Centro · M. Cruz</div><div style="font-size:11px;color:var(--text-muted)">Regresó 18:05</div></div><span class="chip err">⛔ Diferencia −$320</span></div>
+        <div style="font-size:11px;color:#b91c1c;margin-top:6px">Efectivo entregado no cuadra con lo esperado. Requiere nota y tu autorización para forzar, o recuento.</div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="10 · Requisiciones · ciclo completo" data-note='<h2>Crear → Autorizar → Recibir, en una sola pantalla con pestañas</h2><p>El ciclo completo que ya existe en el código (AdminRequisicionForm + RequisitionReceiptModal), reunido: la pestaña NUEVA crea con producto de catálogo (adiós texto libre en móvil); POR AUTORIZAR es la acción del gerente — aprobar o rechazar con motivo (botones que hoy están rotos tras un flag, se reparan); POR RECIBIR registra la recepción PARCIAL contra lo pedido — lo que falta queda pendiente, no desaparece.</p><div class="fix"><b>Analítica derivada POR LÍNEA</b> desde el producto (misma matriz que los gastos), no una sola para toda la requisición.</div><div class="fix"><b>La recepción alimenta Controles:</b> la regla "Recepción eterna" (requisición aprobada sin recibir en N días) ya existe en el panel de la Fase 3.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>17:30</span><span>Admin · Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Requisiciones</span></div>
+    <div class="body">
+      <div style="display:flex;gap:5px;margin:8px 0"><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Nueva</span><span class="reason on" style="margin:0;font-size:11px;padding:7px 11px">Por autorizar · 2</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Por recibir · 1</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Historial</span></div>
+
+      <div class="overline">Por autorizar (tu acción)</div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:800">REQ-0214 · Bolsa impresa 5 kg × 500</div><div style="font-size:10.5px;color:var(--text-muted)">Pidió: A. Jaimes · hoy 09:40 · $4,250 · CC Producción IGU</div></div><span class="chip warn">⚠ Por autorizar</span></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:38px;font-size:12px;color:#b91c1c;border-color:rgba(185,28,28,.35)">Rechazar (motivo)</button><button class="cta" style="flex:1.4;min-height:38px;font-size:12.5px">Aprobar requisición</button></div>
+      </div>
+      <div class="card" style="padding:10px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:800">REQ-0215 · Aceite compresor × 2</div><div style="font-size:10.5px;color:var(--text-muted)">Pidió: M. Morales · $1,890 · CC Mantenimiento</div></div><span class="chip warn">⚠ Por autorizar</span></div></div>
+
+      <div class="overline">Por recibir (mercancía que llegó)</div>
+      <div class="card" style="border-color:rgba(0,119,187,.35)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:800">REQ-0209 · Aprobada el vie 8</div><div style="font-size:10.5px;color:var(--text-muted)">Proveedor entregó hoy — registra lo que DE VERDAD llegó</div></div><span class="chip info">◈ Recepción parcial</span></div>
+        <div class="pline" style="margin-top:6px"><div class="pi">🛍️</div><div><div class="pn">Bolsa impresa 5 kg</div><div class="pp money">Pedido: 500 · recibido antes: 0</div></div><div class="stepper"><div class="sb">−</div><div class="sq">300</div><div class="sb">+</div></div></div>
+        <div class="pline" style="border-bottom:none"><div class="pi">🏷️</div><div><div class="pn">Etiqueta térmica</div><div class="pp money">Pedido: 10 rollos · recibido antes: 0</div></div><div class="stepper"><div class="sb">−</div><div class="sq">10</div><div class="sb">+</div></div></div>
+        <div class="card" style="margin:8px 0 0;padding:9px 13px;background:#FFFBF5;border-color:rgba(180,83,9,.3)"><div style="font-size:11px;color:#b45309">Quedarán pendientes 200 bolsas — la requisición sigue abierta. El contador tiene TOPE en lo pendiente: no existe la sobre-recepción, y cada entrega es idempotente.</div></div>
+        <button class="cta" style="margin-top:8px;min-height:42px;font-size:12.5px">Registrar recepción (300 + 10)</button>
+      </div>
+
+      <div class="card" style="background:#F3FAFE;border-color:var(--border-blue);padding:10px 14px;font-size:11px;color:var(--blue3)">◈ Cada línea deriva su analítica del producto (matriz). "Recepción eterna" (aprobada sin recibir en N días) salta sola en Controles.</div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="11 · Controles (ya construida · Fase 3)" data-note='<h2>La 7ª pestaña que ya está en PR draft — se conserva</h2><p>Panel read-only de detección de malos manejos: 15 reglas en 5 categorías (Gastos · Ventas mostrador · Caja · Requisiciones · Cruce de canales), con semáforo POR PALABRA (SIN FUENTE / SIN HALLAZGOS / REVISAR) y estados honestos — available:false es gris "sin fuente", nunca verde.</p><div class="fix"><b>Lo único que se le suma al rediseño:</b> acción por hallazgo (ver gasto, ver corte, ver venta) — mismo principio de "todo foco lleva botón".</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>15:00</span><span>Gerente · Iguala</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">⚇</span>Equipo</span><span class="rt"><span class="g">▤</span>Admin</span><span class="rt"><span class="g">⚙</span>Producción</span><span class="rt"><span class="g">▦</span>Inventario</span><span class="rt on"><span class="g">⚐</span>Controles</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 8px"><span style="font-size:20px;font-weight:800">Controles</span><span class="chip mut">Semana</span></div>
+      <div class="overline">Gastos</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Sin comprobante</span><span class="r"><span class="chip err">REVISAR · 2 · $3,910</span></span></div>
+        <div class="rowline"><span class="l">Duplicado sospechoso</span><span class="r"><span class="chip ok">SIN HALLAZGOS</span></span></div>
+        <div class="rowline"><span class="l">Parece depósito</span><span class="r"><span class="chip ok">SIN HALLAZGOS</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Backdating</span><span class="r"><span class="chip mut">SIN FUENTE</span></span></div>
+      </div>
+      <div class="overline">Caja</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Diferencias recurrentes</span><span class="r"><span class="chip err">REVISAR · 3 cortes</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Reaperturas</span><span class="r"><span class="chip ok">SIN HALLAZGOS</span></span></div>
+      </div>
+      <div class="overline">Cruce de canales</div>
+      <div class="card" style="border-color:rgba(185,28,28,.35)">
+        <div class="rowline" style="border-bottom:none"><span class="l">Venta contada dos veces</span><span class="r"><span class="chip err">REVISAR · 1 · $1,240</span></span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">La misma venta aparece en el corte de mostrador y en una ruta.</div>
+        <button class="ghost" style="margin-top:8px;min-height:36px;font-size:12px">Ver el caso →</button>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="12 · Equipo (supervisor de ventas)" data-note='<h2>La app del supervisor, con los ojos del gerente</h2><p>El gerente ve la familia V2 completa del supervisor de ventas (Hoy/Radar/Rutas/Clientes…) escopada a SU sucursal por token — en solo lectura donde el puesto no escribe (el editor de clientes read-only ya está construido en Fase 2). Se acabaron los filtros por empresa con sudo y el desbloqueo de forecasts ajenos.</p><div class="fix"><b>Resuelve:</b> hallazgos 4.2 (fuga de alcance) y 5.1.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>16:00</span><span>Gerente · Iguala</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt on"><span class="g">⚇</span>Equipo</span><span class="rt"><span class="g">▤</span>Admin</span><span class="rt"><span class="g">⚙</span>Producción</span><span class="rt"><span class="g">▦</span>Inventario</span><span class="rt"><span class="g">⚐</span>Controles</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="body">
+      <div style="font-size:20px;font-weight:800;margin:10px 0 8px">Equipo de ventas</div>
+      <div class="card" style="padding:11px 15px"><div class="rowline"><span class="l">Rutas de hoy</span><span class="r">4 de 5 en calle</span></div><div class="rowline"><span class="l">Venta del equipo</span><span class="r money">$8,420</span></div><div class="rowline" style="border-bottom:none"><span class="l">Pendientes del supervisor</span><span class="r"><span class="chip warn">⚠ 4</span></span></div></div>
+      <div class="card" style="background:#F3FAFE;border-color:var(--border-blue);padding:10px 14px;font-size:11px;color:var(--blue3)">◈ Vista de solo lectura de la app del supervisor (Hoy · Radar · Rutas · Clientes · Pendientes), con el alcance de tu sucursal. El editor de clientes se muestra read-only para tu puesto.</div>
+      <button class="ghost">Abrir la vista completa del equipo →</button>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="13 · Producción (supervisor de producción)" data-note='<h2>Iguala es planta + sucursal: el gerente necesita ver el turno</h2><p>Resumen del turno en vivo (alimentado por los MISMOS endpoints del supervisor de producción — una sola fuente) + el brief. Aquí sí aparece el $ de energía: el gerente es el destinatario del costo, el supervisor opera con kg/kWh.</p><div class="fix"><b>Resuelve:</b> hallazgo 5.2 — hoy no ve nada de /produccion.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>16:30</span><span>Gerente · Iguala</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">⚇</span>Equipo</span><span class="rt"><span class="g">▤</span>Admin</span><span class="rt on"><span class="g">⚙</span>Producción</span><span class="rt"><span class="g">▦</span>Inventario</span><span class="rt"><span class="g">⚐</span>Controles</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="body">
+      <div style="font-size:20px;font-weight:800;margin:10px 0 8px">Producción · turno en curso</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Producido</span><span class="r money">11,240 kg</span></div>
+        <div class="rowline"><span class="l">Esperado vs real</span><span class="r"><span class="chip warn">⚠ Barras −9.8%</span></span></div>
+        <div class="rowline"><span class="l">Energía</span><span class="r money">12.2 kg/kWh · <b>$0.21/kg</b></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Merma sin conciliar</span><span class="r"><span class="chip err">⛔ 530 kg</span></span></div>
+      </div>
+      <div class="card" style="padding:11px 15px"><div class="rowline" style="border-bottom:none"><span class="l">Brief de planta</span><span class="r" style="color:var(--blue)">Ver →</span></div></div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="14 · Cotejo físico vs sistema" data-note='<h2>La actividad que hacía en papel, con nombre propio</h2><p>Del relato: "revisa las bitácoras físicas de producción vs lo que capturaron, y las de los almacenistas vs lo que está en sistema". Esta pantalla lista lo CAPTURADO del día por área para palomearlo contra el papel — y la discrepancia se registra con observación, no se queda en la libreta.</p><div class="fix"><b>Una observación NO cierra un faltante</b> (auditoría YELLOW): la diferencia abre EXPEDIENTE con responsable, vencimiento, recuento, resolución y reapertura — el mismo patrón que la disputa de recepción PT. El cotejo solo cierra lo que coincidió.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>17:00</span><span>Verificación diaria · Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Cotejo físico vs sistema</span></div>
+    <div class="body">
+      <div class="overline">Producción (bitácora del turno)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Cosecha capturada: 41 barras</span><span class="r"><span class="chip ok">✓ Coincide</span></span></div>
+        <div class="rowline"><span class="l">Ciclos Rolito: 3 · 4,260 kg</span><span class="r"><span class="chip ok">✓ Coincide</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Merma capturada: 200 kg</span><span class="r"><span class="chip err">⛔ Papel dice 260</span></span></div>
+      </div>
+      <div class="card" style="border-color:rgba(185,28,28,.3);padding:10px 14px"><div style="font-size:11.5px;color:#b91c1c">Diferencia de 60 kg en merma. Registra la observación:</div><input class="mock" style="margin-top:6px;font-size:12px" placeholder="Observación…" value="Bitácora física incluye barras quebradas de las 6:40 (antes del turno)"></div>
+      <div class="overline">Almacenes (bitácoras de almacenistas)</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Cargas a camionetas: 5 · 412 pzas c/u prom.</span><span class="r"><span class="chip ok">✓ Coincide</span></span></div>
+        <div class="rowline"><span class="l">Recepción PT: 2 movimientos</span><span class="r"><span class="chip ok">✓ Coincide</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Devoluciones: 2 rutas</span><span class="r"><span class="chip mut">▢ Sin cotejar</span></span></div>
+      </div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Abrir expediente de discrepancia (60 kg de merma)</button><button class="ghost" style="margin-top:8px;min-height:38px;font-size:12px;border:none;box-shadow:none">Cerrar cotejo — solo lo que coincidió</button></div>
+  </div>
+</section>
+
+<section data-name="15 · Inventarios · todos los almacenes" data-note='<h2>"Tiene que ver los inventarios de TODOS los almacenes"</h2><p>Un solo lugar con selector de almacén: PT, materia prima, entregas y las camionetas — con kardex por producto a un tap (la pantalla de kardex ya existe, hoy desktop-only). Muere la dependencia de warehouse_id que hoy truena pantallas si la gerente no tiene almacén asignado: el alcance es LA SUCURSAL, no un almacén.</p><div class="fix"><b>Absorbe también:</b> recepciones y consumos del día, el traspaso de MP (que mueve stock real), la validación de materiales/bolsas (hoy pantallas huérfanas del menú) y el historial de cargas por camioneta.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>13:00</span><span>Inventarios · Iguala</span></div>
+    <div class="rail2">
+      <span class="rt"><span class="g">◉</span>Hoy</span><span class="rt"><span class="g">⚇</span>Equipo</span><span class="rt"><span class="g">▤</span>Admin</span><span class="rt"><span class="g">⚙</span>Producción</span><span class="rt on"><span class="g">▦</span>Inventario</span><span class="rt"><span class="g">⚐</span>Controles</span><span class="rt"><span class="g">⋯</span>Más</span>
+    </div>
+    <div class="body">
+      <div style="font-size:20px;font-weight:800;margin:10px 0 8px">Inventarios</div>
+      <div style="margin-bottom:8px"><span class="reason on">Almacén PT</span><span class="reason">Materia prima</span><span class="reason">Entregas</span><span class="reason">Camionetas (5)</span></div>
+      <div class="card">
+        <div class="pline"><div class="pi">🧊</div><div><div class="pn">Barra 50 kg</div><div class="pp">Kardex →</div></div><span class="chip ok" style="margin-left:auto">84</span></div>
+        <div class="pline"><div class="pi">🛍️</div><div><div class="pn">Bolsa molido 5 kg</div><div class="pp">Kardex →</div></div><span class="chip warn" style="margin-left:auto">⚠ 352</span></div>
+        <div class="pline" style="border-bottom:none"><div class="pi">🧊</div><div><div class="pn">Hielo 5 kg</div><div class="pp">Kardex →</div></div><span class="chip ok" style="margin-left:auto">140</span></div>
+      </div>
+      <div class="overline">Movimientos de hoy en este almacén</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">08:10 · Entrada de producción</span><span class="r money">+16 barras</span></div>
+        <div class="rowline"><span class="l">08:40 · Carga a Unidad 265</span><span class="r money">−412 pzas</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">13:55 · Recepción molido lote 3</span><span class="r money">+107 bolsas</span></div>
+      </div>
+      <div class="grid2" style="margin-top:4px">
+        <div class="act" style="min-height:56px"><span class="al">↔ Traspaso MP</span></div>
+        <div class="act" style="min-height:56px"><span class="al">✓ Validar materiales</span></div>
+        <div class="act" style="min-height:56px"><span class="al">🚚 Historial de cargas</span></div>
+        <div class="act" style="min-height:56px"><span class="al">🛍️ Validar bolsas</span></div>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="16 · Asistencias (Talento)" data-note='<h2>Verificado en Odoo: el checador YA deposita — la pantalla cambia de rol</h2><p>Verificación del 11-ago contra producción: 1,024 checadas históricas, 295 en 30 días, 25 desde el sábado. El kiosko de Odoo funciona. Entonces esta pantalla deja de CAPTURAR entradas y pasa a GESTIONAR EXCEPCIONES: los tramos llegan solos del checador; lo manual queda para faltas, justificantes y correcciones con motivo auditado.</p><div class="fix"><b>La higiene es el trabajo real</b> (visto en los datos): tramos de 36 horas (entrada sábado, "salida" lunes), 8 tramos abiertos sin salida, checadas de 11 segundos. Cada anomalía se marca con palabra y se resuelve aquí — nunca pasa a nómina en automático.</div><div class="fix"><b>Dato maestro pendiente (cuantificado):</b> 25 de 51 sin número de checador, 8 sin puesto, 3 personas con fichas duplicadas (Angélica ×3, Miguel Morales ×2, "Dirección" ×2) — la lista exacta de la Fase 0 de Talento.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>08:30</span><span>Talento · Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Asistencias de hoy</span></div>
+    <div class="body">
+      <div style="display:flex;gap:5px;margin:8px 0"><span class="reason on" style="margin:0;font-size:11px;padding:7px 11px">Glaciem (34)</span><span class="reason" style="margin:0;font-size:11px;padding:7px 11px">Todos los puestos ▾</span></div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Esperados hoy</span><span class="r">18</span></div>
+        <div class="rowline"><span class="l">Checaron (kiosko)</span><span class="r"><span class="chip ok">✓ 14 automáticas</span></span></div>
+        <div class="rowline"><span class="l">Anomalías por resolver</span><span class="r"><span class="chip warn">⚠ 3</span></span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Faltas</span><span class="r"><span class="chip err">⛔ 1</span></span></div>
+      </div>
+      <div class="card" style="padding:10px 15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">Valerio Guzmán · Vendedor</div><div style="font-size:10.5px;color:var(--text-muted)">Entrada 07:12 · kiosko ✓ · sin intervención</div></div><span class="chip ok">✓ Presente</span></div></div>
+      <div class="card" style="border-color:rgba(180,83,9,.35)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">Á. Patricio Martínez · Reparto</div><div style="font-size:10.5px;color:var(--text-muted)">Tramo abierto desde el sábado 07:36 (49 h) — sin checada de salida</div></div><span class="chip warn">⚠ Tramo huérfano</span></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:36px;font-size:11.5px">Cerrar con motivo</button><button class="ghost" style="flex:1;min-height:36px;font-size:11.5px">Ver auditoría</button></div>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.35)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">J. Cedillo · Almacén</div><div style="font-size:10.5px;color:var(--text-muted)">Checada de 11 segundos (20:26:36 → 20:26:47)</div></div><span class="chip warn">⚠ Checada de prueba</span></div></div>
+      <div class="card" style="padding:10px 15px;border-color:rgba(185,28,28,.3)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">J. Pérez · Aux almacén</div><div style="font-size:10.5px;color:var(--text-muted)">Sin checada del kiosko</div></div><span class="chip err">⛔ Falta</span></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:36px;font-size:11.5px">Registrar falta</button><button class="ghost" style="flex:1;min-height:36px;font-size:11.5px">Justificar (doc)</button></div>
+      </div>
+      <div class="card" style="background:#F3FAFE;border-color:var(--border-blue);padding:10px 14px;font-size:11px;color:var(--blue3)">◈ Las entradas vienen del checador (hr.attendance). Toda intervención manual exige motivo y queda en la auditoría del registro.</div>
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</section>
+
+<section data-name="17 · Pre-nómina semanal (nuevo)" data-note='<h2>De checadas a nómina — con reglas de saneamiento primero</h2><p>El checador ya alimenta hr.attendance (verificado), así que la pre-nómina es viable — pero SOLO con saneamiento entre medio: un tramo de 36 horas no puede pagar 36 horas. Las horas que entran a la semana son las SANEADAS; toda anomalía resuelta con motivo, o excluida y declarada.</p><div class="fix"><b>Reglas de saneamiento (de los casos reales encontrados):</b> tramo huérfano → cierre con motivo, jamás auto-pago · jornada máxima plausible (p. ej. 12 h) → el excedente "a revisar" · checada &lt; 1 min → descartada como prueba · persona con fichas duplicadas → SOLO su ficha canónica computa (Angélica ×3, Miguel ×2).</div><div class="fix"><b>Fase 0 de Talento con números:</b> 25 fichas sin número de checador y 8 sin puesto — sin eso, ni el kiosko ni el corte "por puesto" cubren a toda la gente.</div><div class="fix"><b>La pre-nómina PROPONE, nunca ejecuta</b> (auditoría YELLOW): crudos inmutables, saneamiento como vista derivada explicable (motivo+evidencia+quién por ajuste), descuentos como propuestas amparadas en política laboral formal, la gerente valida y RH/nómina aprueba final. La PWA es el paquete de revisión, no la nómina operable.</div>'>
+  <div class="screen">
+    <div class="statusbar"><span>Vie 15 · 17:00</span><span>Talento · Iguala</span></div>
+    <div class="hdr"><div class="iconbtn">←</div><span class="t">Pre-nómina · semana 33</span></div>
+    <div class="body">
+      <div class="card" style="padding:10px 15px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:700">Lun 10 – Dom 16 · Glaciem (34)</span><span class="chip warn">⚠ Abierta · por autorizar</span></div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Horas del checador (crudas)</span><span class="r money">1,048 h</span></div>
+        <div class="rowline"><span class="l">Saneadas (las que pagan)</span><span class="r money">1,002 h</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Excluidas con causa</span><span class="r"><span class="chip warn">⚠ 46 h · 3 casos</span></span></div>
+      </div>
+      <div class="overline">Por puesto</div>
+      <div class="card" style="padding:11px 15px">
+        <div class="rowline"><span class="l">Vendedores (5)</span><span class="r">288 h · 1 falta</span></div>
+        <div class="rowline"><span class="l">Producción (6)</span><span class="r">336 h · completas</span></div>
+        <div class="rowline" style="border-bottom:none"><span class="l">Almacén y admin (7)</span><span class="r">378 h · 1 justificada</span></div>
+      </div>
+      <div class="overline">Requieren tu decisión</div>
+      <div class="card" style="border-color:rgba(180,83,9,.3)">
+        <div style="font-size:13px;font-weight:700">Á. Patricio · tramo de 49 h (sáb→lun)</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Saneado a jornada de 8 h + 41 h excluidas — confirma o corrige con la bitácora física</div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:36px;font-size:11.5px">Corregir tramo</button><button class="cta" style="flex:1;min-height:36px;font-size:12px">Confirmar saneo</button></div>
+      </div>
+      <div class="card" style="border-color:rgba(180,83,9,.3)">
+        <div style="font-size:13px;font-weight:700">J. Pérez · falta del lunes sin justificar</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Al cierre → descuento de 1 día según regla</div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" style="flex:1;min-height:36px;font-size:11.5px">Ver justificante</button><button class="cta" style="flex:1;min-height:36px;font-size:12px">Proponer descuento</button></div>
+      </div>
+      <div style="height:110px"></div>
+    </div>
+    <div class="fixedbar"><button class="cta">Validar propuesta de la semana</button><div style="text-align:center;font-size:10.5px;color:var(--text-muted);margin-top:8px">Es una PROPUESTA: RH/nómina da la aprobación final en Odoo. Los registros crudos del checador nunca se modifican.</div></div>
+  </div>
+</section>
+
+</template>
+
+<script>
+const tpl=document.getElementById('screens');
+const sections=[...tpl.content.querySelectorAll('section')];
+const tabs=document.getElementById('tabs');
+const stage=document.getElementById('stage');
+function show(i){
+  [...tabs.children].forEach((t,j)=>t.classList.toggle('on',i===j));
+  stage.innerHTML='';
+  const s=sections[i];
+  const phone=document.createElement('div');phone.className='phone';
+  phone.innerHTML=s.innerHTML;
+  const note=document.createElement('div');note.className='note';
+  note.innerHTML=s.dataset.note;
+  stage.appendChild(phone);stage.appendChild(note);
+}
+sections.forEach((s,i)=>{
+  const b=document.createElement('button');b.className='tab';b.textContent=s.dataset.name;
+  b.onclick=()=>show(i);tabs.appendChild(b);
+});
+show(0);
+</script>
+</body>
+</html>

@@ -246,10 +246,21 @@ export function removeCustomerFromRoutePlan(routePlanId, customerOrStopId) {
   })
 }
 
-/** Publicar plan de ruta */
-export function publishRoutePlan(routePlanId) {
+/** Optimizar el plan (secuencia) antes de publicar — B5. Devuelve plan_revision +
+ *  métricas (distance_km/duration_min/stops_count) + optimizer_run_id. */
+export function optimizeRoutePlan(routePlanId) {
+  return api('POST', '/pwa-supv/route-plan-optimize', {
+    route_plan_id: Number(routePlanId || 0),
+  })
+}
+
+/** Publicar plan de ruta. `planRevision` (opcional): la revisión con la que se
+ *  optimizó; el backend la exige cuando el flag de publicación optimizada está ON
+ *  (B5.2). Sin ella, el backend actual publica igual (flag OFF, retrocompatible). */
+export function publishRoutePlan(routePlanId, planRevision) {
   return api('POST', '/pwa-supv/route-plan-publish', {
     route_plan_id: Number(routePlanId || 0),
+    ...(planRevision ? { plan_revision: String(planRevision) } : {}),
   })
 }
 

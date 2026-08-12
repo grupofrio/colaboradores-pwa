@@ -205,3 +205,40 @@ export function personRolesLabel(person = {}) {
   if (person.is_seller) roles.push('Vendedor')
   return roles.length ? roles.join(' · ') : 'Equipo'
 }
+
+// Contrato optimize↔publish (B5 · Codex P1). Interpreta la respuesta del
+// optimizador y decide si habilita publicar. REGLA DURA: SOLO un éxito con
+// `plan_revision` habilita publicar (blocked:false + revision). Todo lo demás
+// —error explícito del backend (FORBIDDEN/LOCKED/VALIDATION/NOT_FOUND/CONFLICT/
+// CAPABILITY_UNAVAILABLE/red) o un "éxito" malformado SIN revisión— BLOQUEA.
+// NO se degrada a publicar directo: dejaría publicar (con el flag apagado) una
+// ruta que no podemos anclar a una revisión verificable.
+//
+// `metrics` = payload para la tarjeta (o null). null ≠ 0: los kilos/capacidad/
+// utilización sólo viajan si el backend los mandó; unassigned se normaliza a 0.
+export function interpretOptimizeResponse(opt = {}) {
+  const isErr = opt?.ok === false || String(opt?.status || '').toLowerCase() === 'error'
+  const d = isErr ? {} : (opt?.data || opt || {})
+  const revision = isErr ? null : (d.plan_revision || null)
+  if (revision) {
+    return {
+      revision,
+      blocked: false,
+      message: '',
+      metrics: {
+        stops: (d.stops_count ?? null),
+        km: (d.distance_km ?? null),
+        min: (d.duration_min ?? null),
+        revision,
+        demandKg: (d.demand_kg ?? null),
+        capacityKg: (d.capacity_kg ?? null),
+        utilizationPct: (d.utilization_pct ?? null),
+        unassigned: (Number(d.unassigned_count ?? 0) || 0),
+      },
+    }
+  }
+  const message = isErr
+    ? (opt?.message || 'El optimizador no pudo secuenciar la ruta. Intenta de nuevo o avisa a soporte.')
+    : 'El optimizador respondió sin una revisión verificable; no se publica.'
+  return { revision: null, blocked: true, message, metrics: null }
+}
