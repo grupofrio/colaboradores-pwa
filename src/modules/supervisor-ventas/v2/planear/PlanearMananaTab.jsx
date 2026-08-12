@@ -536,45 +536,18 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     }
   }
 
+  // F1: invalidar la readiness cacheada del backend ⇒ null, para que `coverage`
+  // (línea ~411) caiga a la derivación LOCAL `resourceReadiness(assignment)` —
+  // presencia de unidad/chofer/vendedor, ya reflejada en `resources`. Antes se
+  // hacía un POST a assign-resources con payload vacío para "leer" la readiness;
+  // pero ese endpoint responde VALIDATION_ERROR ("Nada que asignar") sin recursos
+  // ⇒ el semáforo quedaba en `blocked` con los tres selectores llenos (el bug de
+  // "asignar varias veces"). La readiness autoritativa del servidor (con
+  // sobrecapacidad) vuelve con el DTO de un assign real (handleAssign); el GET
+  // readiness dedicado (B1) la restituirá para add/remove/preview.
   function invalidateResourceReadiness() {
     resourceReq.current += 1
-    setAssignReadiness({
-      coverage_state: 'blocked',
-      blockers: ['Validando la cobertura de recursos antes de publicar.'],
-    })
-  }
-
-  async function refreshResourceReadiness(planId) {
-    if (!planId) return false
-    const reqId = ++resourceReq.current
-    setAssignBusy('validation')
-    try {
-      // Sin recursos en el payload, el endpoint no reasigna: sólo devuelve la
-      // readiness autoritativa del plan después de cambiar sus clientes.
-      const resp = await assignRoutePlanResources(planId)
-      const status = String(resp?.status || (resp?.ok === false ? 'error' : 'ok')).toLowerCase()
-      const data = resp?.data || resp || {}
-      if (reqId !== resourceReq.current) return false
-      if (status === 'error' || resp?.ok === false || !data.readiness) {
-        setAssignReadiness({
-          coverage_state: 'blocked',
-          blockers: [resp?.user_message || resp?.message || 'No se pudo validar la cobertura de recursos.'],
-        })
-        return false
-      }
-      setAssignReadiness(data.readiness)
-      return true
-    } catch (e) {
-      if (reqId !== resourceReq.current) return false
-      logScreenError('PlanearManana', 'refreshResourceReadiness', e)
-      setAssignReadiness({
-        coverage_state: 'blocked',
-        blockers: ['No se pudo validar la cobertura de recursos.'],
-      })
-      return false
-    } finally {
-      if (reqId === resourceReq.current) setAssignBusy(null)
-    }
+    setAssignReadiness(null)
   }
 
   async function handlePrepare(route) {
@@ -595,7 +568,6 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       await loadData()
       if (planId) {
         await loadPlanCustomers(planId)
-        await refreshResourceReadiness(planId)
       }
     } catch (e) {
       logScreenError('PlanearManana', 'ensureDailyRoutePlan', e)
@@ -638,7 +610,6 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       const rows = Array.isArray(data) ? data : (data.customers || data.items || data.records || [])
       setPreviewCustomers(rows.map(normalizeRoutePlanCustomer))
       await loadData()
-      if (planId) await refreshResourceReadiness(planId)
       if (previewReq.current === reqId) flash('Propuesta generada')
     } catch (e) {
       if (previewReq.current !== reqId) return
@@ -667,7 +638,6 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
         return [...cur, added]
       })
       setQuery(''); setResults([])
-      await refreshResourceReadiness(routePlanId)
     } catch (e) {
       logScreenError('PlanearManana', 'addCustomerToRoutePlan', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
@@ -684,7 +654,6 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       setPreviewCustomers((cur) => cur.filter((it) => customer.stop_id
         ? String(it.stop_id || '') !== String(customer.stop_id)
         : String(it.customer_id || it.id || '') !== String(customer.customer_id || customer.id || '')))
-      await refreshResourceReadiness(routePlanId)
     } catch (e) {
       logScreenError('PlanearManana', 'removeCustomerFromRoutePlan', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)

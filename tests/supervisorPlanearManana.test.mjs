@@ -208,10 +208,18 @@ test('guard: publicar exige readiness (no botón siempre activo)', () => {
   assert.ok(/readiness\?\.publishable|readiness\.publishable/.test(tab), 'publish gateado por readiness')
 })
 
-test('guard: publicar espera una cobertura vigente y ninguna asignación en vuelo', () => {
+test('F1: la readiness NO se lee con un POST vacío a assign-resources (bug de "asignar varias veces")', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
-  assert.ok(/async function refreshResourceReadiness/.test(tab), 'refresca la validación autoritativa')
-  assert.ok(/await refreshResourceReadiness\(routePlanId\)/.test(tab), 'refresca después de cambiar clientes')
+  // El POST vacío a assign-resources devolvía VALIDATION_ERROR ("Nada que
+  // asignar") y dejaba el semáforo en `blocked` con los tres selectores llenos.
+  // F1 lo elimina: sin recursos NO se llama al write para "leer".
+  assert.ok(!/refreshResourceReadiness/.test(tab), 'no existe el refresh por POST vacío')
+  assert.ok(!/assignRoutePlanResources\(\s*(?:planId|routePlanId)\s*\)/.test(tab), 'no hay assign-resources con payload vacío')
+  // Invalidar la readiness cacheada ⇒ null, para que `coverage` caiga a la
+  // derivación LOCAL de presencia de recursos.
+  assert.ok(/function invalidateResourceReadiness\(\)\s*\{[\s\S]*?setAssignReadiness\(null\)/.test(tab), 'invalidar deja la readiness en null (derivación local)')
+  assert.ok(/const coverage = assignReadiness \|\| resourceReadiness\(assignment\)/.test(tab), 'coverage cae a resourceReadiness(assignment) local')
+  // El guard de publicación sigue vigente (no se relaja al quitar el POST).
   assert.ok(/publishing \|\| assignBusy \|\| rowBusy \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante una asignación')
   assert.ok(/disabled=\{!readiness\.publishable \|\| Boolean\(assignBusy \|\| rowBusy\)\}/.test(tab), 'el botón queda deshabilitado durante una asignación')
 })
