@@ -37,6 +37,7 @@ const GROUPS = [
     title: 'Desempeño',
     tiles: [
       { label: 'Integridad', desc: 'Cuánto del trabajo se puede verificar', route: '/equipo/integridad' },
+      { label: 'Productos', desc: 'Qué vende el CEDIS y qué no se ofreció', route: '/equipo/productos' },
       { label: 'Metas', desc: 'Metas de venta y cobranza del mes', route: '/equipo/metas' },
       { label: 'Score', desc: 'Cumplimiento semanal por vendedor', route: '/equipo/score-semanal' },
       { label: 'Dashboard', desc: 'Indicadores del equipo', route: '/equipo/dashboard' },

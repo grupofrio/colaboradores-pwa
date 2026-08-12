@@ -19,6 +19,7 @@ const render = (props = {}) => renderToStaticMarkup(createElement(MasView, props
 // Contrato: label visible + ruta legacy real. Espejo de los GROUPS de MasView.
 const EXPECTED_TILES = [
   { label: 'Integridad', route: '/equipo/integridad' },
+  { label: 'Productos', route: '/equipo/productos' },  // F4.1: enlace a Productos del CEDIS
   { label: 'Metas', route: '/equipo/metas' },
   { label: 'Score', route: '/equipo/score-semanal' },
   { label: 'Dashboard', route: '/equipo/dashboard' },
@@ -79,4 +80,24 @@ test('MasView: onNavigate puede pasarse como no-op sin romper el render', () => 
 
 test('MasView: onNavigate es opcional (sin prop no lanza)', () => {
   assert.doesNotThrow(() => render({}))
+})
+
+// ── F4.1: superficie Productos enlazada (reusa ProductsSection, no reconstruye) ──
+import { readFileSync } from 'node:fs'
+const srcOf = (rel) => readFileSync(fileURLToPath(new URL('../' + rel, import.meta.url)), 'utf8')
+
+test('F4.1: /equipo/productos ruteada bajo el guard V2 (como Integridad)', () => {
+  const app = srcOf('src/App.jsx')
+  assert.ok(/ProductosView = lazy\(\(\) => import\('\.\/modules\/supervisor-ventas\/v2\/productos\/ProductosView'\)\)/.test(app), 'ProductosView importado lazy')
+  assert.ok(/path="\/equipo\/productos"[^\n]*ModuleRoleRoute moduleId="supervisor_ventas"[^\n]*SupervisorV2Gate[^\n]*ProductosView/.test(app), 'ruta bajo ModuleRoleRoute + SupervisorV2Gate')
+})
+
+test('F4.1: ProductosView reusa ProductsSection (enlaza, no reconstruye)', () => {
+  const view = srcOf('src/modules/supervisor-ventas/v2/productos/ProductosView.jsx')
+  assert.ok(/import \{ ProductsSection \} from '\.\.\/\.\.\/kpis\/PanelKpis'/.test(view), 'reusa ProductsSection de PanelKpis')
+  assert.ok(/<ProductsSection key=\{period\} period=\{period\} \/>/.test(view), 'la renderiza con el periodo seleccionado')
+  assert.ok(/productos-periodo-/.test(view), 'ofrece selector de periodo')
+  // PanelKpis exporta ProductsSection (antes era privada).
+  const panel = srcOf('src/modules/supervisor-ventas/kpis/PanelKpis.jsx')
+  assert.ok(/export function ProductsSection/.test(panel), 'ProductsSection exportada')
 })

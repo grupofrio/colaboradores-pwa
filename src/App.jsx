@@ -170,6 +170,7 @@ const ClientesTab   = lazy(() => import('./modules/supervisor-ventas/v2/tabs/Cli
 const PendientesTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/PendientesTab'))
 const MasTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/MasTab'))
 const IntegridadEjecucion = lazy(() => import('./modules/supervisor-ventas/v2/equipo/IntegridadEjecucion'))
+const ProductosView = lazy(() => import('./modules/supervisor-ventas/v2/productos/ProductosView'))
 import SupervisorV2Gate from './modules/supervisor-ventas/v2/SupervisorV2Gate'
 import V2ExcludedRoute from './modules/supervisor-ventas/v2/V2ExcludedRoute'
 // Torres de Control — Validación de Requisiciones
@@ -856,6 +857,7 @@ export default function App() {
             {/* Capacidad V2 (no existe en legacy): su fuente es el endpoint
                 execution-integrity, que solo el backend V2 sirve. v2Only. */}
             <Route path="/equipo/integridad" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="mas" v2Only><IntegridadEjecucion /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/productos" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="mas" v2Only><ProductosView /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/score-semanal" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenScoreSemanal /></ModuleRoleRoute>} />
             <Route path="/equipo/cierre" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenCierreOperativo /></ModuleRoleRoute>} />
             <Route path="/equipo/dashboard" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenDashboardVentas /></ModuleRoleRoute>} />
