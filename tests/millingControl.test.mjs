@@ -50,6 +50,15 @@ test('se registran los DOS conteos, no solo el corregido', () => {
   assert.match(SCREEN, /recount:\s*Number\(draft\.output_qty_units\)/)
 })
 
+test('un fallo al guardar la evidencia se HACE VISIBLE, no se silencia', () => {
+  // La transformacion fisica ya ocurrio; si la evidencia no se guarda, la
+  // pantalla debe decirlo (P0). El catch pone un savingError, no solo un log.
+  const block = SCREEN.split('recordMillingCounts({')[1].split('setDraft({')[0]
+  assert.match(block, /catch/)
+  assert.match(block, /setSavingError/)
+  assert.match(block, /NO qued/)
+})
+
 test('una falla del control NO bloquea la captura física', () => {
   // La operación no puede detenerse porque una consulta de control falle:
   // el catch registra el error y sigue, no corta ni relanza.

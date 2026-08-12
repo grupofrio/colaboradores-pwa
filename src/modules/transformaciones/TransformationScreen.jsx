@@ -124,18 +124,28 @@ export default function TransformationScreen({ roleScope }) {
 
       // Paso 2: dejar la evidencia. El par (primer conteo, recuento) es el
       // dato que hoy no existe y el que distingue apunte de faltante.
+      //
+      // NO se silencia el fallo: la transformación física ya ocurrió (movió
+      // stock), pero si la evidencia no se guarda, la pantalla NO debe
+      // aparentar que sí. Antes se tragaba el error y el recuento se perdía
+      // sin que nadie lo supiera (P0).
       if (recount) {
         const orderId = result?.transformation_id || result?.order_id || result?.id
-        if (orderId) {
-          try {
-            await recordMillingCounts({
-              orderId,
-              firstCount: recount.firstCount,
-              recount: Number(draft.output_qty_units),
-            })
-          } catch (err) {
-            logScreenError('TransformationScreen', 'recordMillingCounts', err)
+        try {
+          if (!orderId) {
+            throw new Error('No se recibió el id de la transformación')
           }
+          await recordMillingCounts({
+            orderId,
+            firstCount: recount.firstCount,
+            recount: Number(draft.output_qty_units),
+          })
+        } catch (err) {
+          logScreenError('TransformationScreen', 'recordMillingCounts', err)
+          setSavingError(
+            'La transformación se guardó, pero el recuento NO quedó registrado: '
+            + (err.message || 'error al guardar la evidencia') + '. Avisa a tu supervisor.',
+          )
         }
         setRecount(null)
       }
