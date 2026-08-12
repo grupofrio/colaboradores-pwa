@@ -548,7 +548,13 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   // readiness dedicado (B1) la restituirá para add/remove/preview.
   function invalidateResourceReadiness() {
     resourceReq.current += 1
-    setAssignReadiness(null)
+    // Codex P1 (3ª): estado 'blocked' (verificando) mientras se pide la readiness
+    // AUTORITATIVA (B1). NO se cae a la derivación local en la ventana EN VUELO — si
+    // no, tras preparar/previsualizar y antes de que responda B1, publish podría
+    // habilitarse por la derivación local (que no conoce sobrecapacidad server-side).
+    // refreshReadinessFromServer lo resuelve: authoritative, blocked (error real), o
+    // null/local SOLO con 404 (capacidad ausente, backend pre-B1).
+    setAssignReadiness({ coverage_state: 'blocked', blockers: ['Verificando la cobertura con el servidor…'] })
   }
 
   // B1 (F1↔B1, Codex P1): tras una mutación lee la readiness AUTORITATIVA del
@@ -701,10 +707,14 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   }
 
   async function handlePublish() {
-    if (publishing || assignBusy || rowBusy || !routePlanId) {
+    // Codex P1 (3ª): tampoco publicar mientras se prepara/previsualiza (readiness
+    // autoritativa en vuelo). El estado 'blocked' de invalidate ya deshabilita el
+    // botón; esto cierra también la ruta programática.
+    if (publishing || assignBusy || rowBusy || preparing || previewing || !routePlanId) {
       if (!routePlanId) flash('Genera primero la propuesta')
       else if (assignBusy) flash('Espera la validación de recursos antes de publicar')
       else if (rowBusy) flash('Espera que termine la modificación de clientes')
+      else if (preparing || previewing) flash('Espera a que termine de verificarse el plan')
       return
     }
     if (!readiness?.publishable) { flash('Este plan no se puede publicar en su estado actual'); return }
@@ -993,7 +1003,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>{readiness.reasons[0] || 'Completa la preparación para publicar.'}</div>
           )}
           {!readiness.published && (
-            <PrimaryButton testid="planear-publicar" tone="green" onClick={handlePublish} busy={publishing} disabled={!readiness.publishable || Boolean(assignBusy || rowBusy)}>
+            <PrimaryButton testid="planear-publicar" tone="green" onClick={handlePublish} busy={publishing} disabled={!readiness.publishable || Boolean(assignBusy || rowBusy || preparing || previewing)}>
               Publicar ruta de mañana
             </PrimaryButton>
           )}
