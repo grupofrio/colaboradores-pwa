@@ -40,11 +40,9 @@ import {
   matchPwaHrAttendanceRoute,
 } from './pwaHrRoute.js'
 import {
-  buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
   resolveBarHarvestQuantities,
   resolveHarvestShiftId,
-  resolvePackedProductFromHarvest,
 } from '../modules/produccion/barraHarvestReception.js'
 import {
   normalizeChecklistNumericCheck,
@@ -758,9 +756,8 @@ async function createUpdate(payload) {
   return result
 }
 
-const IGUALA_BARRA_PT_LOCATION_ID = 1519
+const IGUALA_PRODUCTION_LOCATION_ID = 1085
 const IGUALA_MERMA_LOCATION_ID = 1173
-const IGUALA_COMPANY_ID = 35
 const UNIT_UOM_ID = 1
 const POS_CUSTOMER_ANALYTIC_PLAN_ID = 2
 const POS_CUSTOMER_ANALYTIC_CODE = 'IGU'
@@ -994,57 +991,6 @@ async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 20
       customers: rows.map(shapeSupervisorCustomer),
       total: rows.length,
     },
-  }
-}
-
-async function createBarHarvestScrap({
-  product = {},
-  quantities = {},
-  slot = {},
-  tank = {},
-  shiftId = 0,
-  operatorId = 0,
-  lineId = 0,
-  machineId = 0,
-  reasonId = 0,
-  companyId = 0,
-  sourceLocationId = IGUALA_BARRA_PT_LOCATION_ID,
-  destLocationId = IGUALA_MERMA_LOCATION_ID,
-  productUomId = UNIT_UOM_ID,
-} = {}) {
-  const scrapBars = Number(quantities?.scrapBars || 0)
-  if (!(scrapBars > 0)) return { ok: true, skipped: true, data: null }
-
-  const productId = Number(product?.product_id || 0)
-  if (!productId) throw new Error('product_id requerido para mover merma a ME-IGUALA')
-
-  const slotName = String(slot?.name || '').trim() || String(slot?.x_name || '').trim() || 'sin-slot'
-  const tankName = String(tank?.display_name || tank?.name || '').trim()
-  const response = await odooHttp('POST', '/api/production/bar-harvest-scrap', {}, {
-    shift_id: Number(shiftId || 0),
-    product_id: productId,
-    qty_bars: scrapBars,
-    kg: Number(quantities?.scrapKg || 0),
-    reason_id: Number(reasonId || 0) || undefined,
-    line_id: Number(lineId || 0) || undefined,
-    machine_id: Number(machineId || 0) || undefined,
-    operator_id: Number(operatorId || 0) || undefined,
-    slot_id: Number(slot?.id || slot?.slot_id || 0) || undefined,
-    slot_name: slotName,
-    tank_name: tankName || undefined,
-    location_id: Number(sourceLocationId || IGUALA_BARRA_PT_LOCATION_ID),
-    location_dest_id: Number(destLocationId || IGUALA_MERMA_LOCATION_ID),
-    company_id: Number(companyId || getCompanyId() || IGUALA_COMPANY_ID),
-    product_uom_id: Number(productUomId || UNIT_UOM_ID),
-    notes: buildBarHarvestScrapNotes({ slot, tank, quantities }),
-  })
-  if (response?.ok === false) throw new Error(response?.message || response?.error || 'No se pudo registrar la merma de barra')
-
-  const data = response?.data || response || {}
-  return {
-    ok: true,
-    skipped: false,
-    data,
   }
 }
 
@@ -3962,136 +3908,59 @@ async function directProduction(method, path, body) {
       throw new Error('No se pudo calcular kg de merma para la canastilla')
     }
 
-    const harvestResult = await createUpdate({
-      model: 'x_ice.brine.slot',
-      method: 'function',
-      ids: [slotId],
-      function: 'action_cosechar',
-      sudo: 1, app: 'pwa_colaboradores',
-    })
-    const slotReentryStatus = await ensureSlotReentersFreezingAfterLegacyHarvest(slotId)
-
     try {
-      const dict = {}
-      if (operatorId) dict.x_operator_id = operatorId
-      if (temperature) dict.x_brine_temp_at_extraction = temperature
-      if (Object.keys(dict).length > 0) {
-        await createUpdate({
-          model: 'x_ice.brine.slot',
-          method: 'update',
-          ids: [slotId],
-          dict,
-          sudo: 1, app: 'pwa_colaboradores',
-        }).catch(() => null)
-      }
-    } catch { /* ignore */ }
-
-    const harvestedProduct = resolvePackedProductFromHarvest({
-      harvestResult,
-      fallbackProduct: {
+      const harvestEnvelope = await odooHttp('POST', '/api/ice/slot/harvest', {}, {
+        slot_id: slotId,
+        shift_id: harvestShiftId,
+        temperatura: temperature,
+        operator_id: operatorId || undefined,
+        line_type: String(body?.line_type || 'barra').trim() || 'barra',
         product_id: Number(body?.product_id || receptionPayload.product_id || 0),
-        product_name: String(receptionPayload.product_name || '').trim(),
-      },
-    })
-
-    const scrapStatus = { ok: true, skipped: quantities.scrapBars <= 0, data: null }
-    const scrapInventoryStatus = { ok: true, skipped: quantities.scrapBars <= 0, data: null }
-    if (quantities.scrapBars > 0) {
-      try {
-        const scrapResult = await createBarHarvestScrap({
-          product: harvestedProduct,
-          quantities,
-          slot,
-          tank,
-          shiftId: harvestShiftId,
-          operatorId,
-          lineId: Number(body?.line_id || tank?.line_id || 0),
-          machineId: Number(body?.machine_id || tank?.id || 0),
-          reasonId: Number(body?.scrap_reason_id || body?.reason_id || 0),
-          companyId: Number(body?.company_id || getCompanyId() || IGUALA_COMPANY_ID),
-          sourceLocationId: Number(body?.scrap_source_location_id || IGUALA_BARRA_PT_LOCATION_ID),
-          destLocationId: Number(body?.scrap_dest_location_id || IGUALA_MERMA_LOCATION_ID),
-          productUomId: Number(body?.product_uom_id || harvestResult?.uom_id || harvestResult?.data?.uom_id || UNIT_UOM_ID),
-        })
-        scrapStatus.ok = true
-        scrapStatus.skipped = false
-        scrapStatus.data = scrapResult.data || scrapResult
-        scrapInventoryStatus.ok = true
-        scrapInventoryStatus.skipped = false
-        scrapInventoryStatus.data = scrapResult.data || scrapResult
-      } catch (error) {
-        scrapStatus.ok = false
-        scrapStatus.skipped = false
-        scrapStatus.error = error?.message || 'No se pudo registrar la merma'
-        scrapInventoryStatus.ok = false
-        scrapInventoryStatus.skipped = false
-        scrapInventoryStatus.error = error?.message || 'No se pudo mover la merma a ME-IGUALA'
-      }
-    }
-
-    const ptStatus = { ok: true, skipped: qtyReported <= 0, data: null }
-    try {
-      if (qtyReported > 0) {
-        if (!harvestedProduct.product_id) throw new Error('product_id requerido para recepcion PT')
-
-        const packResult = await odooHttp('POST', '/api/production/pack', {}, {
-          shift_id: harvestShiftId,
-          cycle_id: 0,
-          product_id: harvestedProduct.product_id,
-          qty_bags: qtyReported,
-          production_order_id: 0,
-          line_type: String(body?.line_type || 'barra').trim() || 'barra',
-          source_product_id: sourceProductId || undefined,
-          slot_id: slotId,
-          machine_id: Number(tank?.id || body?.machine_id || 0) || undefined,
-        })
-        ptStatus.ok = true
-        ptStatus.skipped = false
-        ptStatus.data = packResult?.data || packResult || {}
-      }
-
-      if (!scrapStatus.ok || !scrapInventoryStatus.ok || !ptStatus.ok) {
-        const parts = []
-        if (!scrapStatus.ok) parts.push(`merma: ${scrapStatus.error}`)
-        if (!scrapInventoryStatus.ok) parts.push(`movimiento a ME-IGUALA: ${scrapInventoryStatus.error}`)
-        if (!ptStatus.ok) parts.push(`recepcion PT: ${ptStatus.error}`)
+        source_product_id: sourceProductId || undefined,
+        line_id: Number(body?.line_id || tank?.line_id || 0) || undefined,
+        machine_id: Number(body?.machine_id || tank?.id || 0) || undefined,
+        scrap_bars: quantities.scrapBars,
+        scrap_reason_id: Number(body?.scrap_reason_id || body?.reason_id || 0) || undefined,
+        scrap_source_location_id: Number(body?.scrap_source_location_id || IGUALA_PRODUCTION_LOCATION_ID),
+        scrap_dest_location_id: Number(body?.scrap_dest_location_id || IGUALA_MERMA_LOCATION_ID),
+        product_uom_id: Number(body?.product_uom_id || UNIT_UOM_ID),
+      })
+      const harvestData = harvestEnvelope?.data || {}
+      if (harvestEnvelope?.ok === false) {
+        const message = harvestEnvelope?.message || harvestEnvelope?.error || 'No se pudo cosechar la canastilla'
         return {
           ok: false,
-          harvested: true,
-          harvest: { ok: true, data: harvestResult },
-          slot_reentry: slotReentryStatus,
-          scrap: scrapStatus,
-          scrap_inventory_move: scrapInventoryStatus,
-          pt_reception: ptStatus,
-          error: `La canastilla fue cosechada pero fallo ${parts.join(' y ')}`,
+          harvested: false,
+          harvest: { ok: false, data: harvestData },
+          slot_reentry: { ok: true, skipped: true },
+          scrap: { ok: false, skipped: quantities.scrapBars <= 0, error: message, data: harvestData?.scrap || null },
+          scrap_inventory_move: { ok: false, skipped: quantities.scrapBars <= 0, error: message, data: harvestData?.scrap || null },
+          pt_reception: { ok: false, skipped: qtyReported <= 0, error: message, data: harvestData },
+          error: message,
         }
       }
 
+      const scrapData = harvestData?.scrap || null
       return {
         ok: true,
-        harvest: { ok: true, data: harvestResult },
-        slot_reentry: slotReentryStatus,
-        scrap: scrapStatus,
-        scrap_inventory_move: scrapInventoryStatus,
-        pt_reception: ptStatus,
+        harvested: true,
+        harvest: { ok: true, data: harvestData },
+        slot_reentry: { ok: true, skipped: true },
+        scrap: { ok: true, skipped: quantities.scrapBars <= 0, data: scrapData },
+        scrap_inventory_move: { ok: true, skipped: quantities.scrapBars <= 0, data: scrapData },
+        pt_reception: { ok: true, skipped: qtyReported <= 0, data: harvestData },
       }
     } catch (error) {
-      ptStatus.ok = false
-      ptStatus.skipped = false
-      ptStatus.error = error?.message || 'No se pudo generar la recepcion PT'
-      const parts = []
-      if (!scrapStatus.ok) parts.push(`merma: ${scrapStatus.error}`)
-      if (!scrapInventoryStatus.ok) parts.push(`movimiento a ME-IGUALA: ${scrapInventoryStatus.error}`)
-      parts.push(`recepcion PT: ${ptStatus.error}`)
+      const message = error?.message || 'No se pudo cosechar la canastilla'
       return {
         ok: false,
-        harvested: true,
-        harvest: { ok: true, data: harvestResult },
-        slot_reentry: slotReentryStatus,
-        scrap: scrapStatus,
-        scrap_inventory_move: scrapInventoryStatus,
-        pt_reception: ptStatus,
-        error: `La canastilla fue cosechada pero fallo ${parts.join(' y ')}`,
+        harvested: false,
+        harvest: { ok: false, data: null },
+        slot_reentry: { ok: true, skipped: true },
+        scrap: { ok: false, skipped: quantities.scrapBars <= 0, error: message, data: null },
+        scrap_inventory_move: { ok: false, skipped: quantities.scrapBars <= 0, error: message, data: null },
+        pt_reception: { ok: false, skipped: qtyReported <= 0, error: message, data: null },
+        error: message,
       }
     }
   }
