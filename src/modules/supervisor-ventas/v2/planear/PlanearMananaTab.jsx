@@ -32,6 +32,7 @@ import {
   removeCustomerFromRoutePlan,
   optimizeRoutePlan,
   reviewRoutePlan,
+  generateRoutePlanDemandSnapshot,
   publishRoutePlan,
   searchPlanningCustomers,
   getRouteStops,
@@ -61,6 +62,7 @@ import {
   resourceReadiness,
   interpretOptimizeResponse,
   interpretReviewResponse,
+  interpretDemandSnapshotResponse,
   interpretPublishResponse,
   COVERAGE_TONE,
 } from './planearModel'
@@ -394,6 +396,8 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   // Se muestra tras "Optimizar y publicar" para que el número sea visible.
   const [optimizeResult, setOptimizeResult] = useState(null)
   const [reviewResult, setReviewResult] = useState(null)
+  const [snapshotResult, setSnapshotResult] = useState(null)
+  const [snapshotBusy, setSnapshotBusy] = useState(false)
   const [rowBusy, setRowBusy] = useState(null)        // add-/remove-<id>
   const [assignBusy, setAssignBusy] = useState(null)  // vehicle_id | driver_employee_id | salesperson_employee_id
   const [assignReadiness, setAssignReadiness] = useState(null)  // readiness del backend (incluye sobrecapacidad)
@@ -616,6 +620,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   async function handlePrepare(route) {
     if (!route?.route_id) return
     setPreparing(route.route_id)
+    setSnapshotResult(null)
+    setOptimizeResult(null)
+    setReviewResult(null)
     try {
       const criteria = buildRoutePlanCriteriaPayload({
         routeId: route.route_id, dateTarget, polygonId, subpolygonId, segmentId,
@@ -656,6 +663,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     }
     const reqId = ++previewReq.current
     invalidateResourceReadiness()
+    setSnapshotResult(null)
+    setOptimizeResult(null)
+    setReviewResult(null)
     setPreviewing(true)
     try {
       const payload = buildRoutePlanPreviewPayload({
@@ -689,6 +699,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     if (!canEdit) { flash('Este plan no permite modificar clientes', 4000); return }
     if (!routePlanId) { flash('Genera primero la propuesta'); return }
     invalidateResourceReadiness()
+    setSnapshotResult(null)
+    setOptimizeResult(null)
+    setReviewResult(null)
     setRowBusy(`add-${customer.id}`)
     try {
       const res = await addCustomerToRoutePlan(routePlanId, customer.id, '')
@@ -713,6 +726,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   async function handleRemove(customer) {
     if (!routePlanId || !canEdit) return
     invalidateResourceReadiness()
+    setSnapshotResult(null)
+    setOptimizeResult(null)
+    setReviewResult(null)
     setRowBusy(`remove-${customer.stop_id || customer.id}`)
     try {
       const res = await removeCustomerFromRoutePlan(routePlanId, customer)
@@ -751,6 +767,31 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     return interpretReviewResponse(await reviewRoutePlan(planId))
   }
 
+  async function handleGenerateDemandSnapshot() {
+    if (snapshotBusy || publishing || assignBusy || rowBusy || preparing || previewing || !routePlanId) return
+    if (!canEdit) { flash('Este plan ya no permite generar un snapshot de demanda.', 5000); return }
+    setSnapshotBusy(true)
+    try {
+      const snapshot = interpretDemandSnapshotResponse(await generateRoutePlanDemandSnapshot(routePlanId))
+      if (!snapshot.ok) {
+        flash(snapshot.message, 6000)
+        return
+      }
+      // El snapshot enlaza demanda/pesos a las paradas: la secuencia anterior no
+      // puede publicarse. Se exige volver a optimize → review → publish.
+      setSnapshotResult(snapshot)
+      setOptimizeResult(null)
+      setReviewResult(null)
+      await refreshReadinessFromServer(routePlanId)
+      flash('Snapshot generado. Optimiza de nuevo antes de publicar.', 6000)
+    } catch (e) {
+      logScreenError('PlanearManana', 'generateRoutePlanDemandSnapshot', e)
+      flash(getSupervisorRouteErrorMessage(e), 5000)
+    } finally {
+      setSnapshotBusy(false)
+    }
+  }
+
   // optimize → review → publish (B5+, absorbe el flujo de Sebas):
   //   ready   → publica; warning → exige confirmación explícita; blocked → no publica.
   async function handlePublish(opts = {}) {
@@ -758,8 +799,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     // Codex P1 (3ª): tampoco publicar mientras se prepara/previsualiza (readiness
     // autoritativa en vuelo). El estado 'blocked' de invalidate ya deshabilita el
     // botón; esto cierra también la ruta programática.
-    if (publishing || assignBusy || rowBusy || preparing || previewing || !routePlanId) {
+    if (publishing || snapshotBusy || assignBusy || rowBusy || preparing || previewing || !routePlanId) {
       if (!routePlanId) flash('Genera primero la propuesta')
+      else if (snapshotBusy) flash('Espera a que termine la generación del snapshot')
       else if (assignBusy) flash('Espera la validación de recursos antes de publicar')
       else if (rowBusy) flash('Espera que termine la modificación de clientes')
       else if (preparing || previewing) flash('Espera a que termine de verificarse el plan')
@@ -808,12 +850,13 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
         flash('La ruta tiene avisos; revísalos y confirma para publicar.', 6000); return
       }
       if (pub.code === 'demand_snapshot_required') {
+        setSnapshotResult({ required: true })
         flash('Falta generar el snapshot del plan antes de publicar.', 6000); return
       }
       if (!pub.ok) throw pub
       flash('Ruta optimizada y publicada para mañana')
       await loadData()
-      setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([]); setOptimizeResult(null); setReviewResult(null)
+      setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([]); setOptimizeResult(null); setReviewResult(null); setSnapshotResult(null)
     } catch (e) {
       logScreenError('PlanearManana', 'optimizeReviewPublish', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
@@ -833,6 +876,8 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     if (assignBusy || !routePlanId || !id) return
     const reqId = ++resourceReq.current
     setAssignBusy(field)
+    setOptimizeResult(null)
+    setReviewResult(null)
     try {
       const resp = await assignRoutePlanResources(routePlanId, { [field]: id })
       const status = String(resp?.status || (resp?.ok === false ? 'error' : 'ok')).toLowerCase()
@@ -1099,7 +1144,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>{readiness.reasons[0] || 'Completa la preparación para publicar.'}</div>
           )}
           {!readiness.published && (
-            <PrimaryButton testid="planear-publicar" tone="green" onClick={() => handlePublish()} busy={publishing} disabled={!readiness.publishable || Boolean(assignBusy || rowBusy || preparing || previewing)}>
+            <PrimaryButton testid="planear-publicar" tone="green" onClick={() => handlePublish()} busy={publishing} disabled={!readiness.publishable || Boolean(snapshotBusy || assignBusy || rowBusy || preparing || previewing)}>
               Optimizar y publicar
             </PrimaryButton>
           )}
@@ -1123,6 +1168,21 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
               <PrimaryButton testid="planear-publicar-confirmar" tone="green" onClick={() => handlePublish({ confirmWarnings: true })} busy={publishing} disabled={Boolean(assignBusy || rowBusy || preparing || previewing)}>
                 Publicar de todos modos
               </PrimaryButton>
+            </div>
+          )}
+          {!readiness.published && snapshotResult?.required && (
+            <div data-testid="planear-snapshot-required" style={{ marginTop: 10, padding: '10px 12px', borderRadius: R.md, background: C.warningSoft, border: '1px solid rgba(180,83,9,0.30)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.warning, marginBottom: 4 }}>Falta congelar la demanda</div>
+              <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, marginBottom: 8 }}>Genera el snapshot desde las paradas actuales. Después se optimiza otra vez antes de publicar.</div>
+              <PrimaryButton testid="planear-generar-snapshot" onClick={handleGenerateDemandSnapshot} busy={snapshotBusy} disabled={!canEdit || Boolean(publishing || assignBusy || rowBusy || preparing || previewing)}>
+                Generar snapshot de demanda
+              </PrimaryButton>
+            </div>
+          )}
+          {!readiness.published && snapshotResult?.ok && (
+            <div data-testid="planear-snapshot-generated" style={{ marginTop: 10, padding: '10px 12px', borderRadius: R.md, background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.30)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.success }}>Demanda congelada</div>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 3 }}>Snapshot #{snapshotResult.snapshotId}{snapshotResult.lineCount != null ? ` · ${snapshotResult.lineCount} líneas` : ''}. Optimiza y publica la nueva secuencia.</div>
             </div>
           )}
           {optimizeResult && (

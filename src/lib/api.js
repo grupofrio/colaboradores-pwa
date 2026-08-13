@@ -8485,6 +8485,36 @@ async function directSupervisorVentas(method, path, body) {
     }
   }
 
+  if (cleanPath === '/pwa-supv/route-plan-generate-snapshot' && method === 'POST') {
+    const routePlanId = Number(body?.route_plan_id || 0)
+    if (!routePlanId) {
+      return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'route_plan_id requerido' }
+    }
+    // B7: write dedicado y acotado al plan de la sucursal del token. No se usa ORM
+    // desde el navegador; el controller genera/fija el snapshot y el envelope manda.
+    let snapshotRes
+    try {
+      snapshotRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/route_plan/generate-snapshot', {
+        meta: supervisorMeta(),
+        data: { route_plan_id: routePlanId },
+      }), null)
+    } catch (e) {
+      snapshotRes = normalizeWriteResponse(null, e)
+    }
+    if (!snapshotRes.ok) {
+      return {
+        ok: false, status: 'error', phase: snapshotRes.phase, code: snapshotRes.code,
+        message: snapshotRes.message || 'No se pudo generar el snapshot de demanda.', retryable: snapshotRes.retryable,
+        data: snapshotRes.data || {},
+      }
+    }
+    return {
+      ok: true, status: 'ok', phase: snapshotRes.phase, message: 'Snapshot de demanda generado',
+      data: (snapshotRes.data && (snapshotRes.data.demand_snapshot_id ? snapshotRes.data : snapshotRes.data.data)) || { route_plan_id: routePlanId },
+      meta: supervisorMeta(),
+    }
+  }
+
   if (cleanPath === '/pwa-supv/route-plan-publish' && method === 'POST') {
     const routePlanId = Number(body?.route_plan_id || 0)
     if (!routePlanId) {

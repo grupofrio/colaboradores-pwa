@@ -264,6 +264,15 @@ export function reviewRoutePlan(routePlanId) {
   })
 }
 
+/** Genera el snapshot de demanda desde las paradas VIGENTES del plan. Es un
+ *  write explícito, token/scoped server-side: no optimiza ni publica. Tras éxito
+ *  la UI debe volver a optimizar porque se actualiza la demanda congelada. */
+export function generateRoutePlanDemandSnapshot(routePlanId) {
+  return api('POST', '/pwa-supv/route-plan-generate-snapshot', {
+    route_plan_id: Number(routePlanId || 0),
+  })
+}
+
 /** Publicar plan de ruta. `planRevision` (opcional): la revisión con la que se
  *  optimizó/revisó; el backend la exige cuando el flag de publicación optimizada
  *  está ON (B5.2). `confirmWarnings`: cuando la revisión dejó AVISOS (readiness

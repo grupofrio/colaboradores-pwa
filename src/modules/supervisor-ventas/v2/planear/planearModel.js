@@ -263,6 +263,31 @@ export function interpretReviewResponse(resp = {}) {
   }
 }
 
+// B7: solo una respuesta exitosa CON el id del snapshot permite afirmar que la
+// demanda quedó congelada. Un ok malformado no se presenta como éxito.
+export function interpretDemandSnapshotResponse(resp = {}) {
+  const isErr = resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error'
+  const d = isErr ? {} : (resp?.data || resp || {})
+  const snapshotId = Number(d.demand_snapshot_id || 0) || null
+  const code = String(resp?.code || resp?.data?.code || '').toLowerCase()
+  const parsedLineCount = Number(d.line_count)
+  if (!isErr && snapshotId) {
+    return {
+      ok: true,
+      snapshotId,
+      lineCount: Number.isFinite(parsedLineCount) && parsedLineCount >= 0 ? parsedLineCount : null,
+      message: resp?.message || 'Snapshot de demanda generado.',
+    }
+  }
+  return {
+    ok: false,
+    snapshotId: null,
+    lineCount: null,
+    code: code || (isErr ? 'snapshot_failed' : 'snapshot_response_invalid'),
+    message: resp?.message || resp?.data?.message || 'El servidor no confirmó el snapshot de demanda.',
+  }
+}
+
 // Interpreta la respuesta de `route-plan-publish` (B5+). El envelope MANDA: los
 // códigos accionables (readiness_blocked/readiness_warnings/demand_snapshot_required/
 // revision_mismatch) NO son "éxito". Devuelve una decisión tipada para la UI.
