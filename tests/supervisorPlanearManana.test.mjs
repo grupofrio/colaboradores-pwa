@@ -221,7 +221,7 @@ test('F1: la readiness NO se lee con un POST vacío a assign-resources (bug de "
   assert.ok(/function invalidateResourceReadiness\(\)\s*\{[\s\S]*?coverage_state: 'blocked'[\s\S]*?\n  \}/.test(tab), 'invalidar deja la readiness en blocked (verificando), no null')
   assert.ok(/const coverage = assignReadiness \|\| resourceReadiness\(assignment\)/.test(tab), 'coverage cae a resourceReadiness(assignment) local solo si assignReadiness es null')
   // El guard de publicación bloquea también durante snapshot/preparar/previsualizar.
-  assert.ok(/publishing \|\| snapshotBusy \|\| assignBusy \|\| rowBusy \|\| preparing \|\| previewing \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante snapshot/preparar/previsualizar')
+  assert.ok(/publishing \|\| snapshotBusy \|\| reloadBusy \|\| assignBusy \|\| rowBusy \|\| preparing \|\| previewing \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante snapshot/preparar/previsualizar')
   assert.ok(/disabled=\{!readiness\.publishable \|\| Boolean\(snapshotBusy \|\| assignBusy \|\| rowBusy \|\| preparing \|\| previewing\)\}/.test(tab), 'el botón queda deshabilitado durante snapshot/preparar/previsualizar')
 })
 
@@ -530,4 +530,15 @@ test('B7: snapshot solo es éxito con un id confirmado y fuerza reoptimización'
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
   assert.ok(/planear-generar-snapshot/.test(tab), 'el flujo ofrece la acción explícita')
   assert.ok(/setOptimizeResult\(null\)/.test(tab) && /setReviewResult\(null\)/.test(tab), 'un snapshot no reutiliza una secuencia previa')
+})
+
+test('B8: la recarga se resuelve server-side y no crea inventario desde la PWA', () => {
+  const api = src('modules/supervisor-ventas/api.js')
+  const lib = src('lib/api.js')
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/previewRoutePlanCapacityReload/.test(api) && /applyRoutePlanCapacityReload/.test(api), 'wrappers B8')
+  assert.ok(/route-plan-capacity-reload-preview/.test(lib) && /route-plan-apply-capacity-reload/.test(lib), 'shims B8')
+  assert.ok(/Planear recarga en CEDIS/.test(tab) && /CEDIS · recarga programada/.test(tab), 'superficie operativa de recarga')
+  assert.ok(/requires_reoptimization|Optimiza y revisa antes de publicar/.test(tab), 'exige reoptimizar tras aplicar')
+  assert.ok(!/create.*picking|reserve.*inventory/i.test(api), 'cliente no crea stock ni pickings')
 })

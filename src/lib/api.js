@@ -8515,6 +8515,26 @@ async function directSupervisorVentas(method, path, body) {
     }
   }
 
+  if ((cleanPath === '/pwa-supv/route-plan-capacity-reload-preview' || cleanPath === '/pwa-supv/route-plan-apply-capacity-reload') && method === 'POST') {
+    const routePlanId = Number(body?.route_plan_id || 0)
+    if (!routePlanId) {
+      return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'route_plan_id requerido' }
+    }
+    const operation = cleanPath.endsWith('-preview') ? 'capacity-reload-preview' : 'apply-capacity-reload'
+    let result
+    try {
+      result = normalizeWriteResponse(await odooJson(`/gf/salesops/supervisor/v2/route_plan/${operation}`, {
+        meta: supervisorMeta(), data: { route_plan_id: routePlanId },
+      }), null)
+    } catch (e) {
+      result = normalizeWriteResponse(null, e)
+    }
+    if (!result.ok) {
+      return { ok: false, status: 'error', phase: result.phase, code: result.code, message: result.message || 'No se pudo planear la recarga.', retryable: result.retryable, data: result.data || {} }
+    }
+    return { ok: true, status: 'ok', phase: result.phase, message: result.message || 'Recarga programada', data: result.data || { route_plan_id: routePlanId }, meta: supervisorMeta() }
+  }
+
   if (cleanPath === '/pwa-supv/route-plan-publish' && method === 'POST') {
     const routePlanId = Number(body?.route_plan_id || 0)
     if (!routePlanId) {

@@ -273,6 +273,22 @@ export function generateRoutePlanDemandSnapshot(routePlanId) {
   })
 }
 
+/** Calcula una recarga única en el CEDIS de despacho. El servidor fija el
+ * almacén y el corte; el cliente no puede elegir sucursal, almacén ni kg. */
+export function previewRoutePlanCapacityReload(routePlanId) {
+  return api('POST', '/pwa-supv/route-plan-capacity-reload-preview', {
+    route_plan_id: Number(routePlanId || 0),
+  })
+}
+
+/** Aplica la recarga ya recalculada por el servidor. No crea picking ni reserva
+ * inventario: después exige optimizar y revisar el plan de nuevo. */
+export function applyRoutePlanCapacityReload(routePlanId) {
+  return api('POST', '/pwa-supv/route-plan-apply-capacity-reload', {
+    route_plan_id: Number(routePlanId || 0),
+  })
+}
+
 /** Publicar plan de ruta. `planRevision` (opcional): la revisión con la que se
  *  optimizó/revisó; el backend la exige cuando el flag de publicación optimizada
  *  está ON (B5.2). `confirmWarnings`: cuando la revisión dejó AVISOS (readiness
