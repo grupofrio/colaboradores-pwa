@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import {
   routeReadiness, summarizeResources, capacityLabel, personRolesLabel, planStateLabel,
   derivePlanAssignment, resourceOptions, resourceReadiness, interpretOptimizeResponse,
+  interpretReviewResponse, interpretDemandSnapshotResponse, interpretPublishResponse,
 } from '../src/modules/supervisor-ventas/v2/planear/planearModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -219,9 +220,9 @@ test('F1: la readiness NO se lee con un POST vacío a assign-resources (bug de "
   // la derivación local mientras B1 está en vuelo (evita habilitar publish por local).
   assert.ok(/function invalidateResourceReadiness\(\)\s*\{[\s\S]*?coverage_state: 'blocked'[\s\S]*?\n  \}/.test(tab), 'invalidar deja la readiness en blocked (verificando), no null')
   assert.ok(/const coverage = assignReadiness \|\| resourceReadiness\(assignment\)/.test(tab), 'coverage cae a resourceReadiness(assignment) local solo si assignReadiness es null')
-  // El guard de publicación bloquea también durante preparar/previsualizar.
-  assert.ok(/publishing \|\| assignBusy \|\| rowBusy \|\| preparing \|\| previewing \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante preparar/previsualizar')
-  assert.ok(/disabled=\{!readiness\.publishable \|\| Boolean\(assignBusy \|\| rowBusy \|\| preparing \|\| previewing\)\}/.test(tab), 'el botón queda deshabilitado durante preparar/previsualizar')
+  // El guard de publicación bloquea también durante snapshot/preparar/previsualizar.
+  assert.ok(/publishing \|\| snapshotBusy \|\| assignBusy \|\| rowBusy \|\| preparing \|\| previewing \|\| !routePlanId/.test(tab), 'el handler rechaza publicar durante snapshot/preparar/previsualizar')
+  assert.ok(/disabled=\{!readiness\.publishable \|\| Boolean\(snapshotBusy \|\| assignBusy \|\| rowBusy \|\| preparing \|\| previewing\)\}/.test(tab), 'el botón queda deshabilitado durante snapshot/preparar/previsualizar')
 })
 
 test('F1↔B1 (Codex P1): tras una mutación se refresca la readiness AUTORITATIVA del servidor', () => {
@@ -396,30 +397,38 @@ test('F2 P1 (Codex): multiplicidad de rutas mañana NO autoabre una arbitraria',
 
 // ── (F5) Optimizar y publicar (contrato B5) ──────────────────────────────────
 
-test('F5: optimize+publish — wrapper, shim y revisión', () => {
+test('F5: optimize+review+publish — wrappers y shims', () => {
   const api = src('modules/supervisor-ventas/api.js')
   assert.ok(/export function optimizeRoutePlan/.test(api), 'wrapper optimizeRoutePlan')
   assert.ok(/\/pwa-supv\/route-plan-optimize/.test(api), 'usa la ruta pwa-supv del optimize')
-  assert.ok(/export function publishRoutePlan\(routePlanId, planRevision\)/.test(api), 'publishRoutePlan acepta planRevision')
+  assert.ok(/export function reviewRoutePlan/.test(api) && /\/pwa-supv\/route-plan-review/.test(api), 'wrapper reviewRoutePlan')
+  assert.ok(/export function generateRoutePlanDemandSnapshot/.test(api) && /\/pwa-supv\/route-plan-generate-snapshot/.test(api), 'wrapper snapshot de demanda')
+  assert.ok(/export function publishRoutePlan\(routePlanId, planRevision, confirmWarnings/.test(api), 'publishRoutePlan acepta planRevision + confirmWarnings')
   assert.ok(/plan_revision: String\(planRevision\)/.test(api), 'publish envía plan_revision cuando la hay')
+  assert.ok(/confirm_readiness_warnings: true/.test(api), 'publish envía confirm_readiness_warnings')
   const lib = src('lib/api.js')
-  assert.ok(/\/pwa-supv\/route-plan-optimize/.test(lib) && /route_plan\/optimize/.test(lib), 'shim optimize → controller dedicado')
+  assert.ok(/\/pwa-supv\/route-plan-review/.test(lib) && /route_plan\/review/.test(lib), 'shim review → controller dedicado')
+  assert.ok(/\/pwa-supv\/route-plan-generate-snapshot/.test(lib) && /route_plan\/generate-snapshot/.test(lib), 'shim snapshot → controller dedicado')
   assert.ok(/body\?\.plan_revision \? \{ plan_revision:/.test(lib), 'el shim de publish reenvía plan_revision')
+  assert.ok(/body\?\.confirm_readiness_warnings \? \{ confirm_readiness_warnings/.test(lib), 'el shim de publish reenvía confirm_readiness_warnings')
 })
 
-test('F5: handlePublish optimiza antes de publicar y maneja revision_mismatch', () => {
+test('F5: handlePublish corre optimize→review→publish y gatea ready/warning/blocked', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
   assert.ok(/Optimizar y publicar/.test(tab), 'el botón dice "Optimizar y publicar"')
   const handler = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('function toggleDemand'))
-  assert.ok(/runOptimize\(routePlanId\)/.test(handler), 'optimiza antes de publicar')
-  assert.ok(/publishRoutePlan\(routePlanId, (first|again)\.revision\)/.test(handler), 'publica con la revisión de la optimización')
-  assert.ok(/revision_mismatch/.test(handler), 'maneja revision_mismatch (reoptimiza y reintenta una vez)')
-  assert.ok(/if \(first\.blocked\)/.test(handler), 'si el optimizador bloquea, NO publica')
-  // runOptimize delega la decisión a la función pura (contrato optimize↔publish).
-  const runOpt = tab.slice(tab.indexOf('async function runOptimize'), tab.indexOf('async function handlePublish'))
-  assert.ok(/interpretOptimizeResponse\(opt\)/.test(runOpt), 'runOptimize usa la función pura del contrato')
+  assert.ok(/runOptimize\(routePlanId\)/.test(handler), 'optimiza')
+  assert.ok(/runReview\(routePlanId\)/.test(handler), 'revisa antes de publicar')
+  assert.ok(/publishRoutePlan\(routePlanId, ready\.revision/.test(handler), 'publica con la revisión post-review')
+  assert.ok(/revision_mismatch/.test(handler), 'maneja revision_mismatch (reoptimiza+revisa y reintenta una vez)')
+  assert.ok(/readiness_blocked/.test(handler) && /readiness_warnings/.test(handler), 'gatea los códigos de readiness')
+  assert.ok(/demand_snapshot_required/.test(handler), 'surfacea la falta de snapshot')
+  assert.ok(/setSnapshotResult\(\{ required: true \}\)/.test(handler), 'ofrece generar snapshot cuando el gate lo exige')
+  assert.ok(/confirmWarnings/.test(handler), 'los avisos exigen confirmación explícita')
+  // La UI muestra bloqueos/avisos de la revisión + botón de confirmación.
+  assert.ok(/planear-review-blocked/.test(tab), 'muestra los bloqueos')
+  assert.ok(/planear-review-warning/.test(tab) && /planear-publicar-confirmar/.test(tab), 'muestra avisos + confirmar')
   assert.ok(/planear-optimizacion/.test(tab), 'muestra paradas · km · min tras optimizar')
-  // Codex P1 (F5): tampoco publica mientras se prepara/previsualiza.
   assert.ok(/preparing \|\| previewing/.test(handler), 'bloquea publish con readiness en vuelo')
 })
 
@@ -468,4 +477,57 @@ test('F5: la optimización muestra carga esperada, utilización y clientes no as
   assert.ok(/optimizeResult\.demandKg != null/.test(tab), 'la carga solo se muestra si el backend la mandó')
   assert.ok(/planear-optimizacion-noasignadas/.test(tab), 'advierte clientes que no cupieron')
   assert.ok(/optimizeResult\.unassigned > 0/.test(tab), 'la advertencia solo aparece si hay no asignados')
+})
+
+// ── F5+ · optimize→review→publish (absorbe el review de Sebas) ────────────────
+test('F5+: interpretReviewResponse mapea el veredicto ready/warning/blocked', () => {
+  const ready = interpretReviewResponse({ ok: true, status: 'ok', data: { readiness_state: 'ready', plan_revision: 'r9' } })
+  assert.equal(ready.failed, false)
+  assert.equal(ready.state, 'ready')
+  assert.equal(ready.revision, 'r9')
+
+  const warn = interpretReviewResponse({ ok: true, status: 'ok', data: { readiness_state: 'warning', warnings: ['Sin chofer.'], plan_revision: 'r9' } })
+  assert.equal(warn.state, 'warning')
+  assert.deepEqual(warn.warnings, ['Sin chofer.'])
+
+  const blk = interpretReviewResponse({ ok: true, status: 'ok', data: { readiness_state: 'blocked', blockers: ['2 stops sin coordenadas.'] } })
+  assert.equal(blk.state, 'blocked')
+  assert.deepEqual(blk.blockers, ['2 stops sin coordenadas.'])
+
+  // Endpoint caído (backend viejo) ⇒ failed (no confundir con readiness blocked);
+  // el flujo deja que el gate server-side del publish decida.
+  const down = interpretReviewResponse({ ok: false, status: 'error', code: 'NOT_FOUND', message: 'x' })
+  assert.equal(down.failed, true)
+})
+
+test('F5+: interpretPublishResponse — códigos accionables NO son éxito', () => {
+  const ok = interpretPublishResponse({ ok: true, status: 'ok', data: { route_plan_id: 5, state: 'published' } })
+  assert.equal(ok.ok, true)
+  for (const [code, key] of [['readiness_blocked', 'blockers'], ['readiness_warnings', 'warnings']]) {
+    const r = interpretPublishResponse({ ok: false, status: 'error', code, data: { [key]: ['x'] } })
+    assert.equal(r.ok, false)
+    assert.equal(r.code, code)
+    assert.deepEqual(r[key], ['x'])
+  }
+  const snap = interpretPublishResponse({ ok: false, status: 'error', code: 'demand_snapshot_required' })
+  assert.equal(snap.ok, false)
+  assert.equal(snap.code, 'demand_snapshot_required')
+  const mism = interpretPublishResponse({ ok: false, status: 'error', code: 'revision_mismatch' })
+  assert.equal(mism.code, 'revision_mismatch')
+})
+
+test('B7: snapshot solo es éxito con un id confirmado y fuerza reoptimización', () => {
+  const ok = interpretDemandSnapshotResponse({ ok: true, status: 'ok', data: { demand_snapshot_id: 18, line_count: 7 } })
+  assert.equal(ok.ok, true)
+  assert.equal(ok.snapshotId, 18)
+  assert.equal(ok.lineCount, 7)
+  const malformed = interpretDemandSnapshotResponse({ ok: true, status: 'ok', data: {} })
+  assert.equal(malformed.ok, false)
+  assert.equal(malformed.code, 'snapshot_response_invalid')
+  const blocked = interpretDemandSnapshotResponse({ ok: false, status: 'error', code: 'FORBIDDEN', message: 'x' })
+  assert.equal(blocked.ok, false)
+  assert.equal(blocked.code, 'forbidden')
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.ok(/planear-generar-snapshot/.test(tab), 'el flujo ofrece la acción explícita')
+  assert.ok(/setOptimizeResult\(null\)/.test(tab) && /setReviewResult\(null\)/.test(tab), 'un snapshot no reutiliza una secuencia previa')
 })

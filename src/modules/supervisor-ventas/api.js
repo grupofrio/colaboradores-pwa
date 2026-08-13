@@ -254,13 +254,35 @@ export function optimizeRoutePlan(routePlanId) {
   })
 }
 
+/** Revisar el plan antes de publicar (B5+). Corre la revisión server-side
+ *  (action_review_optimized_route) y devuelve el veredicto: readiness_state
+ *  (ready/warning/blocked) + blockers[]/warnings[]/missing_geo_count/overcapacity
+ *  + plan_revision (la revisión POST-review que publish exigirá). NO publica. */
+export function reviewRoutePlan(routePlanId) {
+  return api('POST', '/pwa-supv/route-plan-review', {
+    route_plan_id: Number(routePlanId || 0),
+  })
+}
+
+/** Genera el snapshot de demanda desde las paradas VIGENTES del plan. Es un
+ *  write explícito, token/scoped server-side: no optimiza ni publica. Tras éxito
+ *  la UI debe volver a optimizar porque se actualiza la demanda congelada. */
+export function generateRoutePlanDemandSnapshot(routePlanId) {
+  return api('POST', '/pwa-supv/route-plan-generate-snapshot', {
+    route_plan_id: Number(routePlanId || 0),
+  })
+}
+
 /** Publicar plan de ruta. `planRevision` (opcional): la revisión con la que se
- *  optimizó; el backend la exige cuando el flag de publicación optimizada está ON
- *  (B5.2). Sin ella, el backend actual publica igual (flag OFF, retrocompatible). */
-export function publishRoutePlan(routePlanId, planRevision) {
+ *  optimizó/revisó; el backend la exige cuando el flag de publicación optimizada
+ *  está ON (B5.2). `confirmWarnings`: cuando la revisión dejó AVISOS (readiness
+ *  'warning'), confirma explícitamente que se publica con ellos. Sin flag, el
+ *  backend actual publica igual (retrocompatible). */
+export function publishRoutePlan(routePlanId, planRevision, confirmWarnings = false) {
   return api('POST', '/pwa-supv/route-plan-publish', {
     route_plan_id: Number(routePlanId || 0),
     ...(planRevision ? { plan_revision: String(planRevision) } : {}),
+    ...(confirmWarnings ? { confirm_readiness_warnings: true } : {}),
   })
 }
 
