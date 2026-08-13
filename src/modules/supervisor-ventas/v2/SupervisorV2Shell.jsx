@@ -26,6 +26,7 @@ export const V2_TABS = Object.freeze([
   { key: 'radar', label: 'Radar', route: '/equipo/radar', glyph: '◎' },
   { key: 'rutas', label: 'Rutas', route: '/equipo/rutas', glyph: '⋔' },
   { key: 'clientes', label: 'Clientes', route: '/equipo/clientes', glyph: '⚇' },
+  { key: 'prospectos', label: 'Prospectos', route: '/equipo/prospectos', glyph: '+' },
   { key: 'pendientes', label: 'Pendientes', route: '/equipo/pendientes', glyph: '⚑' },
   { key: 'mas', label: 'Más', route: '/equipo/mas', glyph: '⋯' },
 ])

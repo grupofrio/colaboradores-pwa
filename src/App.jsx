@@ -167,6 +167,7 @@ const RadarTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/Rad
 const RutasTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RutasTab'))
 const MisRutasManana = lazy(() => import('./modules/supervisor-ventas/v2/planear/MisRutasManana'))
 const ClientesTab   = lazy(() => import('./modules/supervisor-ventas/v2/tabs/ClientesTab'))
+const ProspectosTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/ProspectosTab'))
 const PendientesTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/PendientesTab'))
 const MasTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/MasTab'))
 const IntegridadEjecucion = lazy(() => import('./modules/supervisor-ventas/v2/equipo/IntegridadEjecucion'))
@@ -839,6 +840,7 @@ export default function App() {
             {/* "Planear mañana" (re-hogar del flujo de ScreenPronostico a V2 claro,
                 dentro de la superficie Rutas). Solo V2, con guard de rol. */}
             <Route path="/equipo/rutas/planear" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="rutas" v2Only><MisRutasManana /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/prospectos" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="prospectos" v2Only><ProspectosTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/pendientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="pendientes" v2Only><PendientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/mas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="mas" v2Only><MasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             {/* `/equipo/hoy` es una CAPACIDAD V2 (no una ruta legacy permitida):

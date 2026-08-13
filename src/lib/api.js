@@ -8198,6 +8198,45 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  // B6/F6: descubrimiento de prospectos. Ambos endpoints derivan compania,
+  // plaza y geometria desde el token; el navegador no puede ampliar el alcance.
+  if (cleanPath === '/pwa-supv/prospects-scope' && method === 'POST') {
+    return odooJson('/gf/salesops/supervisor/v2/prospects/scope', {
+      meta: supervisorMeta(), data: {},
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/prospects-list' && method === 'POST') {
+    return odooJson('/gf/salesops/supervisor/v2/prospects/list', {
+      meta: supervisorMeta(),
+      data: {
+        ...(Number(body?.polygon_id) > 0 ? { polygon_id: Number(body.polygon_id) } : {}),
+        ...(body?.demand_class ? { demand_class: String(body.demand_class) } : {}),
+        limit: Math.min(100, Math.max(1, Number(body?.limit) || 100)),
+      },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/route-plan-add-lead' && method === 'POST') {
+    const routePlanId = Number(body?.route_plan_id || 0)
+    const leadId = Number(body?.lead_id || 0)
+    if (!routePlanId || !leadId) {
+      return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'route_plan_id y lead_id requeridos' }
+    }
+    let result
+    try {
+      result = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/route_plan/add_lead', {
+        meta: supervisorMeta(), data: { route_plan_id: routePlanId, lead_id: leadId },
+      }), null)
+    } catch (error) {
+      result = normalizeWriteResponse(null, error)
+    }
+    if (!result.ok) {
+      return { ok: false, status: 'error', phase: result.phase, code: result.code, message: result.message || 'No se pudo agregar el prospecto.', retryable: result.retryable, data: result.data || {} }
+    }
+    return { ok: true, status: 'ok', phase: result.phase, message: result.message || 'Prospecto agregado', data: result.data || {}, meta: supervisorMeta() }
+  }
+
   if (cleanPath === '/pwa-supv/customers/search' && method === 'GET') {
     return odooJson('/gf/salesops/supervisor/v2/customers/search', {
       meta: supervisorMeta(),
