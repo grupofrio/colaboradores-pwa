@@ -33,6 +33,8 @@ import {
   optimizeRoutePlan,
   reviewRoutePlan,
   generateRoutePlanDemandSnapshot,
+  previewRoutePlanCapacityReload,
+  applyRoutePlanCapacityReload,
   publishRoutePlan,
   searchPlanningCustomers,
   getRouteStops,
@@ -398,6 +400,8 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const [reviewResult, setReviewResult] = useState(null)
   const [snapshotResult, setSnapshotResult] = useState(null)
   const [snapshotBusy, setSnapshotBusy] = useState(false)
+  const [reloadResult, setReloadResult] = useState(null)
+  const [reloadBusy, setReloadBusy] = useState(false)
   const [rowBusy, setRowBusy] = useState(null)        // add-/remove-<id>
   const [assignBusy, setAssignBusy] = useState(null)  // vehicle_id | driver_employee_id | salesperson_employee_id
   const [assignReadiness, setAssignReadiness] = useState(null)  // readiness del backend (incluye sobrecapacidad)
@@ -767,6 +771,28 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     return interpretReviewResponse(await reviewRoutePlan(planId))
   }
 
+  async function handleCapacityReload() {
+    if (!routePlanId || reloadBusy || publishing) return
+    setReloadBusy(true)
+    try {
+      const preview = await previewRoutePlanCapacityReload(routePlanId)
+      if (!preview?.ok) throw preview
+      const applied = await applyRoutePlanCapacityReload(routePlanId)
+      if (!applied?.ok) throw applied
+      const reload = applied?.data?.reload || applied?.data?.data?.reload
+      if (!reload) throw new Error('La respuesta de recarga está incompleta.')
+      setReloadResult(reload)
+      setOptimizeResult(null)
+      setReviewResult(null)
+      invalidateResourceReadiness()
+      await refreshReadinessFromServer(routePlanId)
+      flash('Recarga programada. Optimiza y revisa antes de publicar.', 6000)
+    } catch (e) {
+      logScreenError('PlanearManana', 'capacityReload', e)
+      flash(getSupervisorRouteErrorMessage(e), 5000)
+    } finally { setReloadBusy(false) }
+  }
+
   async function handleGenerateDemandSnapshot() {
     if (snapshotBusy || publishing || assignBusy || rowBusy || preparing || previewing || !routePlanId) return
     if (!canEdit) { flash('Este plan ya no permite generar un snapshot de demanda.', 5000); return }
@@ -799,7 +825,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     // Codex P1 (3ª): tampoco publicar mientras se prepara/previsualiza (readiness
     // autoritativa en vuelo). El estado 'blocked' de invalidate ya deshabilita el
     // botón; esto cierra también la ruta programática.
-    if (publishing || snapshotBusy || assignBusy || rowBusy || preparing || previewing || !routePlanId) {
+    if (publishing || snapshotBusy || reloadBusy || assignBusy || rowBusy || preparing || previewing || !routePlanId) {
       if (!routePlanId) flash('Genera primero la propuesta')
       else if (snapshotBusy) flash('Espera a que termine la generación del snapshot')
       else if (assignBusy) flash('Espera la validación de recursos antes de publicar')
@@ -1144,9 +1170,24 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>{readiness.reasons[0] || 'Completa la preparación para publicar.'}</div>
           )}
           {!readiness.published && (
-            <PrimaryButton testid="planear-publicar" tone="green" onClick={() => handlePublish()} busy={publishing} disabled={!readiness.publishable || Boolean(snapshotBusy || assignBusy || rowBusy || preparing || previewing)}>
+            <PrimaryButton testid="planear-publicar" tone="green" onClick={() => handlePublish()} busy={publishing || reloadBusy} disabled={!readiness.publishable || Boolean(snapshotBusy || assignBusy || rowBusy || preparing || previewing)}>
               Optimizar y publicar
             </PrimaryButton>
+          )}
+          {!readiness.published && readiness.overcapacity && (
+            <div data-testid="planear-recarga" style={{ marginTop: 10, padding: '10px 12px', borderRadius: R.md, background: C.warningSoft, border: '1px solid rgba(180,83,9,0.30)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.warning }}>La ruta no cabe en una sola carga</div>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 3, lineHeight: 1.5 }}>Programa un regreso virtual al CEDIS. Almacén confirma la carga física después; no se reserva inventario aquí.</div>
+              <PrimaryButton testid="planear-programar-recarga" onClick={handleCapacityReload} busy={reloadBusy} disabled={!canEdit || Boolean(publishing || snapshotBusy || assignBusy || rowBusy || preparing || previewing)}>
+                Planear recarga en CEDIS
+              </PrimaryButton>
+            </div>
+          )}
+          {reloadResult && (
+            <div data-testid="planear-recarga-programada" style={{ marginTop: 10, padding: '10px 12px', borderRadius: R.md, background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.30)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.success }}>CEDIS · recarga programada</div>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 3 }}>Tras la parada #{reloadResult.reload_after_stop_id}: tramo 1 {reloadResult.first_trip_kg} kg · recarga {reloadResult.reload_kg} kg · tramo 2 {reloadResult.second_trip_kg} kg.</div>
+            </div>
           )}
           {/* Veredicto de la revisión (B5+): bloqueos (rojo, no publica) o avisos
               (ámbar, exige confirmación explícita). Se listan para que la
