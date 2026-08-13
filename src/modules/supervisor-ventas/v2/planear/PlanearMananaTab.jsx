@@ -770,7 +770,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   async function runReview(planId) {
     // Revisión pre-publicación (B5+): veredicto ready/warning/blocked + revisión
     // POST-review. Si el endpoint no está disponible, `failed`=true y el flujo
-    // deja que el gate server-side del publish decida.
+    // se detiene: publicar sin la revisión registrada viola el gate del servidor.
     return interpretReviewResponse(await reviewRoutePlan(planId))
   }
 
@@ -870,13 +870,14 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
         const opt = await runOptimize(routePlanId)
         if (opt.blocked) { flash(opt.message || 'El optimizador no pudo secuenciar la ruta.', 6000); return null }
         const review = await runReview(routePlanId)
-        if (!review.failed) {
-          setReviewResult(review)
-          if (review.state === 'blocked') { flash('La ruta tiene bloqueos; corrígelos antes de publicar.', 6000); return null }
-          if (review.state === 'warning' && !confirmWarnings) { flash('La ruta tiene avisos; revísalos y confirma para publicar.', 6000); return null }
-        } else {
-          setReviewResult(null)
+        if (review.failed) {
+          setReviewResult({ state: 'blocked', blockers: [review.message || 'No se pudo registrar la revisión del plan.'] })
+          flash(review.message || 'No se pudo revisar el plan. No se publicará sin revisión.', 6000)
+          return null
         }
+        setReviewResult(review)
+        if (review.state === 'blocked') { flash('La ruta tiene bloqueos; corrígelos antes de publicar.', 6000); return null }
+        if (review.state === 'warning' && !confirmWarnings) { flash('La ruta tiene avisos; revísalos y confirma para publicar.', 6000); return null }
         return { revision: review.revision || opt.revision, warning: review.state === 'warning' }
       }
 
