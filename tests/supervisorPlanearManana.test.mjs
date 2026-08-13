@@ -500,6 +500,13 @@ test('F5+: interpretReviewResponse mapea el veredicto ready/warning/blocked', ()
   assert.equal(down.failed, true)
 })
 
+test('F5 hotfix: si la revisión falla, el flujo se detiene antes de publicar', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  const handler = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('function toggleDemand'))
+  assert.match(handler, /if \(review\.failed\) \{[\s\S]*?return null/, 'un fallo de review debe cortar el flujo')
+  assert.doesNotMatch(handler, /if \(!review\.failed\)[\s\S]*?else \{\s*setReviewResult\(null\)/, 'review fallido no degrada a publish directo')
+})
+
 test('F5+: interpretPublishResponse — códigos accionables NO son éxito', () => {
   const ok = interpretPublishResponse({ ok: true, status: 'ok', data: { route_plan_id: 5, state: 'published' } })
   assert.equal(ok.ok, true)

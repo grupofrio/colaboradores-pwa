@@ -247,7 +247,8 @@ export function interpretOptimizeResponse(opt = {}) {
 // la respuesta de `route-plan-review`: readiness ready/warning/blocked + bloqueos/
 // avisos/geo/sobrecapacidad + la revisión POST-review (la que publish exigirá).
 // `failed` = el ENDPOINT de review falló (no confundir con readiness 'blocked'):
-// backend viejo/red ⇒ se deja que el publish del servidor gatee la readiness.
+// backend viejo/red ⇒ la UI debe detenerse; publicar sin revisión registrada viola
+// el gate del servidor.
 export function interpretReviewResponse(resp = {}) {
   const isErr = resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error'
   const d = isErr ? {} : (resp?.data || resp || {})
