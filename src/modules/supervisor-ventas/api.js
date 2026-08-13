@@ -289,6 +289,30 @@ export function applyRoutePlanCapacityReload(routePlanId) {
   })
 }
 
+/** Poligonos permitidos para descubrir prospectos. El alcance sale del token. */
+export function getSupervisorProspectScope() {
+  return api('POST', '/pwa-supv/prospects-scope', {})
+}
+
+/** Prospectos de la plaza autorizada. El cliente solo puede escoger filtros
+ * devueltos por el servidor; nunca manda sucursal, compania o unidad. */
+export function getSupervisorProspects({ polygonId = null, demandClass = null } = {}) {
+  return api('POST', '/pwa-supv/prospects-list', {
+    ...(Number(polygonId) > 0 ? { polygon_id: Number(polygonId) } : {}),
+    ...(demandClass ? { demand_class: String(demandClass) } : {}),
+    limit: 100,
+  })
+}
+
+/** Agrega un prospecto a un plan ya elegido. El servidor vuelve a validar plan,
+ * plaza y geometria; el lead no se convierte en cliente desde el navegador. */
+export function addLeadToRoutePlan(routePlanId, leadId) {
+  return api('POST', '/pwa-supv/route-plan-add-lead', {
+    route_plan_id: Number(routePlanId || 0),
+    lead_id: Number(leadId || 0),
+  })
+}
+
 /** Publicar plan de ruta. `planRevision` (opcional): la revisión con la que se
  *  optimizó/revisó; el backend la exige cuando el flag de publicación optimizada
  *  está ON (B5.2). `confirmWarnings`: cuando la revisión dejó AVISOS (readiness

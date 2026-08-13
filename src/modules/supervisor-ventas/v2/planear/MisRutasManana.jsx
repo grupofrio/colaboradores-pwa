@@ -21,6 +21,7 @@ export default function MisRutasManana() {
         initialPolygonId={Number(params.get('poly') || 0) || 0}
         initialSubpolygonId={Number(params.get('sub') || 0) || 0}
         initialSegmentId={Number(params.get('seg') || 0) || 0}
+        initialLeadId={Number(params.get('lead') || 0) || 0}
         onExit={() => setParams({}, { replace: true })}
       />
     )

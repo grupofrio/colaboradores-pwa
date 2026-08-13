@@ -11,12 +11,14 @@ import { fileURLToPath } from 'node:url'
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
 const SHELL = () => src('modules/supervisor-ventas/v2/SupervisorV2Shell.jsx')
 const REGISTRY = () => src('modules/registry.js')
+const APP = () => src('App.jsx')
+const PROSPECTS = () => src('modules/supervisor-ventas/v2/tabs/ProspectosTab.jsx')
 
-// ── Shell: las 6 pestañas SIEMPRE se pintan, sin barra inferior fija ─────────
+// ── Shell: las 7 pestañas SIEMPRE se pintan, sin barra inferior fija ─────────
 
-test('las 6 superficies siguen declaradas en V2_TABS', () => {
+test('las 7 superficies siguen declaradas en V2_TABS', () => {
   const s = SHELL()
-  for (const key of ['hoy', 'radar', 'rutas', 'clientes', 'pendientes', 'mas']) {
+  for (const key of ['hoy', 'radar', 'rutas', 'clientes', 'prospectos', 'pendientes', 'mas']) {
     assert.ok(s.includes(`key: '${key}'`), `falta la pestaña ${key}`)
   }
 })
@@ -44,6 +46,34 @@ test('touch targets ≥44px y accesibilidad conservada', () => {
   assert.match(s, /role="tablist"/)
   assert.match(s, /aria-current=/)
   assert.match(s, /role="tab"/)
+})
+
+test('Prospectos es una superficie V2 token-scoped y no muestra datos de contacto o GPS', () => {
+  const app = APP()
+  const tab = PROSPECTS()
+  const api = src('modules/supervisor-ventas/api.js')
+  const shim = src('lib/api.js')
+  const prospectApi = api.slice(api.indexOf('export function getSupervisorProspectScope'), api.indexOf('export function publishRoutePlan'))
+  assert.match(app, /path="\/equipo\/prospectos"[\s\S]*SupervisorV2Gate active="prospectos" v2Only/)
+  assert.match(tab, /getSupervisorProspectScope/)
+  assert.match(tab, /getSupervisorProspects/)
+  assert.doesNotMatch(tab, /prospect\.phone|prospect\.lat|prospect\.lng/)
+  assert.match(api, /\/pwa-supv\/prospects-scope/)
+  assert.match(api, /\/pwa-supv\/prospects-list/)
+  assert.match(api, /\/pwa-supv\/route-plan-add-lead/)
+  assert.match(shim, /\/gf\/salesops\/supervisor\/v2\/prospects\/scope/)
+  assert.match(shim, /\/gf\/salesops\/supervisor\/v2\/prospects\/list/)
+  assert.match(shim, /\/gf\/salesops\/supervisor\/v2\/route_plan\/add_lead/)
+  assert.doesNotMatch(prospectApi, /company_id|companyId|branch_config_id/)
+})
+
+test('un prospecto se agrega solo después de elegir un plan de ruta', () => {
+  const planner = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  const entry = src('modules/supervisor-ventas/v2/planear/MisRutasManana.jsx')
+  assert.match(entry, /initialLeadId=\{Number\(params\.get\('lead'\)/)
+  assert.match(planner, /if \(pendingLeadId\) await handleAddLead\(planId, pendingLeadId, route\)/)
+  assert.match(planner, /addLeadToRoutePlan\(planId, leadId\)/)
+  assert.match(planner, /planear-prospecto-pendiente/)
 })
 
 // ── Registry: "Mis rutas de mañana" entre KPIs (30) y Encuestas (40) ─────────

@@ -29,6 +29,7 @@ import {
   ensureDailyRoutePlan,
   previewRoutePlanCustomers,
   addCustomerToRoutePlan,
+  addLeadToRoutePlan,
   removeCustomerFromRoutePlan,
   optimizeRoutePlan,
   reviewRoutePlan,
@@ -354,7 +355,7 @@ function CustomerRow({ customer, onRemove, canEdit, removing }) {
 
 // ── Contenedor ───────────────────────────────────────────────────────────────
 
-export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId = 0, initialSubpolygonId = 0, initialSegmentId = 0, onExit = null }) {
+export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId = 0, initialSubpolygonId = 0, initialSegmentId = 0, initialLeadId = 0, onExit = null }) {
   const navigate = useNavigate()
   const dateTarget = getTomorrowDateString()
   // Se entró desde una fila de SEGMENTO operativo (sin zona geográfica heredada):
@@ -407,6 +408,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const [assignReadiness, setAssignReadiness] = useState(null)  // readiness del backend (incluye sobrecapacidad)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
+  const [pendingLeadId, setPendingLeadId] = useState(Number(initialLeadId) || 0)
   const [msg, setMsg] = useState(null)
 
   const msgTimer = useRef(null)
@@ -643,6 +645,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       if (planId) {
         await loadPlanCustomers(planId)
         await refreshReadinessFromServer(planId)
+        if (pendingLeadId) await handleAddLead(planId, pendingLeadId, route)
       }
     } catch (e) {
       logScreenError('PlanearManana', 'ensureDailyRoutePlan', e)
@@ -769,6 +772,32 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     // POST-review. Si el endpoint no está disponible, `failed`=true y el flujo
     // deja que el gate server-side del publish decida.
     return interpretReviewResponse(await reviewRoutePlan(planId))
+  }
+
+  async function handleAddLead(planId, leadId, route) {
+    if (!planId || !leadId) return false
+    if (!canEditRoutePlanCustomers(route || {})) {
+      flash('Este plan no permite agregar prospectos', 4000)
+      return false
+    }
+    invalidateResourceReadiness()
+    setSnapshotResult(null)
+    setOptimizeResult(null)
+    setReviewResult(null)
+    setRowBusy(`lead-${leadId}`)
+    try {
+      const res = await addLeadToRoutePlan(planId, leadId)
+      if (res?.ok === false || String(res?.status || '').toLowerCase() === 'error' || String(res?.data?.status || '').toLowerCase() === 'error') throw res
+      setPendingLeadId(0)
+      await loadPlanCustomers(planId)
+      await refreshReadinessFromServer(planId)
+      flash('Prospecto agregado al plan. Genera el snapshot y optimiza de nuevo.', 6000)
+      return true
+    } catch (e) {
+      logScreenError('PlanearManana', 'addLeadToRoutePlan', e)
+      flash(getSupervisorRouteErrorMessage(e), 5000)
+      return false
+    } finally { setRowBusy(null) }
   }
 
   async function handleCapacityReload() {
@@ -957,6 +986,11 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
           <div data-testid="planear-fecha" style={{ fontSize: 12.5, color: C.textMuted, marginTop: 2, textTransform: 'capitalize' }}>{dateHuman(dateTarget)}</div>
         </div>
       </div>
+      {pendingLeadId && view !== 'detail' && (
+        <div role="status" data-testid="planear-prospecto-pendiente" style={{ marginTop: 10, padding: '9px 11px', borderRadius: R.md, background: C.bluePale, color: C.text, fontSize: 13, fontWeight: 700 }}>
+          Elige la ruta a la que agregarás el prospecto seleccionado.
+        </div>
+      )}
     </div>
   )
 
