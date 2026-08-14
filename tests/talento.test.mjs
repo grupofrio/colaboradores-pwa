@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readTalentRhAccess } from '../src/modules/talento/access.js'
-import { mapTalentError, TALENT_ERROR_MESSAGES, TALENT_SECTION_ENDPOINTS, classifyTalentStatus } from '../src/modules/talento/talentoApi.js'
+import { mapTalentError, TALENT_ERROR_MESSAGES, TALENT_SECTION_ENDPOINTS, classifyTalentStatus, mergeCapacitacionAndMe } from '../src/modules/talento/talentoApi.js'
 import { getModuleById } from '../src/modules/registry.js'
 import { isModuleVisibleForSession } from '../src/lib/navModel.js'
 
@@ -64,4 +64,16 @@ test('frontend job_key no es autorización: access.js es UX', () => {
   const session = { employee_id: 9, session_token: 't', role: 'direccion_general' }
   assert.equal(readTalentRhAccess(session).reason, 'job_key')
   assert.ok(readTalentRhAccess(session).level === 'global')
+})
+
+test('mergeCapacitacionAndMe no deja que cap tape /me', () => {
+  const cap = { status: 'fulfilled', value: { academy: 'on', passport: { pendientes: [] } } }
+  const me = {
+    status: 'fulfilled',
+    value: { operating: { released_to_operate: true }, induction: [{ id: 1, name: 'Kit' }] },
+  }
+  const merged = mergeCapacitacionAndMe(cap, me)
+  assert.equal(merged.data.operating.released_to_operate, true)
+  assert.equal(merged.data.induction[0].name, 'Kit')
+  assert.equal(merged.data.academy, 'on')
 })

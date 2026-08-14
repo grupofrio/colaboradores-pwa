@@ -54,6 +54,61 @@ export function classifyTalentStatus(err) {
   return 'error'
 }
 
+export function isTalentAuthError(err) {
+  const code = err?.code
+  return code === 'no_session' || code === 'invalid_employee_token'
+}
+
+/**
+ * Combina /api/colaborador/capacitacion y /pwa-talento/me.
+ * Generales desde /me; pasaporte desde capacitación. Una respuesta
+ * parcial no tapa datos válidos de la otra.
+ */
+export function mergeCapacitacionAndMe(capRes, meRes) {
+  const cap = capRes.status === 'fulfilled' ? capRes.value : null
+  const me = meRes.status === 'fulfilled' ? meRes.value : null
+  const capErr = capRes.status === 'rejected' ? capRes.reason : null
+  const meErr = meRes.status === 'rejected' ? meRes.reason : null
+
+  if (!cap && !me) {
+    const authBoth = isTalentAuthError(capErr) && isTalentAuthError(meErr)
+    const err = capErr || meErr || { code: 'network' }
+    return {
+      status: authBoth ? 'expired' : classifyTalentStatus(err),
+      message: err?.message || mapTalentError(err?.code),
+      data: null,
+      degraded: { me: true, capacitacion: true },
+      errors: { me: meErr, capacitacion: capErr },
+    }
+  }
+
+  const data = { ...(me || {}) }
+  if (cap) {
+    data.academy = cap.academy
+    data.passport = cap.passport
+  } else {
+    data.passport = null
+  }
+  if (!me) {
+    delete data.operating
+    delete data.induction
+    delete data.labor_state
+    delete data.first_day_state
+    delete data.payroll
+  }
+
+  return {
+    status: 'ready',
+    message: '',
+    data,
+    degraded: { me: !me, capacitacion: !cap },
+    errors: {
+      me: meErr ? (meErr.message || mapTalentError(meErr.code)) : null,
+      capacitacion: capErr ? (capErr.message || mapTalentError(capErr.code)) : null,
+    },
+  }
+}
+
 export async function talentFetch(path) {
   const token = employeeToken()
   const res = await fetch(`${ODOO_BASE}${path}`, {

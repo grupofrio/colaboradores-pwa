@@ -1,7 +1,7 @@
 export function TalentState({ status, message, onRetry }) {
   const label = {
     loading: 'Cargando…',
-    empty: 'No hay nada pendiente.',
+    empty: message || 'No hay nada pendiente.',
     error: message || 'No se pudo cargar.',
     unauthorized: 'No tienes acceso.',
     expired: 'Tu sesión venció. Entra de nuevo.',
