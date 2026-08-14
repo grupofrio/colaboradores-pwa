@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { todayLocal } from '../../lib/api'
 import { getAlerts, getKpiSummary } from './api'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -45,6 +46,18 @@ export default function ScreenGerente() {
 
   const alertCount = alerts.length
   const sucursal = session?.sucursal || session?.branch_name || ''
+
+  // null ≠ 0: sin dato se pinta «—», un cero medido se pinta 0.
+  const fmtKpi = (v) => (v === null || v === undefined
+    ? '—'
+    : Number(v).toLocaleString('es-MX', { maximumFractionDigits: 0 }))
+
+  const kpiIsToday = Boolean(kpi?.date_kpi) && kpi.date_kpi === todayLocal()
+  const kpiDateLabel = kpi?.date_kpi
+    ? (kpiIsToday
+        ? 'HOY'
+        : `AL ${new Date(kpi.date_kpi + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long' }).toUpperCase()}`)
+    : 'SIN DATO'
 
   const ACTIONS = [
     { id: 'dashboard', label: 'Dashboard', desc: 'Indicadores generales', route: '/gerente/dashboard',
@@ -109,19 +122,32 @@ export default function ScreenGerente() {
               </div>
             )}
 
-            {/* KPI Summary Card */}
+            {/* KPI Summary Card
+                El dato es el ÚLTIMO snapshot de gf.saleops.kpi.snapshot del mes
+                en curso, no forzosamente el de hoy: por eso la tarjeta se rotula
+                con la fecha real del snapshot en vez de decir "Venta Hoy". */}
             {kpi && (
               <div style={{
                 marginTop: 4, padding: 16, borderRadius: TOKENS.radius.xl,
                 background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
                 boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
               }}>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 12 }}>RESUMEN DEL DIA</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  <StatMini label="Venta Hoy" value={kpi.sales_today ?? '-'} color={TOKENS.colors.blue2} />
-                  <StatMini label="Forecast" value={kpi.forecast ?? '-'} color={TOKENS.colors.warning} />
-                  <StatMini label="Disponible" value={kpi.available ?? '-'} color={TOKENS.colors.success} />
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+                  <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>RESUMEN DE VENTAS</p>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: kpiIsToday ? TOKENS.colors.success : TOKENS.colors.warning }}>
+                    {kpiDateLabel}
+                  </span>
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <StatMini label="Venta" value={fmtKpi(kpi.sales_today)} color={TOKENS.colors.blue2} />
+                  <StatMini label="Forecast" value={fmtKpi(kpi.forecast)} color={TOKENS.colors.warning} />
+                  <StatMini label="Disponible" value={fmtKpi(kpi.available)} color={TOKENS.colors.success} />
+                </div>
+                {!kpi.has_data && (
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '10px 0 0' }}>
+                    Sin snapshot de KPIs para este mes. «—» significa sin dato, no cero.
+                  </p>
+                )}
               </div>
             )}
 

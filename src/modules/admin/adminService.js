@@ -14,6 +14,7 @@ import {
   createRequisition as apiCreateRequisition,
   createCashClosing as apiCreateCashClosing,
   getCapabilities as apiGetCapabilities,
+  getRequisitions,
 } from './api'
 import {
   buildSessionIdentity,
@@ -244,25 +245,41 @@ export async function getDashboardData({ warehouseId, companyId }) {
     ? { companyId, warehouseId }
     : {}
 
-  const [salesRaw, expensesRaw] = await Promise.all([
-    getTodaySales(salesArgs).catch(() => []),
-    getTodayExpenses(expensesArgs).catch(() => []),
+  // `available: false` significa "no hay fuente cableada", NO "cero".
+  // Antes liquidaciones/requisiciones/materiaPrima/alertas venían con count: 0
+  // fijo y el hub los pintaba como ceros medidos. Y "Caja del día" era un alias
+  // literal de ventas del día (mismo count, mismo total), lo que hacía pasar la
+  // venta mostrador por saldo de caja.
+  const [salesRaw, expensesRaw, requisitionsRaw] = await Promise.all([
+    getTodaySales(salesArgs).catch(() => null),
+    getTodayExpenses(expensesArgs).catch(() => null),
+    getRequisitions({ companyId, limit: 1 }).catch(() => null),
   ])
 
   // Safety-net: aún aplicamos filterByCompany por si el endpoint es legacy.
   // toList extrae el array real: today-sales devuelve { data: { items/orders } }
   // (objeto, no array), por lo que unwrap por sí solo dejaba las tarjetas en $0.
-  const sales = filterByCompany(toList(salesRaw), companyId)
-  const expenses = filterByCompany(toList(expensesRaw), companyId)
+  const sales = salesRaw === null ? [] : filterByCompany(toList(salesRaw), companyId)
+  const expenses = expensesRaw === null ? [] : filterByCompany(toList(expensesRaw), companyId)
+
+  const requisitionCount = (() => {
+    if (requisitionsRaw === null) return null
+    const d = unwrap(requisitionsRaw)
+    const total = d?.total_count ?? d?.count
+    if (Number.isFinite(Number(total))) return Number(total)
+    return toList(requisitionsRaw).length
+  })()
 
   const kpis = {
-    ventasHoy: { count: sales.length, total: sumAmount(sales, 'amount_total') },
-    gastosHoy: { count: expenses.length, total: sumAmount(expenses, 'total_amount') },
-    caja:      { count: sales.length, total: sumAmount(sales, 'amount_total') },
-    liquidaciones:  { count: 0, total: 0, pendingBackend: !BACKEND_CAPS.liquidaciones },
-    requisiciones:  { count: 0, total: 0, pendingBackend: false },
-    materiaPrima:   { count: 0, total: 0, pendingBackend: !BACKEND_CAPS.materiaPrima },
-    alertas:        { count: 0 },
+    ventasHoy: { available: salesRaw !== null, count: sales.length, total: sumAmount(sales, 'amount_total') },
+    gastosHoy: { available: expensesRaw !== null, count: expenses.length, total: sumAmount(expenses, 'total_amount') },
+    // Caja real = corte de turno (gf.pos.cash.shift), no la suma de ventas.
+    // Hasta cablearlo se declara sin dato en lugar de mentir con ventas.
+    caja:           { available: false, count: null, total: null, reason: 'no_cash_shift_source' },
+    liquidaciones:  { available: false, count: null, total: null, reason: BACKEND_CAPS.liquidaciones ? 'not_wired' : 'backend_capability_off' },
+    requisiciones:  { available: requisitionCount !== null, count: requisitionCount, total: null },
+    materiaPrima:   { available: false, count: null, total: null, reason: BACKEND_CAPS.materiaPrima ? 'not_wired' : 'backend_capability_off' },
+    alertas:        { available: false, count: null, reason: 'no_source' },
   }
 
   return { sales, expenses, kpis }

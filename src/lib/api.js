@@ -1194,7 +1194,11 @@ async function directProfile(method, path, body) {
   return NO_DIRECT
 }
 
-async function directGerente(method, path) {
+// `body` SÍ es un parámetro: `routeDirect` invoca todos los handlers como
+// handler(method, path, body). La firma anterior lo omitía, así que la rama de
+// forecast-unlock leía una variable libre y reventaba con
+// "ReferenceError: body is not defined" antes de tocar Odoo.
+async function directGerente(method, path, body) {
   if (path === '/pwa-gerente/alerts' && method === 'GET') {
     const companyId = getCompanyId()
     const [start, end] = todayRange()
@@ -1234,13 +1238,29 @@ async function directGerente(method, path) {
       sudo: 1,
     })
     const row = pickFirstResponse(result)
+    // Sin snapshot NO es "cero ventas": es "no hay dato". Devolver 0 pintaba
+    // un cero rotundo en el hub que la gerente leía como venta real.
     if (!row) {
-      return { sales_today: 0, forecast: 0, available: 0 }
+      return {
+        has_data: false,
+        sales_today: null,
+        forecast: null,
+        available: null,
+        date_kpi: null,
+        sucursal: '',
+      }
     }
+    // `date_kpi` es el día del ÚLTIMO snapshot del mes, no necesariamente hoy.
+    // Se devuelve siempre para que la UI pueda rotular el dato con su fecha.
+    const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v))
+    const parts = [row.pt_available_qty, row.en_available_qty, row.vans_available_qty].map(num)
     return {
-      sales_today: Number(row.sales_qty || 0),
-      forecast: Number(row.forecast_qty || 0),
-      available: Number(row.pt_available_qty || 0) + Number(row.en_available_qty || 0) + Number(row.vans_available_qty || 0),
+      has_data: true,
+      sales_today: num(row.sales_qty),
+      forecast: num(row.forecast_qty),
+      available: parts.every((p) => p === null)
+        ? null
+        : parts.reduce((sum, p) => sum + (p || 0), 0),
       date_kpi: row.date_kpi || null,
       sucursal: row.analytic_account_id?.[1] || row.company_id?.[1] || '',
     }
@@ -1251,13 +1271,18 @@ async function directGerente(method, path) {
     const domain = [['state', '=', 'confirmed']]
     if (companyId) domain.push(['company_id', '=', companyId])
     const result = await readModelSorted('gf.saleops.forecast', {
-      fields: ['id', 'name', 'analytic_account_id', 'company_id', 'date_target', 'state', 'created_by_employee_id', 'confirmed_by_employee_id', 'confirmed_at'],
+      fields: ['id', 'name', 'analytic_account_id', 'company_id', 'date_target', 'state', 'created_by_employee_id', 'confirmed_by_employee_id', 'confirmed_at', 'line_ids'],
       domain,
       sort_column: 'date_target',
       sort_desc: true,
       limit: 50,
       sudo: 1,
     })
+    // Además de los many2one crudos se exponen las claves planas que la
+    // pantalla consume (`sucursal`, `line_count`, `created_by`, …). Antes la
+    // pantalla leía nombres que este handler nunca devolvió y por eso tres de
+    // las cuatro columnas del detalle pintaban "-" siempre.
+    const m2oName = (v) => (Array.isArray(v) ? v[1] || '' : '')
     return pickListResponse(result).map((row) => ({
       id: row.id,
       name: row.name,
@@ -1268,21 +1293,32 @@ async function directGerente(method, path) {
       created_by_employee_id: row.created_by_employee_id,
       confirmed_by_employee_id: row.confirmed_by_employee_id,
       confirmed_at: row.confirmed_at,
+      // Claves planas para la UI
+      sucursal: m2oName(row.analytic_account_id) || m2oName(row.company_id),
+      empresa: m2oName(row.company_id),
+      created_by: m2oName(row.created_by_employee_id),
+      confirmed_by: m2oName(row.confirmed_by_employee_id),
+      line_count: Array.isArray(row.line_ids) ? row.line_ids.length : null,
     }))
   }
 
   if (path === '/pwa-gerente/forecast-unlock' && method === 'POST') {
+    // El desbloqueo REAL vive en el bloque 5: endpoint server-side que deriva la
+    // sucursal del token y valida que el forecast sea de ESA sucursal.
+    // Lo que había aquí era un `action_reset_to_draft` con sudo desde el
+    // cliente, sin ninguna comprobación de alcance — y además muerto, porque
+    // leía `body` sin tenerlo en la firma (ReferenceError antes de llegar a
+    // Odoo). No se "arregla" el ReferenceError para no encender una escritura
+    // sin alcance: se responde de forma explícita hasta que exista el endpoint.
     const forecastId = Number(body?.forecast_id || 0)
-    if (!forecastId) return { success: false, error: 'forecast_id requerido' }
-    const result = await createUpdate({
-      model: 'gf.saleops.forecast',
-      method: 'function',
-      ids: [forecastId],
-      function: 'action_reset_to_draft',
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-    return { success: true, data: result }
+    if (!forecastId) {
+      return { success: false, code: 'forecast_id_required', message: 'forecast_id requerido' }
+    }
+    return {
+      success: false,
+      code: 'forecast_unlock_unavailable',
+      message: 'El desbloqueo de forecast no está disponible: falta el endpoint con alcance de sucursal.',
+    }
   }
 
   return NO_DIRECT

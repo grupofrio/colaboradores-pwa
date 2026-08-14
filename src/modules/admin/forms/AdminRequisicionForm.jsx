@@ -86,10 +86,6 @@ function HistorialTab({ companyId }) {
   const [filterTo, setFilterTo]       = useState('')
 
   const [detailId, setDetailId]   = useState(null)
-  const [rejectId, setRejectId]   = useState(null)
-  const [rejectReason, setRejectReason] = useState('')
-  const [actionLoading, setActionLoading] = useState(false)
-  const [actionMsg, setActionMsg] = useState('')
 
   const load = useCallback(async (pg = 0) => {
     if (!companyId) return
@@ -121,38 +117,6 @@ function HistorialTab({ companyId }) {
 
   useEffect(() => { load(0) }, [load])
 
-  async function handleApprove(id) {
-    setActionLoading(true)
-    setActionMsg('')
-    try {
-      await approveRequisition(id)
-      setActionMsg('✓ Requisición aprobada')
-      load(page)
-    } catch (e) {
-      setActionMsg(e?.message || 'Error al aprobar')
-    } finally {
-      setActionLoading(false)
-      setTimeout(() => setActionMsg(''), 3000)
-    }
-  }
-
-  async function handleReject() {
-    if (!rejectId || !rejectReason.trim()) return
-    setActionLoading(true)
-    setActionMsg('')
-    try {
-      await rejectRequisition(rejectId, rejectReason.trim())
-      setActionMsg('Requisición rechazada')
-      setRejectId(null)
-      setRejectReason('')
-      load(page)
-    } catch (e) {
-      setActionMsg(e?.message || 'Error al rechazar')
-    } finally {
-      setActionLoading(false)
-      setTimeout(() => setActionMsg(''), 3000)
-    }
-  }
 
   const inputStyle = {
     padding: '8px 12px', borderRadius: TOKENS.radius.md,
@@ -199,72 +163,6 @@ function HistorialTab({ companyId }) {
         </button>
       </div>
 
-      {actionMsg && (
-        <div style={{
-          padding: '8px 12px', borderRadius: TOKENS.radius.sm, marginBottom: 10,
-          background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}40`,
-          fontSize: 12, fontWeight: 600, color: TOKENS.colors.success,
-        }}>
-          {actionMsg}
-        </div>
-      )}
-
-      {/* Modal rechazo */}
-      {rejectId && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 800,
-          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <div style={{
-            background: TOKENS.colors.surface, borderRadius: TOKENS.radius.xl,
-            border: `1px solid ${TOKENS.colors.border}`,
-            padding: 24, width: 360, maxWidth: '90vw',
-          }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: TOKENS.colors.text, marginTop: 0 }}>
-              Rechazar requisición
-            </p>
-            <textarea
-              rows={3}
-              value={rejectReason}
-              onChange={e => setRejectReason(e.target.value)}
-              placeholder="Motivo del rechazo (obligatorio)…"
-              style={{
-                ...inputStyle, width: '100%', resize: 'vertical', marginBottom: 14,
-                fontSize: 13,
-              }}
-            />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={handleReject}
-                disabled={!rejectReason.trim() || actionLoading}
-                style={{
-                  flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
-                  background: TOKENS.colors.error, color: 'white',
-                  fontSize: 13, fontWeight: 700,
-                  opacity: !rejectReason.trim() || actionLoading ? 0.5 : 1,
-                  cursor: !rejectReason.trim() || actionLoading ? 'not-allowed' : 'pointer',
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
-                {actionLoading ? 'Rechazando…' : 'Confirmar rechazo'}
-              </button>
-              <button
-                onClick={() => { setRejectId(null); setRejectReason('') }}
-                style={{
-                  padding: '10px 16px', borderRadius: TOKENS.radius.md,
-                  background: TOKENS.colors.surfaceSoft,
-                  border: `1px solid ${TOKENS.colors.border}`,
-                  color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 600,
-                  cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 30 }}>
@@ -358,40 +256,6 @@ function HistorialTab({ companyId }) {
                         ...req,
                         can_receive: req.can_receive_ui ?? req.can_receive,
                       })}
-                    </button>
-                  </div>
-                )}
-
-                {/* Acciones de aprobación — solo para gerente/director y cuando está pending */}
-                {false && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    <button
-                      onClick={() => handleApprove(req.purchase_order_id ?? req.id)}
-                      disabled={actionLoading}
-                      style={{
-                        flex: 1, padding: '7px 0', borderRadius: TOKENS.radius.md,
-                        background: `${TOKENS.colors.success}18`,
-                        border: `1px solid ${TOKENS.colors.success}40`,
-                        color: TOKENS.colors.success, fontSize: 12, fontWeight: 700,
-                        cursor: actionLoading ? 'wait' : 'pointer',
-                        fontFamily: "'DM Sans', sans-serif",
-                      }}
-                    >
-                      ✓ Aprobar
-                    </button>
-                    <button
-                      onClick={() => setRejectId(req.purchase_order_id ?? req.id)}
-                      disabled={actionLoading}
-                      style={{
-                        flex: 1, padding: '7px 0', borderRadius: TOKENS.radius.md,
-                        background: `${TOKENS.colors.error}18`,
-                        border: `1px solid ${TOKENS.colors.error}40`,
-                        color: TOKENS.colors.error, fontSize: 12, fontWeight: 700,
-                        cursor: actionLoading ? 'wait' : 'pointer',
-                        fontFamily: "'DM Sans', sans-serif",
-                      }}
-                    >
-                      ✕ Rechazar
                     </button>
                   </div>
                 )}

@@ -5,6 +5,17 @@ import { TOKENS, getTypo, getCompaniesForSucursal } from '../../tokens'
 import { createExpense, getTodayExpenses } from '../admin/api'
 import { todayLocal } from '../../lib/api'
 
+// `today-expenses` responde el envelope { ok, data: [...] } (o
+// { data: { items: [...] } }). `Array.isArray(envelope)` es SIEMPRE falso, así
+// que la lista quedaba vacía aunque hubiera gastos. Y el catch silencioso hacía
+// que un 401 se viera idéntico a "sin gastos hoy".
+function unwrapExpenses(res) {
+  const d = res && typeof res === 'object' && 'data' in res ? res.data : res
+  if (Array.isArray(d)) return d
+  if (d && typeof d === 'object' && Array.isArray(d.items)) return d.items
+  return []
+}
+
 export default function GastosScreenBase({
   title = 'Gastos',
   backRoute = '/admin',
@@ -19,6 +30,7 @@ export default function GastosScreenBase({
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [listError, setListError] = useState('')
   const [success, setSuccess] = useState('')
 
   const companies = useMemo(() => getCompaniesForSucursal(session?.sucursal), [session?.sucursal])
@@ -40,11 +52,13 @@ export default function GastosScreenBase({
 
   async function loadExpenses() {
     setLoading(true)
+    setListError('')
     try {
       const data = await getTodayExpenses()
-      setExpenses(Array.isArray(data) ? data : [])
-    } catch {
-      // silent
+      setExpenses(unwrapExpenses(data))
+    } catch (e) {
+      setExpenses([])
+      setListError(e?.message || 'No se pudieron cargar los gastos de hoy.')
     } finally {
       setLoading(false)
     }
@@ -207,6 +221,16 @@ export default function GastosScreenBase({
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 30 }}>
             <div style={{ width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          </div>
+        ) : listError ? (
+          <div style={{
+            padding: '24px 20px', borderRadius: TOKENS.radius.lg, textAlign: 'center',
+            background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
+          }}>
+            <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0 }}>{listError}</p>
+            <button onClick={loadExpenses} style={{ ...typo.caption, color: TOKENS.colors.textSoft, marginTop: 8, textDecoration: 'underline' }}>
+              Reintentar
+            </button>
           </div>
         ) : expenses.length === 0 ? (
           <div style={{

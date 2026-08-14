@@ -42,7 +42,13 @@ export default function ScreenForecastUnlock() {
     setUnlocking(id)
     setError('')
     try {
-      await unlockForecast(id)
+      // El endpoint devuelve un envelope: `success:false` NO lanza. Sin este
+      // chequeo un desbloqueo rechazado se veía igual que uno exitoso.
+      const res = await unlockForecast(id)
+      if (res && res.success === false) {
+        setError(res.message || 'No se pudo desbloquear el forecast.')
+        return
+      }
       await loadData()
     } catch (e) {
       const msg = logScreenError('ScreenForecastUnlock', 'unlockForecast', e)
@@ -138,9 +144,17 @@ export default function ScreenForecastUnlock() {
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 12 }}>
                         <DetailRow label="Fecha objetivo" value={fc.date_target ? new Date(fc.date_target).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'} typo={typo} />
-                        <DetailRow label="Sucursal" value={fc.sucursal || '-'} typo={typo} />
-                        <DetailRow label="Lineas" value={fc.line_count ?? '-'} typo={typo} />
-                        <DetailRow label="Creado por" value={fc.created_by || '-'} typo={typo} />
+                        <DetailRow label="Sucursal" value={fc.sucursal || fc.analytic_account_id?.[1] || fc.company_id?.[1] || '—'} typo={typo} />
+                        <DetailRow label="Lineas" value={fc.line_count ?? '—'} typo={typo} />
+                        <DetailRow label="Creado por" value={fc.created_by || fc.created_by_employee_id?.[1] || '—'} typo={typo} />
+                        <DetailRow label="Confirmado por" value={fc.confirmed_by || fc.confirmed_by_employee_id?.[1] || '—'} typo={typo} />
+                        <DetailRow
+                          label="Confirmado el"
+                          value={fc.confirmed_at
+                            ? new Date(String(fc.confirmed_at).replace(' ', 'T') + 'Z').toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })
+                            : '—'}
+                          typo={typo}
+                        />
                       </div>
 
                       {!isUnlocked && (

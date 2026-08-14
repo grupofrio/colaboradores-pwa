@@ -43,15 +43,51 @@ export default function HubV2() {
     return () => { alive = false; clearInterval(id) }
   }, [warehouseId, companyId])
 
+  // Una tarjeta solo se pinta si su KPI tiene fuente cableada (`available`).
+  // Las que no la tienen se muestran explícitamente como «sin dato» — nunca
+  // como 0 — para que un cero en pantalla siempre signifique un cero medido.
   const kpis = useMemo(() => {
     const k = data?.kpis || {}
+    const money = (kpi) => (kpi?.available ? fmt(kpi.total) : '—')
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+
     return [
-      { id: 'caja',      label: 'Caja del día',     value: fmt(k.caja?.total),          sub: `${k.caja?.count || 0} ventas`,    tone: TOKENS.colors.success },
-      { id: 'ventas',    label: 'Venta mostrador',  value: fmt(k.ventasHoy?.total),     sub: `${k.ventasHoy?.count || 0} tickets`, tone: TOKENS.colors.blue3 },
-      { id: 'gastos',    label: 'Gastos',           value: fmt(k.gastosHoy?.total),     sub: `${k.gastosHoy?.count || 0} registros`, tone: TOKENS.colors.warning },
-      { id: 'liquid',    label: 'Liquidaciones',    value: k.liquidaciones?.pendingBackend ? '—' : fmt(k.liquidaciones?.total), sub: k.liquidaciones?.pendingBackend ? 'pendiente backend' : `${k.liquidaciones?.count || 0}`, tone: TOKENS.colors.textMuted, pending: k.liquidaciones?.pendingBackend },
-      { id: 'req',       label: 'Requisiciones',    value: `${k.requisiciones?.count || 0}`, sub: 'activas',                    tone: TOKENS.colors.blue2 },
-      { id: 'alertas',   label: 'Alertas',          value: `${k.alertas?.count || 0}`,  sub: 'sin resolver',                    tone: TOKENS.colors.error },
+      {
+        id: 'ventas', label: 'Venta mostrador', tone: TOKENS.colors.blue3,
+        value: money(k.ventasHoy),
+        sub: k.ventasHoy?.available ? plural(k.ventasHoy.count, 'ticket', 'tickets') : 'sin dato',
+        pending: !k.ventasHoy?.available,
+      },
+      {
+        id: 'gastos', label: 'Gastos', tone: TOKENS.colors.warning,
+        value: money(k.gastosHoy),
+        sub: k.gastosHoy?.available ? plural(k.gastosHoy.count, 'registro', 'registros') : 'sin dato',
+        pending: !k.gastosHoy?.available,
+      },
+      {
+        id: 'req', label: 'Requisiciones', tone: TOKENS.colors.blue2,
+        value: k.requisiciones?.available ? `${k.requisiciones.count}` : '—',
+        sub: k.requisiciones?.available ? 'en el periodo' : 'sin dato',
+        pending: !k.requisiciones?.available,
+      },
+      {
+        id: 'caja', label: 'Caja del día', tone: TOKENS.colors.success,
+        value: money(k.caja),
+        sub: k.caja?.available ? plural(k.caja.count, 'movimiento', 'movimientos') : 'sin cortes cableados',
+        pending: !k.caja?.available,
+      },
+      {
+        id: 'liquid', label: 'Liquidaciones', tone: TOKENS.colors.textMuted,
+        value: money(k.liquidaciones),
+        sub: k.liquidaciones?.available ? plural(k.liquidaciones.count, 'liquidación', 'liquidaciones') : 'sin dato',
+        pending: !k.liquidaciones?.available,
+      },
+      {
+        id: 'alertas', label: 'Alertas', tone: TOKENS.colors.error,
+        value: k.alertas?.available ? `${k.alertas.count}` : '—',
+        sub: k.alertas?.available ? 'sin resolver' : 'sin dato',
+        pending: !k.alertas?.available,
+      },
     ]
   }, [data])
 
@@ -112,16 +148,22 @@ export default function HubV2() {
               fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em',
               color: TOKENS.colors.text, margin: '6px 0 2px',
             }}>
-              {loading ? '—' : k.value}
+              {loading ? '···' : k.value}
             </p>
             <p style={{
               fontSize: 11, color: TOKENS.colors.textMuted, margin: 0,
             }}>
-              {k.sub}
+              {loading ? 'cargando' : k.sub}
             </p>
           </div>
         ))}
       </div>
+
+      {!loading && kpis.some(k => k.pending) && (
+        <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, margin: '-16px 0 24px' }}>
+          «—» = sin fuente de datos cableada. No es un cero.
+        </p>
+      )}
 
       {showAngyBreakdown && (
         <AngyPosProductBreakdown warehouseId={warehouseId} companyId={companyId} />
