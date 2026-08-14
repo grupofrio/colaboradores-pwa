@@ -39,7 +39,11 @@ import {
   isManagerCopilotPath,
   filterManagerCopilotParams,
   buildCopilotChatBody,
+  buildCopilotInvoiceConfirmBody,
+  buildCopilotInvoiceResendBody,
   MANAGER_COPILOT_CHAT,
+  MANAGER_COPILOT_INVOICE_CONFIRM,
+  MANAGER_COPILOT_INVOICE_RESEND,
 } from './managerCopilotRoute.js'
 import {
   isPwaHrNamespace,
@@ -1213,6 +1217,12 @@ async function directManagerCopilot(method, path, body) {
   }
   if (method === 'POST' && cleanPath === MANAGER_COPILOT_CHAT) {
     return odooHttp('POST', cleanPath, {}, buildCopilotChatBody(body || {}))
+  }
+  if (method === 'POST' && cleanPath === MANAGER_COPILOT_INVOICE_CONFIRM) {
+    return odooHttp('POST', cleanPath, {}, buildCopilotInvoiceConfirmBody(body || {}))
+  }
+  if (method === 'POST' && cleanPath === MANAGER_COPILOT_INVOICE_RESEND) {
+    return odooHttp('POST', cleanPath, {}, buildCopilotInvoiceResendBody(body || {}))
   }
   throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
 }

@@ -10,6 +10,8 @@ import {
   MANAGER_COPILOT_CHAT,
   MANAGER_COPILOT_CAPABILITIES,
   MANAGER_COPILOT_HISTORY,
+  MANAGER_COPILOT_INVOICE_CONFIRM,
+  buildCopilotInvoiceConfirmBody,
 } from '../src/lib/managerCopilotRoute.js'
 import { buildMobileNav, getNavModules } from '../src/lib/navModel.js'
 
@@ -52,6 +54,7 @@ test('isManagerCopilotPath allowlist exacta', () => {
   assert.equal(isManagerCopilotPath(MANAGER_COPILOT_CHAT), true)
   assert.equal(isManagerCopilotPath(MANAGER_COPILOT_HISTORY), true)
   assert.equal(isManagerCopilotPath(MANAGER_COPILOT_CAPABILITIES), true)
+  assert.equal(isManagerCopilotPath(MANAGER_COPILOT_INVOICE_CONFIRM), true)
   assert.equal(isManagerCopilotPath('/pwa-gerente/alerts'), false)
   assert.equal(isManagerCopilotPath('/pwa-gerente/copilot/chat/../alerts'), false)
 })
@@ -90,6 +93,20 @@ test('pantalla: sucursal de sesión/backend, chips, retry, sin branch_id', () =>
   assert.doesNotMatch(screenSrc, /branch_id/)
   assert.match(screenSrc, /data\.cards/)
   assert.match(screenSrc, /data\?\.llm/)
+  assert.match(screenSrc, /Confirmar factura/)
+  assert.match(screenSrc, /Descargar PDF/)
+  assert.match(copilotApiSrc, /\/pwa-gerente\/copilot\/invoice\/confirm/)
+})
+
+test('confirmación de factura no lleva branch_id', () => {
+  const body = buildCopilotInvoiceConfirmBody({
+    confirmation_token: 'tok',
+    branch_id: 7,
+    company_id: 9,
+  })
+  assert.equal(body.confirmation_token, 'tok')
+  assert.ok(!('branch_id' in body))
+  assert.ok(!('company_id' in body))
 })
 
 test('handler reconstruye body seguro (no reenvía branch_id del caller)', () => {
