@@ -3,7 +3,9 @@ import { getEffectiveJobKeys } from '../../lib/roleContext.js'
 
 /**
  * UX gate only. Odoo revalida /pwa-talento/rh/*.
- * Dirección entra por job key. Otros RH solo si /me marcó talent_rh.
+ * Dirección entra por job key en frontend; el backend exige grupo de
+ * reclutamiento o (job_key allowlist + pwa_talent_enabled).
+ * CEDIS vacío en Odoo = cero candidatos (fail-closed). No se decide aquí.
  */
 export function readTalentRhAccess(session) {
   if (!isValidAuthenticatedSession(session)) {
