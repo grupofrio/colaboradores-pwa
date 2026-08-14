@@ -76,10 +76,10 @@ test('módulo desconocido: fail-closed a home aunque la sesión sea válida', ()
 })
 
 // ── App.jsx: cableado real de guards (text-scan) ────────────────────────────
-test('ModuleRoleRoute existe y aplica la triple autoridad (sesión→módulo→rol)', () => {
+test('ModuleRoleRoute exige sesión, rol y capability runtime cuando aplica', () => {
   assert.match(appSrc, /function ModuleRoleRoute\(\{ moduleId, children \}\)/)
   assert.match(appSrc, /if \(!isValidAuthenticatedSession\(session\)\) return <Navigate to="\/login" replace \/>/)
-  assert.match(appSrc, /isModuleVisibleForRoles\(module, getEffectiveJobKeys\(session\)\)/)
+  assert.match(appSrc, /isModuleVisibleForSession\(module, session, runtimeCapabilities\)/)
 })
 
 test('cada familia de módulo usa ModuleRoleRoute con su moduleId canónico', () => {

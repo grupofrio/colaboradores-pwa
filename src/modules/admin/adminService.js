@@ -14,11 +14,12 @@ import {
   createRequisition as apiCreateRequisition,
   createCashClosing as apiCreateCashClosing,
   getCapabilities as apiGetCapabilities,
-} from './api'
+} from './api.js'
 import {
   buildSessionIdentity,
   readSessionRaw,
 } from '../supervisor-ventas/v2/sessionScope.js'
+import { normalizeTodayExpensesControllerResponse } from './adminExpenseControllerAdapter.js'
 
 // ── Feature caps del backend ────────────────────────────────────────────────
 // Los defaults están en true porque `gf_pwa_admin` ya expone todos estos
@@ -236,7 +237,9 @@ function toList(res) {
 
 /** Trae los datos del dashboard del día filtrados por razón social.
  *  Usa filtros server-side si BACKEND_CAPS.serverSideCompanyFilter = true. */
-export async function getDashboardData({ warehouseId, companyId }) {
+export async function getDashboardData({ warehouseId, companyId }, services = {}) {
+  const salesService = services.getTodaySales || getTodaySales
+  const expensesService = services.getTodayExpenses || getTodayExpenses
   const salesArgs = BACKEND_CAPS.serverSideCompanyFilter
     ? { warehouseId, companyId }
     : { warehouseId }
@@ -245,15 +248,17 @@ export async function getDashboardData({ warehouseId, companyId }) {
     : {}
 
   const [salesRaw, expensesRaw] = await Promise.all([
-    getTodaySales(salesArgs).catch(() => []),
-    getTodayExpenses(expensesArgs).catch(() => []),
+    salesService(salesArgs).catch(() => []),
+    expensesService(expensesArgs).catch(() => []),
   ])
 
   // Safety-net: aún aplicamos filterByCompany por si el endpoint es legacy.
   // toList extrae el array real: today-sales devuelve { data: { items/orders } }
   // (objeto, no array), por lo que unwrap por sí solo dejaba las tarjetas en $0.
   const sales = filterByCompany(toList(salesRaw), companyId)
-  const expenses = filterByCompany(toList(expensesRaw), companyId)
+  const expenses = filterByCompany(
+    normalizeTodayExpensesControllerResponse(expensesRaw), companyId,
+  )
 
   const kpis = {
     ventasHoy: { count: sales.length, total: sumAmount(sales, 'amount_total') },

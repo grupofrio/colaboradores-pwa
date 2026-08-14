@@ -7,12 +7,13 @@ import { normalizeSessionRoleContext } from './lib/roleContext'
 import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervisor-ventas/v2/sessionScope'
 import { api } from './lib/api'
 import { isBrandLightSession } from './theme/useBrandPalette'
+import { getRuntimeCapabilities } from './modules/admin/api'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
-import { getModuleById, isModuleVisibleForRoles } from './modules/registry'
-import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
-import { isValidAuthenticatedSession } from './lib/session'
+import { getModuleById } from './modules/registry'
 import { isModuleVisibleForSession } from './lib/navModel'
+import { resolveModuleContextRole } from './lib/roleContext'
+import { isValidAuthenticatedSession } from './lib/session'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
@@ -105,6 +106,11 @@ const ScreenGastos          = lazy(() => import('./modules/admin/ScreenGastos'))
 const ScreenGastosHistorial = lazy(() => import('./modules/admin/ScreenGastosHistorial'))
 const ScreenGastosAprobar   = lazy(() => import('./modules/admin/ScreenGastosAprobar'))
 const ScreenRequisiciones   = lazy(() => import('./modules/admin/ScreenRequisiciones'))
+const ScreenOwnRequisiciones = lazy(() => import('./modules/requisiciones/ScreenOwnRequisiciones'))
+const ScreenComprasCSC = lazy(() => import('./modules/compras/ScreenComprasCSC'))
+const ScreenCompraDetail = lazy(() => import('./modules/compras/ScreenCompraDetail'))
+const ScreenMultiCompanyRequisiciones = lazy(() => import('./modules/compras/ScreenMultiCompanyRequisiciones'))
+const ScreenMultiCompanyExpenses = lazy(() => import('./modules/compras/ScreenMultiCompanyExpenses'))
 const ScreenLiquidaciones   = lazy(() => import('./modules/admin/ScreenLiquidaciones'))
 const ScreenMateriaPrima    = lazy(() => import('./modules/admin/ScreenMateriaPrima'))
 const ScreenTraspasoMateriaPrima = lazy(() => import('./modules/admin/ScreenTraspasoMateriaPrima'))
@@ -243,11 +249,11 @@ function PrivateRoute({ children }) {
 // Tower NO usa este guard: conserva su TowerRoute especializado (rol
 // AUTORITATIVO tower_status servido por Odoo, allowlist dura).
 function ModuleRoleRoute({ moduleId, children }) {
-  const { session } = useSession()
+  const { session, runtimeCapabilities } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   const module = getModuleById(moduleId)
   if (!module) return <Navigate to="/" replace />
-  if (!isModuleVisibleForRoles(module, getEffectiveJobKeys(session))) return <Navigate to="/" replace />
+  if (!isModuleVisibleForSession(module, session, runtimeCapabilities)) return <Navigate to="/" replace />
   return children
 }
 
@@ -572,6 +578,17 @@ export default function App() {
   // nonce estable en la inicialización (una sola vez; el efecto de persistencia la
   // guarda ya con el nonce).
   const [session, setSession] = useState(() => withScopeNonce(getStoredSession()))
+  const [runtimeCapabilities, setRuntimeCapabilities] = useState({ ready: false, allowed: [], scopes: [] })
+
+  useEffect(() => {
+    let alive = true
+    setRuntimeCapabilities({ ready: false, allowed: [], scopes: [] })
+    if (!isValidAuthenticatedSession(session)) return () => { alive = false }
+    getRuntimeCapabilities()
+      .then((capabilities) => { if (alive) setRuntimeCapabilities(capabilities) })
+      .catch(() => { if (alive) setRuntimeCapabilities({ ready: false, allowed: [], scopes: [] }) })
+    return () => { alive = false }
+  }, [session])
 
   useEffect(() => {
     if (session) {
@@ -688,7 +705,7 @@ export default function App() {
   }
 
   return (
-    <SessionContext.Provider value={{ session, login, logout, updateSession }}>
+    <SessionContext.Provider value={{ session, runtimeCapabilities, login, logout, updateSession }}>
       <ToastProvider>
       <BrowserRouter>
         <ErrorBoundary>
@@ -710,6 +727,14 @@ export default function App() {
             <Route path="/badges" element={<ModuleRoleRoute moduleId="logros"><ScreenBadges /></ModuleRoleRoute>} />
             <Route path="/profile" element={<PrivateRoute><ScreenProfile /></PrivateRoute>} />
 
+            {/* ── Compras CSC GF — capacidades y alcance del servidor ─────── */}
+            <Route path="/compras-csc" element={<ModuleRoleRoute moduleId="compras_csc"><ScreenComprasCSC /></ModuleRoleRoute>} />
+            <Route path="/compras-csc/requisicion/:poId" element={<ModuleRoleRoute moduleId="compras_csc"><ScreenCompraDetail /></ModuleRoleRoute>} />
+            <Route path="/compras-csc/requisiciones" element={<ModuleRoleRoute moduleId="requisiciones_multiempresa"><ScreenMultiCompanyRequisiciones /></ModuleRoleRoute>} />
+            <Route path="/compras-csc/gastos" element={<ModuleRoleRoute moduleId="gastos_multiempresa"><ScreenMultiCompanyExpenses /></ModuleRoleRoute>} />
+
+            {/* ── Requisiciones propias — Almacenista Entregas ─────────── */}
+            <Route path="/requisiciones" element={<ModuleRoleRoute moduleId="requisiciones_propias"><ScreenOwnRequisiciones /></ModuleRoleRoute>} />
             {/* ── E1-C.4 — KOLD Tower (read-only, gated por tower_status autoritativo; SIN menú) ── */}
             <Route path="/torre" element={<TowerRoute><ScreenKoldTowerE1Mount /></TowerRoute>} />
             {/* ── M1-D — Backlog M1 (read-only, mismo gate; SIN menú, ruta directa) ── */}

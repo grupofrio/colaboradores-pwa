@@ -181,60 +181,68 @@ function navPriorityOf(module) {
 }
 
 // ── Visibilidad SESSION-AWARE (fuente única para tarjeta + nav + clic) ───────
-// Un módulo con accessPolicy declara que su autoridad NO es x_job_key genérico
-// sino un contrato propio (la MISMA función decide tarjeta, nav, Más, rail y
-// clic; el route guard revalida). Se resuelven por ACCESS_POLICY_RESOLVERS.
-// FAIL-CLOSED en tres capas: sesión inválida => nada; política desconocida =>
-// oculto; y el route guard revalida en la entrada.
-//
-// ORDEN de resolución (un módulo tiene accessPolicy O towerGated, nunca ambos):
-//   1. sesión inválida            => deny
-//   2. module.accessPolicy        => resolver del registro; desconocida => deny
-//   3. module.towerGated          => tower_status autoritativo (M1, intacto)
-//   4. resto                      => roles x_job_key
-export function isModuleVisibleForSession(module, session, attendanceManagerIdsRaw) {
+// Un módulo con accessPolicy declara que su autoridad NO es x_job_key genérico.
+// La capacidad runtime viene siempre del backend autenticado y falla cerrada.
+export function hasRuntimeCapability(capabilities, capability) {
+  return Boolean(
+    capabilities?.ready
+    && Array.isArray(capabilities?.allowed)
+    && capabilities.allowed.includes(capability),
+  )
+}
+
+export function isModuleVisibleForSession(module, session, capabilitiesOrAttendance = null) {
   if (!module) return false
   if (module.showInNav === false && module.showOnHome === false) return false
   if (!isValidAuthenticatedSession(session)) return false
+  const capabilities = capabilitiesOrAttendance && typeof capabilitiesOrAttendance === 'object'
+    ? capabilitiesOrAttendance
+    : null
+  const attendanceManagerIdsRaw = capabilities ? undefined : capabilitiesOrAttendance
   if (module.accessPolicy === 'attendance_manager') {
     return readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
   }
+  if (module.runtimeCapability && !hasRuntimeCapability(capabilities, module.runtimeCapability)) return false
   if (module.accessPolicy) return resolveAccessPolicy(module.accessPolicy, session)
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
 }
 
-// Módulos visibles para la sesión en el orden canónico del registry.
-// La AUTORIZACIÓN no reordena ni filtra por superficie: cada superficie aplica
-// después su propia metadata (fix de Sebastián d7c2bb8, conservado).
-export function getVisibleModulesForSession(session = null) {
+export function getVisibleModulesForSession(session = null, capabilities = null) {
   if (!isValidAuthenticatedSession(session)) return []
   const seen = new Set()
   return MODULES
     .filter((module) => {
-      if (seen.has(module.id) || !isModuleVisibleForSession(module, session)) return false
+      if (seen.has(module.id) || !isModuleVisibleForSession(module, session, capabilities)) return false
       seen.add(module.id)
       return true
     })
 }
 
 // Home conserva el orden histórico del registry y respeta su flag de superficie.
-export function getHomeModulesForSession(session = null) {
-  return getVisibleModulesForSession(session).filter((module) => module.showOnHome !== false)
+export function getHomeModulesForSession(session = null, capabilities = null) {
+  return getVisibleModulesForSession(session, capabilities).filter((module) => module.showOnHome !== false)
 }
 
 // Decisión de ENTRADA (clic del home) con la MISMA autoridad que la
 // visibilidad: módulos accessPolicy entran/deniegan por su contrato (navegan
 // directo, sin role-context); el resto delega en la lógica por rol.
 // El route guard (App.jsx) sigue siendo la autoridad final.
-export function getModuleEntryDecisionForSession(module, session, attendanceManagerIdsRaw) {
+export function getModuleEntryDecisionForSession(module, session, capabilitiesOrAttendance = null) {
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
+  const capabilities = capabilitiesOrAttendance && typeof capabilitiesOrAttendance === 'object'
+    ? capabilitiesOrAttendance
+    : null
+  const attendanceManagerIdsRaw = capabilities ? undefined : capabilitiesOrAttendance
   if (module?.accessPolicy === 'attendance_manager') {
     return readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
       ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
       : { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  if (module?.runtimeCapability && !hasRuntimeCapability(capabilities, module.runtimeCapability)) {
+    return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
   // Toda política del registro canónico entra o se deniega por SU contrato,
   // sin role-context. Una política desconocida falla cerrada.
@@ -250,12 +258,8 @@ export function getModuleEntryDecisionForSession(module, session, attendanceMana
 
 // Módulos del registry visibles en navegación para la sesión, ordenados por
 // navPriority asc y, a igualdad, por su orden en el registry.
-// FAIL-CLOSED (BLOCKER 1): sesión inválida (null/{}/token vacío/expirada/
-// corrupta) => []. Sesión válida sin roles especiales => solo universales.
-export function getNavModules(session = null) {
-  // Nav SÍ ordena por navPriority (a diferencia del home, que conserva el orden
-  // del registry). El sort vive aquí, no en la autorización.
-  return getVisibleModulesForSession(session)
+export function getNavModules(session = null, capabilities = null) {
+  return getVisibleModulesForSession(session, capabilities)
     .filter((m) => m.showInNav !== false)
     .map((module, index) => ({ module, index }))
     .sort((a, b) => (navPriorityOf(a.module) - navPriorityOf(b.module)) || (a.index - b.index))
@@ -291,7 +295,7 @@ export function resolveActiveId(items = [], pathname = '') {
 export function buildMobileNav(session = null, pathname = '', options = {}) {
   const maxSlots = Number.isFinite(options.maxSlots) ? options.maxSlots : 5
   const moduleSlots = Math.max(1, maxSlots - 2)
-  const modules = getNavModules(session)
+  const modules = getNavModules(session, options.capabilities)
 
   let primary
   let overflow
@@ -319,8 +323,8 @@ export function buildMobileNav(session = null, pathname = '', options = {}) {
 }
 
 // Navegación DESKTOP/TABLET: rail lateral con TODOS los módulos + anclas.
-export function buildDesktopNav(session = null, pathname = '') {
-  const modules = getNavModules(session)
+export function buildDesktopNav(session = null, pathname = '', capabilities = null) {
+  const modules = getNavModules(session, capabilities)
   const activeItems = [HOME_ANCHOR, ...modules, PROFILE_ANCHOR]
   return {
     home: HOME_ANCHOR,

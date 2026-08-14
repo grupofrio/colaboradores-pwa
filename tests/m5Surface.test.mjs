@@ -87,8 +87,8 @@ test('política desconocida => fail-closed; módulos normales delegan sin bypass
 })
 
 test('ScreenHome usa la fuente session-aware (getHomeModulesForSession)', () => {
-  assert.match(homeSrc, /getHomeModulesForSession\(session\)/)
-  assert.match(homeSrc, /getModuleEntryDecisionForSession\(mod, session\)/)
+  assert.match(homeSrc, /getHomeModulesForSession\(session, runtimeCapabilities\)/)
+  assert.match(homeSrc, /getModuleEntryDecisionForSession\(mod, session, runtimeCapabilities\)/)
 })
 
 // ── Ruta y guard ─────────────────────────────────────────────────────────────

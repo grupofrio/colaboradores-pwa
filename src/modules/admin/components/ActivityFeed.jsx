@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import { getTodayExpenses, getTodayMpTransfers, getTodaySales } from '../api'
+import { normalizeTodayExpensesControllerResponse } from '../adminExpenseControllerAdapter'
 import { buildModuleActivityFeed, resolveActivityFeedScope } from '../activityFeedModel'
 
 const POLL_MS = 30_000
@@ -37,7 +38,7 @@ export default function ActivityFeed({ moduleId = 'hub', variant = 'sidebar' }) 
         if (!alive) return
         setEvents(buildModuleActivityFeed(moduleId, {
           sales: normalizeList(salesRaw),
-          expenses: normalizeList(expensesRaw),
+          expenses: normalizeTodayExpensesControllerResponse(expensesRaw),
           transfers: normalizeList(transfersRaw),
         }))
         setLastFetch(new Date())

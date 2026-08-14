@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, getCompaniesForSucursal } from '../../tokens'
 import { createExpense, getTodayExpenses } from '../admin/api'
+import { normalizeTodayExpensesControllerResponse } from '../admin/adminExpenseControllerAdapter'
 import { todayLocal } from '../../lib/api'
 
 export default function GastosScreenBase({
@@ -42,7 +43,7 @@ export default function GastosScreenBase({
     setLoading(true)
     try {
       const data = await getTodayExpenses()
-      setExpenses(Array.isArray(data) ? data : [])
+      setExpenses(normalizeTodayExpensesControllerResponse(data))
     } catch {
       // silent
     } finally {

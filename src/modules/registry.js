@@ -248,6 +248,45 @@ export const MODULES = [
     icon:   'admin',
     navPriority: 10,
   },
+  // ── Compras CSC GF ──────────────────────────────────────────────────────
+  // Superficie deliberadamente separada de Administración de sucursal. El
+  // backend resuelve el alcance por actor + Plaza + Empresa + Almacén.
+  {
+    id:     'compras_csc',
+    label:  'Compras CSC GF',
+    shortLabel: 'Compras',
+    route:  '/compras-csc',
+    tone:   'green',
+    roles:  ['comprador'],
+    runtimeCapability: 'buyer_read',
+    status: 'live',
+    icon:   'admin',
+    navPriority: 11,
+  },
+  {
+    id:     'requisiciones_multiempresa',
+    label:  'Mis requisiciones',
+    shortLabel: 'Requisiciones',
+    route:  '/compras-csc/requisiciones',
+    tone:   'green',
+    roles:  ['comprador'],
+    runtimeCapability: 'single_login_multi_company',
+    status: 'live',
+    icon:   'admin',
+    navPriority: 12,
+  },
+  {
+    id:     'gastos_multiempresa',
+    label:  'Gastos',
+    shortLabel: 'Gastos',
+    route:  '/compras-csc/gastos',
+    tone:   'green',
+    roles:  ['comprador'],
+    runtimeCapability: 'expense_create',
+    status: 'live',
+    icon:   'admin',
+    navPriority: 13,
+  },
 
   // ── KOLD OS · M2 — Planeación y readiness (observatorio read-only) ───────
   // Evidencia incumplimientos de planeación (territorio/solver/capacidad/
