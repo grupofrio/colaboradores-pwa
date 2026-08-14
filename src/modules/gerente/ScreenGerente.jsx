@@ -47,6 +47,9 @@ export default function ScreenGerente() {
   const sucursal = session?.sucursal || session?.branch_name || ''
 
   const ACTIONS = [
+    { id: 'copiloto', label: 'Copiloto Gerencial', desc: 'Pregunta por tu sucursal', route: '/gerente/copiloto',
+      color: TOKENS.colors.blue3,
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
     { id: 'dashboard', label: 'Dashboard', desc: 'Indicadores generales', route: '/gerente/dashboard',
       color: TOKENS.colors.blue2,
       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> },

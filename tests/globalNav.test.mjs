@@ -37,7 +37,7 @@ test('gerente_sucursal (Angélica): Admin Sucursal + Gerente directos; Brief y u
   // El Brief de gerencia (navPriority 16) entra DESPUÉS de Admin(10) y
   // Gerente(12): no les quita su lugar en la barra.
   assert.deepEqual(ids(m.primary), ['admin_sucursal', 'gerente'])
-  assert.deepEqual(ids(m.overflow), ['brief_gerencia', 'kpis', 'encuestas', 'logros'])
+  assert.deepEqual(ids(m.overflow), ['copiloto_gerencial', 'brief_gerencia', 'kpis', 'encuestas', 'logros'])
   assert.equal(m.hasMore, true)
   assert.ok(!ids(getNavModules(session)).includes('supervisor_ventas'), 'no ve Equipo')
 })

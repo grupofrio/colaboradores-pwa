@@ -36,6 +36,12 @@ import {
   filterKoldOsM7Params,
 } from './koldOsM7Route.js'
 import {
+  isManagerCopilotPath,
+  filterManagerCopilotParams,
+  buildCopilotChatBody,
+  MANAGER_COPILOT_CHAT,
+} from './managerCopilotRoute.js'
+import {
   isPwaHrNamespace,
   matchPwaHrAttendanceRoute,
 } from './pwaHrRoute.js'
@@ -267,6 +273,7 @@ function extractErrorDetails(payload, status = 0) {
   const message =
     payload?.error?.data?.message
     || payload?.error?.message
+    || payload?.user_message
     || payload?.message
     || payload?.data?.message
     || payload?.error
@@ -1192,6 +1199,22 @@ async function directProfile(method, path, body) {
   }
 
   return NO_DIRECT
+}
+
+// Copiloto Gerencial — Odoo dedicado. PROHIBIDO n8n y generic readModel.
+// La sucursal NUNCA viaja: el backend la resuelve del token.
+async function directManagerCopilot(method, path, body) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+  if (!isManagerCopilotPath(cleanPath)) return NO_DIRECT
+
+  if (method === 'GET') {
+    return odooHttp('GET', cleanPath, filterManagerCopilotParams(query))
+  }
+  if (method === 'POST' && cleanPath === MANAGER_COPILOT_CHAT) {
+    return odooHttp('POST', cleanPath, {}, buildCopilotChatBody(body || {}))
+  }
+  throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
 }
 
 async function directGerente(method, path) {
@@ -9546,6 +9569,7 @@ async function routeDirect(method, path, body) {
     directKoldOsM6,
     directKoldOsM7,
     directProfile,
+    directManagerCopilot,
     directGerente,
     directAdmin,
     directProduction,

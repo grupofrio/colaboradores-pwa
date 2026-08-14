@@ -183,6 +183,7 @@ const ScreenDashboardGerente = lazy(() => import('./modules/gerente/ScreenDashbo
 const ScreenAlertasGerente   = lazy(() => import('./modules/gerente/ScreenAlertasGerente'))
 const ScreenForecastUnlock   = lazy(() => import('./modules/gerente/ScreenForecastUnlock'))
 const ScreenGastosGerente    = lazy(() => import('./modules/gerente/ScreenGastos'))
+const ScreenCopilotoGerencial = lazy(() => import('./modules/gerente/ScreenCopilotoGerencial'))
 // Briefs (ventas, producción, …) — HTML servido por n8n, embebido aislado.
 // UNA sola pantalla para todas las variantes; lo que cambia vive en briefCatalog.
 const BriefEmbedScreen       = lazy(() => import('./modules/brief/BriefEmbedScreen'))
@@ -901,6 +902,7 @@ export default function App() {
             <Route path="/gerente/alertas" element={<ModuleRoleRoute moduleId="gerente"><ScreenAlertasGerente /></ModuleRoleRoute>} />
             <Route path="/gerente/gastos" element={<ModuleRoleRoute moduleId="gerente"><ScreenGastosGerente /></ModuleRoleRoute>} />
             <Route path="/gerente/forecast" element={<ModuleRoleRoute moduleId="gerente"><ScreenForecastUnlock /></ModuleRoleRoute>} />
+            <Route path="/gerente/copiloto" element={<ModuleRoleRoute moduleId="copiloto_gerencial"><ScreenCopilotoGerencial /></ModuleRoleRoute>} />
 
             {/* ── Briefs embebidos (una pantalla, N variantes) ───────────────
                 La pestaña la gatea el registry (un rol por variante); el DATO lo
