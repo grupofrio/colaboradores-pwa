@@ -89,6 +89,7 @@ test('pantalla: sucursal de sesión/backend, chips, retry, sin branch_id', () =>
   assert.match(screenSrc, /FEATURE_DISABLED/)
   assert.doesNotMatch(screenSrc, /branch_id/)
   assert.match(screenSrc, /data\.cards/)
+  assert.match(screenSrc, /data\?\.llm/)
 })
 
 test('handler reconstruye body seguro (no reenvía branch_id del caller)', () => {

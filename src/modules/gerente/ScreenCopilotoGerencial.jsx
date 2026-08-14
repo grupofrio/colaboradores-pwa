@@ -55,6 +55,7 @@ export default function ScreenCopilotoGerencial() {
   const [error, setError] = useState('')
   const [conversationId, setConversationId] = useState(null)
   const [retryPayload, setRetryPayload] = useState(null)
+  const [llmReady, setLlmReady] = useState(null)
   const listRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -73,6 +74,7 @@ export default function ScreenCopilotoGerencial() {
         if (Array.isArray(data?.quick_questions) && data.quick_questions.length) {
           setChips(data.quick_questions)
         }
+        if (data?.llm) setLlmReady(Boolean(data.llm.ready))
       })
       .catch((err) => {
         logScreenError('ScreenCopilotoGerencial', 'capabilities', err)
@@ -160,6 +162,11 @@ export default function ScreenCopilotoGerencial() {
             <p style={{ ...typo.title, color: TOKENS.colors.textSoft, margin: 0 }}>Copiloto Gerencial</p>
             {branchName ? (
               <p style={{ ...typo.caption, color: TOKENS.colors.blue3, margin: 0, marginTop: 2 }}>{branchName}</p>
+            ) : null}
+            {llmReady === false ? (
+              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
+                Respuestas con datos de Odoo. La IA no está activa.
+              </p>
             ) : null}
           </div>
         </div>
