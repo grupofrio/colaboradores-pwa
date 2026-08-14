@@ -345,5 +345,5 @@ test('cada quien ve su brief en la barra sin perder su superficie operativa', ()
 
   // Gerencia: Admin(10) y Gerente(12) conservan la barra; el brief entra después.
   const gerente = nav('gerente_sucursal', 699)
-  assert.deepEqual(gerente.slice(0, 3), ['admin_sucursal', 'gerente', 'brief_gerencia'])
+  assert.deepEqual(gerente.slice(0, 4), ['admin_sucursal', 'gerente', 'copiloto_gerencial', 'brief_gerencia'])
 })

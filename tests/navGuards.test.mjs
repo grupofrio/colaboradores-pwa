@@ -25,6 +25,7 @@ test('gerente_sucursal: entra Admin/Gerente; NO Equipo/Ruta/Producción/Almacén
   const g = s('gerente_sucursal')
   assert.equal(canEnter(g, 'admin_sucursal'), 'monta')
   assert.equal(canEnter(g, 'gerente'), 'monta')
+  assert.equal(canEnter(g, 'copiloto_gerencial'), 'monta')
   assert.equal(canEnter(g, 'supervisor_ventas'), 'home')
   assert.equal(canEnter(g, 'cierre_ruta'), 'home')
   assert.equal(canEnter(g, 'registro_produccion'), 'home')
@@ -36,6 +37,7 @@ test('supervisor_ventas: entra Equipo; NO Admin/Gerente sin permiso explícito',
   assert.equal(canEnter(sv, 'supervisor_ventas'), 'monta')
   assert.equal(canEnter(sv, 'admin_sucursal'), 'home')
   assert.equal(canEnter(sv, 'gerente'), 'home')
+  assert.equal(canEnter(sv, 'copiloto_gerencial'), 'home')
   assert.equal(canEnter(sv, 'torre_control'), 'home')
 })
 
@@ -84,7 +86,7 @@ test('cada familia de módulo usa ModuleRoleRoute con su moduleId canónico', ()
   const expected = [
     ['/kpis', 'kpis'], ['/surveys', 'encuestas'], ['/badges', 'logros'],
     ['/pos-diurno', 'pos_diurno'],
-    ['/admin', 'admin_sucursal'], ['/gerente', 'gerente'], ['/equipo', 'supervisor_ventas'],
+    ['/admin', 'admin_sucursal'], ['/gerente', 'gerente'], ['/gerente/copiloto', 'copiloto_gerencial'], ['/equipo', 'supervisor_ventas'],
     ['/ruta', 'cierre_ruta'], ['/entregas', 'almacen_entregas'], ['/almacen-pt', 'almacen_pt'],
     ['/koldcup', 'koldcup'], ['/supervision', 'supervision_produccion'], ['/torres', 'torre_control'],
   ]

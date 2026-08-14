@@ -429,6 +429,20 @@ export const MODULES = [
     navPriority: 12,
   },
 
+  // Copiloto Gerencial — chat read-only. La sucursal la resuelve Odoo del token.
+  // navPriority 13: entra DESPUÉS de Admin(10) y Gerente(12); no les quita la barra.
+  {
+    id:     'copiloto_gerencial',
+    label:  'Copiloto Gerencial',
+    shortLabel: 'Copiloto',
+    route:  '/gerente/copiloto',
+    tone:   'blue',
+    roles:  ['gerente_sucursal'],
+    status: 'live',
+    icon:   'copiloto',
+    navPriority: 13,
+  },
+
   // Brief de GERENCIA — tercera variante del mismo catálogo (mismo componente,
   // mismo candado en el endpoint). `roles` debe coincidir con
   // briefCatalog.viewerRoles (hay test). direccion_general ve la entrada porque

@@ -46,6 +46,7 @@ function NavIcon({ name, size = 20 }) {
     case 'supervision': return <svg {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
     case 'almacen': return <svg {...p}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
     case 'torres': return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+    case 'copiloto': return <svg {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
     default: return <svg {...p}><circle cx="12" cy="12" r="9" /></svg>
   }
 }
