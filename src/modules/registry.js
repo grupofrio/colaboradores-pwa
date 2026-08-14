@@ -69,6 +69,19 @@ export const MODULES = [
     icon:   'logros',
     navPriority: 50,
   },
+  {
+    id:     'mi_capacitacion',
+    label:  'Mi capacitación',
+    shortLabel: 'Capacitación',
+    route:  '/mi-capacitacion',
+    tone:   'blueSoft',
+    roles:  ['*'],
+    status: 'live',
+    icon:   'logros',
+    navPriority: 45,
+    showOnHome: true,
+    showInNav: false,
+  },
 
   // ── Producción — Fabricación de Congelados (company 35) ─────────────────
   {
@@ -441,6 +454,20 @@ export const MODULES = [
     status: 'live',
     icon:   'copiloto',
     navPriority: 13,
+  },
+  {
+    id:     'talento',
+    label:  'Talento',
+    shortLabel: 'Talento',
+    route:  '/talento',
+    tone:   'blue',
+    roles:  ['direccion_general'],
+    accessPolicy: 'talent_rh',
+    status: 'live',
+    icon:   'equipo',
+    navPriority: 19,
+    showOnHome: true,
+    showInNav: false,
   },
 
   // Brief de GERENCIA — tercera variante del mismo catálogo (mismo componente,

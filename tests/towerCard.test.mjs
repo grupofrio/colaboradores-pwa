@@ -42,7 +42,7 @@ test('Aida (tower_status supervisor_ventas): ve la tarjeta Torre', () => {
 
 test('Home conserva el orden histórico del registry y agrega Torre al final', () => {
   assert.deepEqual(ids(getHomeModulesForSession(towerSession('supervisor_ventas'))), [
-    'kpis', 'supervisor_rutas_manana', 'encuestas', 'logros', 'supervisor_ventas', 'brief_dia', 'torre_operativa',
+    'kpis', 'supervisor_rutas_manana', 'encuestas', 'logros', 'mi_capacitacion', 'supervisor_ventas', 'brief_dia', 'torre_operativa',
   ])
 })
 

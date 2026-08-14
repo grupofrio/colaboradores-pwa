@@ -23,6 +23,7 @@ import { readM6Access } from './modules/caja-conciliacion/m6/access'
 import { readM7Access } from './modules/rentabilidad-costos/m7/access'
 import { canAccessHectorNightPos } from './modules/admin/nightPosAccess'
 import { DAY_POS_FLOW, NIGHT_POS_FLOW } from './modules/admin/posFlow'
+import { readTalentRhAccess } from './modules/talento/access'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -36,6 +37,15 @@ import ScreenProfile from './screens/ScreenProfile'
 const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente'))
 // Talento GF — ruta pública, sin sesión (P2.8B.1)
 const ScreenTalentUpload = lazy(() => import('./modules/talent/ScreenTalentUpload'))
+const ScreenMiCapacitacion = lazy(() => import('./modules/talento/ScreenMiCapacitacion'))
+const ScreenTalentoHome = lazy(() => import('./modules/talento/ScreenTalentoHome'))
+const ScreenTalentoPipeline = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoPipeline })))
+const ScreenTalentoInbox = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoInbox })))
+const ScreenTalentoVacancies = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoVacancies })))
+const ScreenTalentoRequisitions = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoRequisitions })))
+const ScreenTalentoInterviews = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoInterviews })))
+const ScreenTalentoAnalytics = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoAnalytics })))
+const ScreenTalentoCandidate = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoCandidate })))
 // E1-C.4 — superficie KOLD Tower read-only (E1-B), montada detrás de TowerRoute (gate por rol autoritativo)
 const ScreenKoldTowerE1 = lazy(() => import('./modules/torre/e1/ScreenKoldTowerE1'))
 // M1-D — Backlog M1 read-only (mismo gate TowerRoute; SIN menú, solo ruta directa)
@@ -340,6 +350,13 @@ function AttendanceRoute({ children }) {
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   const module = getModuleById('asistencias')
   if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
+  return children
+}
+
+function TalentRhRoute({ children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (readTalentRhAccess(session).level !== 'global') return <Navigate to="/" replace />
   return children
 }
 
@@ -709,6 +726,15 @@ export default function App() {
             <Route path="/surveys" element={<ModuleRoleRoute moduleId="encuestas"><ScreenSurveys /></ModuleRoleRoute>} />
             <Route path="/badges" element={<ModuleRoleRoute moduleId="logros"><ScreenBadges /></ModuleRoleRoute>} />
             <Route path="/profile" element={<PrivateRoute><ScreenProfile /></PrivateRoute>} />
+            <Route path="/mi-capacitacion" element={<ModuleRoleRoute moduleId="mi_capacitacion"><ScreenMiCapacitacion /></ModuleRoleRoute>} />
+            <Route path="/talento" element={<TalentRhRoute><ScreenTalentoHome /></TalentRhRoute>} />
+            <Route path="/talento/pipeline" element={<TalentRhRoute><ScreenTalentoPipeline /></TalentRhRoute>} />
+            <Route path="/talento/pendientes" element={<TalentRhRoute><ScreenTalentoInbox /></TalentRhRoute>} />
+            <Route path="/talento/vacantes" element={<TalentRhRoute><ScreenTalentoVacancies /></TalentRhRoute>} />
+            <Route path="/talento/requisiciones" element={<TalentRhRoute><ScreenTalentoRequisitions /></TalentRhRoute>} />
+            <Route path="/talento/entrevistas" element={<TalentRhRoute><ScreenTalentoInterviews /></TalentRhRoute>} />
+            <Route path="/talento/analytics" element={<TalentRhRoute><ScreenTalentoAnalytics /></TalentRhRoute>} />
+            <Route path="/talento/candidatos/:id" element={<TalentRhRoute><ScreenTalentoCandidate /></TalentRhRoute>} />
 
             {/* ── E1-C.4 — KOLD Tower (read-only, gated por tower_status autoritativo; SIN menú) ── */}
             <Route path="/torre" element={<TowerRoute><ScreenKoldTowerE1Mount /></TowerRoute>} />

@@ -26,6 +26,7 @@ import { readM7Access } from '../modules/rentabilidad-costos/m7/access.js'
 import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
 import { readAttendanceAccess } from '../modules/asistencias/access.js'
 import { readConfiguredVentasIgualaAccessForSession } from '../modules/ventas-iguala/access.js'
+import { readTalentRhAccess } from '../modules/talento/access.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
 // Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
@@ -51,6 +52,7 @@ export const ACCESS_POLICY_RESOLVERS = Object.freeze({
       ? 'global'
       : 'none',
   }),
+  talent_rh: readTalentRhAccess,
 })
 
 // Resuelve una accessPolicy. FAIL-CLOSED: si la política no está registrada
