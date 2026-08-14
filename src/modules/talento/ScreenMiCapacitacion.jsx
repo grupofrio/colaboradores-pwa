@@ -25,7 +25,7 @@ export default function ScreenMiCapacitacion() {
     })
   }
 
-  useEffect(() => { load() }, [session?.employee_id])
+  useEffect(() => { load() }, [session?.employee_id]) // eslint-disable-line react-hooks/exhaustive-deps -- recarga si cambia el empleado
 
   if (status !== 'ready') {
     return <TalentState status={status} message={error} onRetry={load} />

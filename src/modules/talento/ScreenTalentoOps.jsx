@@ -16,7 +16,7 @@ function useTalentLoad(loader) {
         setStatus(classifyTalentStatus(err))
       })
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps -- mount + retry manual
   return { status, error, data, load }
 }
 
