@@ -1911,11 +1911,13 @@ async function directAdmin(method, path, body) {
   //   3. Cree el registro gf.pwa.requisition con approval_state
   //   4. Ejecute la lógica de umbral de aprobación
   if (cleanPath === '/pwa-admin/requisition-create' && method === 'POST') {
-    return odooJson('/pwa-admin/requisition-create', {
-      ...(body || {}),
-      // employee_id como fallback — el controller llama _resolve_employee()
-      employee_id: (body || {}).employee_id || getSession().employee_id || undefined,
-    })
+    const {
+      company_id: _companyId,
+      warehouse_id: _warehouseId,
+      employee_id: _employeeId,
+      ...requisition
+    } = body || {}
+    return odooJson('/pwa-admin/requisition-create', requisition)
   }
 
   // ── Requisition receipt detail (passthrough al controller de Odoo) ──────
