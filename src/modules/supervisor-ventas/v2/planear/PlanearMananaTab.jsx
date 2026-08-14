@@ -1136,7 +1136,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
           ) : (
             <select data-testid="planear-segmento" value={segmentId} onChange={(e) => setSegmentId(e.target.value)}
               style={{ width: '100%', minHeight: 44, borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 14, padding: '0 10px', marginBottom: 10 }}>
-              <option value="">Todos</option>
+              <option value="">Ninguno (sin filtro de segmento)</option>
               {segments.map((s) => <option key={optionId(s)} value={optionId(s)}>{optionLabel(s)}</option>)}
             </select>
           )}

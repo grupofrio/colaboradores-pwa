@@ -109,6 +109,12 @@ test('wiring: SO hereda el segmento (query param seg) al armar', () => {
   assert.ok(/initialSegmentId/.test(tab), 'el tab acepta el segmento heredado')
 })
 
+test('selector de segmento deja explícito que vacío no filtra', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.match(tab, /<option value="">Ninguno \(sin filtro de segmento\)<\/option>/)
+  assert.doesNotMatch(tab, /<option value="">Todos<\/option>/)
+})
+
 test('wiring: Asignar navega al flujo de la ruta de mañana (armar+route)', () => {
   const cont = src('modules/supervisor-ventas/v2/planear/MisRutasManana.jsx')
   assert.ok(/armar/.test(cont) && /route/.test(cont), 'switch por query param')
