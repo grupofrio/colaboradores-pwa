@@ -2,7 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getCopilotCapabilities, postCopilotChat } from './copilotApi'
+import {
+  confirmCopilotInvoice,
+  downloadBase64File,
+  getCopilotCapabilities,
+  getCopilotInvoiceDocument,
+  postCopilotChat,
+  resendCopilotInvoiceEmail,
+} from './copilotApi'
 import { logScreenError } from '../shared/logScreenError'
 
 const FALLBACK_CHIPS = [
@@ -13,7 +20,7 @@ const FALLBACK_CHIPS = [
   { label: 'Inventarios', capability: 'get_inventory_health', message: '¿Cómo están los almacenes?' },
   { label: 'Gastos', capability: 'get_expenses_summary', message: '¿Cuáles fueron los gastos?' },
   { label: 'Rutas pendientes', capability: 'get_route_backlog', message: '¿Hay rutas atrasadas o abiertas?' },
-  { label: '¿Qué debo atender?', capability: 'get_branch_status', message: '¿Qué debo atender primero?' },
+  { label: '¿Qué debo atender?', capability: 'get_branch_priorities', message: '¿Qué tengo que atender hoy?' },
 ]
 
 const STATUS_COLOR = {
@@ -56,6 +63,8 @@ export default function ScreenCopilotoGerencial() {
   const [conversationId, setConversationId] = useState(null)
   const [retryPayload, setRetryPayload] = useState(null)
   const [llmReady, setLlmReady] = useState(null)
+  const [confirming, setConfirming] = useState(false)
+  const confirmLock = useRef(false)
   const listRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -124,6 +133,67 @@ export default function ScreenCopilotoGerencial() {
       }
     } finally {
       setSending(false)
+    }
+  }
+
+  async function confirmInvoice(card) {
+    const token = card?.confirmation?.token
+    if (!token || confirming || confirmLock.current) return
+    confirmLock.current = true
+    setConfirming(true)
+    setError('')
+    try {
+      const data = await confirmCopilotInvoice({ confirmation_token: token })
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        body: data.user_message || data.answer || 'Factura procesada.',
+        cards: [{
+          id: `invoice-result-${data.invoice_request_id || Date.now()}`,
+          kind: 'invoice_result',
+          title: data.invoice_name || 'Factura',
+          value: data.total,
+          unit: 'MXN',
+          status: data.cfdi_ok ? 'green' : 'red',
+          subtitle: data.cfdi_uuid ? `UUID ${data.cfdi_uuid}` : (data.status || ''),
+          invoice: {
+            name: data.invoice_name,
+            uuid: data.cfdi_uuid,
+            email_ok: data.email_ok,
+            email_to: data.email_to,
+            invoice_request_id: data.invoice_request_id,
+            cfdi_ok: data.cfdi_ok,
+          },
+        }],
+      }])
+    } catch (err) {
+      logScreenError('ScreenCopilotoGerencial', 'invoice-confirm', err)
+      setError(err.message || 'No pude confirmar la factura. No reintentaré el timbrado automáticamente.')
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  async function downloadInvoice(invoiceRequestId, kind) {
+    try {
+      const doc = await getCopilotInvoiceDocument(invoiceRequestId, kind)
+      downloadBase64File(doc)
+    } catch (err) {
+      logScreenError('ScreenCopilotoGerencial', 'invoice-download', err)
+      setError(err.message || 'No pude descargar el archivo.')
+    }
+  }
+
+  async function resendEmail(invoiceRequestId) {
+    try {
+      const data = await resendCopilotInvoiceEmail({ invoice_request_id: invoiceRequestId })
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        body: data.user_message || 'Reintento de correo enviado.',
+        cards: [],
+      }])
+    } catch (err) {
+      logScreenError('ScreenCopilotoGerencial', 'invoice-resend', err)
+      setError(err.message || 'No pude reenviar el correo. El CFDI no se modifica.')
     }
   }
 
@@ -218,7 +288,12 @@ export default function ScreenCopilotoGerencial() {
                 }}>
                   <p style={{ ...typo.body, color: TOKENS.colors.text, margin: 0, whiteSpace: 'pre-wrap' }}>{msg.body}</p>
                   {Array.isArray(msg.cards) && msg.cards.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: msg.cards.some((c) => c.kind === 'invoice_preview' || c.kind === 'invoice_result') ? '1fr' : '1fr 1fr',
+                      gap: 8,
+                      marginTop: 12,
+                    }}>
                       {msg.cards.map((card) => (
                         <div key={card.id} style={{
                           padding: 10, borderRadius: TOKENS.radius.md,
@@ -234,6 +309,72 @@ export default function ScreenCopilotoGerencial() {
                           {card.subtitle ? (
                             <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>{card.subtitle}</p>
                           ) : null}
+                          {Array.isArray(card.fields) && card.fields.filter((f) => f.value).map((field) => (
+                            <p key={field.label} style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: '4px 0 0' }}>
+                              {field.label}: {field.value}
+                            </p>
+                          ))}
+                          {Array.isArray(card.blocking_reasons) && card.blocking_reasons.map((reason) => (
+                            <p key={reason} style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>{reason}</p>
+                          ))}
+                          {Array.isArray(card.items) && card.items.slice(0, 5).map((item) => (
+                            <p key={item.label} style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                              {item.label}{item.value != null && item.value !== '' ? `: ${item.value}` : ''}
+                            </p>
+                          ))}
+                          {card.kind === 'invoice_preview' && card.confirmation?.token ? (
+                            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                              <button type="button" disabled={confirming} onClick={() => confirmInvoice(card)} style={{
+                                minHeight: 44, flex: 1, borderRadius: TOKENS.radius.md,
+                                background: TOKENS.colors.ctaGradient, color: '#fff', fontWeight: 700, fontSize: 13,
+                                opacity: confirming ? 0.5 : 1,
+                              }}>
+                                {confirming ? 'Timbrando…' : 'Confirmar factura'}
+                              </button>
+                            </div>
+                          ) : null}
+                          {card.kind === 'invoice_result' && card.invoice?.invoice_request_id && card.invoice?.cfdi_ok ? (
+                            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                              <button type="button" onClick={() => downloadInvoice(card.invoice.invoice_request_id, 'pdf')} style={{
+                                minHeight: 44, padding: '0 12px', borderRadius: TOKENS.radius.md,
+                                background: TOKENS.colors.blueGlow, color: TOKENS.colors.blue3, fontWeight: 700, fontSize: 13,
+                              }}>
+                                Descargar PDF
+                              </button>
+                              <button type="button" onClick={() => downloadInvoice(card.invoice.invoice_request_id, 'xml')} style={{
+                                minHeight: 44, padding: '0 12px', borderRadius: TOKENS.radius.md,
+                                background: TOKENS.colors.blueGlow, color: TOKENS.colors.blue3, fontWeight: 700, fontSize: 13,
+                              }}>
+                                Descargar XML
+                              </button>
+                              {card.invoice.email_ok === false ? (
+                                <button type="button" onClick={() => resendEmail(card.invoice.invoice_request_id)} style={{
+                                  minHeight: 44, padding: '0 12px', color: TOKENS.colors.blue3, fontWeight: 700, fontSize: 13,
+                                }}>
+                                  Reintentar envío
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {card.invoice?.email_to ? (
+                            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
+                              Correo: {card.invoice.email_ok ? 'enviado' : 'pendiente'} — {card.invoice.email_to}
+                            </p>
+                          ) : null}
+                          {Array.isArray(card.actions) && card.actions.map((action) => (
+                            <button
+                              key={action.label}
+                              type="button"
+                              disabled={sending}
+                              onClick={() => send({ message: action.message, capability: action.capability })}
+                              style={{
+                                marginTop: 8, minHeight: 44, width: '100%', borderRadius: TOKENS.radius.md,
+                                background: TOKENS.colors.blueGlow, color: TOKENS.colors.blue3, fontWeight: 700, fontSize: 13,
+                              }}
+                            >
+                              {action.label}
+                            </button>
+                          ))}
                         </div>
                       ))}
                     </div>
