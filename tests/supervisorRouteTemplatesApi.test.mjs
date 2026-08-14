@@ -226,6 +226,47 @@ test('supervisor route plan preview degrada a error honesto si stops_preview fal
   assert.equal(calls.some((call) => call.url.endsWith('/get_records_sorted') && call.params.model === 'gf.route.stop'), false)
 })
 
+test('supervisor route plan preview conserva un subpolígono único para route_plan/ensure', async () => {
+  setSession()
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const params = (JSON.parse(options.body).params) || {}
+    calls.push({ url, params })
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/ensure') {
+      return createJsonResponse(200, { result: { ok: true, data: { plan_id: 800, state: 'draft' } } })
+    }
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/stops_preview') {
+      return createJsonResponse(200, { result: { ok: true, data: { route_plan_id: 800, stops: [] } } })
+    }
+    return createJsonResponse(200, { result: { response: [] } })
+  }
+
+  await api('POST', '/pwa-supv/route-plan-preview-customers', {
+    route_id: 16, date_target: '2026-06-03', polygon_id: 69,
+    subpolygon_ids: [71], channel_ids: [], visit_days: [], time_window_id: null, demand_classes: [],
+  })
+
+  const ensure = calls.find((call) => call.url.endsWith('/route_plan/ensure'))
+  assert.equal(ensure.params.data.subpolygon_id, 71)
+  assert.equal(Object.hasOwn(ensure.params.data, 'subpolygon_ids'), false)
+})
+
+test('supervisor route plan preview rechaza varios subpolígonos sin crear un plan ambiguo', async () => {
+  setSession()
+  globalThis.fetch = async () => {
+    throw new Error('No debe llamar al backend si el alcance es ambiguo')
+  }
+
+  const response = await api('POST', '/pwa-supv/route-plan-preview-customers', {
+    route_id: 16, date_target: '2026-06-03', polygon_id: 69,
+    subpolygon_ids: [71, 72], channel_ids: [], visit_days: [], time_window_id: null, demand_classes: [],
+  })
+
+  assert.equal(response.ok, false)
+  assert.equal(response.code, 'VALIDATION_ERROR')
+  assert.match(response.message, /único subpolígono/i)
+})
+
 test('supervisor branch configs forbidden response degrades without throwing', async () => {
   setSession()
 

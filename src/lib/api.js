@@ -8403,13 +8403,25 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/route-plan-preview-customers' && method === 'POST') {
+    const subpolygonIds = cleanNumberList(body?.subpolygon_ids)
+    if (subpolygonIds.length > 1) {
+      return {
+        ok: false,
+        status: 'error',
+        code: 'VALIDATION_ERROR',
+        message: 'Selecciona un único subpolígono para generar la propuesta.',
+        data: {},
+      }
+    }
     const ensureResponse = await odooJson('/gf/salesops/supervisor/v2/route_plan/ensure', {
       meta: supervisorMeta(),
       data: {
         route_id: Number(body?.route_id || 0),
         date_target: body?.date_target || undefined,
         polygon_id: Number(body?.polygon_id || 0) || undefined,
-        subpolygon_ids: cleanNumberList(body?.subpolygon_ids),
+        // route_plan/ensure persiste un solo subpolígono. Preservarlo como
+        // singular permite al backend derivar su polígono padre cuando falta.
+        subpolygon_id: subpolygonIds[0] || undefined,
         // segment_id: plan por segmento (sin polígono ⇒ propuesta = miembros del segmento).
         segment_id: Number(body?.segment_id || 0) || undefined,
         channel_ids: cleanNumberList(body?.channel_ids),
