@@ -243,12 +243,48 @@ test('supervisor route plan preview conserva un subpolígono único para route_p
 
   await api('POST', '/pwa-supv/route-plan-preview-customers', {
     route_id: 16, date_target: '2026-06-03', polygon_id: 69,
-    subpolygon_ids: [71], channel_ids: [], visit_days: [], time_window_id: null, demand_classes: [],
+    subpolygon_ids: [71], segment_id: null,
+    channel_ids: [], visit_days: [], time_window_id: null, demand_classes: [],
   })
 
   const ensure = calls.find((call) => call.url.endsWith('/route_plan/ensure'))
   assert.equal(ensure.params.data.subpolygon_id, 71)
   assert.equal(Object.hasOwn(ensure.params.data, 'subpolygon_ids'), false)
+  assert.equal(Object.hasOwn(ensure.params.data, 'segment_id'), true)
+  assert.equal(ensure.params.data.segment_id, null)
+})
+
+test('supervisor route ensure conserva null para limpiar el segmento existente', async () => {
+  setSession()
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const params = (JSON.parse(options.body).params) || {}
+    calls.push({ url, params })
+    if (url === '/odoo-api/get_records_sorted' && params.model === 'hr.employee') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 717, user_id: [17, 'supervisora'], x_analytic_account_id: [901, 'CEDIS Iguala'] }] },
+      })
+    }
+    if (url === '/odoo-api/get_records_sorted' && params.model === 'gf.route') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 16, name: 'Ruta Tuxpan', warehouse_dispatch_id: [89, 'CEDIS Iguala'], driver_employee_id: [717, 'Supervisora'] }] },
+      })
+    }
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/ensure') {
+      return createJsonResponse(200, { result: { status: 'ok', data: { plan_id: 800, state: 'draft' } } })
+    }
+    return createJsonResponse(200, { result: { response: [] } })
+  }
+
+  const response = await api('POST', '/pwa-supv/route-plan-ensure', {
+    route_id: 16, date_target: '2026-06-03', polygon_id: 69, subpolygon_id: 71,
+    segment_id: null, channel_ids: [], visit_days: [], time_window_id: null, demand_classes: [],
+  })
+
+  assert.equal(response.ok, true)
+  const ensure = calls.find((call) => call.url.endsWith('/route_plan/ensure'))
+  assert.equal(Object.hasOwn(ensure.params.data, 'segment_id'), true)
+  assert.equal(ensure.params.data.segment_id, null)
 })
 
 test('supervisor route plan preview rechaza varios subpolígonos sin crear un plan ambiguo', async () => {
