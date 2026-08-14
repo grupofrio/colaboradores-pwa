@@ -21,7 +21,7 @@ export default function ScreenTalentoHome() {
       })
   }
 
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps -- mount + retry manual
+  useEffect(() => { load() }, [])
 
   if (status !== 'ready') {
     return <TalentState status={status} message={error} onRetry={load} />
