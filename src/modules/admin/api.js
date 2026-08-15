@@ -158,7 +158,6 @@ export function getPosCatalog(filters = {}) {
   const posScope = readPosScopeOption(filters)
   return api('GET', buildPosCatalogPath({
     warehouseId: filters?.warehouseId,
-    companyId: filters?.companyId,
     partnerId: filters?.partnerId,
     ...(posScope === undefined ? {} : { posScope }),
   }))
@@ -176,7 +175,6 @@ export function getPosProducts(arg) {
   const posScope = readPosScopeOption(filters)
   return api('GET', buildPosCatalogPath({
     warehouseId: filters?.warehouseId,
-    companyId: filters?.companyId,
     partnerId: filters?.partnerId,
     ...(posScope === undefined ? {} : { posScope }),
   }))
@@ -193,7 +191,6 @@ export function searchCustomers(query, companyId, options = {}) {
     'GET',
     buildPosCustomerSearchPath(
       query,
-      companyId,
       posScope === undefined ? {} : { posScope },
     ),
   )
@@ -205,7 +202,6 @@ export function searchCustomers(query, companyId, options = {}) {
 export function getDefaultCustomer(companyId, options = {}) {
   const posScope = readPosScopeOption(options)
   return api('GET', `/pwa-admin/default-customer${toQuery({
-    company_id: companyId,
     pos_scope: posScope,
   })}`)
     .then((response) => requireSuccessfulPosRead(response, posScope))
@@ -224,8 +220,16 @@ export function createSaleOrder(data) {
     }
     return value
   })
+  const posData = {}
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(data))) {
+    if (!descriptor.enumerable || key === 'company_id') continue
+    if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+      throw new TypeError('Los datos de la venta no son válidos.')
+    }
+    posData[key] = descriptor.value
+  }
   return api('POST', '/pwa-admin/sale-create', {
-    ...data,
+    ...posData,
     ...(posScope.present ? { pos_scope: posScope.value } : {}),
     ...(nightPos.present ? { night_pos: nightPos.value } : {}),
   })
