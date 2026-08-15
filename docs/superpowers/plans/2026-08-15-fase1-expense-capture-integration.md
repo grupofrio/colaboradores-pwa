@@ -30,7 +30,7 @@
 
 - [ ] **Step 2: Verify RED.** Run `node --test tests/expenseAccounting.test.mjs`. Expected: failure because the adapter does not exist.
 
-- [ ] **Step 3: Implement the minimal adapter.** Implement `buildExpenseCatalogPath`, `getExpenseCatalog`, `buildFase0ExpensePayload`, `uploadExpenseEvidence`, and `createFase0Expense`. Require positive IDs, valid `YYYY-MM-DD` dates, non-empty names, and positive finite amount/quantity. The adapter must call only `GET /pwa-admin/expense-catalog`, `POST /pwa/evidence/upload` with `{ context: 'expense', filename, file_base64, mime_type }`, and `POST /pwa-admin/expense-create`. It must reject malformed or `ok:false` envelopes and never send a direct link, scope, analytics, payment, tax, account, journal, employee, or branch field.
+- [ ] **Step 3: Implement the minimal adapter.** Implement `buildExpenseCatalogPath`, `getExpenseCatalog`, `buildFase0ExpensePayload`, `uploadExpenseEvidence`, and `createFase0Expense`. Require positive IDs, valid `YYYY-MM-DD` dates, non-empty names, and positive finite amount/quantity. Permit `operation` and `asset_kind` only if they are valid codes from the selected article; require `asset_kind` when `requires_asset` is true. The adapter must call only `GET /pwa-admin/expense-catalog`, `POST /pwa/evidence/upload` with `{ context: 'expense', filename, file_base64, mime_type }`, and `POST /pwa-admin/expense-create`. It must reject malformed or `ok:false` envelopes and never send a direct link, scope, analytics, payment, tax, account, journal, employee, or branch field.
 
 - [ ] **Step 4: Verify GREEN.** Run `node --test tests/expenseAccounting.test.mjs`. Expected: PASS.
 
@@ -50,7 +50,7 @@
 
 - [ ] **Step 2: Verify RED.** Run `node --test tests/expenseAccounting.test.mjs`. Expected: FAIL because the form semantics are absent.
 
-- [ ] **Step 3: Implement only the general-expense migration.** Load the catalogue when `companyId`, `warehouseId`, or date changes and clear the selected article when that scope changes. Render articles and their server-declared requirements. General capture must block on an empty/invalid catalogue and never use legacy fallback. Use the adapter to upload unbound evidence and create a general expense; only clear after an authenticated successful envelope. Remove general-expense UI state and payload fields for `paymentMode`, `analyticDistribution`, `company_id`, `warehouse_id`, `sucursal_code`, `payment_mode`, and the direct `attachExpense` fallback. Keep the existing fuel workflow unchanged.
+- [ ] **Step 3: Implement only the general-expense migration.** Load the catalogue when `companyId`, `warehouseId`, or date changes and clear the selected article when that scope changes. Render articles and their server-declared requirements. Render an operation selector only for an article’s `allowed_operations`, and an asset-kind selector when the article requires an asset; validate both before submit. General capture must block on an empty/invalid catalogue and never use legacy fallback. Use the adapter to upload unbound evidence and create a general expense; only clear after an authenticated successful envelope. Remove general-expense UI state and payload fields for `paymentMode`, `analyticDistribution`, `company_id`, `warehouse_id`, `sucursal_code`, `payment_mode`, and the direct `attachExpense` fallback. Keep the existing fuel workflow unchanged.
 
 - [ ] **Step 4: Verify GREEN.** Run `node --test tests/expenseAccounting.test.mjs`. Expected: PASS.
 

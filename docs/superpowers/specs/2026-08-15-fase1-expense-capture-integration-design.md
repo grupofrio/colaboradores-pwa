@@ -49,6 +49,8 @@ activa una ruta legacy: bloquea la captura con un mensaje accionable.
 
 - artículo (`product_id`), fecha, importe, descripción y cantidad cuando
   aplique;
+- operación y tipo de activo, únicamente cuando el artículo publicado los
+  requiere y siempre elegidos de las listas devueltas por el catálogo;
 - referencia o datos operativos permitidos;
 - el identificador de recibo previamente cargado, si hay evidencia.
 
@@ -79,7 +81,9 @@ normaliza sólo envelopes válidos y expone errores de contrato como errores
 operativos; el formulario conserva estado y no anuncia éxito ante un rechazo.
 
 `AdminGastosForm` pasa de “categoría + preview de dimensiones” a “artículo
-elegible + requisitos devueltos por catálogo”. Puede presentar dimensiones
+elegible + requisitos devueltos por catálogo”. Cuando el artículo tenga
+operaciones o tipos de activo permitidos, el formulario muestra sólo esas
+opciones y exige los calificadores obligatorios. Puede presentar dimensiones
 después de la creación, pero nunca simularlas antes ni reconstruirlas en el
 cliente. Se elimina el modo legacy y el envío de campos financieros.
 
