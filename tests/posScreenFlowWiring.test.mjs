@@ -1,11 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readUtf8Lf } from './helpers/readUtf8Lf.mjs'
 
-const mobile = readFileSync(new URL('../src/modules/admin/ScreenPOS.jsx', import.meta.url), 'utf8')
-const desktop = readFileSync(new URL('../src/modules/admin/forms/AdminPosForm.jsx', import.meta.url), 'utf8')
-const ticket = readFileSync(new URL('../src/modules/admin/ScreenTicket.jsx', import.meta.url), 'utf8')
-const shell = readFileSync(new URL('../src/modules/admin/components/AdminShell.jsx', import.meta.url), 'utf8')
+const mobile = readUtf8Lf(new URL('../src/modules/admin/ScreenPOS.jsx', import.meta.url))
+const desktop = readUtf8Lf(new URL('../src/modules/admin/forms/AdminPosForm.jsx', import.meta.url))
+const ticket = readUtf8Lf(new URL('../src/modules/admin/ScreenTicket.jsx', import.meta.url))
+const shell = readUtf8Lf(new URL('../src/modules/admin/components/AdminShell.jsx', import.meta.url))
 
 function sliceFunction(source, startNeedle, nextNeedle) {
   const start = source.indexOf(startNeedle)
