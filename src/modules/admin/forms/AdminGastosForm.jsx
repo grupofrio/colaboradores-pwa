@@ -10,14 +10,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import {
-  createExpense,
   getTodayExpenses,
   filterByCompany,
   BACKEND_CAPS,
 } from '../adminService'
-import { attachExpense, createFuelExpense, getFuelRoutes } from '../api'
+import { createFuelExpense, getFuelRoutes } from '../api'
 import { api, todayLocal } from '../../../lib/api'
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
+import {
+  createFase0Expense,
+  getExpenseCatalog,
+  uploadExpenseEvidence,
+} from '../expenseAccounting'
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024 // 8 MB
 
@@ -51,6 +55,8 @@ export default function AdminGastosForm() {
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayLocal())
+  const [quantity, setQuantity] = useState('1')
+  // Combustible conserva su contrato actual; gasto general ya no usa controles contables del cliente.
   const [paymentMode, setPaymentMode] = useState('company')
   const [reference, setReference] = useState('')
   const [description, setDescription] = useState('')
@@ -58,7 +64,12 @@ export default function AdminGastosForm() {
   const [fuelRoutes, setFuelRoutes] = useState([])
   const [fuelRoutesLoading, setFuelRoutesLoading] = useState(false)
   const [fuelRouteId, setFuelRouteId] = useState('')
-  // Analítica Odoo 18: dict { account_id: pct } o null
+  const [catalog, setCatalog] = useState([])
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [catalogError, setCatalogError] = useState('')
+  const [articleId, setArticleId] = useState('')
+  const [operation, setOperation] = useState('')
+  const [assetKind, setAssetKind] = useState('')
   const [analyticDistribution, setAnalyticDistribution] = useState(null)
 
   // Adjunto (Sprint 4 — expense-attach)
@@ -100,10 +111,40 @@ export default function AdminGastosForm() {
   // Reload expenses al cambiar razón social o warehouse (filtro server-side)
   useEffect(() => {
     loadExpenses()
-    // Limpiar la cuenta analítica: depende de la company
     setAnalyticDistribution(null)
+    setArticleId('')
+    setOperation('')
+    setAssetKind('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, warehouseId])
+
+  useEffect(() => {
+    let alive = true
+    setCatalog([])
+    setArticleId('')
+    setOperation('')
+    setAssetKind('')
+    if (!companyId || !warehouseId || !date) {
+      setCatalogError('Selecciona una razón social y almacén válidos para cargar artículos.')
+      return () => { alive = false }
+    }
+    setCatalogLoading(true)
+    setCatalogError('')
+    getExpenseCatalog({ companyId, warehouseId, date })
+      .then((articles) => {
+        if (alive) setCatalog(articles)
+      })
+      .catch((catalogLoadError) => {
+        if (alive) {
+          setCatalog([])
+          setCatalogError(catalogLoadError?.message || 'No se pudo cargar el catálogo de gastos.')
+        }
+      })
+      .finally(() => {
+        if (alive) setCatalogLoading(false)
+      })
+    return () => { alive = false }
+  }, [companyId, warehouseId, date])
 
   useEffect(() => {
     if (expenseMode !== 'fuel') return
@@ -143,20 +184,32 @@ export default function AdminGastosForm() {
     if (!amount || Number(amount) <= 0) { setError('Ingresa un monto válido'); return }
     if (expenseMode === 'general' && !companyId) { setError('Selecciona una razón social'); return }
     if (expenseMode === 'fuel' && !fuelRouteId) { setError('Selecciona la ruta de gasolina'); return }
-    if (BACKEND_CAPS.expenseAnalytics && !analyticDistribution) {
+    const article = catalog.find((item) => item.product_id === Number(articleId))
+    if (expenseMode === 'general' && catalogLoading) {
+      setError('Espera a que cargue el catálogo de gastos.')
+      return
+    }
+    if (expenseMode === 'general' && catalogError) {
+      setError(catalogError)
+      return
+    }
+    if (expenseMode === 'general' && !article) {
+      setError('Selecciona un artículo de gasto habilitado.')
+      return
+    }
+    if (expenseMode === 'fuel' && BACKEND_CAPS.expenseAnalytics && !analyticDistribution) {
       setError('Selecciona la cuenta analítica del gasto')
       return
     }
 
-    // Validación de foto obligatoria cuando el monto supera el umbral
-    // (guía de pruebas sección 2b — backend rechaza sin attachment).
     const amountNum = Number(amount)
     const threshold = Number(BACKEND_CAPS.expenseApprovalThreshold ?? 1000)
     const requiresAttach =
-      BACKEND_CAPS.expenseRequiresAttachment &&
-      amountNum > threshold
+      expenseMode === 'general'
+        ? Boolean(article.requires_evidence) || amountNum > threshold
+        : BACKEND_CAPS.expenseRequiresAttachment && amountNum > threshold
     if (requiresAttach && !attachment) {
-      setError(`Gastos mayores a $${threshold.toLocaleString('es-MX')} requieren adjuntar comprobante.`)
+      setError('Este gasto requiere adjuntar comprobante.')
       return
     }
 
@@ -164,91 +217,70 @@ export default function AdminGastosForm() {
     setError('')
     setSuccess('')
     try {
-      // Si hay attachment: subir PRIMERO a /pwa/evidence/upload para tener
-      // el attachment_id antes de crear el gasto (guía §2c). Backend rechaza
-      // expense-create si monto > threshold y no viene attachment_id.
       let uploadedAttachmentId = null
       let uploadedFuelEvidenceToken = null
-      let uploadError = null
       if (attachment && BACKEND_CAPS.evidenceUpload) {
-        try {
-          const payload = await fileToPayload(attachment)
-          const uploadRes = await api('POST', expenseMode === 'fuel'
-            ? '/pwa-admin/fuel-evidence-upload'
-            : '/pwa/evidence/upload', {
-            filename:    payload.filename,
+        const payload = await fileToPayload(attachment)
+        if (expenseMode === 'general') {
+          uploadedAttachmentId = await uploadExpenseEvidence(payload)
+        } else {
+          const uploadRes = await api('POST', '/pwa-admin/fuel-evidence-upload', {
+            filename: payload.filename,
             file_base64: payload.base64,
-            mime_type:   payload.mime,
-            ...(expenseMode === 'fuel' ? {} : { linked_model: 'hr.expense' }),
+            mime_type: payload.mime,
           })
           const uploaded = uploadRes?.data ?? uploadRes ?? {}
-          uploadedAttachmentId = uploaded.attachment_id || null
           uploadedFuelEvidenceToken = uploaded.evidence_token || null
-          if (!uploadedAttachmentId) {
-            if (!uploadedFuelEvidenceToken) {
-              uploadError = 'No se pudo subir el comprobante (backend no devolvió credencial)'
-            }
-          }
-        } catch (upErr) {
-          uploadError = upErr?.message || 'Error subiendo comprobante'
         }
       }
 
-      // Si monto requiere attachment y la subida falló → no crear gasto
       if (requiresAttach && !(expenseMode === 'fuel' ? uploadedFuelEvidenceToken : uploadedAttachmentId)) {
-        setError(uploadError || 'Sube el comprobante antes de enviar el gasto.')
-        setSubmitting(false)
-        return
+        throw new Error('No se pudo cargar el comprobante requerido.')
       }
 
-      const functionalPayload = {
-        name: name.trim(),
-        total_amount: Number(amount),
-        quantity: 1.0,
-        date,
-        payment_mode: paymentMode === 'company' ? 'company_account' : 'own_account',
-        reference: reference.trim() || undefined,
-        description: description.trim() || undefined,
-        company_id: companyId,
-        warehouse_id: warehouseId || undefined,
-        sucursal_code: sucursal || undefined,
-        analytic_distribution: analyticDistribution,
-        // Attachment pre-subido (guía §2c). Backend lo vincula al expense.
-        attachment_id: uploadedAttachmentId || undefined,
-        evidence_token: uploadedFuelEvidenceToken || undefined,
-      }
-      const res = expenseMode === 'fuel'
-        ? await createFuelExpense({ ...functionalPayload, route_plan_id: Number(fuelRouteId) })
-        : await createExpense({
-          ...functionalPayload,
+      if (expenseMode === 'fuel') {
+        await createFuelExpense({
+          name: name.trim(),
+          total_amount: Number(amount),
+          quantity: 1.0,
+          date,
+          payment_mode: paymentMode === 'company' ? 'company_account' : 'own_account',
+          reference: reference.trim() || undefined,
+          description: description.trim() || undefined,
           company_id: companyId,
           warehouse_id: warehouseId || undefined,
           sucursal_code: sucursal || undefined,
+          analytic_distribution: analyticDistribution,
+          attachment_id: uploadedAttachmentId || undefined,
+          evidence_token: uploadedFuelEvidenceToken || undefined,
+          route_plan_id: Number(fuelRouteId),
         })
-
-      // Fallback legacy: si el evidence/upload no funcionó pero expense-attach
-      // sí, intentamos adjuntar por separado. Solo para montos bajos donde
-      // el attachment es opcional pero el usuario lo subió.
-      const created = res?.data ?? res
-      const expenseId = created?.id ?? created?.expense_id ?? created?.data?.id
-      let attachedMsg = (uploadedAttachmentId || uploadedFuelEvidenceToken) ? ' (con comprobante)' : ''
-      if (attachment && expenseMode !== 'fuel' && !uploadedAttachmentId && BACKEND_CAPS.expenseAttachments && expenseId) {
-        try {
-          const payload = await fileToPayload(attachment)
-          await attachExpense({ expenseId, ...payload })
-          attachedMsg = ' (con comprobante · legacy)'
-        } catch (attachErr) {
-          attachedMsg = ` (gasto creado, comprobante falló: ${attachErr.message || 'desconocido'})`
-        }
+      } else {
+        await createFase0Expense({
+          article,
+          name,
+          amount: amountNum,
+          quantity: Number(quantity),
+          date,
+          operation,
+          assetKind,
+          attachmentId: uploadedAttachmentId || undefined,
+          reference,
+          description,
+        })
       }
 
-      setSuccess(`Gasto registrado en ${companyLabel}${attachedMsg}`)
+      setSuccess(`Gasto registrado en ${companyLabel}${attachment ? ' (con comprobante)' : ''}`)
       setName('')
       setAmount('')
+      setQuantity('1')
       setReference('')
       setDescription('')
       setPaymentMode('company')
       setAnalyticDistribution(null)
+      setArticleId('')
+      setOperation('')
+      setAssetKind('')
       if (expenseMode === 'fuel') {
         setExpenseMode('general')
         setFuelRouteId('')
@@ -429,60 +461,98 @@ export default function AdminGastosForm() {
             </div>
           )}
 
-          <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
-            Modo de pago
-          </label>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <button
-              type="button"
-              onClick={() => setPaymentMode('company')}
-              style={{
-                flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
-                background: paymentMode === 'company' ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
-                border: `1px solid ${paymentMode === 'company' ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
-                fontSize: 12, fontWeight: 600,
-                color: paymentMode === 'company' ? TOKENS.colors.blue3 : TOKENS.colors.textMuted,
-              }}
-            >
-              Pagado por empresa
-            </button>
-            <button
-              type="button"
-              onClick={() => setPaymentMode('employee')}
-              style={{
-                flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
-                background: paymentMode === 'employee' ? `${TOKENS.colors.warning}22` : TOKENS.colors.surface,
-                border: `1px solid ${paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.border}`,
-                fontSize: 12, fontWeight: 600,
-                color: paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.textMuted,
-              }}
-            >
-              Pagado por empleado
-            </button>
-          </div>
+          {expenseMode === 'general' && (
+            <>
+              <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
+                Artículo de gasto *
+              </label>
+              <select
+                value={articleId}
+                onChange={e => {
+                  setArticleId(e.target.value)
+                  setOperation('')
+                  setAssetKind('')
+                }}
+                disabled={catalogLoading || !companyId || !warehouseId}
+                style={{ ...inputStyle, marginBottom: 12 }}
+              >
+                <option value="">
+                  {catalogLoading ? 'Cargando artículos…' : 'Selecciona un artículo'}
+                </option>
+                {catalog.map(article => (
+                  <option key={article.product_id} value={article.product_id}>
+                    {article.name}
+                  </option>
+                ))}
+              </select>
+              {catalogError && (
+                <p style={{ fontSize: 11, color: TOKENS.colors.error, margin: '-6px 0 12px' }}>
+                  {catalogError}
+                </p>
+              )}
 
-          {/* ── Bloque de analítica (LIVE — gf_pwa_admin) ─────────────── */}
-          <div style={{
-            padding: 14, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surfaceSoft,
-            border: `1px solid ${TOKENS.colors.border}`,
-            marginBottom: 14,
-          }}>
-            <p style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
-              color: TOKENS.colors.textLow, margin: '0 0 10px',
-            }}>
-              CLASIFICACIÓN ANALÍTICA · {companyLabel.toUpperCase()}
-            </p>
-            <AnalyticAccountPicker
-              value={analyticDistribution}
-              onChange={setAnalyticDistribution}
-              companyId={companyId}
-              required={BACKEND_CAPS.expenseAnalytics}
-            />
-          </div>
+              {article && (
+                <>
+                  <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
+                    Cantidad *
+                  </label>
+                  <input
+                    type="number" min="0.01" step="0.01"
+                    value={quantity} onChange={e => setQuantity(e.target.value)}
+                    style={{ ...inputStyle, marginBottom: 12 }}
+                  />
 
-          {BACKEND_CAPS.expenseAttachments && (
+                  {article.allowed_operations?.length > 0 && (
+                    <>
+                      <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
+                        Operación *
+                      </label>
+                      <select value={operation} onChange={e => setOperation(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }}>
+                        <option value="">Selecciona una operación</option>
+                        {article.allowed_operations.map(value => <option key={value} value={value}>{value}</option>)}
+                      </select>
+                    </>
+                  )}
+
+                  {(article.requires_asset || article.allowed_asset_kinds?.length > 0) && (
+                    <>
+                      <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
+                        Tipo de activo {article.requires_asset ? '*' : ''}
+                      </label>
+                      <select value={assetKind} onChange={e => setAssetKind(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }}>
+                        <option value="">Selecciona un tipo</option>
+                        {(article.allowed_asset_kinds || []).map(value => <option key={value} value={value}>{value}</option>)}
+                      </select>
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {expenseMode === 'fuel' && (
+            <>
+              <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
+                Modo de pago
+              </label>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                <button type="button" onClick={() => setPaymentMode('company')} style={{ flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md, background: paymentMode === 'company' ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface, border: `1px solid ${paymentMode === 'company' ? TOKENS.colors.blue2 : TOKENS.colors.border}`, fontSize: 12, fontWeight: 600, color: paymentMode === 'company' ? TOKENS.colors.blue3 : TOKENS.colors.textMuted }}>
+                  Pagado por empresa
+                </button>
+                <button type="button" onClick={() => setPaymentMode('employee')} style={{ flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md, background: paymentMode === 'employee' ? `${TOKENS.colors.warning}22` : TOKENS.colors.surface, border: `1px solid ${paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.border}`, fontSize: 12, fontWeight: 600, color: paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.textMuted }}>
+                  Pagado por empleado
+                </button>
+              </div>
+              <div style={{ padding: 14, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, marginBottom: 14 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', color: TOKENS.colors.textLow, margin: '0 0 10px' }}>
+                  CLASIFICACIÓN ANALÍTICA · {companyLabel.toUpperCase()}
+                </p>
+                <AnalyticAccountPicker value={analyticDistribution} onChange={setAnalyticDistribution} companyId={companyId} required={BACKEND_CAPS.expenseAnalytics} />
+              </div>
+            </>
+          )}
+
+          {(expenseMode === 'general' || BACKEND_CAPS.expenseAttachments) && (
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
                 Comprobante (opcional)

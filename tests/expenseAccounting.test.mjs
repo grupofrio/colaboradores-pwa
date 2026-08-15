@@ -67,3 +67,33 @@ test('fase 0 payload rejects an asset article without its allowed kind', () => {
     /activo/i,
   )
 })
+
+test('fase 0 payload requires an allowed operational qualifier when the article declares one', () => {
+  const article = {
+    product_id: 17,
+    allowed_operations: ['maintenance'],
+    allowed_asset_kinds: [],
+  }
+
+  assert.throws(
+    () => buildFase0ExpensePayload({
+      article,
+      name: 'Servicio',
+      amount: 100,
+      quantity: 1,
+      date: '2026-08-15',
+    }),
+    /operación/i,
+  )
+  assert.equal(
+    buildFase0ExpensePayload({
+      article,
+      name: 'Servicio',
+      amount: 100,
+      quantity: 1,
+      date: '2026-08-15',
+      operation: 'maintenance',
+    }).operation,
+    'maintenance',
+  )
+})

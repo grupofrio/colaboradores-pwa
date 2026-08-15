@@ -706,13 +706,20 @@ Lista completa (≈40 endpoints) en [`src/modules/admin/api.js`](../src/modules/
 | `/pwa-admin/dispatch-ticket` | POST | Almacenista Entregas (operativamente), `auxiliar_admin` | Valida deliveries, descuenta stock |
 | `/pwa-admin/cash-closing` | GET | `auxiliar_admin`, `gerente_sucursal`, `direccion_general` | Cierre diario Legacy, read-only después de activar turnos. |
 | `/pwa-admin/cash-closing` | POST | `auxiliar_admin` (registra), `gerente_sucursal` (autoriza) | Crea `gf.cash.closing` Legacy mientras la sucursal esté inactiva. G018 aplica a este contrato anterior. |
-| `/pwa-admin/expense-create` | POST | `auxiliar_admin`, todos los roles operativos para sus gastos | Crea `hr.expense` con company + analítica |
+| `/pwa-admin/expense-catalog` | GET | Actor móvil con grant vigente para empresa × almacén | Devuelve los artículos Fase 0 efectivos en la fecha; el cliente sólo elige producto y calificadores operativos. |
+| `/pwa-admin/expense-create` | POST | `auxiliar_admin`, todos los roles operativos para sus gastos | Crea el gasto mediante el gate Fase 0. La empresa, almacén, Plaza, UN, pago, cuenta y analítica se derivan en servidor; el cliente no los envía. |
 | `/pwa-admin/expense-approve`, `/expense-reject` | POST | `gerente_sucursal`, `direccion_general` | Aprueba/rechaza |
 | `/pwa-admin/requisition-create` | POST | `auxiliar_admin`, otros roles que las disparan | Crea `purchase.order` draft con analytic_distribution |
 | `/pwa-admin/requisition-approve`, `/reject` | POST | `gerente_sucursal`, `direccion_general` | Cambia approval_state |
 | `/pwa-admin/torre/*` | varios | `operador_torres` (revisión central de requisiciones) | Confirma/edita PO |
 | `/pwa-admin/liquidaciones/*` | varios | `gerente_sucursal` (validación final) | Liquidación de jefes de ruta |
 | `/pwa-admin/traspaso-mp/iguala-stock` | GET | `auxiliar_admin`, `gerente_sucursal` | Hardcoded para Fabricación-Iguala |
+
+Para gasto general, el comprobante se sube primero a `/pwa/evidence/upload` con
+`context: "expense"`, sin `linked_model` ni `linked_id`. El `attachment_id`
+resultante se consume una sola vez por `/pwa-admin/expense-create`, que lo liga
+y sella atómicamente con la identidad móvil y la API key. Combustible conserva
+su flujo específico y no comparte esos controles de UI.
 
 Ejemplo de payload (`createCashClosing` — [`admin/api.js:197-199`](../src/modules/admin/api.js)):
 
@@ -1638,6 +1645,7 @@ Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_s
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
 | 2026-07-29 | Codex (cierre móvil sin foto) | §6.6 preserva evidencia histórica, permite cierre/recierre nuevo sin foto y documenta al responsable por token de empleado sin exigir `res.users`. §7.4 separa comprobantes de gastos/Legacy. §12.4 actualiza el rollout backend-first para `gf_pwa_admin` 18.0.2.2.1 con checker normal y renovación de sesión PWA. |
+| 2026-08-15 | Codex (Fase 1 captura de gasto) | §7.4 documenta el catálogo de artículos Fase 0, la resolución contable exclusivamente servidor-side y la evidencia de gasto ligada de forma atómica. |
 | 2026-07-28 | Codex (cortes POS por turno) | §6.6 documenta alcance autoritativo, periodos manuales, snapshots, evidencia, idempotencia, concurrencia e invariantes. §7.4 agrega endpoints/capacidades Noche-Día y separa Legacy. §12.4 fija el orden de upgrade backend-first y rollback antes/después de activación. El manual por rol añade la operación completa de Angy. |
 | 2026-04-27 | Claude (auto-generado, review por Yamil) | Generación inicial. Cubre 18 secciones, 162+ endpoints, 9 roles operativos + 7 fuera de scope, 5 diagramas Mermaid embebidos. Branch: `docs/code-manual-initial`. Necesita review humano antes de considerarse fuente única de verdad. |
 | 2026-04-27 | Claude (verificación P1 + ajustes scope) | Reescritura de §8 a 11 roles operativos (9 primarios + 2 secundarios `auxiliar_produccion` y `auxiliar_ruta`). §8.12 reducida a 5 roles fuera de scope. Matriz Mermaid §4.4 actualizada con 2 nuevos nodos. §12 actualizada con dominio real `colaboradores-pwa.vercel.app`. §7.7 anota que `gf.inventory.posting` vive en `gf_production_ops` y que tiene 56.2% records en error en producción al momento de la auditoría. |
