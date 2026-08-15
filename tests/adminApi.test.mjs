@@ -7,11 +7,26 @@ import {
   normalizePosProductsResponse,
 } from '../src/modules/admin/posProducts.js'
 import * as posProducts from '../src/modules/admin/posProducts.js'
+import { createSaleOrder } from '../src/modules/admin/api.js'
 
-test('buildPosCatalogPath includes company and partner filters when present', () => {
+const originalFetch = globalThis.fetch
+const originalLocalStorage = globalThis.localStorage
+const originalWindow = globalThis.window
+
+function response(payload) {
+  return { ok: true, status: 200, async text() { return JSON.stringify(payload) } }
+}
+
+test.afterEach(() => {
+  globalThis.fetch = originalFetch
+  globalThis.localStorage = originalLocalStorage
+  globalThis.window = originalWindow
+})
+
+test('buildPosCatalogPath ignores the administrative company selection', () => {
   assert.equal(
     buildPosCatalogPath({ warehouseId: 76, companyId: 35, partnerId: 9001 }),
-    '/pwa-admin/pos-products?warehouse_id=76&company_id=35&partner_id=9001',
+    '/pwa-admin/pos-products?warehouse_id=76&partner_id=9001',
   )
 })
 
@@ -23,11 +38,11 @@ test('POS catalog and customer path builders append the exact day scope', () => 
       partnerId: 9001,
       posScope: 'day',
     }),
-    '/pwa-admin/pos-products?warehouse_id=76&company_id=35&partner_id=9001&pos_scope=day',
+    '/pwa-admin/pos-products?warehouse_id=76&partner_id=9001&pos_scope=day',
   )
   assert.equal(
     posProducts.buildPosCustomerSearchPath('hielo', 35, { posScope: 'day' }),
-    '/pwa-admin/customers?q=hielo&company_id=35&pos_scope=day',
+    '/pwa-admin/customers?q=hielo&pos_scope=day',
   )
 })
 
@@ -39,6 +54,32 @@ test('POS path builders reject non-canonical scopes', () => {
       TypeError,
     )
   }
+test('createSaleOrder does not send an administrative company selection to POS', async () => {
+  globalThis.localStorage = {
+    getItem: () => JSON.stringify({ session_token: 'pos-token' }),
+  }
+  globalThis.window = { dispatchEvent() {} }
+  let request
+  globalThis.fetch = async (url, options = {}) => {
+    request = { url, options }
+    return response({ ok: true, data: { order_id: 99 } })
+  }
+
+  await createSaleOrder({
+    company_id: 35,
+    warehouse_id: 76,
+    partner_id: 9001,
+    payment_method: 'cash',
+    lines: [{ product_id: 776, qty: 1 }],
+  })
+
+  assert.equal(request.url, '/odoo-api/pwa-admin/sale-create')
+  assert.deepEqual(JSON.parse(request.options.body).params, {
+    warehouse_id: 76,
+    partner_id: 9001,
+    payment_method: 'cash',
+    lines: [{ product_id: 776, qty: 1 }],
+  })
 })
 
 test('normalizePosCatalogResponse preserves products and pricelist metadata', () => {

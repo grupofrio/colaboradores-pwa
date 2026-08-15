@@ -158,7 +158,6 @@ export function getPosCatalog(filters = {}) {
   const posScope = readPosScopeOption(filters)
   return api('GET', buildPosCatalogPath({
     warehouseId: filters?.warehouseId,
-    companyId: filters?.companyId,
     partnerId: filters?.partnerId,
     ...(posScope === undefined ? {} : { posScope }),
   }))
@@ -176,7 +175,6 @@ export function getPosProducts(arg) {
   const posScope = readPosScopeOption(filters)
   return api('GET', buildPosCatalogPath({
     warehouseId: filters?.warehouseId,
-    companyId: filters?.companyId,
     partnerId: filters?.partnerId,
     ...(posScope === undefined ? {} : { posScope }),
   }))
@@ -193,7 +191,6 @@ export function searchCustomers(query, companyId, options = {}) {
     'GET',
     buildPosCustomerSearchPath(
       query,
-      companyId,
       posScope === undefined ? {} : { posScope },
     ),
   )
@@ -205,7 +202,6 @@ export function searchCustomers(query, companyId, options = {}) {
 export function getDefaultCustomer(companyId, options = {}) {
   const posScope = readPosScopeOption(options)
   return api('GET', `/pwa-admin/default-customer${toQuery({
-    company_id: companyId,
     pos_scope: posScope,
   })}`)
     .then((response) => requireSuccessfulPosRead(response, posScope))
@@ -217,6 +213,7 @@ export function createSaleOrder(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new TypeError('Los datos de la venta no son válidos.')
   }
+  const { company_id: _administrativeCompanyId, ...posData } = data
   const posScope = readOwnIntent(data, 'pos_scope', normalizePosScope)
   const nightPos = readOwnIntent(data, 'night_pos', (value) => {
     if (typeof value !== 'string' || value !== '1') {
@@ -225,7 +222,7 @@ export function createSaleOrder(data) {
     return value
   })
   return api('POST', '/pwa-admin/sale-create', {
-    ...data,
+    ...posData,
     ...(posScope.present ? { pos_scope: posScope.value } : {}),
     ...(nightPos.present ? { night_pos: nightPos.value } : {}),
   })
