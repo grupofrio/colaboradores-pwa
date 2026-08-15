@@ -23,7 +23,14 @@ import { readM6Access } from './modules/caja-conciliacion/m6/access'
 import { readM7Access } from './modules/rentabilidad-costos/m7/access'
 import { canAccessHectorNightPos } from './modules/admin/nightPosAccess'
 import { DAY_POS_FLOW, NIGHT_POS_FLOW } from './modules/admin/posFlow'
-import { readTalentRhAccess } from './modules/talento/access'
+import {
+  entitlementFromError,
+  entitlementFromMe,
+  forgetTalentRhEntitlement,
+  resolveTalentRhRouteDecision,
+} from './modules/talento/access'
+import { fetchMe } from './modules/talento/talentoApi'
+import { TalentState } from './modules/talento/TalentState'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -220,7 +227,7 @@ function getStoredSession() {
       localStorage.removeItem('gf_session')
       return null
     }
-    return normalized
+    return forgetTalentRhEntitlement(normalized)
   } catch {
     // JSON corrupto/ilegible: eliminarlo para que la próxima carga no vuelva a
     // fallar por el mismo valor. Defensivo: removeItem no debe propagar error;
@@ -353,11 +360,48 @@ function AttendanceRoute({ children }) {
   return children
 }
 
+function TalentRhBootstrap() {
+  const { session, updateSession } = useSession()
+  const identity = isValidAuthenticatedSession(session)
+    ? `${session.employee_id}:${session.session_token}`
+    : ''
+  const status = session?.talent_rh_status
+
+  useEffect(() => {
+    if (!identity) return undefined
+    if (status && status !== 'unknown') return undefined
+    let cancelled = false
+    fetchMe()
+      .then((me) => {
+        if (!cancelled) updateSession(entitlementFromMe(me))
+      })
+      .catch((err) => {
+        if (!cancelled) updateSession(entitlementFromError(err))
+      })
+    return () => { cancelled = true }
+    // updateSession se recrea cada render; identity+status bastan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, status])
+
+  return null
+}
+
 function TalentRhRoute({ children }) {
-  const { session } = useSession()
-  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
-  if (readTalentRhAccess(session).level !== 'global') return <Navigate to="/" replace />
-  return children
+  const { session, updateSession } = useSession()
+  const decision = resolveTalentRhRouteDecision(session)
+  if (decision.type === 'login') return <Navigate to="/login" replace />
+  if (decision.type === 'loading') return <TalentState status="loading" />
+  if (decision.type === 'error') {
+    return (
+      <TalentState
+        status="error"
+        message="No se pudo comprobar tu acceso a Talento. Revisa tu red."
+        onRetry={() => updateSession({ talent_rh_status: 'unknown' })}
+      />
+    )
+  }
+  if (decision.type === 'allow') return children
+  return <Navigate to="/" replace />
 }
 
 // La política registrada `iguala_sales` controla tarjeta, navegación, clic y
@@ -667,7 +711,7 @@ export default function App() {
   }, [session])
 
   function login(sessionData) {
-    const next = normalizeSessionRoleContext(sessionData)
+    const next = forgetTalentRhEntitlement(normalizeSessionRoleContext(sessionData))
     // Codex §6: nonce de scope NO sensible por sesión — separa re-logins de la
     // misma persona en las claves de caché. Se genera una vez y persiste con la
     // sesión; estable durante la sesión, nuevo en cada login.
@@ -706,6 +750,7 @@ export default function App() {
 
   return (
     <SessionContext.Provider value={{ session, login, logout, updateSession }}>
+      <TalentRhBootstrap />
       <ToastProvider>
       <BrowserRouter>
         <ErrorBoundary>

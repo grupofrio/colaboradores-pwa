@@ -1,31 +1,124 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readTalentRhAccess } from '../src/modules/talento/access.js'
+import {
+  entitlementFromError,
+  entitlementFromMe,
+  forgetTalentRhEntitlement,
+  hydrateTalentRhFromMe,
+  readTalentRhAccess,
+  resolveTalentRhRouteDecision,
+  shouldFetchTalentMe,
+} from '../src/modules/talento/access.js'
 import { mapTalentError, TALENT_ERROR_MESSAGES, TALENT_SECTION_ENDPOINTS, classifyTalentStatus, mergeCapacitacionAndMe } from '../src/modules/talento/talentoApi.js'
 import { getModuleById } from '../src/modules/registry.js'
 import { isModuleVisibleForSession } from '../src/lib/navModel.js'
 
+function sess(extra = {}) {
+  return { employee_id: 1, session_token: 't', ...extra }
+}
+
 test('talent_rh: sesión inválida falla cerrada', () => {
   assert.equal(readTalentRhAccess(null).level, 'none')
   assert.equal(readTalentRhAccess({}).level, 'none')
+  assert.equal(resolveTalentRhRouteDecision(null).type, 'login')
 })
 
-test('talent_rh: direccion_general ve Talento', () => {
-  const session = { employee_id: 1, session_token: 't', role: 'direccion_general' }
-  assert.equal(readTalentRhAccess(session).level, 'global')
-  const mod = getModuleById('talento')
-  assert.equal(isModuleVisibleForSession(mod, session), true)
+test('finding: RH Odoo sin direccion_general ve Talento tras /me', () => {
+  const session = sess({ role: 'jefe_ruta' })
+  assert.equal(session.role !== 'direccion_general', true)
+  assert.equal(readTalentRhAccess(session).status, 'unknown')
+  assert.equal(isModuleVisibleForSession(getModuleById('talento'), session), false)
+  const hydrated = { ...session, ...entitlementFromMe({ talent_rh: true }) }
+  assert.equal(readTalentRhAccess(hydrated).level, 'global')
+  assert.equal(readTalentRhAccess(hydrated).reason, 'odoo_me')
+  assert.equal(isModuleVisibleForSession(getModuleById('talento'), hydrated), true)
+  assert.equal(resolveTalentRhRouteDecision(hydrated).type, 'allow')
 })
 
-test('talent_rh: jefe_ruta no ve Talento RH', () => {
-  const session = { employee_id: 2, session_token: 't', role: 'jefe_ruta' }
+test('direccion_general sin talent_rh backend no ve Talento', () => {
+  const session = {
+    ...sess({ role: 'direccion_general' }),
+    ...entitlementFromMe({ talent_rh: false, can_access_rh: false }),
+  }
   assert.equal(readTalentRhAccess(session).level, 'none')
-  const mod = getModuleById('talento')
-  assert.equal(isModuleVisibleForSession(mod, session), false)
+  assert.equal(readTalentRhAccess(session).status, 'denied')
+  assert.equal(isModuleVisibleForSession(getModuleById('talento'), session), false)
+  assert.equal(resolveTalentRhRouteDecision(session).type, 'home')
+})
+
+test('empleado normal talent_rh false no ve Talento', () => {
+  const session = {
+    ...sess({ role: 'jefe_ruta' }),
+    ...entitlementFromMe({ talent_rh: false }),
+  }
+  assert.equal(readTalentRhAccess(session).level, 'none')
+  assert.equal(isModuleVisibleForSession(getModuleById('talento'), session), false)
+})
+
+test('entitlement loading/unknown no muestra contenido RH', () => {
+  const unknown = sess({ role: 'direccion_general' })
+  assert.equal(readTalentRhAccess(unknown).status, 'unknown')
+  assert.equal(readTalentRhAccess(unknown).level, 'none')
+  assert.equal(resolveTalentRhRouteDecision(unknown).type, 'loading')
+  assert.equal(isModuleVisibleForSession(getModuleById('talento'), unknown), false)
+  const loading = sess({ talent_rh_status: 'loading', talent_rh: false })
+  assert.equal(readTalentRhAccess(loading).status, 'loading')
+  assert.equal(readTalentRhAccess(loading).level, 'none')
+  assert.equal(resolveTalentRhRouteDecision(loading).type, 'loading')
+})
+
+test('/pwa-talento/me 401 → sesión expirada', () => {
+  const patch = entitlementFromError({ status: 401, code: 'no_session' })
+  const session = { ...sess(), ...patch }
+  assert.equal(readTalentRhAccess(session).status, 'expired')
+  assert.equal(resolveTalentRhRouteDecision(session).type, 'login')
+  assert.equal(readTalentRhAccess(session).level, 'none')
+})
+
+test('/pwa-talento/me 403 → denied', () => {
+  const session = { ...sess(), ...entitlementFromError({ status: 403, code: 'talent_access_denied' }) }
+  assert.equal(readTalentRhAccess(session).status, 'denied')
+  assert.equal(resolveTalentRhRouteDecision(session).type, 'home')
+})
+
+test('network error no concede Talento', () => {
+  const session = { ...sess({ role: 'direccion_general' }), ...entitlementFromError({ code: 'network' }) }
+  assert.equal(readTalentRhAccess(session).status, 'error')
+  assert.equal(readTalentRhAccess(session).level, 'none')
+  assert.equal(resolveTalentRhRouteDecision(session).type, 'error')
+  assert.equal(isModuleVisibleForSession(getModuleById('talento'), session), false)
+})
+
+test('refresh/direct /talento: bootstrap consulta /me y autoriza RH sin direccion_general', async () => {
+  const stale = sess({
+    role: 'auxiliar_admin',
+    talent_rh: true,
+    talent_rh_status: 'authorized',
+  })
+  const afterRefresh = forgetTalentRhEntitlement(stale)
+  assert.equal(shouldFetchTalentMe(afterRefresh), true)
+  assert.equal(resolveTalentRhRouteDecision(afterRefresh).type, 'loading')
+  assert.equal(isModuleVisibleForSession(getModuleById('talento'), afterRefresh), false)
+  let called = 0
+  const hydrated = await hydrateTalentRhFromMe(async () => {
+    called += 1
+    return { ok: true, talent_rh: true, can_access_rh: true }
+  }, afterRefresh)
+  assert.equal(called, 1)
+  assert.equal(readTalentRhAccess(hydrated).level, 'global')
+  assert.equal(resolveTalentRhRouteDecision(hydrated).type, 'allow')
+  assert.equal(isModuleVisibleForSession(getModuleById('talento'), hydrated), true)
+})
+
+test('frontend job_key no es autorización de Talento', () => {
+  const session = sess({ role: 'direccion_general' })
+  assert.notEqual(readTalentRhAccess(session).reason, 'job_key')
+  assert.equal(readTalentRhAccess(session).level, 'none')
+  assert.equal(isModuleVisibleForSession(getModuleById('talento'), session), false)
 })
 
 test('mi_capacitacion es universal', () => {
-  const session = { employee_id: 3, session_token: 't', role: 'jefe_ruta' }
+  const session = sess({ role: 'jefe_ruta' })
   const mod = getModuleById('mi_capacitacion')
   assert.ok(mod)
   assert.equal(isModuleVisibleForSession(mod, session), true)
@@ -58,12 +151,6 @@ test('classifyTalentStatus: expirada vs unauthorized vs error', () => {
   assert.equal(classifyTalentStatus({ code: 'talent_access_denied' }), 'unauthorized')
   assert.equal(classifyTalentStatus({ code: 'network' }), 'offline')
   assert.equal(classifyTalentStatus({ code: 'internal_error' }), 'error')
-})
-
-test('frontend job_key no es autorización: access.js es UX', () => {
-  const session = { employee_id: 9, session_token: 't', role: 'direccion_general' }
-  assert.equal(readTalentRhAccess(session).reason, 'job_key')
-  assert.ok(readTalentRhAccess(session).level === 'global')
 })
 
 test('mergeCapacitacionAndMe no deja que cap tape /me', () => {

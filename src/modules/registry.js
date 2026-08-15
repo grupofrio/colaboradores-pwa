@@ -462,7 +462,7 @@ export const MODULES = [
     route:  '/talento',
     tone:   'blue',
     roles:  ['direccion_general'],
-    accessPolicy: 'talent_rh',
+    accessPolicy: 'talent_rh', // /pwa-talento/me.talent_rh — no direccion_general
     status: 'live',
     icon:   'equipo',
     navPriority: 19,
