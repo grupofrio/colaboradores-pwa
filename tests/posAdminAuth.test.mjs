@@ -591,10 +591,10 @@ test('POS wrappers surface the real backend 403 revocation envelope', async () =
     })
   }
   assert.deepEqual(calls, [
-    '/odoo-api/pwa-admin/pos-products?warehouse_id=89&company_id=34',
     '/odoo-api/pwa-admin/pos-products?warehouse_id=89',
-    '/odoo-api/pwa-admin/customers?q=publico&company_id=34',
-    '/odoo-api/pwa-admin/default-customer?company_id=34',
+    '/odoo-api/pwa-admin/pos-products?warehouse_id=89',
+    '/odoo-api/pwa-admin/customers?q=publico',
+    '/odoo-api/pwa-admin/default-customer',
   ])
 })
 
@@ -772,7 +772,7 @@ test('admin catalog wrapper preserves authoritative backend products and priceli
   })
 
   assert.deepEqual(calls.map((call) => call.url), [
-    '/odoo-api/pwa-admin/pos-products?warehouse_id=89&company_id=34&partner_id=61000',
+    '/odoo-api/pwa-admin/pos-products?warehouse_id=89&partner_id=61000',
   ])
   assert.deepEqual(catalog, {
     pricelist_id: 81,
@@ -803,7 +803,7 @@ test('Hector catalog wrapper keeps the same authoritative product response contr
   })
 
   assert.deepEqual(calls.map((call) => call.url), [
-    '/odoo-api/pwa-admin/pos-products?warehouse_id=89&company_id=34&partner_id=62001',
+    '/odoo-api/pwa-admin/pos-products?warehouse_id=89&partner_id=62001',
   ])
   assert.deepEqual(catalog, {
     pricelist_id: 92,
@@ -840,7 +840,7 @@ test('admin customer wrapper preserves rank-zero and contact-field results from 
   const response = await searchCustomers('nuevo', 34)
 
   assert.deepEqual(calls.map((call) => call.url), [
-    '/odoo-api/pwa-admin/customers?q=nuevo&company_id=34',
+    '/odoo-api/pwa-admin/customers?q=nuevo',
   ])
   assert.deepEqual(response, expected)
   assert.equal(calls[0].options.headers['X-GF-Employee-Token'], 'employee-token-test')
@@ -873,7 +873,7 @@ test('Hector customer wrapper preserves legacy Iguala results from authoritative
   const response = await searchCustomers('legado', 34)
 
   assert.deepEqual(calls.map((call) => call.url), [
-    '/odoo-api/pwa-admin/customers?q=legado&company_id=34',
+    '/odoo-api/pwa-admin/customers?q=legado',
   ])
   assert.deepEqual(response, expected)
   assert.equal(calls.some((call) => call.url.includes('/get_records')), false)
@@ -906,7 +906,7 @@ test('customer wrapper preserves exact ID query and authoritative response field
   const response = await searchCustomers('ID: 61100', 34)
 
   assert.deepEqual(calls.map((call) => call.url), [
-    '/odoo-api/pwa-admin/customers?q=ID%3A+61100&company_id=34',
+    '/odoo-api/pwa-admin/customers?q=ID%3A+61100',
   ])
   assert.deepEqual(response, expected)
 })
@@ -932,7 +932,7 @@ test('Angelica default-customer wrapper preserves the exact daytime customer', a
   const response = await getDefaultCustomer(34)
 
   assert.deepEqual(calls.map((call) => call.url), [
-    '/odoo-api/pwa-admin/default-customer?company_id=34',
+    '/odoo-api/pwa-admin/default-customer',
   ])
   assert.deepEqual(response, expected)
 })
@@ -958,7 +958,7 @@ test('Hector default-customer wrapper preserves the exact night customer', async
   const response = await getDefaultCustomer(34)
 
   assert.deepEqual(calls.map((call) => call.url), [
-    '/odoo-api/pwa-admin/default-customer?company_id=34',
+    '/odoo-api/pwa-admin/default-customer',
   ])
   assert.deepEqual(response, expected)
   assert.equal(calls.some((call) => call.url.includes('/get_records')), false)
@@ -986,7 +986,7 @@ test('Hector default-customer wrapper surfaces structured missing failure withou
   })
 
   assert.deepEqual(calls.map((call) => call.url), [
-    '/odoo-api/pwa-admin/default-customer?company_id=34',
+    '/odoo-api/pwa-admin/default-customer',
   ])
 })
 

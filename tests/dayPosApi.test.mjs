@@ -97,10 +97,10 @@ test('day wrappers preserve the exact query and JSON transport contract', async 
   })
 
   assert.deepEqual(calls.map((call) => call.url), [
-    '/odoo-api/pwa-admin/pos-products?warehouse_id=89&company_id=34&partner_id=61000&pos_scope=day',
+    '/odoo-api/pwa-admin/pos-products?warehouse_id=89&partner_id=61000&pos_scope=day',
     '/odoo-api/pwa-admin/pos-products?warehouse_id=89&pos_scope=day',
-    '/odoo-api/pwa-admin/customers?q=publico&company_id=34&pos_scope=day',
-    '/odoo-api/pwa-admin/default-customer?company_id=34&pos_scope=day',
+    '/odoo-api/pwa-admin/customers?q=publico&pos_scope=day',
+    '/odoo-api/pwa-admin/default-customer?pos_scope=day',
     '/odoo-api/pwa-admin/today-sales?pos_scope=day',
     '/odoo-api/pwa-admin/sale-detail?order_id=9001&pos_scope=day',
     '/odoo-api/pwa-admin/sale-create',

@@ -54,6 +54,8 @@ test('POS path builders reject non-canonical scopes', () => {
       TypeError,
     )
   }
+})
+
 test('createSaleOrder does not send an administrative company selection to POS', async () => {
   globalThis.localStorage = {
     getItem: () => JSON.stringify({ session_token: 'pos-token' }),

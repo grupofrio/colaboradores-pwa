@@ -213,7 +213,6 @@ export function createSaleOrder(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new TypeError('Los datos de la venta no son válidos.')
   }
-  const { company_id: _administrativeCompanyId, ...posData } = data
   const posScope = readOwnIntent(data, 'pos_scope', normalizePosScope)
   const nightPos = readOwnIntent(data, 'night_pos', (value) => {
     if (typeof value !== 'string' || value !== '1') {
@@ -221,6 +220,14 @@ export function createSaleOrder(data) {
     }
     return value
   })
+  const posData = {}
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(data))) {
+    if (!descriptor.enumerable || key === 'company_id') continue
+    if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+      throw new TypeError('Los datos de la venta no son válidos.')
+    }
+    posData[key] = descriptor.value
+  }
   return api('POST', '/pwa-admin/sale-create', {
     ...posData,
     ...(posScope.present ? { pos_scope: posScope.value } : {}),
