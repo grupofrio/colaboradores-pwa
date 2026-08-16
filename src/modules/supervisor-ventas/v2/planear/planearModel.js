@@ -83,7 +83,9 @@ export function routeReadiness(route = {}, customersCount = 0, coverage = null) 
   }
 }
 
-/** Gate de publicación de la PWA: snapshot + optimizer + review vigentes. */
+/** Gate de publicación de la PWA: snapshot + optimizer + veredicto positivo de review. */
+export const PUBLISHABLE_REVIEW_STATES = Object.freeze(['ready', 'warning'])
+
 export function canPublishPreparedRoute({
   customersCount = 0,
   snapshotOk = false,
@@ -96,11 +98,14 @@ export function canPublishPreparedRoute({
 } = {}) {
   if (Number(customersCount || 0) <= 0) return { ok: false, reason: 'No tiene clientes.' }
   if (!snapshotOk) return { ok: false, reason: 'Falta preparar la demanda.' }
-  if (optimizeBlocked || !planRevision) return { ok: false, reason: 'Falta una optimización vigente.' }
+  if (optimizeBlocked) return { ok: false, reason: 'Falta una optimización vigente.' }
+  if (!planRevision) return { ok: false, reason: 'Falta la revisión vigente.' }
   if (Number(unassigned || 0) > 0) return { ok: false, reason: 'Hay clientes sin asignar.' }
   if (Number(missingGeo || 0) > 0) return { ok: false, reason: 'Hay clientes sin ubicación.' }
-  if (reviewFailed || String(reviewState || '').toLowerCase() === 'blocked') {
-    return { ok: false, reason: 'La revisión bloquea la publicación.' }
+  if (reviewFailed) return { ok: false, reason: 'La revisión bloquea la publicación.' }
+  const state = String(reviewState || '').toLowerCase()
+  if (!PUBLISHABLE_REVIEW_STATES.includes(state)) {
+    return { ok: false, reason: 'La ruta no tiene un veredicto de revisión publicable.' }
   }
   return { ok: true, reason: null }
 }
@@ -333,19 +338,73 @@ export function interpretPublishResponse(resp = {}) {
   }
 }
 
-export const PREPARE_ROUTE_STEPS = Object.freeze(['snapshot', 'optimize', 'review'])
-
-export function publishUsesReviewedRevision({ planRevision, reviewState } = {}) {
+export function publishUsesReviewedRevision({ planRevision, reviewState, optimizeRevision } = {}) {
   const state = String(reviewState || '').toLowerCase()
-  return Boolean(planRevision) && state !== '' && state !== 'none' && state !== 'blocked'
+  if (!planRevision || !PUBLISHABLE_REVIEW_STATES.includes(state)) return false
+  if (optimizeRevision && planRevision !== optimizeRevision) return true
+  return true
 }
 
-export function publishRerunsOptimizer() {
+export function reviewedPublishRevision(reviewResult) {
+  const revision = reviewResult?.revision
+  if (!revision) return null
+  return revision
+}
+
+export async function runPrepareSequence({ generateSnapshot, runOptimize, runReview }) {
+  const snapshot = await generateSnapshot()
+  if (!snapshot?.ok || (snapshot.lineCount != null && snapshot.lineCount <= 0)) {
+    return { snapshot, optimize: null, review: null, complete: false }
+  }
+  const optimize = await runOptimize()
+  if (optimize?.blocked || Number(optimize?.metrics?.unassigned || optimize?.unassigned || 0) > 0) {
+    return { snapshot, optimize, review: null, complete: false }
+  }
+  try {
+    const review = await runReview()
+    const complete = Boolean(review && !review.failed && PUBLISHABLE_REVIEW_STATES.includes(String(review.state || '').toLowerCase()))
+    return { snapshot, optimize, review, complete }
+  } catch {
+    return { snapshot, optimize, review: { failed: true, state: '', revision: null }, complete: false }
+  }
+}
+
+export async function runPublishSequence({
+  customersCount,
+  snapshotOk,
+  optimizeResult,
+  reviewResult,
+  publish,
+}) {
+  const revision = reviewedPublishRevision(reviewResult)
+  const gate = canPublishPreparedRoute({
+    customersCount,
+    snapshotOk,
+    optimizeBlocked: Boolean(optimizeResult == null || !optimizeResult.revision),
+    planRevision: revision,
+    unassigned: Number(optimizeResult?.unassigned || reviewResult?.unassigned || 0),
+    missingGeo: Number(reviewResult?.missingGeo || 0),
+    reviewFailed: Boolean(reviewResult?.failed),
+    reviewState: reviewResult?.state || '',
+  })
+  if (!gate.ok) return { ok: false, published: false, revision: null, gate, publishCalled: false }
+  await publish(revision)
+  return { ok: true, published: true, revision, gate, publishCalled: true }
+}
+
+export function preparationAfterReopen() {
+  return { snapshotResult: null, optimizeResult: null, reviewResult: null }
+}
+
+export function isReopenNotFound(res) {
+  if (String(res?.phase || '').toLowerCase() === 'not_found') return true
+  // Raw ApiError before the shim attaches phase: HTTP 404 of a missing endpoint.
+  if (res && res.phase == null && Number(res.status) === 404) return true
   return false
 }
 
-export function reopenClearsPreparation() {
-  return { snapshotResult: null, optimizeResult: null, reviewResult: null }
+export function shouldAutoOpenEnsure({ alreadyOpened, hasRoute, zoneReady }) {
+  return Boolean(!alreadyOpened && hasRoute && zoneReady)
 }
 
 export function echoedUnionKeys(ensureResp) {
