@@ -107,6 +107,7 @@ export default function AdminGastosForm() {
     () => filterByCompany(expenses, companyId),
     [expenses, companyId],
   )
+  const selectedArticle = catalog.find((item) => item.product_id === Number(articleId))
 
   // Reload expenses al cambiar razón social o warehouse (filtro server-side)
   useEffect(() => {
@@ -184,7 +185,6 @@ export default function AdminGastosForm() {
     if (!amount || Number(amount) <= 0) { setError('Ingresa un monto válido'); return }
     if (expenseMode === 'general' && !companyId) { setError('Selecciona una razón social'); return }
     if (expenseMode === 'fuel' && !fuelRouteId) { setError('Selecciona la ruta de gasolina'); return }
-    const article = catalog.find((item) => item.product_id === Number(articleId))
     if (expenseMode === 'general' && catalogLoading) {
       setError('Espera a que cargue el catálogo de gastos.')
       return
@@ -193,7 +193,7 @@ export default function AdminGastosForm() {
       setError(catalogError)
       return
     }
-    if (expenseMode === 'general' && !article) {
+    if (expenseMode === 'general' && !selectedArticle) {
       setError('Selecciona un artículo de gasto habilitado.')
       return
     }
@@ -206,7 +206,7 @@ export default function AdminGastosForm() {
     const threshold = Number(BACKEND_CAPS.expenseApprovalThreshold ?? 1000)
     const requiresAttach =
       expenseMode === 'general'
-        ? Boolean(article.requires_evidence) || amountNum > threshold
+        ? Boolean(selectedArticle.requires_evidence) || amountNum > threshold
         : BACKEND_CAPS.expenseRequiresAttachment && amountNum > threshold
     if (requiresAttach && !attachment) {
       setError('Este gasto requiere adjuntar comprobante.')
@@ -257,7 +257,7 @@ export default function AdminGastosForm() {
         })
       } else {
         await createFase0Expense({
-          article,
+          article: selectedArticle,
           name,
           amount: amountNum,
           quantity: Number(quantity),
@@ -491,7 +491,7 @@ export default function AdminGastosForm() {
                 </p>
               )}
 
-              {article && (
+              {selectedArticle && (
                 <>
                   <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
                     Cantidad *
@@ -502,26 +502,26 @@ export default function AdminGastosForm() {
                     style={{ ...inputStyle, marginBottom: 12 }}
                   />
 
-                  {article.allowed_operations?.length > 0 && (
+                  {selectedArticle.allowed_operations?.length > 0 && (
                     <>
                       <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
                         Operación *
                       </label>
                       <select value={operation} onChange={e => setOperation(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }}>
                         <option value="">Selecciona una operación</option>
-                        {article.allowed_operations.map(value => <option key={value} value={value}>{value}</option>)}
+                        {selectedArticle.allowed_operations.map(value => <option key={value} value={value}>{value}</option>)}
                       </select>
                     </>
                   )}
 
-                  {(article.requires_asset || article.allowed_asset_kinds?.length > 0) && (
+                  {(selectedArticle.requires_asset || selectedArticle.allowed_asset_kinds?.length > 0) && (
                     <>
                       <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
-                        Tipo de activo {article.requires_asset ? '*' : ''}
+                        Tipo de activo {selectedArticle.requires_asset ? '*' : ''}
                       </label>
                       <select value={assetKind} onChange={e => setAssetKind(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }}>
                         <option value="">Selecciona un tipo</option>
-                        {(article.allowed_asset_kinds || []).map(value => <option key={value} value={value}>{value}</option>)}
+                        {(selectedArticle.allowed_asset_kinds || []).map(value => <option key={value} value={value}>{value}</option>)}
                       </select>
                     </>
                   )}
