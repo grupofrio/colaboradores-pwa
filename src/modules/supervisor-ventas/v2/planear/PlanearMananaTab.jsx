@@ -72,7 +72,11 @@ import {
   canPublishPreparedRoute,
   echoedUnionKeys,
   shouldShowCombinedSources,
-  reopenClearsPreparation,
+  preparationAfterReopen,
+  isReopenNotFound,
+  shouldAutoOpenEnsure,
+  runPrepareSequence,
+  reviewedPublishRevision,
   COVERAGE_TONE,
 } from './planearModel'
 import { canEnsureRoutePlan } from './routesWeekModel'
@@ -447,7 +451,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     customersCount: previewCustomers.length,
     snapshotOk: Boolean(snapshotResult?.ok && snapshotResult?.snapshotId),
     optimizeBlocked: Boolean(optimizeResult == null || !optimizeResult.revision),
-    planRevision: reviewResult?.revision || optimizeResult?.revision || null,
+    planRevision: reviewResult?.revision || null,
     unassigned: Number(optimizeResult?.unassigned || reviewResult?.unassigned || 0),
     missingGeo: Number(reviewResult?.missingGeo || 0),
     reviewFailed: Boolean(reviewResult?.failed),
@@ -516,9 +520,12 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   useEffect(() => {
     if (autoOpenedRef.current || !initialRouteId || phase !== 'ready') return
     const route = routes.find((r) => Number(r.route_id) === Number(initialRouteId))
-    if (route) { autoOpenedRef.current = true; handlePrepare(route) }
+    const zoneReady = canEnsureRoutePlan({ polygonId, subpolygonId, segmentId })
+    if (!shouldAutoOpenEnsure({ alreadyOpened: autoOpenedRef.current, hasRoute: Boolean(route), zoneReady })) return
+    autoOpenedRef.current = true
+    handlePrepare(route)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialRouteId, phase, routes])
+  }, [initialRouteId, phase, routes, polygonId, subpolygonId, segmentId])
 
   // Subpolígonos del polígono elegido.
   useEffect(() => {
@@ -891,32 +898,43 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     }
     setPublishing(true)
     try {
-      setPrepareStage('Preparando demanda…')
-      const snapshot = interpretDemandSnapshotResponse(await generateRoutePlanDemandSnapshot(routePlanId))
-      if (!snapshot.ok || (snapshot.lineCount != null && snapshot.lineCount <= 0)) {
-        setSnapshotResult(snapshot.ok ? { ...snapshot, ok: false, message: 'La demanda no congeló ninguna línea.' } : snapshot)
-        flash(snapshot.message || 'No se pudo preparar la demanda.', 6000)
+      const prepared = await runPrepareSequence({
+        generateSnapshot: async () => {
+          setPrepareStage('Preparando demanda…')
+          return interpretDemandSnapshotResponse(await generateRoutePlanDemandSnapshot(routePlanId))
+        },
+        runOptimize: async () => {
+          setPrepareStage('Optimizando recorrido…')
+          return runOptimize(routePlanId)
+        },
+        runReview: async () => {
+          setPrepareStage('Revisando ruta…')
+          return runReview(routePlanId)
+        },
+      })
+      setSnapshotResult(prepared.snapshot)
+      if (!prepared.snapshot?.ok || (prepared.snapshot.lineCount != null && prepared.snapshot.lineCount <= 0)) {
+        flash(prepared.snapshot?.message || 'No se pudo preparar la demanda.', 6000)
         return
       }
-      setSnapshotResult(snapshot)
-      setPrepareStage('Optimizando recorrido…')
-      const opt = await runOptimize(routePlanId)
-      if (opt.blocked) { flash(opt.message || 'El optimizador no pudo secuenciar la ruta.', 6000); return }
-      if (Number(opt.metrics?.unassigned || 0) > 0) {
-        flash(`${opt.metrics.unassigned} clientes no pudieron entrar en la ruta optimizada.`, 6000)
+      if (!prepared.optimize || prepared.optimize.blocked) {
+        flash(prepared.optimize?.message || 'El optimizador no pudo secuenciar la ruta.', 6000)
         return
       }
-      setPrepareStage('Revisando ruta…')
-      const review = await runReview(routePlanId)
-      setReviewResult(review)
-      if (review.failed || review.state === 'blocked') {
-        flash(review.message || 'La ruta tiene bloqueos; corrígelos antes de publicar.', 6000)
+      if (Number(prepared.optimize.metrics?.unassigned || 0) > 0) {
+        flash(`${prepared.optimize.metrics.unassigned} clientes no pudieron entrar en la ruta optimizada.`, 6000)
+        return
+      }
+      setReviewResult(prepared.review || { failed: true, state: '', revision: null })
+      if (!prepared.complete) {
+        flash(prepared.review?.message || 'La ruta tiene bloqueos; corrígelos antes de publicar.', 6000)
         return
       }
       setPrepareStage('')
       setShowSequence(true)
       flash('Ruta lista para publicar. Revisa el resultado.', 5000)
     } catch (e) {
+      setReviewResult({ failed: true, state: '', revision: null })
       logScreenError('PlanearManana', 'prepareRoute', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
     } finally {
@@ -938,7 +956,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       return
     }
     if (!readiness?.publishable) { flash('Este plan no se puede publicar en su estado actual'); return }
-    const revision = reviewResult?.revision || optimizeResult?.revision || null
+    const revision = reviewedPublishRevision(reviewResult)
     const gate = canPublishPreparedRoute({
       customersCount: previewCustomers.length,
       snapshotOk: Boolean(snapshotResult?.ok && snapshotResult?.snapshotId),
@@ -1001,13 +1019,13 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     setPublishing(true)
     try {
       const res = await reopenRoutePlanForRevision(routePlanId)
-      if (Number(res?.status) === 404 || res?.code === 'NOT_FOUND') {
+      if (isReopenNotFound(res)) {
         setReopenCapable(false)
         flash('Reabrir no está disponible en este servidor.', 5000)
         return
       }
       if (res?.ok === false || String(res?.status || '').toLowerCase() === 'error') throw res
-      const cleared = reopenClearsPreparation()
+      const cleared = preparationAfterReopen()
       setSnapshotResult(cleared.snapshotResult)
       setOptimizeResult(cleared.optimizeResult)
       setReviewResult(cleared.reviewResult)
@@ -1016,7 +1034,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       await loadData()
       flash('Ruta reabierta. Vuelve a Preparar ruta (snapshot → optimizar → revisar) antes de publicar.', 7000)
     } catch (e) {
-      if (Number(e?.status) === 404 || e?.code === 'NOT_FOUND') {
+      if (isReopenNotFound(e)) {
         setReopenCapable(false)
         flash('Reabrir no está disponible en este servidor.', 5000)
         return
@@ -1132,9 +1150,6 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
               <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text }}>Ruta de mañana</div>
               <div style={{ fontSize: 12, color: C.text, marginTop: 4 }}>
                 Planes seleccionados: {echoedSourceKeys.join(' + ')}
-              </div>
-              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                Clientes combinados: {previewCustomers.length || 'Sin dato'}
               </div>
             </div>
           )}
