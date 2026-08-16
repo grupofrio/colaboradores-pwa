@@ -284,7 +284,7 @@ export function interpretReviewResponse(resp = {}) {
   return {
     failed: isErr,
     message: isErr ? (resp?.message || resp?.data?.message || 'No se pudo revisar el plan.') : '',
-    state: String((isErr ? '' : d.readiness_state) || 'ready').toLowerCase(),
+    state: String((isErr ? '' : d.readiness_state) || '').toLowerCase(),
     blockers: Array.isArray(d.blockers) ? d.blockers : [],
     warnings: Array.isArray(d.warnings) ? d.warnings : [],
     missingGeo: (Number(d.missing_geo_count ?? 0) || 0),

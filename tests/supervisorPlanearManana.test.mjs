@@ -510,6 +510,24 @@ test('F5+: interpretReviewResponse mapea el veredicto ready/warning/blocked', ()
   assert.equal(down.failed, true)
 })
 
+test('REVIEW-MALFORMADO: HTTP 200 sin readiness_state no es publicable', () => {
+  for (const data of [{}, { plan_revision: 'rev-9' }]) {
+    const review = interpretReviewResponse({ ok: true, status: 'ok', data })
+    assert.equal(review.failed, false)
+    assert.equal(review.state, '')
+    assert.equal(canPublishPreparedRoute({
+      customersCount: 4,
+      snapshotOk: true,
+      optimizeBlocked: false,
+      planRevision: review.revision || 'rev-9',
+      unassigned: 0,
+      missingGeo: 0,
+      reviewFailed: review.failed,
+      reviewState: review.state,
+    }).ok, false)
+  }
+})
+
 test('F5 hotfix: si la revisión falla, el flujo se detiene antes de publicar', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
   const prepare = tab.slice(tab.indexOf('async function handlePrepareRoute'), tab.indexOf('async function handlePublish'))
