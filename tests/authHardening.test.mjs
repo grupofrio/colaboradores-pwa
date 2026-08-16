@@ -42,7 +42,7 @@ test('/login (estructural exacto): usa isValidAuthenticatedSession, no truthines
 test('getStoredSession: el catch elimina gf_session corrupto y no lanza', () => {
   const start = appSrc.indexOf('function getStoredSession')
   assert.ok(start !== -1, 'existe getStoredSession')
-  const block = appSrc.slice(start, start + 900)
+  const block = appSrc.slice(start, start + 1400)
   // El catch limpia gf_session (defensivo) y devuelve null.
   assert.match(block, /\} catch \{[\s\S]*localStorage\.removeItem\('gf_session'\)[\s\S]*return null/, 'catch limpia gf_session y devuelve null')
   assert.match(block, /try \{ localStorage\.removeItem\('gf_session'\) \} catch \{/, 'removeItem defensivo (no propaga)')

@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { parse } from '@babel/parser'
+import { readUtf8Lf } from './helpers/readUtf8Lf.mjs'
 
 import { buildSupervisorV2SessionProjection } from '../src/modules/supervisor-ventas/v2/sessionProjection.js'
 
@@ -128,9 +128,9 @@ test('login projection: merging an OFF projection overwrites a prior ON projecti
   })
 })
 
-const screenLoginSource = readFileSync(fileURLToPath(
+const screenLoginSource = readUtf8Lf(fileURLToPath(
   new URL('../src/screens/ScreenLogin.jsx', import.meta.url),
-), 'utf8')
+))
 
 function replaceExactlyOnce(source, before, after) {
   assert.equal(source.split(before).length - 1, 1, `mutation target must occur exactly once: ${before}`)

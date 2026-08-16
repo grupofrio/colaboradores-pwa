@@ -23,6 +23,14 @@ import { readM6Access } from './modules/caja-conciliacion/m6/access'
 import { readM7Access } from './modules/rentabilidad-costos/m7/access'
 import { canAccessHectorNightPos } from './modules/admin/nightPosAccess'
 import { DAY_POS_FLOW, NIGHT_POS_FLOW } from './modules/admin/posFlow'
+import {
+  entitlementFromError,
+  entitlementFromMe,
+  forgetTalentRhEntitlement,
+  resolveTalentRhRouteDecision,
+} from './modules/talento/access'
+import { fetchMe } from './modules/talento/talentoApi'
+import { TalentState } from './modules/talento/TalentState'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -36,6 +44,15 @@ import ScreenProfile from './screens/ScreenProfile'
 const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente'))
 // Talento GF — ruta pública, sin sesión (P2.8B.1)
 const ScreenTalentUpload = lazy(() => import('./modules/talent/ScreenTalentUpload'))
+const ScreenMiCapacitacion = lazy(() => import('./modules/talento/ScreenMiCapacitacion'))
+const ScreenTalentoHome = lazy(() => import('./modules/talento/ScreenTalentoHome'))
+const ScreenTalentoPipeline = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoPipeline })))
+const ScreenTalentoInbox = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoInbox })))
+const ScreenTalentoVacancies = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoVacancies })))
+const ScreenTalentoRequisitions = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoRequisitions })))
+const ScreenTalentoInterviews = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoInterviews })))
+const ScreenTalentoAnalytics = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoAnalytics })))
+const ScreenTalentoCandidate = lazy(() => import('./modules/talento/ScreenTalentoOps.jsx').then((m) => ({ default: m.ScreenTalentoCandidate })))
 // E1-C.4 — superficie KOLD Tower read-only (E1-B), montada detrás de TowerRoute (gate por rol autoritativo)
 const ScreenKoldTowerE1 = lazy(() => import('./modules/torre/e1/ScreenKoldTowerE1'))
 // M1-D — Backlog M1 read-only (mismo gate TowerRoute; SIN menú, solo ruta directa)
@@ -210,7 +227,7 @@ function getStoredSession() {
       localStorage.removeItem('gf_session')
       return null
     }
-    return normalized
+    return forgetTalentRhEntitlement(normalized)
   } catch {
     // JSON corrupto/ilegible: eliminarlo para que la próxima carga no vuelva a
     // fallar por el mismo valor. Defensivo: removeItem no debe propagar error;
@@ -341,6 +358,50 @@ function AttendanceRoute({ children }) {
   const module = getModuleById('asistencias')
   if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
   return children
+}
+
+function TalentRhBootstrap() {
+  const { session, updateSession } = useSession()
+  const identity = isValidAuthenticatedSession(session)
+    ? `${session.employee_id}:${session.session_token}`
+    : ''
+  const status = session?.talent_rh_status
+
+  useEffect(() => {
+    if (!identity) return undefined
+    if (status && status !== 'unknown') return undefined
+    let cancelled = false
+    fetchMe()
+      .then((me) => {
+        if (!cancelled) updateSession(entitlementFromMe(me))
+      })
+      .catch((err) => {
+        if (!cancelled) updateSession(entitlementFromError(err))
+      })
+    return () => { cancelled = true }
+    // updateSession se recrea cada render; identity+status bastan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, status])
+
+  return null
+}
+
+function TalentRhRoute({ children }) {
+  const { session, updateSession } = useSession()
+  const decision = resolveTalentRhRouteDecision(session)
+  if (decision.type === 'login') return <Navigate to="/login" replace />
+  if (decision.type === 'loading') return <TalentState status="loading" />
+  if (decision.type === 'error') {
+    return (
+      <TalentState
+        status="error"
+        message="No se pudo comprobar tu acceso a Talento. Revisa tu red."
+        onRetry={() => updateSession({ talent_rh_status: 'unknown' })}
+      />
+    )
+  }
+  if (decision.type === 'allow') return children
+  return <Navigate to="/" replace />
 }
 
 // La política registrada `iguala_sales` controla tarjeta, navegación, clic y
@@ -650,7 +711,7 @@ export default function App() {
   }, [session])
 
   function login(sessionData) {
-    const next = normalizeSessionRoleContext(sessionData)
+    const next = forgetTalentRhEntitlement(normalizeSessionRoleContext(sessionData))
     // Codex §6: nonce de scope NO sensible por sesión — separa re-logins de la
     // misma persona en las claves de caché. Se genera una vez y persiste con la
     // sesión; estable durante la sesión, nuevo en cada login.
@@ -689,6 +750,7 @@ export default function App() {
 
   return (
     <SessionContext.Provider value={{ session, login, logout, updateSession }}>
+      <TalentRhBootstrap />
       <ToastProvider>
       <BrowserRouter>
         <ErrorBoundary>
@@ -709,6 +771,15 @@ export default function App() {
             <Route path="/surveys" element={<ModuleRoleRoute moduleId="encuestas"><ScreenSurveys /></ModuleRoleRoute>} />
             <Route path="/badges" element={<ModuleRoleRoute moduleId="logros"><ScreenBadges /></ModuleRoleRoute>} />
             <Route path="/profile" element={<PrivateRoute><ScreenProfile /></PrivateRoute>} />
+            <Route path="/mi-capacitacion" element={<ModuleRoleRoute moduleId="mi_capacitacion"><ScreenMiCapacitacion /></ModuleRoleRoute>} />
+            <Route path="/talento" element={<TalentRhRoute><ScreenTalentoHome /></TalentRhRoute>} />
+            <Route path="/talento/pipeline" element={<TalentRhRoute><ScreenTalentoPipeline /></TalentRhRoute>} />
+            <Route path="/talento/pendientes" element={<TalentRhRoute><ScreenTalentoInbox /></TalentRhRoute>} />
+            <Route path="/talento/vacantes" element={<TalentRhRoute><ScreenTalentoVacancies /></TalentRhRoute>} />
+            <Route path="/talento/requisiciones" element={<TalentRhRoute><ScreenTalentoRequisitions /></TalentRhRoute>} />
+            <Route path="/talento/entrevistas" element={<TalentRhRoute><ScreenTalentoInterviews /></TalentRhRoute>} />
+            <Route path="/talento/analytics" element={<TalentRhRoute><ScreenTalentoAnalytics /></TalentRhRoute>} />
+            <Route path="/talento/candidatos/:id" element={<TalentRhRoute><ScreenTalentoCandidate /></TalentRhRoute>} />
 
             {/* ── E1-C.4 — KOLD Tower (read-only, gated por tower_status autoritativo; SIN menú) ── */}
             <Route path="/torre" element={<TowerRoute><ScreenKoldTowerE1Mount /></TowerRoute>} />
