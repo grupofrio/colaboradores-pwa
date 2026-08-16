@@ -225,8 +225,7 @@ export function resolveArmarZone({ poly, sub, seg, src } = {}) {
   }
 }
 
-export function canEnsureRoutePlan({ polygonId, subpolygonId, segmentId, sources } = {}) {
-  if (Array.isArray(sources) && sources.length) return true
+export function canEnsureRoutePlan({ polygonId, subpolygonId, segmentId } = {}) {
   return Boolean(Number(polygonId) || Number(subpolygonId) || Number(segmentId))
 }
 

@@ -241,6 +241,9 @@ test('P0-03: polígono sobrevive roundtrip SP + poly gana sobre src', () => {
   assert.equal(won.subpolygonId, 39)
   assert.equal(canEnsureRoutePlan({ polygonId: 0, subpolygonId: 0, segmentId: 0, sources: [] }), false)
   assert.equal(canEnsureRoutePlan({ polygonId: 26, sources: [] }), true)
+  assert.equal(canEnsureRoutePlan({
+    polygonId: 0, subpolygonId: 0, segmentId: 0, sources: [{ tipo: 'SP', id: 39 }],
+  }), false)
 })
 
 test('P1-04: pre-contrato null ≠ 0 y breakdown sin doble conteo', () => {
