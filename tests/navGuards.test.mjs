@@ -4,8 +4,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { MODULES, getModuleById, isModuleVisibleForRoles } from '../src/modules/registry.js'
-import { getEffectiveJobKeys } from '../src/lib/roleContext.js'
+import { MODULES, getModuleById } from '../src/modules/registry.js'
+import { isModuleVisibleForSession } from '../src/lib/navModel.js'
 import { isValidAuthenticatedSession } from '../src/lib/session.js'
 
 const appSrc = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
@@ -16,7 +16,7 @@ function canEnter(session, moduleId) {
   if (!isValidAuthenticatedSession(session)) return 'login'
   const module = getModuleById(moduleId)
   if (!module) return 'home'
-  if (!isModuleVisibleForRoles(module, getEffectiveJobKeys(session))) return 'home'
+  if (!isModuleVisibleForSession(module, session)) return 'home'
   return 'monta'
 }
 
@@ -39,7 +39,11 @@ test('supervisor_ventas: entra Equipo; NO Admin/Gerente sin permiso explícito',
   assert.equal(canEnter(sv, 'admin_sucursal'), 'home')
   assert.equal(canEnter(sv, 'gerente'), 'home')
   assert.equal(canEnter(sv, 'copiloto_gerencial'), 'home')
-  assert.equal(canEnter(sv, 'copiloto_supervisor'), 'monta')
+  assert.equal(canEnter(sv, 'copiloto_supervisor'), 'home')
+  assert.equal(canEnter({
+    ...sv,
+    capabilities: { supervisorCopilot: true },
+  }, 'copiloto_supervisor'), 'monta')
   assert.equal(canEnter(sv, 'torre_control'), 'home')
 })
 

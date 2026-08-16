@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { getModuleById } from '../src/modules/registry.js'
-import { getNavModules } from '../src/lib/navModel.js'
+import { getNavModules, getHomeModulesForSession } from '../src/lib/navModel.js'
 import {
   isSupervisorCopilotPath,
   SUPERVISOR_COPILOT_CHAT,
@@ -14,12 +14,22 @@ import {
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
 const s = (role) => ({ employee_id: 100, session_token: 'h.p.s', role })
 
-test('registry: copiloto_supervisor solo supervisor_ventas', () => {
+test('N5: copiloto_supervisor exige capability real en nav y home', () => {
+  const without = s('supervisor_ventas')
+  const withCap = { ...s('supervisor_ventas'), capabilities: { supervisorCopilot: true } }
+  assert.ok(!getNavModules(without).some((m) => m.id === 'copiloto_supervisor'))
+  assert.ok(!getHomeModulesForSession(without).some((m) => m.id === 'copiloto_supervisor'))
+  assert.ok(getNavModules(withCap).some((m) => m.id === 'copiloto_supervisor'))
+  assert.ok(getHomeModulesForSession(withCap).some((m) => m.id === 'copiloto_supervisor'))
   const mod = getModuleById('copiloto_supervisor')
   assert.equal(mod.route, '/equipo/copiloto')
   assert.deepEqual(mod.roles, ['supervisor_ventas'])
   assert.ok(!getNavModules(s('gerente_sucursal')).some((m) => m.id === 'copiloto_supervisor'))
-  assert.ok(getNavModules(s('supervisor_ventas')).some((m) => m.id === 'copiloto_supervisor'))
+  assert.ok(!getNavModules(s('supervisor_ventas')).some((m) => m.id === 'copiloto_supervisor'))
+  assert.ok(getNavModules({
+    ...s('supervisor_ventas'),
+    capabilities: { supervisorCopilot: true },
+  }).some((m) => m.id === 'copiloto_supervisor'))
 })
 
 test('no abre el Copiloto Gerencial', () => {
@@ -73,6 +83,6 @@ test('P0-05/P1-05: copiloto gated + unwrap error + allowlist', async () => {
   assert.equal(isAllowedSupervisorCopilotHref('/equipo/rutas/planear'), true)
   assert.equal(isAllowedSupervisorCopilotHref('https://evil.example/phish'), false)
   const shell = src('modules/supervisor-ventas/v2/SupervisorV2Shell.jsx')
-  assert.match(shell, /getSupervisorCopilotCapabilities/)
+  assert.match(shell, /hasSupervisorCopilotCapability/)
   assert.match(shell, /t\.key !== 'copiloto'/)
 })

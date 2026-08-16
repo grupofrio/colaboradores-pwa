@@ -42,7 +42,7 @@ test('Aida (tower_status supervisor_ventas): ve la tarjeta Torre', () => {
 
 test('Home conserva el orden histórico del registry y agrega Torre al final', () => {
   assert.deepEqual(ids(getHomeModulesForSession(towerSession('supervisor_ventas'))), [
-    'kpis', 'supervisor_rutas_manana', 'copiloto_supervisor', 'encuestas', 'logros', 'mi_capacitacion', 'supervisor_ventas', 'brief_dia', 'torre_operativa',
+    'kpis', 'supervisor_rutas_manana', 'encuestas', 'logros', 'mi_capacitacion', 'supervisor_ventas', 'brief_dia', 'torre_operativa',
   ])
 })
 
@@ -177,7 +177,7 @@ test('Aida móvil: Torre visible (Equipo antes por prioridad); overflow a Más',
   const m = buildMobileNav(sess, '/')
   // navPriority: Equipo(10) < Torre(15) < Brief(16) < KPIs(30) < Mañana(35) < Encuestas(40) < Premios(50)
   const nav = ids(getNavModules(sess))
-  assert.deepEqual(nav, ['supervisor_ventas', 'torre_operativa', 'brief_dia', 'kpis', 'supervisor_rutas_manana', 'copiloto_supervisor', 'encuestas', 'logros'])
+  assert.deepEqual(nav, ['supervisor_ventas', 'torre_operativa', 'brief_dia', 'kpis', 'supervisor_rutas_manana', 'encuestas', 'logros'])
   // móvil: Inicio + [Equipo, Torre] directos + Más + Yo — el Brief NO desplaza
   // a Torre de la barra (por eso su navPriority es 16 y no 11).
   assert.deepEqual(ids(m.primary), ['supervisor_ventas', 'torre_operativa'])

@@ -25,8 +25,9 @@ import { readM6Access } from '../modules/caja-conciliacion/m6/access.js'
 import { readM7Access } from '../modules/rentabilidad-costos/m7/access.js'
 import { canAccessHectorNightPos } from '../modules/admin/nightPosAccess.js'
 import { readAttendanceAccess } from '../modules/asistencias/access.js'
-import { readConfiguredVentasIgualaAccessForSession } from '../modules/ventas-iguala/access.js'
 import { readTalentRhAccess } from '../modules/talento/access.js'
+import { readConfiguredVentasIgualaAccessForSession } from '../modules/ventas-iguala/access.js'
+import { hasSupervisorCopilotCapability } from '../modules/supervisor-ventas/v2/sessionProjection.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
 // Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
@@ -53,6 +54,9 @@ export const ACCESS_POLICY_RESOLVERS = Object.freeze({
       : 'none',
   }),
   talent_rh: readTalentRhAccess,
+  supervisor_copilot: (session) => ({
+    level: hasSupervisorCopilotCapability(session) ? 'global' : 'none',
+  }),
 })
 
 // Resuelve una accessPolicy. FAIL-CLOSED: si la política no está registrada

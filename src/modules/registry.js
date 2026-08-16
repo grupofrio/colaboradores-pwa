@@ -53,6 +53,7 @@ export const MODULES = [
     route:  '/equipo/copiloto',
     tone:   'blue',
     roles:  ['supervisor_ventas'],
+    accessPolicy: 'supervisor_copilot',
     status: 'gated',
     icon:   'copiloto',
     navPriority: 36,
