@@ -12,20 +12,21 @@ function toQuery(filters = {}) {
 
 export function buildPosCatalogPath(filters = {}) {
   const posScope = readPosScopeOption(filters)
-  const { warehouseId, companyId, partnerId } = filters
+  const { warehouseId, partnerId } = filters
   return `/pwa-admin/pos-products${toQuery({
     warehouse_id: warehouseId,
-    company_id: companyId,
     partner_id: partnerId,
     pos_scope: posScope,
   })}`
 }
 
-export function buildPosCustomerSearchPath(query, companyId, options = {}) {
+export function buildPosCustomerSearchPath(query, companyOrOptions, maybeOptions = {}) {
+  const options = companyOrOptions && typeof companyOrOptions === 'object'
+    ? companyOrOptions
+    : maybeOptions
   const posScope = readPosScopeOption(options)
   return `/pwa-admin/customers${toQuery({
     q: query,
-    company_id: companyId,
     pos_scope: posScope,
   })}`
 }

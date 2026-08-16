@@ -13,7 +13,6 @@ test('general expense form delegates to the fase 0 adapter and removes direct ev
   assert.doesNotMatch(source, /linked_model:\s*['"]hr\.expense['"]/)
   assert.match(source, /expenseMode === 'general'[\s\S]*createFase0Expense/)
 })
-
 test('selected expense article is available to both render and submission', () => {
   const submitStart = source.indexOf('async function handleSubmit()')
   const selectedArticle = source.indexOf(

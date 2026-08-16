@@ -6,15 +6,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
   DAY_CONTROL_FIXTURE, DAY_CONTROL_FIXTURE_DEGRADED, RADAR_FIXTURE,
 } from '../src/modules/supervisor-ventas/dayControl/fixtures.js'
+import { bufferUtf8Lf, readUtf8Lf } from './helpers/readUtf8Lf.mjs'
 
 const DIR = fileURLToPath(new URL('../src/modules/supervisor-ventas/dayControl/contracts/', import.meta.url))
-const read = (name) => readFileSync(DIR + name)
-const readJson = (name) => JSON.parse(read(name).toString('utf8'))
+const read = (name) => bufferUtf8Lf(DIR + name)
+const readJson = (name) => JSON.parse(readUtf8Lf(DIR + name))
 
 const SOURCE = readJson('CONTRACT_SOURCE.json')
 const BACKEND_MERGE_HEAD = '0014dc512aa3329b719d9ef24fbd0c8e939c7c8d'
@@ -265,7 +265,7 @@ test('P1-B/P2: dedup por ruta + occurred_at = mínimo por INSTANTE en UTC canón
 
 test('P3-C: el head canónico del mirror doc == CONTRACT_SOURCE.source.head (no divergen)', () => {
   const MIRROR = fileURLToPath(new URL('../docs/supervisor/SUPERVISOR_DAY_CONTROL_CONTRACT_MIRROR.md', import.meta.url))
-  const doc = readFileSync(MIRROR, 'utf8')
+  const doc = readUtf8Lf(MIRROR)
   const m = /Ancla canónica \(merge head backend\):\*\*\s*>\s*`([0-9a-f]{7,40})`/.exec(doc)
   assert.ok(m, 'el mirror debe declarar el head backend canónico actual')
   assert.equal(m[1], SOURCE.source.head, 'head del mirror diverge de CONTRACT_SOURCE.source.head')
