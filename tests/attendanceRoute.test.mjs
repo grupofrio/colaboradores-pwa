@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 
 test('attendance route: direct access uses the same canonical session-aware policy', () => {
-  assert.match(app, /import \{ isModuleVisibleForSession \} from '\.\/lib\/navModel'/)
+  assert.match(app, /import \{ isModuleVisibleForSession, getModuleRouteDecisionForSession \} from '\.\/lib\/navModel'/)
   assert.match(app, /function AttendanceRoute\(\{ children \}\)/)
 
   const start = app.indexOf('function AttendanceRoute')
