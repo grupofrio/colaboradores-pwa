@@ -10,8 +10,10 @@ import { fileURLToPath } from 'node:url'
 import {
   routeReadiness, summarizeResources, capacityLabel, personRolesLabel, planStateLabel,
   derivePlanAssignment, resourceOptions, resourceReadiness, interpretOptimizeResponse,
-  interpretReviewResponse, interpretDemandSnapshotResponse, interpretPublishResponse,
-  canPublishPreparedRoute, publishUsesReviewedRevision,
+  interpretReviewResponse,
+  interpretDemandSnapshotResponse,
+  interpretPublishResponse,
+  canPublishPreparedRoute,
   echoedUnionKeys, shouldShowCombinedSources, runPrepareSequence, runPublishSequence,
   reviewedPublishRevision, isReopenNotFound, shouldAutoOpenEnsure, preparationAfterReopen,
 } from '../src/modules/supervisor-ventas/v2/planear/planearModel.js'
@@ -419,16 +421,14 @@ test('F5: optimize+review+publish — wrappers y shims', () => {
   assert.ok(/body\?\.confirm_readiness_warnings \? \{ confirm_readiness_warnings/.test(lib), 'el shim de publish reenvía confirm_readiness_warnings')
 })
 
-test('F5: handlePublish publica la revisión revisada SIN volver a optimizar', () => {
+test('F5: handlePublish publica vía runPublishSequence SIN reoptimizar', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
   assert.ok(/Publicar ruta optimizada/.test(tab), 'el botón dice "Publicar ruta optimizada"')
   assert.ok(!/Optimizar y publicar/.test(tab), 'ya no dice Optimizar y publicar')
   const handler = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('function toggleDemand'))
+  assert.match(handler, /runPublishSequence\(/, 'publicar usa el orquestador real')
   assert.ok(!/runOptimize\(routePlanId\)/.test(handler), 'publicar NO llama al optimizer')
   assert.ok(!/runReview\(routePlanId\)/.test(handler), 'publicar NO vuelve a revisar')
-  assert.ok(/publishRoutePlan\(routePlanId, revision/.test(handler), 'publica la revisión revisada')
-  assert.ok(/reviewedPublishRevision\(reviewResult\)/.test(handler), 'usa la revisión que la supervisora revisó')
-  assert.ok(!/optimizeResult\?\.revision/.test(handler), 'no cae a la revisión del optimizer')
   assert.ok(/revision_mismatch/.test(handler), 'maneja revision_mismatch')
   assert.ok(/Vuelve a Preparar ruta/.test(handler), 'mismatch obliga a preparar de nuevo')
   assert.ok(!/ready = await prepare\(\)/.test(handler), 'no reoptimiza en silencio')
@@ -528,13 +528,24 @@ test('REVIEW-MALFORMADO: HTTP 200 sin readiness_state no es publicable', () => {
   }
 })
 
-test('F5 hotfix: si la revisión falla, el flujo se detiene antes de publicar', () => {
+test('F5 hotfix: review fallido o vacío no llama publish', async () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
   const prepare = tab.slice(tab.indexOf('async function handlePrepareRoute'), tab.indexOf('async function handlePublish'))
+  assert.match(prepare, /runPrepareSequence\(/)
   assert.match(prepare, /if \(!prepared\.complete\)/, 'un fallo de review corta Preparar ruta')
   const handler = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('function toggleDemand'))
-  assert.match(handler, /reviewFailed: Boolean\(reviewResult\?\.failed\)/, 'publicar exige revisión vigente')
+  assert.match(handler, /runPublishSequence\(/)
   assert.doesNotMatch(handler, /runOptimize\(routePlanId\)/)
+  let publishCalls = 0
+  const failed = await runPublishSequence({
+    customersCount: 3,
+    snapshotOk: true,
+    optimizeResult: { revision: 'opt-1' },
+    reviewResult: { failed: true, state: '', revision: null },
+    publish: async () => { publishCalls += 1 },
+  })
+  assert.equal(failed.publishCalled, false)
+  assert.equal(publishCalls, 0)
 })
 
 test('F5+: interpretPublishResponse — códigos accionables NO son éxito', () => {
@@ -648,6 +659,7 @@ test('P0: prepare+publish usa exactamente la revisión de review', async () => {
       return { revision: 'rev-9', state: 'ready', failed: false, missingGeo: 0 }
     },
   })
+  assert.equal(calls.snapshot, 1)
   assert.equal(calls.optimize, 1)
   assert.equal(calls.review, 1)
   assert.equal(prepared.complete, true)
@@ -663,9 +675,66 @@ test('P0: prepare+publish usa exactamente la revisión de review', async () => {
   assert.equal(calls.publish, 1)
   assert.equal(sentRevision, 'rev-9')
   assert.equal(pub.revision, 'rev-9')
-  assert.equal(publishUsesReviewedRevision({
-    planRevision: 'rev-9', reviewState: 'ready', optimizeRevision: 'opt-1',
-  }), true)
+  assert.equal(pub.publishCalled, true)
+})
+
+test('PUBLISH: review throw/null/empty no publica; mismatch no reoptimiza', async () => {
+  const calls = { snapshot: 0, optimize: 0, review: 0, publish: 0 }
+  await runPrepareSequence({
+    generateSnapshot: async () => { calls.snapshot += 1; return { ok: true, snapshotId: 1, lineCount: 2 } },
+    runOptimize: async () => { calls.optimize += 1; return { revision: 'opt-1', blocked: false, metrics: { revision: 'opt-1', unassigned: 0 } } },
+    runReview: async () => { calls.review += 1; throw new Error('review down') },
+  })
+  assert.equal(calls.snapshot, 1)
+  assert.equal(calls.optimize, 1)
+  assert.equal(calls.review, 1)
+
+  const thrown = await runPublishSequence({
+    customersCount: 2,
+    snapshotOk: true,
+    optimizeResult: { revision: 'opt-1' },
+    reviewResult: { failed: true, state: '', revision: null },
+    publish: async () => { calls.publish += 1 },
+  })
+  assert.equal(thrown.publishCalled, false)
+
+  const empty = await runPublishSequence({
+    customersCount: 2,
+    snapshotOk: true,
+    optimizeResult: { revision: 'opt-1' },
+    reviewResult: { revision: 'rev-9', state: '', failed: false },
+    publish: async () => { calls.publish += 1 },
+  })
+  assert.equal(empty.publishCalled, false)
+
+  const missing = await runPublishSequence({
+    customersCount: 2,
+    snapshotOk: true,
+    optimizeResult: { revision: 'opt-1' },
+    reviewResult: null,
+    publish: async () => { calls.publish += 1 },
+  })
+  assert.equal(missing.publishCalled, false)
+  assert.equal(calls.publish, 0)
+  assert.equal(calls.optimize, 1)
+  assert.equal(calls.review, 1)
+
+  const mismatch = await runPublishSequence({
+    customersCount: 2,
+    snapshotOk: true,
+    optimizeResult: { revision: 'opt-1' },
+    reviewResult: { revision: 'rev-9', state: 'ready', failed: false },
+    publish: async () => {
+      calls.publish += 1
+      return { ok: false, status: 'error', code: 'revision_mismatch' }
+    },
+  })
+  assert.equal(mismatch.publishCalled, true)
+  assert.equal(mismatch.published, false)
+  assert.equal(mismatch.pub.code, 'revision_mismatch')
+  assert.equal(calls.publish, 1)
+  assert.equal(calls.optimize, 1, 'mismatch no dispara optimize extra')
+  assert.equal(calls.review, 1, 'mismatch no dispara review extra')
 })
 
 test('N6: reopen 404/not_found oculta CTA; reopen exitoso invalida preparación', () => {
@@ -701,7 +770,7 @@ test('P0-04: copy de unión no inventa clientes combinados', () => {
 
 test('P0-03: auto-open no dispara ensure sin zona resuelta', () => {
   assert.equal(canEnsureRoutePlan({
-    polygonId: 0, subpolygonId: 0, segmentId: 0, sources: [{ tipo: 'SP', id: 39 }],
+    polygonId: 0, subpolygonId: 0, segmentId: 0,
   }), false)
   assert.equal(shouldAutoOpenEnsure({ alreadyOpened: false, hasRoute: true, zoneReady: false }), false)
   assert.equal(shouldAutoOpenEnsure({ alreadyOpened: false, hasRoute: true, zoneReady: true }), true)

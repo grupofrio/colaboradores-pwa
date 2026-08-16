@@ -338,13 +338,6 @@ export function interpretPublishResponse(resp = {}) {
   }
 }
 
-export function publishUsesReviewedRevision({ planRevision, reviewState, optimizeRevision } = {}) {
-  const state = String(reviewState || '').toLowerCase()
-  if (!planRevision || !PUBLISHABLE_REVIEW_STATES.includes(state)) return false
-  if (optimizeRevision && planRevision !== optimizeRevision) return true
-  return true
-}
-
 export function reviewedPublishRevision(reviewResult) {
   const revision = reviewResult?.revision
   if (!revision) return null
@@ -387,9 +380,16 @@ export async function runPublishSequence({
     reviewFailed: Boolean(reviewResult?.failed),
     reviewState: reviewResult?.state || '',
   })
-  if (!gate.ok) return { ok: false, published: false, revision: null, gate, publishCalled: false }
-  await publish(revision)
-  return { ok: true, published: true, revision, gate, publishCalled: true }
+  if (!gate.ok) return { ok: false, published: false, revision: null, gate, publishCalled: false, pub: null }
+  const pub = interpretPublishResponse(await publish(revision))
+  return {
+    ok: Boolean(pub.ok),
+    published: Boolean(pub.ok),
+    revision,
+    gate,
+    publishCalled: true,
+    pub,
+  }
 }
 
 export function preparationAfterReopen() {

@@ -68,7 +68,6 @@ import {
   interpretOptimizeResponse,
   interpretReviewResponse,
   interpretDemandSnapshotResponse,
-  interpretPublishResponse,
   canPublishPreparedRoute,
   echoedUnionKeys,
   shouldShowCombinedSources,
@@ -76,7 +75,7 @@ import {
   isReopenNotFound,
   shouldAutoOpenEnsure,
   runPrepareSequence,
-  reviewedPublishRevision,
+  runPublishSequence,
   COVERAGE_TONE,
 } from './planearModel'
 import { canEnsureRoutePlan } from './routesWeekModel'
@@ -656,7 +655,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   async function handlePrepare(route) {
     if (!route?.route_id) return
     const zoneReady = canEnsureRoutePlan({
-      polygonId, subpolygonId, segmentId, sources: operationalSources,
+      polygonId, subpolygonId, segmentId,
     })
     if (!zoneReady) {
       setSelectedRouteId(route.route_id)
@@ -956,34 +955,28 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       return
     }
     if (!readiness?.publishable) { flash('Este plan no se puede publicar en su estado actual'); return }
-    const revision = reviewedPublishRevision(reviewResult)
-    const gate = canPublishPreparedRoute({
-      customersCount: previewCustomers.length,
-      snapshotOk: Boolean(snapshotResult?.ok && snapshotResult?.snapshotId),
-      optimizeBlocked: Boolean(optimizeResult == null || !optimizeResult.revision),
-      planRevision: revision,
-      unassigned: Number(optimizeResult?.unassigned || reviewResult?.unassigned || 0),
-      missingGeo: Number(reviewResult?.missingGeo || 0),
-      reviewFailed: Boolean(reviewResult?.failed),
-      reviewState: reviewResult?.state || '',
-    })
-    if (!gate.ok) { flash(gate.reason || 'La ruta no está lista para publicar.', 6000); return }
-    if (optimizeResult && Number(optimizeResult.unassigned || 0) > 0) {
-      flash(`${optimizeResult.unassigned} clientes no pudieron entrar en la ruta optimizada.`, 6000)
-      return
-    }
-    if (reviewResult && Number(reviewResult.missingGeo || 0) > 0) {
-      flash(`${reviewResult.missingGeo} paradas no tienen ubicación. Corrige coordenadas de clientes o prospectos.`, 6000)
-      return
-    }
     if (reviewResult?.state === 'warning' && !confirmWarnings) {
       flash('La ruta tiene avisos; revísalos y confirma para publicar.', 6000)
       return
     }
     setPublishing(true)
     try {
-      const pub = interpretPublishResponse(
-        await publishRoutePlan(routePlanId, revision, confirmWarnings || reviewResult?.state === 'warning'))
+      const result = await runPublishSequence({
+        customersCount: previewCustomers.length,
+        snapshotOk: Boolean(snapshotResult?.ok && snapshotResult?.snapshotId),
+        optimizeResult,
+        reviewResult,
+        publish: async (revision) => publishRoutePlan(
+          routePlanId,
+          revision,
+          confirmWarnings || reviewResult?.state === 'warning',
+        ),
+      })
+      if (!result.publishCalled) {
+        flash(result.gate?.reason || 'La ruta no está lista para publicar.', 6000)
+        return
+      }
+      const pub = result.pub
       if (pub.code === 'revision_mismatch') {
         setOptimizeResult(null)
         setReviewResult(null)
