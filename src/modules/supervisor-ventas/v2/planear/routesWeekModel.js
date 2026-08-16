@@ -118,3 +118,219 @@ export function rowZone(row) {
   }
   return { subpolygonId: 0, polygonId: 0, segmentId: 0 }
 }
+
+export const ASSIGNMENT_LABEL = Object.freeze({
+  no_plan: 'Sin ruta',
+  unassigned: 'Sin asignar',
+  blocked: 'Bloqueada',
+  assigned: 'Asignada',
+  published: 'Publicada',
+  in_progress: 'En curso',
+  closed: 'Cerrada',
+})
+
+export function assignmentLabel(state) {
+  if (!state) return 'Sin dato'
+  return ASSIGNMENT_LABEL[state] || 'Sin dato'
+}
+
+export function rowSource(row) {
+  return {
+    key: row?.key || `${row?.tipo}:${row?.id}`,
+    type: row?.tipo,
+    tipo: row?.tipo,
+    id: Number(row?.id || 0) || 0,
+    name: rowName(row),
+    polygon: row?.polygon || null,
+    routeId: rowRouteId(row),
+  }
+}
+
+export const MAX_OPERATIONAL_SOURCES = 2
+
+/** Selección 1–2. Intentar 3 no sustituye en silencio: devuelve el mismo selected + error. */
+export function toggleOperationalSelection(selected, row) {
+  const current = Array.isArray(selected) ? selected : []
+  const source = rowSource(row)
+  if (!source.id || !source.tipo) return { selected: current, error: null }
+  const exists = current.some((s) => s.key === source.key)
+  if (exists) return { selected: current.filter((s) => s.key !== source.key), error: null }
+  if (current.length >= MAX_OPERATIONAL_SOURCES) {
+    return {
+      selected: current,
+      error: 'No puedes combinar más de 2 planes operativos en una ruta.',
+    }
+  }
+  return { selected: [...current, source], error: null }
+}
+
+export function encodeSourcesParam(selected) {
+  return (selected || []).map((s) => s.key).filter(Boolean).join(',')
+}
+
+export function decodeSourcesParam(raw) {
+  return String(raw || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((key) => {
+      const [tipo, id] = key.split(':')
+      return { key, tipo, type: tipo, id: Number(id || 0) || 0 }
+    })
+    .filter((s) => s.id && ['SO', 'SP', 'P'].includes(s.tipo))
+    .slice(0, MAX_OPERATIONAL_SOURCES)
+}
+
+export function filterMatrixRows(rows, filter) {
+  const list = Array.isArray(rows) ? rows : []
+  if (!filter || filter === 'all') return list
+  if (filter === 'SO' || filter === 'SP' || filter === 'P') {
+    return list.filter((r) => r?.tipo === filter)
+  }
+  if (filter === 'pending_tomorrow') {
+    return list.filter((r) => !isReadyTomorrow(r))
+  }
+  if (filter === 'ready_tomorrow') {
+    return list.filter((r) => isReadyTomorrow(r))
+  }
+  if (filter === 'week_gaps') {
+    return list.filter((r) => (r?.days || []).some((c) => !c?.has_plan))
+  }
+  return list
+}
+
+export function isReadyTomorrow(row) {
+  const state = row?.tomorrow?.assignment_state
+  if (state) return ['assigned', 'published', 'in_progress', 'closed'].includes(state)
+  return Boolean(row?.tomorrow?.assigned)
+}
+
+export function tomorrowAction(row) {
+  const t = row?.tomorrow || {}
+  const state = t.assignment_state || (t.assigned ? 'assigned' : (Number(t.plan_count || 0) > 0 ? 'unassigned' : 'no_plan'))
+  if (rowRequiresRouteSelection(row)) {
+    return { state, label: 'Varias rutas', cta: 'Elegir ruta', testid: 'rw-elegir-ruta' }
+  }
+  if (state === 'published' || state === 'in_progress' || state === 'closed') {
+    return { state, label: assignmentLabel(state), cta: 'Revisar', testid: 'rw-reasignar' }
+  }
+  if (state === 'assigned') {
+    return { state, label: 'Lista', cta: 'Revisar', testid: 'rw-reasignar' }
+  }
+  if (state === 'blocked') {
+    return { state, label: 'Bloqueada', cta: 'Resolver', testid: 'rw-asignar' }
+  }
+  if (state === 'unassigned') {
+    const miss = []
+    if (t.missing_vehicle) miss.push('Sin unidad')
+    if (t.missing_driver) miss.push('Sin chofer')
+    if (t.missing_salesperson) miss.push('Sin vendedor')
+    return { state, label: miss[0] || 'Pendiente', cta: 'Completar', testid: 'rw-asignar' }
+  }
+  return { state: 'no_plan', label: 'Sin preparar', cta: 'Preparar', testid: 'rw-asignar' }
+}
+
+function asCount(value) {
+  if (value == null || value === '') return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+/** Resume el contrato autoritativo. Si falta summary, deriva de rows (mismos números, no inventa). */
+export function executiveSummary(data) {
+  const rows = Array.isArray(data?.rows) ? data.rows : []
+  const counts = data?.counts || {}
+  const s = data?.summary && typeof data.summary === 'object' ? data.summary : null
+  const total = asCount(s?.total_operational_plans) ?? asCount(counts.total) ?? rows.length
+  const ready = asCount(s?.ready_tomorrow)
+  const pending = asCount(s?.pending_tomorrow)
+  const noPlan = asCount(s?.no_plan_tomorrow)
+  const incomplete = asCount(s?.incomplete_resources_tomorrow)
+  const blocked = asCount(s?.blocked_tomorrow)
+  const published = asCount(s?.published_tomorrow)
+  const weekGaps = asCount(s?.week_rows_with_missing_route)
+  const coverage = s?.weekly_coverage_pct == null ? null : Number(s.weekly_coverage_pct)
+  const derived = !s ? deriveSummaryFromRows(rows, counts) : null
+  return {
+    total,
+    ready: ready ?? derived?.ready ?? null,
+    pending: pending ?? derived?.pending ?? null,
+    noPlan: noPlan ?? derived?.noPlan ?? null,
+    incomplete: incomplete ?? derived?.incomplete ?? null,
+    blocked: blocked ?? derived?.blocked ?? null,
+    published: published ?? derived?.published ?? null,
+    weekGaps: weekGaps ?? derived?.weekGaps ?? null,
+    coverage: coverage ?? derived?.coverage ?? null,
+    SO: asCount(s?.SO) ?? asCount(counts.SO),
+    SP: asCount(s?.SP) ?? asCount(counts.SP),
+    P: asCount(s?.P) ?? asCount(counts.P),
+    tomorrow: data?.tomorrow || null,
+  }
+}
+
+export function deriveSummaryFromRows(rows, counts = {}) {
+  const list = Array.isArray(rows) ? rows : []
+  let ready = 0
+  let noPlan = 0
+  let incomplete = 0
+  let blocked = 0
+  let published = 0
+  let weekGaps = 0
+  const cov = []
+  for (const row of list) {
+    const state = row?.tomorrow?.assignment_state
+      || (row?.tomorrow?.assigned ? 'assigned' : (Number(row?.tomorrow?.plan_count || 0) > 0 ? 'unassigned' : 'no_plan'))
+    if (state === 'no_plan') noPlan += 1
+    else if (state === 'blocked') blocked += 1
+    else if (state === 'unassigned') incomplete += 1
+    else {
+      ready += 1
+      if (state === 'published') published += 1
+    }
+    if ((row?.days || []).some((c) => !c?.has_plan)) weekGaps += 1
+    if (row?.weekly_coverage_pct != null) cov.push(Number(row.weekly_coverage_pct))
+  }
+  return {
+    ready,
+    pending: noPlan + incomplete + blocked,
+    noPlan,
+    incomplete,
+    blocked,
+    published,
+    weekGaps,
+    coverage: cov.length ? Math.round((cov.reduce((a, b) => a + b, 0) / cov.length) * 10) / 10 : null,
+    SO: asCount(counts.SO),
+    SP: asCount(counts.SP),
+    P: asCount(counts.P),
+  }
+}
+
+export function actionPhrase(summary) {
+  const total = summary?.total
+  const pending = summary?.pending
+  const ready = summary?.ready
+  if (total == null) return 'Sin dato de planes operativos.'
+  if (total === 0) return 'No hay planes operativos.'
+  if (pending == null || ready == null) return `${total} planes operativos.`
+  if (pending === 0) return `Los ${total} planes de mañana están listos.`
+  if (pending === 1) return 'Te falta 1 plan por dejar listo para mañana.'
+  return `Te faltan ${pending} planes por dejar listos para mañana.`
+}
+
+export function pendingBreakdown(summary) {
+  const parts = []
+  if (summary?.noPlan != null) parts.push({ n: summary.noPlan, text: summary.noPlan === 1 ? 'todavía no tiene ruta' : 'todavía no tienen ruta' })
+  if (summary?.incomplete != null) parts.push({ n: summary.incomplete, text: 'necesitan completar recursos' })
+  if (summary?.blocked != null) parts.push({ n: summary.blocked, text: summary.blocked === 1 ? 'tiene un bloqueo que debes resolver' : 'tienen un bloqueo que debes resolver' })
+  return parts.filter((p) => p.n > 0)
+}
+
+export function formatCount(n, fallback = 'Sin dato') {
+  if (n == null || !Number.isFinite(Number(n))) return fallback
+  return String(n)
+}
+
+export function cellAssignmentLine(cell) {
+  if (!cell?.has_plan) return 'Sin ruta'
+  return assignmentLabel(cell.assignment_state)
+}

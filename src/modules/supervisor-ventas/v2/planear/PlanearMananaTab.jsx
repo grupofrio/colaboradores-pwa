@@ -67,6 +67,7 @@ import {
   interpretReviewResponse,
   interpretDemandSnapshotResponse,
   interpretPublishResponse,
+  canPublishPreparedRoute,
   COVERAGE_TONE,
 } from './planearModel'
 
@@ -355,7 +356,7 @@ function CustomerRow({ customer, onRemove, canEdit, removing }) {
 
 // ── Contenedor ───────────────────────────────────────────────────────────────
 
-export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId = 0, initialSubpolygonId = 0, initialSegmentId = 0, initialLeadId = 0, onExit = null }) {
+export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId = 0, initialSubpolygonId = 0, initialSegmentId = 0, initialSources = [], initialLeadId = 0, onExit = null }) {
   const navigate = useNavigate()
   const dateTarget = getTomorrowDateString()
   // Se entró desde una fila de SEGMENTO operativo (sin zona geográfica heredada):
@@ -410,6 +411,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const [results, setResults] = useState([])
   const [pendingLeadId, setPendingLeadId] = useState(Number(initialLeadId) || 0)
   const [msg, setMsg] = useState(null)
+  const [prepareStage, setPrepareStage] = useState('')
+  const [showSequence, setShowSequence] = useState(false)
+  const operationalSources = Array.isArray(initialSources) ? initialSources.filter((s) => s?.id && s?.tipo) : []
 
   const msgTimer = useRef(null)
   const previewReq = useRef(0)
@@ -430,6 +434,16 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   // si no, la de presencia (falta unidad/chofer/vendedor) derivada localmente.
   const coverage = assignReadiness || resourceReadiness(assignment)
   const readiness = selectedRoute ? routeReadiness(selectedRoute, previewCustomers.length, coverage) : null
+  const preparedPublish = canPublishPreparedRoute({
+    customersCount: previewCustomers.length,
+    snapshotOk: Boolean(snapshotResult?.ok && snapshotResult?.snapshotId),
+    optimizeBlocked: Boolean(optimizeResult == null || !optimizeResult.revision),
+    planRevision: reviewResult?.revision || optimizeResult?.revision || null,
+    unassigned: Number(optimizeResult?.unassigned || reviewResult?.unassigned || 0),
+    missingGeo: Number(reviewResult?.missingGeo || 0),
+    reviewFailed: Boolean(reviewResult?.failed),
+    reviewState: reviewResult?.state || '',
+  })
   // Recursos "vacíos" = no llegó ninguna unidad NI persona de la sucursal. Estado
   // honesto: no se oculta el bloque de asignar; se muestra error + reintento.
   const resourcesEmpty = !resources
@@ -633,6 +647,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       const criteria = buildRoutePlanCriteriaPayload({
         routeId: route.route_id, dateTarget, polygonId, subpolygonId, segmentId,
         channelIds: [], visitDays: [], timeWindowId: null, demandClasses,
+        sources: operationalSources,
       })
       const res = await ensureDailyRoutePlan(route.route_id, dateTarget, criteria)
       if (res?.ok === false) { flash(getSupervisorRouteErrorMessage(res), 5000); return }
@@ -679,6 +694,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
         routeId: selectedRoute.route_id, dateTarget, polygonId,
         subpolygonIds: subpolygonId ? [subpolygonId] : [], segmentId,
         channelIds: [], visitDays: [], timeWindowId: null, demandClasses,
+        sources: operationalSources,
       })
       const resp = await previewRoutePlanCustomers(payload)
       if (previewReq.current !== reqId) return
@@ -764,7 +780,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     const opt = await optimizeRoutePlan(planId)
     const { revision, blocked, message, metrics } = interpretOptimizeResponse(opt)
     setOptimizeResult(metrics)
-    return { revision, blocked, message }
+    return { revision, blocked, message, metrics }
   }
 
   async function runReview(planId) {
@@ -847,6 +863,48 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     }
   }
 
+  async function handlePrepareRoute() {
+    if (!routePlanId || publishing || snapshotBusy || previewing || preparing) return
+    if (!previewCustomers.length) { flash('Cierra la lista de clientes antes de preparar la ruta.'); return }
+    if (coverage?.missing_vehicle || coverage?.coverage_state === 'blocked') {
+      flash('Asigna unidad, chofer y vendedor antes de preparar la ruta.', 5000)
+      return
+    }
+    setPublishing(true)
+    try {
+      setPrepareStage('Preparando demanda…')
+      const snapshot = interpretDemandSnapshotResponse(await generateRoutePlanDemandSnapshot(routePlanId))
+      if (!snapshot.ok || (snapshot.lineCount != null && snapshot.lineCount <= 0)) {
+        setSnapshotResult(snapshot.ok ? { ...snapshot, ok: false, message: 'La demanda no congeló ninguna línea.' } : snapshot)
+        flash(snapshot.message || 'No se pudo preparar la demanda.', 6000)
+        return
+      }
+      setSnapshotResult(snapshot)
+      setPrepareStage('Optimizando recorrido…')
+      const opt = await runOptimize(routePlanId)
+      if (opt.blocked) { flash(opt.message || 'El optimizador no pudo secuenciar la ruta.', 6000); return }
+      if (Number(opt.metrics?.unassigned || 0) > 0) {
+        flash(`${opt.metrics.unassigned} clientes no pudieron entrar en la ruta optimizada.`, 6000)
+        return
+      }
+      setPrepareStage('Revisando ruta…')
+      const review = await runReview(routePlanId)
+      setReviewResult(review)
+      if (review.failed || review.state === 'blocked') {
+        flash(review.message || 'La ruta tiene bloqueos; corrígelos antes de publicar.', 6000)
+        return
+      }
+      setPrepareStage('')
+      flash('Ruta lista para publicar. Revisa el resultado.', 5000)
+    } catch (e) {
+      logScreenError('PlanearManana', 'prepareRoute', e)
+      flash(getSupervisorRouteErrorMessage(e), 5000)
+    } finally {
+      setPrepareStage('')
+      setPublishing(false)
+    }
+  }
+
   // optimize → review → publish (B5+, absorbe el flujo de Sebas):
   //   ready   → publica; warning → exige confirmación explícita; blocked → no publica.
   async function handlePublish(opts = {}) {
@@ -863,6 +921,25 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       return
     }
     if (!readiness?.publishable) { flash('Este plan no se puede publicar en su estado actual'); return }
+    const gate = canPublishPreparedRoute({
+      customersCount: previewCustomers.length,
+      snapshotOk: Boolean(snapshotResult?.ok && snapshotResult?.snapshotId),
+      optimizeBlocked: Boolean(optimizeResult == null || !optimizeResult.revision),
+      planRevision: reviewResult?.revision || optimizeResult?.revision || null,
+      unassigned: Number(optimizeResult?.unassigned || reviewResult?.unassigned || 0),
+      missingGeo: Number(reviewResult?.missingGeo || 0),
+      reviewFailed: Boolean(reviewResult?.failed),
+      reviewState: reviewResult?.state || '',
+    })
+    if (!gate.ok) { flash(gate.reason || 'La ruta no está lista para publicar.', 6000); return }
+    if (optimizeResult && Number(optimizeResult.unassigned || 0) > 0) {
+      flash(`${optimizeResult.unassigned} clientes no pudieron entrar en la ruta optimizada.`, 6000)
+      return
+    }
+    if (reviewResult && Number(reviewResult.missingGeo || 0) > 0) {
+      flash(`${reviewResult.missingGeo} clientes no tienen ubicación. Corrige sus coordenadas para optimizar la ruta.`, 6000)
+      return
+    }
     setPublishing(true)
     try {
       // Corre optimize→review y devuelve { stop, revision } o null si se bloqueó.
@@ -912,6 +989,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       if (!pub.ok) throw pub
       flash('Ruta optimizada y publicada para mañana')
       await loadData()
+      if (onExit) { onExit(); return }
       setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([]); setOptimizeResult(null); setReviewResult(null); setSnapshotResult(null)
     } catch (e) {
       logScreenError('PlanearManana', 'optimizeReviewPublish', e)
@@ -934,6 +1012,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     setAssignBusy(field)
     setOptimizeResult(null)
     setReviewResult(null)
+    setSnapshotResult(null)
     try {
       const resp = await assignRoutePlanResources(routePlanId, { [field]: id })
       const status = String(resp?.status || (resp?.ok === false ? 'error' : 'ok')).toLowerCase()
@@ -1019,6 +1098,17 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     return shell(
       <>
         <Card testid="planear-detalle-cabecera">
+          {operationalSources.length > 0 && (
+            <div data-testid="planear-fuentes" style={{ marginBottom: 10, padding: '8px 10px', borderRadius: R.md, background: 'rgba(0,119,187,0.06)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text }}>Ruta de mañana</div>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 4 }}>
+                Planes seleccionados: {operationalSources.map((s) => s.name || `${s.tipo} #${s.id}`).join(' + ')}
+              </div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                Clientes combinados: {previewCustomers.length || 'Sin dato'}
+              </div>
+            </div>
+          )}
           {/* Contexto del PLAN por segmento (SO): antes se entraba a la lista
               genérica de rutas sin señal de que era "para armar Mercado". */}
           {segmentOnlyPlan && (
@@ -1205,9 +1295,30 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>{readiness.reasons[0] || 'Completa la preparación para publicar.'}</div>
           )}
           {!readiness.published && (
-            <PrimaryButton testid="planear-publicar" tone="green" onClick={() => handlePublish()} busy={publishing || reloadBusy} disabled={!readiness.publishable || Boolean(snapshotBusy || assignBusy || rowBusy || preparing || previewing)}>
-              Optimizar y publicar
-            </PrimaryButton>
+            <>
+              <div data-testid="planear-pasos" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10, fontSize: 11.5, fontWeight: 700, color: C.textMuted }}>
+                <span>{operationalSources.length || polygonId || segmentId ? '✓' : '○'} Planes</span>
+                <span>{previewCustomers.length > 0 ? '✓' : '○'} {previewCustomers.length || 0} clientes</span>
+                <span>{coverage?.coverage_state === 'ready' ? '✓' : '○'} Recursos</span>
+                <span>{snapshotResult?.ok ? '✓' : '○'} Demanda</span>
+                <span>{optimizeResult && !optimizeResult.unassigned ? '✓' : '○'} Optimizada</span>
+                <span>{reviewResult && reviewResult.state !== 'blocked' ? '✓' : '○'} Revisada</span>
+                <span>○ Publicar</span>
+              </div>
+              {prepareStage && <div data-testid="planear-prepare-stage" style={{ fontSize: 12.5, fontWeight: 700, color: C.blue3, marginBottom: 8 }}>{prepareStage}</div>}
+              {(snapshotResult || optimizeResult || reviewResult) && (previewCustomers.length > 0) && (
+                <div data-testid="planear-ruta-modificada" style={{ fontSize: 12, color: C.warning, fontWeight: 700, marginBottom: 8 }}>
+                  {(!snapshotResult?.ok || !optimizeResult) ? 'Ruta modificada. Actualiza demanda y vuelve a optimizar.' : ''}
+                </div>
+              )}
+              <PrimaryButton testid="planear-preparar-ruta" onClick={handlePrepareRoute} busy={Boolean(publishing || snapshotBusy)} disabled={!readiness.publishable || Boolean(snapshotBusy || assignBusy || rowBusy || preparing || previewing)}>
+                Preparar ruta
+              </PrimaryButton>
+              <div style={{ height: 8 }} />
+              <PrimaryButton testid="planear-publicar" tone="green" onClick={() => handlePublish()} busy={publishing || reloadBusy} disabled={!readiness.publishable || !preparedPublish.ok || Boolean(snapshotBusy || assignBusy || rowBusy || preparing || previewing) || Number(optimizeResult?.unassigned || 0) > 0 || Number(reviewResult?.missingGeo || 0) > 0}>
+                Optimizar y publicar
+              </PrimaryButton>
+            </>
           )}
           {!readiness.published && readiness.overcapacity && (
             <div data-testid="planear-recarga" style={{ marginTop: 10, padding: '10px 12px', borderRadius: R.md, background: C.warningSoft, border: '1px solid rgba(180,83,9,0.30)' }}>
@@ -1278,6 +1389,34 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
                       : (optimizeResult.capacityKg != null ? `Capacidad ${optimizeResult.capacityKg} kg` : null),
                     optimizeResult.utilizationPct != null ? `${optimizeResult.utilizationPct}% de la unidad` : null,
                   ].filter(Boolean).join(' · ')}
+                </div>
+              )}
+              {optimizeResult.unassigned > 0 && (
+                <div data-testid="planear-unassigned" style={{ color: C.error, fontWeight: 700, marginTop: 4 }}>
+                  {optimizeResult.unassigned} clientes no pudieron entrar en la ruta optimizada.
+                </div>
+              )}
+              {optimizeResult.distanceSource && (
+                <div data-testid="planear-distance-source" style={{ marginTop: 4, fontWeight: 700, color: String(optimizeResult.distanceSource).toLowerCase() === 'osrm' ? C.success : C.warning }}>
+                  {String(optimizeResult.distanceSource).toLowerCase() === 'osrm'
+                    ? 'Ruta vial optimizada'
+                    : String(optimizeResult.distanceSource).toLowerCase() === 'haversine'
+                      ? 'Aproximación de distancia — revisar'
+                      : `Fuente: ${optimizeResult.distanceSource}`}
+                </div>
+              )}
+              {Array.isArray(optimizeResult.sequence) && optimizeResult.sequence.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <GhostButton testid="planear-ver-orden" onClick={() => setShowSequence((v) => !v)}>
+                    {showSequence ? 'Ocultar orden de visitas' : 'Ver orden de visitas'}
+                  </GhostButton>
+                  {showSequence && (
+                    <ol data-testid="planear-secuencia" style={{ margin: '8px 0 0', paddingLeft: 18, textAlign: 'left', color: C.text }}>
+                      {optimizeResult.sequence.map((st, idx) => (
+                        <li key={st.stop_id || idx}>{st.name || `Parada ${st.sequence || idx + 1}`}</li>
+                      ))}
+                    </ol>
+                  )}
                 </div>
               )}
               {optimizeResult.unassigned > 0 && (

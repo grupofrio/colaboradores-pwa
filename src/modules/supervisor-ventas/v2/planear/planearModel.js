@@ -83,6 +83,28 @@ export function routeReadiness(route = {}, customersCount = 0, coverage = null) 
   }
 }
 
+/** Gate de publicación de la PWA: snapshot + optimizer + review vigentes. */
+export function canPublishPreparedRoute({
+  customersCount = 0,
+  snapshotOk = false,
+  optimizeBlocked = true,
+  planRevision = null,
+  unassigned = 0,
+  missingGeo = 0,
+  reviewFailed = false,
+  reviewState = '',
+} = {}) {
+  if (Number(customersCount || 0) <= 0) return { ok: false, reason: 'No tiene clientes.' }
+  if (!snapshotOk) return { ok: false, reason: 'Falta preparar la demanda.' }
+  if (optimizeBlocked || !planRevision) return { ok: false, reason: 'Falta una optimización vigente.' }
+  if (Number(unassigned || 0) > 0) return { ok: false, reason: 'Hay clientes sin asignar.' }
+  if (Number(missingGeo || 0) > 0) return { ok: false, reason: 'Hay clientes sin ubicación.' }
+  if (reviewFailed || String(reviewState || '').toLowerCase() === 'blocked') {
+    return { ok: false, reason: 'La revisión bloquea la publicación.' }
+  }
+  return { ok: true, reason: null }
+}
+
 // ── Resumen de recursos del día (read-only) ──────────────────────────────────
 // A partir del payload de /available-resources. Cuenta libres vs tomados y marca
 // cuántas unidades no tienen capacidad registrada (para no prometer "cabe").
@@ -234,6 +256,8 @@ export function interpretOptimizeResponse(opt = {}) {
         capacityKg: (d.capacity_kg ?? null),
         utilizationPct: (d.utilization_pct ?? null),
         unassigned: (Number(d.unassigned_count ?? 0) || 0),
+        distanceSource: d.distance_source || null,
+        sequence: Array.isArray(d.sequence) ? d.sequence : [],
       },
     }
   }
@@ -260,6 +284,8 @@ export function interpretReviewResponse(resp = {}) {
     warnings: Array.isArray(d.warnings) ? d.warnings : [],
     missingGeo: (Number(d.missing_geo_count ?? 0) || 0),
     overcapacity: Boolean(d.overcapacity),
+    distanceSource: d.distance_source || null,
+    unassigned: (Number(d.unassigned_count ?? 0) || 0),
     revision: d.plan_revision || null,
   }
 }

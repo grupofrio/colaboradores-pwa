@@ -143,6 +143,7 @@ export function buildRoutePlanCriteriaPayload({
   visitDays,
   timeWindowId,
   demandClasses,
+  sources,
 }) {
   return {
     route_id: Number(routeId || 0),
@@ -155,6 +156,7 @@ export function buildRoutePlanCriteriaPayload({
     time_window_id: timeWindowId ? Number(timeWindowId) : null,
     // Always send (even []) para limpiar filtros pegados de un ensure previo.
     demand_classes: sanitizeDemandClasses(demandClasses),
+    ...(Array.isArray(sources) && sources.length ? { sources } : {}),
   }
 }
 
@@ -168,6 +170,7 @@ export function buildRoutePlanPreviewPayload({
   visitDays,
   timeWindowId,
   demandClasses,
+  sources,
 }) {
   return {
     route_id: toNumber(routeId),
@@ -179,6 +182,7 @@ export function buildRoutePlanPreviewPayload({
     visit_days: Array.isArray(visitDays) ? visitDays.filter(Boolean) : [],
     time_window_id: timeWindowId ? toNumber(timeWindowId) : null,
     demand_classes: sanitizeDemandClasses(demandClasses),
+    ...(Array.isArray(sources) && sources.length ? { sources } : {}),
   }
 }
 
