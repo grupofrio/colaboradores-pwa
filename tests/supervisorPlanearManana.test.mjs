@@ -11,6 +11,7 @@ import {
   routeReadiness, summarizeResources, capacityLabel, personRolesLabel, planStateLabel,
   derivePlanAssignment, resourceOptions, resourceReadiness, interpretOptimizeResponse,
   interpretReviewResponse, interpretDemandSnapshotResponse, interpretPublishResponse,
+  canPublishPreparedRoute,
 } from '../src/modules/supervisor-ventas/v2/planear/planearModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -548,4 +549,32 @@ test('B8: la recarga se resuelve server-side y no crea inventario desde la PWA',
   assert.ok(/Planear recarga en CEDIS/.test(tab) && /CEDIS · recarga programada/.test(tab), 'superficie operativa de recarga')
   assert.ok(/requires_reoptimization|Optimiza y revisa antes de publicar/.test(tab), 'exige reoptimizar tras aplicar')
   assert.ok(!/create.*picking|reserve.*inventory/i.test(api), 'cliente no crea stock ni pickings')
+})
+
+test('publicación: snapshot + revision + unassigned 0 + geo 0', () => {
+  const ready = canPublishPreparedRoute({
+    customersCount: 10,
+    snapshotOk: true,
+    optimizeBlocked: false,
+    planRevision: 'rev-1',
+    unassigned: 0,
+    missingGeo: 0,
+    reviewFailed: false,
+    reviewState: 'ready',
+  })
+  assert.equal(ready.ok, true)
+  assert.equal(canPublishPreparedRoute({ customersCount: 0, snapshotOk: true, optimizeBlocked: false, planRevision: 'r' }).ok, false)
+  assert.equal(canPublishPreparedRoute({ customersCount: 3, snapshotOk: false, optimizeBlocked: false, planRevision: 'r' }).ok, false)
+  assert.equal(canPublishPreparedRoute({ customersCount: 3, snapshotOk: true, optimizeBlocked: true, planRevision: null }).ok, false)
+  assert.equal(canPublishPreparedRoute({ customersCount: 3, snapshotOk: true, optimizeBlocked: false, planRevision: 'r', unassigned: 2 }).ok, false)
+  assert.equal(canPublishPreparedRoute({ customersCount: 3, snapshotOk: true, optimizeBlocked: false, planRevision: 'r', missingGeo: 1 }).ok, false)
+  assert.equal(canPublishPreparedRoute({ customersCount: 3, snapshotOk: true, optimizeBlocked: false, planRevision: 'r', reviewState: 'blocked' }).ok, false)
+})
+
+test('wiring: Preparar ruta orquesta snapshot→optimize→review', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.match(tab, /Preparar ruta/)
+  assert.match(tab, /handlePrepareRoute/)
+  assert.match(tab, /generateRoutePlanDemandSnapshot/)
+  assert.match(tab, /clientes no pudieron entrar/)
 })

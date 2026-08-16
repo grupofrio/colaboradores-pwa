@@ -26,6 +26,7 @@ test('gerente_sucursal: entra Admin/Gerente; NO Equipo/Ruta/Producción/Almacén
   assert.equal(canEnter(g, 'admin_sucursal'), 'monta')
   assert.equal(canEnter(g, 'gerente'), 'monta')
   assert.equal(canEnter(g, 'copiloto_gerencial'), 'monta')
+  assert.equal(canEnter(g, 'copiloto_supervisor'), 'home')
   assert.equal(canEnter(g, 'supervisor_ventas'), 'home')
   assert.equal(canEnter(g, 'cierre_ruta'), 'home')
   assert.equal(canEnter(g, 'registro_produccion'), 'home')
@@ -38,6 +39,7 @@ test('supervisor_ventas: entra Equipo; NO Admin/Gerente sin permiso explícito',
   assert.equal(canEnter(sv, 'admin_sucursal'), 'home')
   assert.equal(canEnter(sv, 'gerente'), 'home')
   assert.equal(canEnter(sv, 'copiloto_gerencial'), 'home')
+  assert.equal(canEnter(sv, 'copiloto_supervisor'), 'monta')
   assert.equal(canEnter(sv, 'torre_control'), 'home')
 })
 

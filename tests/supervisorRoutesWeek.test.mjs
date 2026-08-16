@@ -6,6 +6,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
   weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId, rowZone, typeLabel,
+  executiveSummary, actionPhrase, pendingBreakdown, formatCount, toggleOperationalSelection,
+  filterMatrixRows,
 } from '../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -143,4 +145,69 @@ test('wiring: recursos son protagonista con estado honesto; relabel en lenguaje 
   assert.ok(/¿De qué zona propongo los clientes\?/.test(tab))
   assert.ok(/Sugerir clientes de la zona/.test(tab))
   assert.ok(!/Generar propuesta/.test(tab), 'ya no dice "Generar propuesta"')
+})
+
+test('resumen ejecutivo: counts dinámicos y null ≠ 0', () => {
+  const empty = executiveSummary({ counts: { total: 0, SO: 0, SP: 0, P: 0 }, rows: [], summary: {
+    total_operational_plans: 0, ready_tomorrow: 0, pending_tomorrow: 0,
+    no_plan_tomorrow: 0, incomplete_resources_tomorrow: 0, blocked_tomorrow: 0,
+    week_rows_with_missing_route: 0, weekly_coverage_pct: null,
+  } })
+  assert.equal(empty.total, 0)
+  assert.equal(empty.coverage, null)
+  assert.equal(actionPhrase(empty), 'No hay planes operativos.')
+  assert.equal(formatCount(null), 'Sin dato')
+
+  const fifteen = executiveSummary({
+    counts: { total: 15, SO: 5, SP: 8, P: 2 },
+    summary: {
+      total_operational_plans: 15, ready_tomorrow: 9, pending_tomorrow: 6,
+      no_plan_tomorrow: 3, incomplete_resources_tomorrow: 2, blocked_tomorrow: 1,
+      week_rows_with_missing_route: 3, weekly_coverage_pct: 78,
+      SO: 5, SP: 8, P: 2,
+    },
+  })
+  assert.equal(fifteen.total, 15)
+  assert.equal(fifteen.pending, 6)
+  assert.equal(actionPhrase(fifteen), 'Te faltan 6 planes por dejar listos para mañana.')
+  assert.equal(pendingBreakdown(fifteen).length, 3)
+
+  const n = executiveSummary({ counts: { total: 2, SO: 2, SP: 0, P: 0 }, rows: [{}, {}] })
+  assert.equal(n.total, 2)
+})
+
+test('selección 1–2: no sustituye al intentar 3', () => {
+  const a = { tipo: 'SO', id: 1, name: 'A', key: 'SO:1' }
+  const b = { tipo: 'SP', id: 2, name: 'B', key: 'SP:2' }
+  const c = { tipo: 'P', id: 3, name: 'C', key: 'P:3' }
+  const one = toggleOperationalSelection([], a)
+  assert.equal(one.selected.length, 1)
+  const two = toggleOperationalSelection(one.selected, b)
+  assert.equal(two.selected.length, 2)
+  assert.equal(two.error, null)
+  const three = toggleOperationalSelection(two.selected, c)
+  assert.equal(three.selected.length, 2)
+  assert.match(three.error, /No puedes combinar más de 2/)
+  const off = toggleOperationalSelection(two.selected, a)
+  assert.equal(off.selected.length, 1)
+})
+
+test('filtros de matriz: SO/SP/P y pendientes', () => {
+  const rows = [
+    { tipo: 'SO', tomorrow: { assignment_state: 'assigned' }, days: [{ has_plan: true }] },
+    { tipo: 'SP', tomorrow: { assignment_state: 'no_plan' }, days: [{ has_plan: false }] },
+    { tipo: 'P', tomorrow: { assignment_state: 'unassigned' }, days: [{ has_plan: true }] },
+  ]
+  assert.equal(filterMatrixRows(rows, 'SO').length, 1)
+  assert.equal(filterMatrixRows(rows, 'pending_tomorrow').length, 2)
+  assert.equal(filterMatrixRows(rows, 'ready_tomorrow').length, 1)
+  assert.equal(filterMatrixRows(rows, 'week_gaps').length, 1)
+})
+
+test('wiring: resumen + filtros + selección en la matriz', () => {
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.match(m, /rw-filter-pending_tomorrow/)
+  assert.match(m, /Armar una ruta/)
+  assert.match(m, /rw-select/)
+  assert.match(m, /actionPhrase/)
 })

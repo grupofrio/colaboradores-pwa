@@ -16,9 +16,9 @@ const PROSPECTS = () => src('modules/supervisor-ventas/v2/tabs/ProspectosTab.jsx
 
 // ── Shell: las 7 pestañas SIEMPRE se pintan, sin barra inferior fija ─────────
 
-test('las 7 superficies siguen declaradas en V2_TABS', () => {
+test('las 8 superficies siguen declaradas en V2_TABS', () => {
   const s = SHELL()
-  for (const key of ['hoy', 'radar', 'rutas', 'clientes', 'prospectos', 'pendientes', 'mas']) {
+  for (const key of ['hoy', 'radar', 'rutas', 'clientes', 'prospectos', 'pendientes', 'copiloto', 'mas']) {
     assert.ok(s.includes(`key: '${key}'`), `falta la pestaña ${key}`)
   }
 })

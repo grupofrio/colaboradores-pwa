@@ -24,7 +24,7 @@ test('supervisor_ventas (Aida): Equipo y Brief prioritarios y directos; universa
   // de mañana" (navPriority 35) cae a "Más", entre KPIs (30) y Encuestas (40).
   const m = buildMobileNav(session, '/')
   assert.deepEqual(ids(m.primary), ['supervisor_ventas', 'brief_dia'])
-  assert.deepEqual(ids(m.overflow), ['kpis', 'supervisor_rutas_manana', 'encuestas', 'logros'])
+  assert.deepEqual(ids(m.overflow), ['kpis', 'supervisor_rutas_manana', 'copiloto_supervisor', 'encuestas', 'logros'])
   assert.equal(m.hasMore, true)
   // No ve módulos de gestión que no le corresponden
   assert.ok(!ids(nav).includes('admin_sucursal'))
