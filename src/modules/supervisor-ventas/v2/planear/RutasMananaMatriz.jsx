@@ -220,9 +220,9 @@ export default function RutasMananaMatriz({ onOpenRoute, onArmarSources }) {
         <div data-testid="rw-checklist" style={{ display: 'grid', gap: 4, fontSize: 12.5, color: C.text }}>
           <div>PREPARACIÓN DE MAÑANA</div>
           <div>✓ {formatCount(summary.total)} planes operativos detectados</div>
-          <div>{summary.noPlan === 0 ? '✓' : '⚠'} {formatCount(summary.total != null && summary.noPlan != null ? summary.total - summary.noPlan : null)} tienen ruta · {formatCount(summary.noPlan)} por preparar</div>
+          <div>{summary.noPlan === 0 ? '✓' : '⚠'} {formatCount(summary.toAssign)} por asignar · {formatCount(summary.toPrepare)} por dejar completamente preparados</div>
           <div>{summary.incomplete === 0 ? '✓' : '⚠'} {formatCount(summary.incomplete)} requieren recursos</div>
-          <div>{summary.published != null && summary.published > 0 ? '✓' : '⚠'} {formatCount(summary.published)} publicados · {formatCount(summary.pending)} pendientes</div>
+          <div>{summary.readyToPublish != null && summary.readyToPublish > 0 ? '✓' : '○'} {formatCount(summary.readyToPublish)} listos para publicar · {formatCount(summary.published)} publicados</div>
         </div>
         <div style={{ fontSize: 12.5, color: C.textMuted }}>
           SEMANA · {formatCount(summary.weekGaps)} planes con algún día sin ruta

@@ -404,29 +404,34 @@ test('F5: optimize+review+publish — wrappers y shims', () => {
   assert.ok(/\/pwa-supv\/route-plan-optimize/.test(api), 'usa la ruta pwa-supv del optimize')
   assert.ok(/export function reviewRoutePlan/.test(api) && /\/pwa-supv\/route-plan-review/.test(api), 'wrapper reviewRoutePlan')
   assert.ok(/export function generateRoutePlanDemandSnapshot/.test(api) && /\/pwa-supv\/route-plan-generate-snapshot/.test(api), 'wrapper snapshot de demanda')
+  assert.ok(/export function reopenRoutePlanForRevision/.test(api) && /\/pwa-supv\/route-plan-reopen-for-revision/.test(api), 'wrapper reopen canónico')
   assert.ok(/export function publishRoutePlan\(routePlanId, planRevision, confirmWarnings/.test(api), 'publishRoutePlan acepta planRevision + confirmWarnings')
   assert.ok(/plan_revision: String\(planRevision\)/.test(api), 'publish envía plan_revision cuando la hay')
   assert.ok(/confirm_readiness_warnings: true/.test(api), 'publish envía confirm_readiness_warnings')
   const lib = src('lib/api.js')
   assert.ok(/\/pwa-supv\/route-plan-review/.test(lib) && /route_plan\/review/.test(lib), 'shim review → controller dedicado')
   assert.ok(/\/pwa-supv\/route-plan-generate-snapshot/.test(lib) && /route_plan\/generate-snapshot/.test(lib), 'shim snapshot → controller dedicado')
+  assert.ok(/\/pwa-supv\/route-plan-reopen-for-revision/.test(lib) && /route_plan\/reopen_for_revision/.test(lib), 'shim reopen → controller dedicado')
   assert.ok(/body\?\.plan_revision \? \{ plan_revision:/.test(lib), 'el shim de publish reenvía plan_revision')
   assert.ok(/body\?\.confirm_readiness_warnings \? \{ confirm_readiness_warnings/.test(lib), 'el shim de publish reenvía confirm_readiness_warnings')
 })
 
-test('F5: handlePublish corre optimize→review→publish y gatea ready/warning/blocked', () => {
+test('F5: handlePublish publica la revisión revisada SIN volver a optimizar', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
-  assert.ok(/Optimizar y publicar/.test(tab), 'el botón dice "Optimizar y publicar"')
+  assert.ok(/Publicar ruta optimizada/.test(tab), 'el botón dice "Publicar ruta optimizada"')
+  assert.ok(!/Optimizar y publicar/.test(tab), 'ya no dice Optimizar y publicar')
   const handler = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('function toggleDemand'))
-  assert.ok(/runOptimize\(routePlanId\)/.test(handler), 'optimiza')
-  assert.ok(/runReview\(routePlanId\)/.test(handler), 'revisa antes de publicar')
-  assert.ok(/publishRoutePlan\(routePlanId, ready\.revision/.test(handler), 'publica con la revisión post-review')
-  assert.ok(/revision_mismatch/.test(handler), 'maneja revision_mismatch (reoptimiza+revisa y reintenta una vez)')
+  assert.ok(!/runOptimize\(routePlanId\)/.test(handler), 'publicar NO llama al optimizer')
+  assert.ok(!/runReview\(routePlanId\)/.test(handler), 'publicar NO vuelve a revisar')
+  assert.ok(/publishRoutePlan\(routePlanId, revision/.test(handler), 'publica la revisión revisada')
+  assert.ok(/reviewResult\?\.revision \|\| optimizeResult\?\.revision/.test(handler), 'usa la revisión que la supervisora revisó')
+  assert.ok(/revision_mismatch/.test(handler), 'maneja revision_mismatch')
+  assert.ok(/Vuelve a Preparar ruta/.test(handler), 'mismatch obliga a preparar de nuevo')
+  assert.ok(!/ready = await prepare\(\)/.test(handler), 'no reoptimiza en silencio')
   assert.ok(/readiness_blocked/.test(handler) && /readiness_warnings/.test(handler), 'gatea los códigos de readiness')
   assert.ok(/demand_snapshot_required/.test(handler), 'surfacea la falta de snapshot')
   assert.ok(/setSnapshotResult\(\{ required: true \}\)/.test(handler), 'ofrece generar snapshot cuando el gate lo exige')
   assert.ok(/confirmWarnings/.test(handler), 'los avisos exigen confirmación explícita')
-  // La UI muestra bloqueos/avisos de la revisión + botón de confirmación.
   assert.ok(/planear-review-blocked/.test(tab), 'muestra los bloqueos')
   assert.ok(/planear-review-warning/.test(tab) && /planear-publicar-confirmar/.test(tab), 'muestra avisos + confirmar')
   assert.ok(/planear-optimizacion/.test(tab), 'muestra paradas · km · min tras optimizar')
@@ -503,9 +508,11 @@ test('F5+: interpretReviewResponse mapea el veredicto ready/warning/blocked', ()
 
 test('F5 hotfix: si la revisión falla, el flujo se detiene antes de publicar', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  const prepare = tab.slice(tab.indexOf('async function handlePrepareRoute'), tab.indexOf('async function handlePublish'))
+  assert.match(prepare, /review\.failed \|\| review\.state === 'blocked'/, 'un fallo de review corta Preparar ruta')
   const handler = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('function toggleDemand'))
-  assert.match(handler, /if \(review\.failed\) \{[\s\S]*?return null/, 'un fallo de review debe cortar el flujo')
-  assert.doesNotMatch(handler, /if \(!review\.failed\)[\s\S]*?else \{\s*setReviewResult\(null\)/, 'review fallido no degrada a publish directo')
+  assert.match(handler, /reviewFailed: Boolean\(reviewResult\?\.failed\)/, 'publicar exige revisión vigente')
+  assert.doesNotMatch(handler, /runOptimize\(routePlanId\)/)
 })
 
 test('F5+: interpretPublishResponse — códigos accionables NO son éxito', () => {
@@ -571,10 +578,35 @@ test('publicación: snapshot + revision + unassigned 0 + geo 0', () => {
   assert.equal(canPublishPreparedRoute({ customersCount: 3, snapshotOk: true, optimizeBlocked: false, planRevision: 'r', reviewState: 'blocked' }).ok, false)
 })
 
-test('wiring: Preparar ruta orquesta snapshot→optimize→review', () => {
+test('wiring: Preparar ruta orquesta snapshot→optimize→review una sola vez', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
   assert.match(tab, /Preparar ruta/)
   assert.match(tab, /handlePrepareRoute/)
   assert.match(tab, /generateRoutePlanDemandSnapshot/)
+  const prepare = tab.slice(tab.indexOf('async function handlePrepareRoute'), tab.indexOf('async function handlePublish'))
+  const optCalls = prepare.split('runOptimize(routePlanId)').length - 1
+  assert.equal(optCalls, 1, 'Preparar ruta llama al optimizer una sola vez')
+  assert.match(prepare, /runReview\(routePlanId\)/)
   assert.match(tab, /clientes no pudieron entrar/)
+  const publish = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('function toggleDemand'))
+  assert.equal(publish.split('runOptimize(routePlanId)').length - 1, 0, 'Publicar no llama al optimizer')
+})
+
+test('wiring: reopen canónico, no write state desde el frontend', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  const api = src('modules/supervisor-ventas/api.js')
+  const lib = src('lib/api.js')
+  assert.match(tab, /handleReopenPublished/)
+  assert.match(tab, /Revisar ruta publicada/)
+  assert.match(tab, /reopenRoutePlanForRevision/)
+  assert.ok(!/write\(\s*\{\s*state:\s*'draft'/.test(tab), 'no hace write({state:draft})')
+  assert.match(api, /export function reopenRoutePlanForRevision/)
+  assert.match(api, /\/pwa-supv\/route-plan-reopen-for-revision/)
+  assert.match(lib, /route_plan\/reopen_for_revision/)
+})
+
+test('wiring: lead aparece en la secuencia como Prospecto', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.match(tab, /Prospecto ·/)
+  assert.match(tab, /st\.lead_id/)
 })

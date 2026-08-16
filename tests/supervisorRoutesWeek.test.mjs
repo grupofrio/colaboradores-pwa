@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import {
   weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId, rowZone, typeLabel,
   executiveSummary, actionPhrase, pendingBreakdown, formatCount, toggleOperationalSelection,
-  filterMatrixRows,
+  filterMatrixRows, isReadyTomorrow,
 } from '../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -163,14 +163,18 @@ test('resumen ejecutivo: counts dinámicos y null ≠ 0', () => {
     summary: {
       total_operational_plans: 15, ready_tomorrow: 9, pending_tomorrow: 6,
       no_plan_tomorrow: 3, incomplete_resources_tomorrow: 2, blocked_tomorrow: 1,
+      to_assign_tomorrow: 5, to_prepare_tomorrow: 1,
       week_rows_with_missing_route: 3, weekly_coverage_pct: 78,
       SO: 5, SP: 8, P: 2,
     },
   })
   assert.equal(fifteen.total, 15)
   assert.equal(fifteen.pending, 6)
-  assert.equal(actionPhrase(fifteen), 'Te faltan 6 planes por dejar listos para mañana.')
-  assert.equal(pendingBreakdown(fifteen).length, 3)
+  assert.equal(fifteen.toAssign, 5)
+  assert.equal(fifteen.toPrepare, 1)
+  assert.equal(actionPhrase(fifteen), 'Te faltan 5 por asignar y 1 por dejar completamente preparados.')
+  assert.ok(pendingBreakdown(fifteen).some((p) => p.text.includes('por asignar')))
+  assert.ok(pendingBreakdown(fifteen).some((p) => p.text.includes('completamente preparado')))
 
   const n = executiveSummary({ counts: { total: 2, SO: 2, SP: 0, P: 0 }, rows: [{}, {}] })
   assert.equal(n.total, 2)
@@ -194,7 +198,7 @@ test('selección 1–2: no sustituye al intentar 3', () => {
 
 test('filtros de matriz: SO/SP/P y pendientes', () => {
   const rows = [
-    { tipo: 'SO', tomorrow: { assignment_state: 'assigned' }, days: [{ has_plan: true }] },
+    { tipo: 'SO', tomorrow: { assignment_state: 'assigned', planning_readiness: 'ready_to_publish' }, days: [{ has_plan: true }] },
     { tipo: 'SP', tomorrow: { assignment_state: 'no_plan' }, days: [{ has_plan: false }] },
     { tipo: 'P', tomorrow: { assignment_state: 'unassigned' }, days: [{ has_plan: true }] },
   ]
@@ -202,6 +206,15 @@ test('filtros de matriz: SO/SP/P y pendientes', () => {
   assert.equal(filterMatrixRows(rows, 'pending_tomorrow').length, 2)
   assert.equal(filterMatrixRows(rows, 'ready_tomorrow').length, 1)
   assert.equal(filterMatrixRows(rows, 'week_gaps').length, 1)
+})
+
+test('assigned ≠ ready_to_publish', () => {
+  const assigned = { tomorrow: { assignment_state: 'assigned', planning_readiness: 'needs_snapshot' } }
+  const ready = { tomorrow: { assignment_state: 'assigned', planning_readiness: 'ready_to_publish' } }
+  const published = { tomorrow: { assignment_state: 'published', planning_readiness: 'published' } }
+  assert.equal(isReadyTomorrow(assigned), false)
+  assert.equal(isReadyTomorrow(ready), true)
+  assert.equal(isReadyTomorrow(published), true)
 })
 
 test('wiring: resumen + filtros + selección en la matriz', () => {

@@ -8620,6 +8620,34 @@ async function directSupervisorVentas(method, path, body) {
     }
   }
 
+  if (cleanPath === '/pwa-supv/route-plan-reopen-for-revision' && method === 'POST') {
+    const routePlanId = Number(body?.route_plan_id || 0)
+    if (!routePlanId) {
+      return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'route_plan_id requerido' }
+    }
+    let reopenRes
+    try {
+      reopenRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/route_plan/reopen_for_revision', {
+        meta: supervisorMeta(),
+        data: { route_plan_id: routePlanId },
+      }), null)
+    } catch (e) {
+      reopenRes = normalizeWriteResponse(null, e)
+    }
+    if (!reopenRes.ok) {
+      return {
+        ok: false, status: 'error', phase: reopenRes.phase, code: reopenRes.code,
+        message: reopenRes.message || 'No se pudo reabrir la ruta para revisión.', retryable: reopenRes.retryable,
+        data: reopenRes.data || {},
+      }
+    }
+    return {
+      ok: true, status: 'ok', phase: reopenRes.phase, message: 'Ruta reabierta para revisión',
+      data: (reopenRes.data && (reopenRes.data.route_plan_id ? reopenRes.data : reopenRes.data.data)) || { route_plan_id: routePlanId },
+      meta: supervisorMeta(),
+    }
+  }
+
   if ((cleanPath === '/pwa-supv/route-plan-capacity-reload-preview' || cleanPath === '/pwa-supv/route-plan-apply-capacity-reload') && method === 'POST') {
     const routePlanId = Number(body?.route_plan_id || 0)
     if (!routePlanId) {

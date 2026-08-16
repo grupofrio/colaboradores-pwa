@@ -37,6 +37,7 @@ import {
   previewRoutePlanCapacityReload,
   applyRoutePlanCapacityReload,
   publishRoutePlan,
+  reopenRoutePlanForRevision,
   searchPlanningCustomers,
   getRouteStops,
   getRoutePlanReadiness,
@@ -51,6 +52,7 @@ import {
   normalizeRoutePlanCustomer,
   normalizeCustomerSearchResult,
   canEditRoutePlanCustomers,
+  canReopenPublishedRoute,
   getSupervisorRouteErrorMessage,
   DEMAND_CLASSES,
 } from '../../routePlanning'
@@ -397,7 +399,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const [previewing, setPreviewing] = useState(false)
   const [publishing, setPublishing] = useState(false)
   // Resultado de la última optimización (F5/B5): paradas · km · min + revisión.
-  // Se muestra tras "Optimizar y publicar" para que el número sea visible.
+  // Se muestra tras "Preparar ruta" para que el número sea visible.
   const [optimizeResult, setOptimizeResult] = useState(null)
   const [reviewResult, setReviewResult] = useState(null)
   const [snapshotResult, setSnapshotResult] = useState(null)
@@ -895,6 +897,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
         return
       }
       setPrepareStage('')
+      setShowSequence(true)
       flash('Ruta lista para publicar. Revisa el resultado.', 5000)
     } catch (e) {
       logScreenError('PlanearManana', 'prepareRoute', e)
@@ -905,13 +908,10 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     }
   }
 
-  // optimize → review → publish (B5+, absorbe el flujo de Sebas):
-  //   ready   → publica; warning → exige confirmación explícita; blocked → no publica.
+  // Publica EXACTAMENTE la plan_revision revisada. NO corre el solver otra vez.
+  // revision_mismatch ⇒ bloquea y obliga a Preparar ruta de nuevo.
   async function handlePublish(opts = {}) {
     const confirmWarnings = opts?.confirmWarnings === true
-    // Codex P1 (3ª): tampoco publicar mientras se prepara/previsualiza (readiness
-    // autoritativa en vuelo). El estado 'blocked' de invalidate ya deshabilita el
-    // botón; esto cierra también la ruta programática.
     if (publishing || snapshotBusy || reloadBusy || assignBusy || rowBusy || preparing || previewing || !routePlanId) {
       if (!routePlanId) flash('Genera primero la propuesta')
       else if (snapshotBusy) flash('Espera a que termine la generación del snapshot')
@@ -921,11 +921,12 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       return
     }
     if (!readiness?.publishable) { flash('Este plan no se puede publicar en su estado actual'); return }
+    const revision = reviewResult?.revision || optimizeResult?.revision || null
     const gate = canPublishPreparedRoute({
       customersCount: previewCustomers.length,
       snapshotOk: Boolean(snapshotResult?.ok && snapshotResult?.snapshotId),
       optimizeBlocked: Boolean(optimizeResult == null || !optimizeResult.revision),
-      planRevision: reviewResult?.revision || optimizeResult?.revision || null,
+      planRevision: revision,
       unassigned: Number(optimizeResult?.unassigned || reviewResult?.unassigned || 0),
       missingGeo: Number(reviewResult?.missingGeo || 0),
       reviewFailed: Boolean(reviewResult?.failed),
@@ -937,43 +938,23 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       return
     }
     if (reviewResult && Number(reviewResult.missingGeo || 0) > 0) {
-      flash(`${reviewResult.missingGeo} clientes no tienen ubicación. Corrige sus coordenadas para optimizar la ruta.`, 6000)
+      flash(`${reviewResult.missingGeo} paradas no tienen ubicación. Corrige coordenadas de clientes o prospectos.`, 6000)
+      return
+    }
+    if (reviewResult?.state === 'warning' && !confirmWarnings) {
+      flash('La ruta tiene avisos; revísalos y confirma para publicar.', 6000)
       return
     }
     setPublishing(true)
     try {
-      // Corre optimize→review y devuelve { stop, revision } o null si se bloqueó.
-      const prepare = async () => {
-        const opt = await runOptimize(routePlanId)
-        if (opt.blocked) { flash(opt.message || 'El optimizador no pudo secuenciar la ruta.', 6000); return null }
-        const review = await runReview(routePlanId)
-        if (review.failed) {
-          setReviewResult({ state: 'blocked', blockers: [review.message || 'No se pudo registrar la revisión del plan.'] })
-          flash(review.message || 'No se pudo revisar el plan. No se publicará sin revisión.', 6000)
-          return null
-        }
-        setReviewResult(review)
-        if (review.state === 'blocked') { flash('La ruta tiene bloqueos; corrígelos antes de publicar.', 6000); return null }
-        if (review.state === 'warning' && !confirmWarnings) { flash('La ruta tiene avisos; revísalos y confirma para publicar.', 6000); return null }
-        return { revision: review.revision || opt.revision, warning: review.state === 'warning' }
-      }
-
-      // 1) Optimizar + revisar.
-      let ready = await prepare()
-      if (!ready) return
-      // 2) Publicar (revisión post-review + confirmación de avisos).
-      let pub = interpretPublishResponse(
-        await publishRoutePlan(routePlanId, ready.revision, confirmWarnings || ready.warning))
-      // revision_mismatch (alguien mutó el plan entre revisar y publicar) ⇒
-      // reoptimiza + revisa + reintenta UNA vez.
+      const pub = interpretPublishResponse(
+        await publishRoutePlan(routePlanId, revision, confirmWarnings || reviewResult?.state === 'warning'))
       if (pub.code === 'revision_mismatch') {
-        ready = await prepare()
-        if (!ready) return
-        pub = interpretPublishResponse(
-          await publishRoutePlan(routePlanId, ready.revision, confirmWarnings || ready.warning))
+        setOptimizeResult(null)
+        setReviewResult(null)
+        flash('El plan cambió desde que se revisó. Vuelve a Preparar ruta y publica esa revisión. No se reoptimiza al publicar.', 7000)
+        return
       }
-      // Códigos accionables del gate server-side (por si el review local no corrió
-      // o el estado del servidor difiere).
       if (pub.code === 'readiness_blocked') {
         setReviewResult((r) => ({ ...(r || {}), state: 'blocked', blockers: pub.blockers }))
         flash('La ruta tiene bloqueos; corrígelos antes de publicar.', 6000); return
@@ -987,12 +968,30 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
         flash('Falta generar el snapshot del plan antes de publicar.', 6000); return
       }
       if (!pub.ok) throw pub
-      flash('Ruta optimizada y publicada para mañana')
+      flash('Ruta optimizada publicada para mañana')
       await loadData()
       if (onExit) { onExit(); return }
       setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([]); setOptimizeResult(null); setReviewResult(null); setSnapshotResult(null)
     } catch (e) {
-      logScreenError('PlanearManana', 'optimizeReviewPublish', e)
+      logScreenError('PlanearManana', 'publishOptimizedRoute', e)
+      flash(getSupervisorRouteErrorMessage(e), 5000)
+    } finally { setPublishing(false) }
+  }
+
+  async function handleReopenPublished() {
+    if (!routePlanId || publishing || !canReopenPublishedRoute(selectedRoute || {})) return
+    setPublishing(true)
+    try {
+      const res = await reopenRoutePlanForRevision(routePlanId)
+      if (res?.ok === false || String(res?.status || '').toLowerCase() === 'error') throw res
+      setSnapshotResult(null)
+      setOptimizeResult(null)
+      setReviewResult(null)
+      invalidateResourceReadiness()
+      await loadData()
+      flash('Ruta reabierta. Vuelve a Preparar ruta (snapshot → optimizar → revisar) antes de publicar.', 7000)
+    } catch (e) {
+      logScreenError('PlanearManana', 'reopenRoutePlanForRevision', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
     } finally { setPublishing(false) }
   }
@@ -1294,6 +1293,16 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
           ) : (
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>{readiness.reasons[0] || 'Completa la preparación para publicar.'}</div>
           )}
+          {readiness.published && canReopenPublishedRoute(selectedRoute || {}) && (
+            <div data-testid="planear-reabrir" style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 12.5, color: C.text, marginBottom: 8, lineHeight: 1.5 }}>
+                La ruta ya está publicada. Para cambiar clientes o prospectos, reábrela: vuelve a snapshot → optimizar → revisar → publicar.
+              </div>
+              <PrimaryButton testid="planear-reabrir-ruta" onClick={handleReopenPublished} busy={publishing}>
+                Revisar ruta publicada
+              </PrimaryButton>
+            </div>
+          )}
           {!readiness.published && (
             <>
               <div data-testid="planear-pasos" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10, fontSize: 11.5, fontWeight: 700, color: C.textMuted }}>
@@ -1316,7 +1325,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
               </PrimaryButton>
               <div style={{ height: 8 }} />
               <PrimaryButton testid="planear-publicar" tone="green" onClick={() => handlePublish()} busy={publishing || reloadBusy} disabled={!readiness.publishable || !preparedPublish.ok || Boolean(snapshotBusy || assignBusy || rowBusy || preparing || previewing) || Number(optimizeResult?.unassigned || 0) > 0 || Number(reviewResult?.missingGeo || 0) > 0}>
-                Optimizar y publicar
+                Publicar ruta optimizada
               </PrimaryButton>
             </>
           )}
@@ -1413,7 +1422,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
                   {showSequence && (
                     <ol data-testid="planear-secuencia" style={{ margin: '8px 0 0', paddingLeft: 18, textAlign: 'left', color: C.text }}>
                       {optimizeResult.sequence.map((st, idx) => (
-                        <li key={st.stop_id || idx}>{st.name || `Parada ${st.sequence || idx + 1}`}</li>
+                        <li key={st.stop_id || idx}>{st.lead_id ? `Prospecto · ${st.name || `Parada ${st.sequence || idx + 1}`}` : (st.name || `Parada ${st.sequence || idx + 1}`)}</li>
                       ))}
                     </ol>
                   )}

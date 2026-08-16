@@ -200,22 +200,31 @@ export function filterMatrixRows(rows, filter) {
 }
 
 export function isReadyTomorrow(row) {
+  const ready = row?.tomorrow?.planning_readiness
+  if (ready) return ['ready_to_publish', 'published', 'in_progress', 'closed'].includes(ready)
   const state = row?.tomorrow?.assignment_state
-  if (state) return ['assigned', 'published', 'in_progress', 'closed'].includes(state)
-  return Boolean(row?.tomorrow?.assigned)
+  if (state) return ['published', 'in_progress', 'closed'].includes(state)
+  return false
 }
 
 export function tomorrowAction(row) {
   const t = row?.tomorrow || {}
-  const state = t.assignment_state || (t.assigned ? 'assigned' : (Number(t.plan_count || 0) > 0 ? 'unassigned' : 'no_plan'))
+  const prep = t.planning_readiness
+  const state = prep || t.assignment_state || (t.assigned ? 'assigned' : (Number(t.plan_count || 0) > 0 ? 'unassigned' : 'no_plan'))
   if (rowRequiresRouteSelection(row)) {
     return { state, label: 'Varias rutas', cta: 'Elegir ruta', testid: 'rw-elegir-ruta' }
   }
   if (state === 'published' || state === 'in_progress' || state === 'closed') {
     return { state, label: assignmentLabel(state), cta: 'Revisar', testid: 'rw-reasignar' }
   }
+  if (state === 'ready_to_publish') {
+    return { state, label: 'Lista para publicar', cta: 'Revisar', testid: 'rw-reasignar' }
+  }
+  if (state === 'needs_snapshot' || state === 'needs_optimization') {
+    return { state, label: state === 'needs_snapshot' ? 'Falta demanda' : 'Falta optimizar', cta: 'Preparar', testid: 'rw-reasignar' }
+  }
   if (state === 'assigned') {
-    return { state, label: 'Lista', cta: 'Revisar', testid: 'rw-reasignar' }
+    return { state, label: 'Recursos listos', cta: 'Preparar', testid: 'rw-reasignar' }
   }
   if (state === 'blocked') {
     return { state, label: 'Bloqueada', cta: 'Resolver', testid: 'rw-asignar' }
@@ -248,6 +257,10 @@ export function executiveSummary(data) {
   const incomplete = asCount(s?.incomplete_resources_tomorrow)
   const blocked = asCount(s?.blocked_tomorrow)
   const published = asCount(s?.published_tomorrow)
+  const toAssign = asCount(s?.to_assign_tomorrow)
+  const toPrepare = asCount(s?.to_prepare_tomorrow)
+  const assigned = asCount(s?.assigned_tomorrow)
+  const readyToPublish = asCount(s?.ready_to_publish_tomorrow)
   const weekGaps = asCount(s?.week_rows_with_missing_route)
   const coverage = s?.weekly_coverage_pct == null ? null : Number(s.weekly_coverage_pct)
   const derived = !s ? deriveSummaryFromRows(rows, counts) : null
@@ -259,6 +272,10 @@ export function executiveSummary(data) {
     incomplete: incomplete ?? derived?.incomplete ?? null,
     blocked: blocked ?? derived?.blocked ?? null,
     published: published ?? derived?.published ?? null,
+    toAssign: toAssign ?? derived?.toAssign ?? null,
+    toPrepare: toPrepare ?? derived?.toPrepare ?? null,
+    assigned: assigned ?? derived?.assigned ?? null,
+    readyToPublish: readyToPublish ?? derived?.readyToPublish ?? null,
     weekGaps: weekGaps ?? derived?.weekGaps ?? null,
     coverage: coverage ?? derived?.coverage ?? null,
     SO: asCount(s?.SO) ?? asCount(counts.SO),
@@ -275,28 +292,38 @@ export function deriveSummaryFromRows(rows, counts = {}) {
   let incomplete = 0
   let blocked = 0
   let published = 0
+  let assigned = 0
+  let readyToPublish = 0
   let weekGaps = 0
   const cov = []
   for (const row of list) {
-    const state = row?.tomorrow?.assignment_state
+    const prep = row?.tomorrow?.planning_readiness
+    const state = prep
+      || row?.tomorrow?.assignment_state
       || (row?.tomorrow?.assigned ? 'assigned' : (Number(row?.tomorrow?.plan_count || 0) > 0 ? 'unassigned' : 'no_plan'))
+    if (['assigned', 'ready_to_publish', 'published', 'in_progress', 'closed'].includes(state)) assigned += 1
+    if (['ready_to_publish', 'published', 'in_progress', 'closed'].includes(state)) ready += 1
     if (state === 'no_plan') noPlan += 1
     else if (state === 'blocked') blocked += 1
     else if (state === 'unassigned') incomplete += 1
-    else {
-      ready += 1
-      if (state === 'published') published += 1
-    }
+    if (state === 'published') published += 1
+    if (state === 'ready_to_publish') readyToPublish += 1
     if ((row?.days || []).some((c) => !c?.has_plan)) weekGaps += 1
     if (row?.weekly_coverage_pct != null) cov.push(Number(row.weekly_coverage_pct))
   }
+  const pending = list.length - ready
+  const toAssign = noPlan + incomplete
   return {
     ready,
-    pending: noPlan + incomplete + blocked,
+    pending,
     noPlan,
     incomplete,
     blocked,
     published,
+    assigned,
+    readyToPublish,
+    toAssign,
+    toPrepare: pending - toAssign,
     weekGaps,
     coverage: cov.length ? Math.round((cov.reduce((a, b) => a + b, 0) / cov.length) * 10) / 10 : null,
     SO: asCount(counts.SO),
@@ -309,16 +336,35 @@ export function actionPhrase(summary) {
   const total = summary?.total
   const pending = summary?.pending
   const ready = summary?.ready
+  const toAssign = summary?.toAssign
+  const toPrepare = summary?.toPrepare
   if (total == null) return 'Sin dato de planes operativos.'
   if (total === 0) return 'No hay planes operativos.'
   if (pending == null || ready == null) return `${total} planes operativos.`
   if (pending === 0) return `Los ${total} planes de mañana están listos.`
+  const assignN = Number(toAssign || 0)
+  const prepareN = Number(toPrepare || 0)
+  if (assignN > 0 && prepareN > 0) {
+    return `Te faltan ${assignN} por asignar y ${prepareN} por dejar completamente preparados.`
+  }
+  if (assignN > 0) {
+    return assignN === 1
+      ? 'Te falta 1 plan por asignar.'
+      : `Te faltan ${assignN} planes por asignar.`
+  }
+  if (prepareN > 0) {
+    return prepareN === 1
+      ? 'Te falta 1 plan por dejar completamente preparado.'
+      : `Te faltan ${prepareN} planes por dejar completamente preparados.`
+  }
   if (pending === 1) return 'Te falta 1 plan por dejar listo para mañana.'
   return `Te faltan ${pending} planes por dejar listos para mañana.`
 }
 
 export function pendingBreakdown(summary) {
   const parts = []
+  if (summary?.toAssign != null) parts.push({ n: summary.toAssign, text: summary.toAssign === 1 ? 'por asignar' : 'por asignar' })
+  if (summary?.toPrepare != null) parts.push({ n: summary.toPrepare, text: summary.toPrepare === 1 ? 'por dejar completamente preparado' : 'por dejar completamente preparados' })
   if (summary?.noPlan != null) parts.push({ n: summary.noPlan, text: summary.noPlan === 1 ? 'todavía no tiene ruta' : 'todavía no tienen ruta' })
   if (summary?.incomplete != null) parts.push({ n: summary.incomplete, text: 'necesitan completar recursos' })
   if (summary?.blocked != null) parts.push({ n: summary.blocked, text: summary.blocked === 1 ? 'tiene un bloqueo que debes resolver' : 'tienen un bloqueo que debes resolver' })

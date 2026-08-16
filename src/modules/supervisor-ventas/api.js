@@ -326,6 +326,14 @@ export function publishRoutePlan(routePlanId, planRevision, confirmWarnings = fa
   })
 }
 
+/** Reabre una ruta publicada (aún no iniciada) a borrador versionado.
+ *  Única vía canónica: el navegador NO hace write({state:'draft'}). */
+export function reopenRoutePlanForRevision(routePlanId) {
+  return api('POST', '/pwa-supv/route-plan-reopen-for-revision', {
+    route_plan_id: Number(routePlanId || 0),
+  })
+}
+
 /**
  * Forecasts recientes.
  * @param {Object} [opts]
