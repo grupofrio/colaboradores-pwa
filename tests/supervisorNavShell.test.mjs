@@ -30,7 +30,7 @@ test('el rail NO se gatea por el breakpoint 900 (se ve a ancho normal)', () => {
   assert.doesNotMatch(s, /const isDesktop = sw >= 900/, 'ya no se decide la nav por isDesktop')
   // El rail se mapea sin condición de ancho, con scroll horizontal si no caben.
   assert.match(s, /overflowX: 'auto'/)
-  assert.match(s, /V2_TABS\.map/)
+  assert.match(s, /tabs\.map/)
 })
 
 test('NO hay barra inferior fija propia (evita la colisión con AppNav)', () => {

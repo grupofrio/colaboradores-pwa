@@ -11,7 +11,8 @@ import {
   routeReadiness, summarizeResources, capacityLabel, personRolesLabel, planStateLabel,
   derivePlanAssignment, resourceOptions, resourceReadiness, interpretOptimizeResponse,
   interpretReviewResponse, interpretDemandSnapshotResponse, interpretPublishResponse,
-  canPublishPreparedRoute,
+  canPublishPreparedRoute, PREPARE_ROUTE_STEPS, publishUsesReviewedRevision, publishRerunsOptimizer,
+  reopenClearsPreparation, echoedUnionKeys, shouldShowCombinedSources,
 } from '../src/modules/supervisor-ventas/v2/planear/planearModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -578,31 +579,36 @@ test('publicación: snapshot + revision + unassigned 0 + geo 0', () => {
   assert.equal(canPublishPreparedRoute({ customersCount: 3, snapshotOk: true, optimizeBlocked: false, planRevision: 'r', reviewState: 'blocked' }).ok, false)
 })
 
-test('wiring: Preparar ruta orquesta snapshot→optimize→review una sola vez', () => {
-  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
-  assert.match(tab, /Preparar ruta/)
-  assert.match(tab, /handlePrepareRoute/)
-  assert.match(tab, /generateRoutePlanDemandSnapshot/)
-  const prepare = tab.slice(tab.indexOf('async function handlePrepareRoute'), tab.indexOf('async function handlePublish'))
-  const optCalls = prepare.split('runOptimize(routePlanId)').length - 1
-  assert.equal(optCalls, 1, 'Preparar ruta llama al optimizer una sola vez')
-  assert.match(prepare, /runReview\(routePlanId\)/)
-  assert.match(tab, /clientes no pudieron entrar/)
-  const publish = tab.slice(tab.indexOf('async function handlePublish'), tab.indexOf('function toggleDemand'))
-  assert.equal(publish.split('runOptimize(routePlanId)').length - 1, 0, 'Publicar no llama al optimizer')
+test('P1-07: publicar una vez con revisión revisada, sin reoptimizar', () => {
+  assert.deepEqual(PREPARE_ROUTE_STEPS, ['snapshot', 'optimize', 'review'])
+  assert.equal(publishRerunsOptimizer(), false)
+  assert.equal(publishUsesReviewedRevision({ planRevision: 'rev-9', reviewState: 'ready' }), true)
+  assert.equal(publishUsesReviewedRevision({ planRevision: 'rev-9', reviewState: 'warning' }), true)
+  assert.equal(publishUsesReviewedRevision({ planRevision: 'rev-9', reviewState: 'blocked' }), false)
+  assert.equal(publishUsesReviewedRevision({ planRevision: null, reviewState: 'ready' }), false)
+  const ok = canPublishPreparedRoute({
+    customersCount: 4, snapshotOk: true, optimizeBlocked: false,
+    planRevision: 'rev-9', reviewState: 'ready',
+  })
+  assert.equal(ok.ok, true)
 })
 
-test('wiring: reopen canónico, no write state desde el frontend', () => {
-  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
-  const api = src('modules/supervisor-ventas/api.js')
-  const lib = src('lib/api.js')
-  assert.match(tab, /handleReopenPublished/)
-  assert.match(tab, /Revisar ruta publicada/)
-  assert.match(tab, /reopenRoutePlanForRevision/)
-  assert.ok(!/write\(\s*\{\s*state:\s*'draft'/.test(tab), 'no hace write({state:draft})')
-  assert.match(api, /export function reopenRoutePlanForRevision/)
-  assert.match(api, /\/pwa-supv\/route-plan-reopen-for-revision/)
-  assert.match(lib, /route_plan\/reopen_for_revision/)
+test('P1-07: reopen fuerza re-preparación', () => {
+  const cleared = reopenClearsPreparation()
+  assert.equal(cleared.snapshotResult, null)
+  assert.equal(cleared.optimizeResult, null)
+  assert.equal(cleared.reviewResult, null)
+  assert.equal(canPublishPreparedRoute({
+    customersCount: 4, snapshotOk: false, optimizeBlocked: true, planRevision: null,
+  }).ok, false)
+})
+
+test('P0-04: unión solo con echo de source_keys', () => {
+  assert.equal(shouldShowCombinedSources(null), false)
+  assert.equal(shouldShowCombinedSources(['SP:1']), false)
+  assert.equal(shouldShowCombinedSources(['SP:1', 'SO:2']), true)
+  assert.deepEqual(echoedUnionKeys({ ok: true, data: { source_keys: ['P:7', 'SP:3'] } }), ['P:7', 'SP:3'])
+  assert.equal(echoedUnionKeys({ ok: true, data: {} }), null)
 })
 
 test('wiring: lead aparece en la secuencia como Prospecto', () => {

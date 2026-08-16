@@ -53,7 +53,7 @@ export const MODULES = [
     route:  '/equipo/copiloto',
     tone:   'blue',
     roles:  ['supervisor_ventas'],
-    status: 'live',
+    status: 'gated',
     icon:   'copiloto',
     navPriority: 36,
   },

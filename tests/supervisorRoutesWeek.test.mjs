@@ -7,7 +7,9 @@ import { fileURLToPath } from 'node:url'
 import {
   weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId, rowZone, typeLabel,
   executiveSummary, actionPhrase, pendingBreakdown, formatCount, toggleOperationalSelection,
-  filterMatrixRows, isReadyTomorrow,
+  filterMatrixRows, isReadyTomorrow, encodeSourcesParam, decodeSourcesParam, zoneFromSources,
+  resolveArmarZone, canEnsureRoutePlan, deriveSummaryFromRows, cellAssignmentLine, cellAssignAttr,
+  countGlyph,
 } from '../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -223,4 +225,42 @@ test('wiring: resumen + filtros + selección en la matriz', () => {
   assert.match(m, /Armar una ruta/)
   assert.match(m, /rw-select/)
   assert.match(m, /actionPhrase/)
+})
+
+test('P0-03: polígono sobrevive roundtrip SP + poly gana sobre src', () => {
+  const row = { tipo: 'SP', id: 39, key: 'SP:39', polygon: { id: 26 }, name: 'Norte' }
+  const encoded = encodeSourcesParam([row])
+  assert.match(encoded, /SP:39/)
+  assert.match(encoded, /P:26/)
+  const decoded = decodeSourcesParam(encoded)
+  const zone = zoneFromSources(decoded)
+  assert.equal(zone.subpolygonId, 39)
+  assert.equal(zone.polygonId, 26)
+  const won = resolveArmarZone({ poly: '26', sub: '39', seg: '', src: 'SP:39' })
+  assert.equal(won.polygonId, 26)
+  assert.equal(won.subpolygonId, 39)
+  assert.equal(canEnsureRoutePlan({ polygonId: 0, subpolygonId: 0, segmentId: 0, sources: [] }), false)
+  assert.equal(canEnsureRoutePlan({ polygonId: 26, sources: [] }), true)
+})
+
+test('P1-04: pre-contrato null ≠ 0 y breakdown sin doble conteo', () => {
+  const pre = deriveSummaryFromRows([
+    { tipo: 'SO', id: 1, tomorrow: { plan_count: 1 }, days: [{ has_plan: true }] },
+    { tipo: 'SP', id: 2, tomorrow: {}, days: [{ has_plan: false }] },
+  ])
+  assert.equal(pre.published, null)
+  assert.equal(pre.readyToPublish, null)
+  assert.equal(pre.ready, null)
+  assert.equal(formatCount(pre.published), 'Sin dato')
+  assert.equal(cellAssignmentLine({ has_plan: true }), '')
+  assert.equal(cellAssignAttr({ has_plan: true }), 'unknown')
+  assert.notEqual(cellAssignAttr({ has_plan: true }), 'no_plan')
+  assert.equal(countGlyph(null), '○')
+  assert.equal(countGlyph(0, { zeroGood: true }), '✓')
+  assert.equal(countGlyph(3, { zeroGood: true }), '⚠')
+  const bd = pendingBreakdown({ toAssign: 5, toPrepare: 1, noPlan: 3, incomplete: 2, blocked: 1 })
+  const texts = bd.map((p) => p.text).join(' ')
+  assert.ok(texts.includes('por asignar'))
+  assert.ok(!texts.includes('todavía no tiene'))
+  assert.ok(!texts.includes('completar recursos'))
 })

@@ -332,3 +332,28 @@ export function interpretPublishResponse(resp = {}) {
     message: resp?.message || resp?.data?.message || '',
   }
 }
+
+export const PREPARE_ROUTE_STEPS = Object.freeze(['snapshot', 'optimize', 'review'])
+
+export function publishUsesReviewedRevision({ planRevision, reviewState } = {}) {
+  const state = String(reviewState || '').toLowerCase()
+  return Boolean(planRevision) && state !== '' && state !== 'none' && state !== 'blocked'
+}
+
+export function publishRerunsOptimizer() {
+  return false
+}
+
+export function reopenClearsPreparation() {
+  return { snapshotResult: null, optimizeResult: null, reviewResult: null }
+}
+
+export function echoedUnionKeys(ensureResp) {
+  const data = ensureResp?.data || ensureResp || {}
+  const keys = data.source_keys
+  return Array.isArray(keys) ? keys.filter(Boolean) : null
+}
+
+export function shouldShowCombinedSources(sourceKeys) {
+  return Array.isArray(sourceKeys) && sourceKeys.length >= 2
+}

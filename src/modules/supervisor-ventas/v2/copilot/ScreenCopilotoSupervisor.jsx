@@ -10,6 +10,7 @@ import { logScreenError } from '../../../shared/logScreenError'
 import {
   getSupervisorCopilotCapabilities,
   postSupervisorCopilotChat,
+  isAllowedSupervisorCopilotHref,
 } from './copilotSupervisorApi'
 
 const C = TOKENS.colors
@@ -71,8 +72,9 @@ export default function ScreenCopilotoSupervisor() {
       .catch((err) => {
         logScreenError('ScreenCopilotoSupervisor', 'capabilities', err)
         if (!alive) return
-        if (err.code === 'FEATURE_DISABLED') setDisabled(err.message)
-        else setError(err.message || 'No pude cargar el copiloto.')
+        if (err.code === 'FEATURE_DISABLED' || Number(err.status) === 404 || err.code === 'NOT_FOUND') {
+          setDisabled(err.message || 'El Copiloto comercial no está disponible.')
+        } else setError(err.message || 'No pude cargar el copiloto.')
       })
     return () => { alive = false }
   }, [])
@@ -185,7 +187,10 @@ export default function ScreenCopilotoSupervisor() {
                         key={action.label}
                         type="button"
                         data-testid="copilot-cta-manana"
-                        onClick={() => navigate(action.href || '/equipo/rutas/planear')}
+                        onClick={() => {
+                          const href = action.href || '/equipo/rutas/planear'
+                          if (isAllowedSupervisorCopilotHref(href)) navigate(href)
+                        }}
                         style={{
                           marginTop: 8, minHeight: 44, padding: '8px 12px',
                           background: C.blue3, color: '#fff', fontWeight: 700,

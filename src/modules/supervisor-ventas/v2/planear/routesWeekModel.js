@@ -165,7 +165,13 @@ export function toggleOperationalSelection(selected, row) {
 }
 
 export function encodeSourcesParam(selected) {
-  return (selected || []).map((s) => s.key).filter(Boolean).join(',')
+  return (selected || []).map((s) => {
+    const key = s.key || (s.tipo && s.id ? `${s.tipo}:${s.id}` : '')
+    if (!key) return ''
+    const polyId = Number(s.polygon?.id || 0) || 0
+    if (s.tipo === 'SP' && polyId) return `${key}@P:${polyId}`
+    return key
+  }).filter(Boolean).join(',')
 }
 
 export function decodeSourcesParam(raw) {
@@ -173,12 +179,55 @@ export function decodeSourcesParam(raw) {
     .split(',')
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((key) => {
-      const [tipo, id] = key.split(':')
-      return { key, tipo, type: tipo, id: Number(id || 0) || 0 }
+    .map((token) => {
+      const [main, polyPart] = token.split('@')
+      const [tipo, id] = String(main || '').split(':')
+      const polygonId = polyPart && String(polyPart).startsWith('P:')
+        ? (Number(String(polyPart).slice(2)) || 0)
+        : 0
+      return {
+        key: main,
+        tipo,
+        type: tipo,
+        id: Number(id || 0) || 0,
+        polygon: polygonId ? { id: polygonId } : null,
+      }
     })
     .filter((s) => s.id && ['SO', 'SP', 'P'].includes(s.tipo))
     .slice(0, MAX_OPERATIONAL_SOURCES)
+}
+
+export function zoneFromSources(sources) {
+  const zone = { subpolygonId: 0, polygonId: 0, segmentId: 0 }
+  for (const src of sources || []) {
+    const next = rowZone(src)
+    if (next.subpolygonId) zone.subpolygonId = next.subpolygonId
+    if (next.polygonId && !zone.polygonId) zone.polygonId = next.polygonId
+    if (next.segmentId && !zone.segmentId) zone.segmentId = next.segmentId
+  }
+  return zone
+}
+
+/** poly/sub/seg del query GANAN sobre src. Sin params de zona, se deriva de sources. */
+export function resolveArmarZone({ poly, sub, seg, src } = {}) {
+  const fromParams = {
+    polygonId: Number(poly || 0) || 0,
+    subpolygonId: Number(sub || 0) || 0,
+    segmentId: Number(seg || 0) || 0,
+  }
+  const sources = decodeSourcesParam(src)
+  const fromSrc = zoneFromSources(sources)
+  return {
+    polygonId: fromParams.polygonId || fromSrc.polygonId,
+    subpolygonId: fromParams.subpolygonId || fromSrc.subpolygonId,
+    segmentId: fromParams.segmentId || fromSrc.segmentId,
+    sources,
+  }
+}
+
+export function canEnsureRoutePlan({ polygonId, subpolygonId, segmentId, sources } = {}) {
+  if (Array.isArray(sources) && sources.length) return true
+  return Boolean(Number(polygonId) || Number(subpolygonId) || Number(segmentId))
 }
 
 export function filterMatrixRows(rows, filter) {
@@ -287,6 +336,8 @@ export function executiveSummary(data) {
 
 export function deriveSummaryFromRows(rows, counts = {}) {
   const list = Array.isArray(rows) ? rows : []
+  const hasPrep = list.some((r) => r?.tomorrow?.planning_readiness)
+  const hasAssign = list.some((r) => r?.tomorrow?.assignment_state)
   let ready = 0
   let noPlan = 0
   let incomplete = 0
@@ -314,16 +365,16 @@ export function deriveSummaryFromRows(rows, counts = {}) {
   const pending = list.length - ready
   const toAssign = noPlan + incomplete
   return {
-    ready,
-    pending,
+    ready: hasPrep || hasAssign ? ready : null,
+    pending: hasPrep || hasAssign ? pending : null,
     noPlan,
     incomplete,
     blocked,
-    published,
+    published: hasPrep || hasAssign ? published : null,
     assigned,
-    readyToPublish,
+    readyToPublish: hasPrep ? readyToPublish : null,
     toAssign,
-    toPrepare: pending - toAssign,
+    toPrepare: hasPrep || hasAssign ? pending - toAssign : null,
     weekGaps,
     coverage: cov.length ? Math.round((cov.reduce((a, b) => a + b, 0) / cov.length) * 10) / 10 : null,
     SO: asCount(counts.SO),
@@ -363,10 +414,16 @@ export function actionPhrase(summary) {
 
 export function pendingBreakdown(summary) {
   const parts = []
-  if (summary?.toAssign != null) parts.push({ n: summary.toAssign, text: summary.toAssign === 1 ? 'por asignar' : 'por asignar' })
-  if (summary?.toPrepare != null) parts.push({ n: summary.toPrepare, text: summary.toPrepare === 1 ? 'por dejar completamente preparado' : 'por dejar completamente preparados' })
-  if (summary?.noPlan != null) parts.push({ n: summary.noPlan, text: summary.noPlan === 1 ? 'todavía no tiene ruta' : 'todavía no tienen ruta' })
-  if (summary?.incomplete != null) parts.push({ n: summary.incomplete, text: 'necesitan completar recursos' })
+  if (summary?.toAssign != null) {
+    parts.push({ n: summary.toAssign, text: summary.toAssign === 1 ? 'por asignar' : 'por asignar' })
+  }
+  if (summary?.toPrepare != null) {
+    parts.push({ n: summary.toPrepare, text: summary.toPrepare === 1 ? 'por dejar completamente preparado' : 'por dejar completamente preparados' })
+  }
+  if (summary?.toAssign == null) {
+    if (summary?.noPlan != null) parts.push({ n: summary.noPlan, text: summary.noPlan === 1 ? 'todavía no tiene ruta' : 'todavía no tienen ruta' })
+    if (summary?.incomplete != null) parts.push({ n: summary.incomplete, text: 'necesitan completar recursos' })
+  }
   if (summary?.blocked != null) parts.push({ n: summary.blocked, text: summary.blocked === 1 ? 'tiene un bloqueo que debes resolver' : 'tienen un bloqueo que debes resolver' })
   return parts.filter((p) => p.n > 0)
 }
@@ -376,7 +433,20 @@ export function formatCount(n, fallback = 'Sin dato') {
   return String(n)
 }
 
+export function countGlyph(n, { zeroGood = false } = {}) {
+  if (n == null || !Number.isFinite(Number(n))) return '○'
+  if (zeroGood) return Number(n) === 0 ? '✓' : '⚠'
+  return Number(n) > 0 ? '✓' : '○'
+}
+
 export function cellAssignmentLine(cell) {
   if (!cell?.has_plan) return 'Sin ruta'
+  if (!cell.assignment_state) return ''
   return assignmentLabel(cell.assignment_state)
+}
+
+export function cellAssignAttr(cell) {
+  if (cell?.assignment_state) return cell.assignment_state
+  if (cell?.has_plan) return 'unknown'
+  return 'no_plan'
 }

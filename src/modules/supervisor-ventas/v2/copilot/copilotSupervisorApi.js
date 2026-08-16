@@ -1,24 +1,20 @@
 import { api } from '../../../../lib/api'
 import { buildSupervisorCopilotChatBody } from '../../../../lib/supervisorCopilotRoute.js'
+import { unwrapSupervisorCopilotPayload } from './copilotSupervisorModel.js'
 
-function unwrap(payload) {
-  if (payload && payload.ok === false) {
-    const err = new Error(payload.user_message || 'El copiloto no está disponible.')
-    err.code = payload.error || 'ERROR'
-    err.payload = payload
-    throw err
-  }
-  if (payload && payload.ok === true && payload.data !== undefined) return payload.data
-  return payload
-}
+export {
+  SUPERVISOR_COPILOT_HREF_ALLOWLIST,
+  isAllowedSupervisorCopilotHref,
+  unwrapSupervisorCopilotPayload,
+} from './copilotSupervisorModel.js'
 
 export function getSupervisorCopilotCapabilities() {
-  return api('GET', '/pwa-supv/copilot/capabilities').then(unwrap)
+  return api('GET', '/pwa-supv/copilot/capabilities').then(unwrapSupervisorCopilotPayload)
 }
 
 export function getSupervisorCopilotHistory(conversationId) {
   const q = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : ''
-  return api('GET', `/pwa-supv/copilot/history${q}`).then(unwrap)
+  return api('GET', `/pwa-supv/copilot/history${q}`).then(unwrapSupervisorCopilotPayload)
 }
 
 export function postSupervisorCopilotChat({ message, conversation_id, capability }) {
@@ -26,5 +22,5 @@ export function postSupervisorCopilotChat({ message, conversation_id, capability
     message,
     conversation_id,
     capability,
-  })).then(unwrap)
+  })).then(unwrapSupervisorCopilotPayload)
 }

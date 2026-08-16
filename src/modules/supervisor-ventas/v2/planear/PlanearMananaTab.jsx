@@ -70,8 +70,12 @@ import {
   interpretDemandSnapshotResponse,
   interpretPublishResponse,
   canPublishPreparedRoute,
+  echoedUnionKeys,
+  shouldShowCombinedSources,
+  reopenClearsPreparation,
   COVERAGE_TONE,
 } from './planearModel'
+import { canEnsureRoutePlan } from './routesWeekModel'
 
 const C = T.colors
 const R = T.radius
@@ -415,6 +419,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const [msg, setMsg] = useState(null)
   const [prepareStage, setPrepareStage] = useState('')
   const [showSequence, setShowSequence] = useState(false)
+  const [echoedSourceKeys, setEchoedSourceKeys] = useState(null)
+  const [reopenCapable, setReopenCapable] = useState(true)
+  const [reopenConfirm, setReopenConfirm] = useState(false)
   const operationalSources = Array.isArray(initialSources) ? initialSources.filter((s) => s?.id && s?.tipo) : []
 
   const msgTimer = useRef(null)
@@ -641,6 +648,15 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
 
   async function handlePrepare(route) {
     if (!route?.route_id) return
+    const zoneReady = canEnsureRoutePlan({
+      polygonId, subpolygonId, segmentId, sources: operationalSources,
+    })
+    if (!zoneReady) {
+      setSelectedRouteId(route.route_id)
+      setView('detail')
+      flash('Elige una zona o un segmento antes de armar el plan', 5000)
+      return
+    }
     setPreparing(route.route_id)
     setSnapshotResult(null)
     setOptimizeResult(null)
@@ -653,7 +669,8 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       })
       const res = await ensureDailyRoutePlan(route.route_id, dateTarget, criteria)
       if (res?.ok === false) { flash(getSupervisorRouteErrorMessage(res), 5000); return }
-      const planId = res?.route_plan_id || res?.plan_id || res?.id || route.plan_id || null
+      setEchoedSourceKeys(echoedUnionKeys(res))
+      const planId = res?.route_plan_id || res?.plan_id || res?.id || res?.data?.plan_id || route.plan_id || null
       setSelectedRouteId(route.route_id)
       setRoutePlanId(planId)
       invalidateResourceReadiness()
@@ -979,18 +996,31 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   }
 
   async function handleReopenPublished() {
-    if (!routePlanId || publishing || !canReopenPublishedRoute(selectedRoute || {})) return
+    if (!routePlanId || publishing || !reopenCapable || !canReopenPublishedRoute(selectedRoute || {})) return
+    if (!reopenConfirm) { setReopenConfirm(true); return }
     setPublishing(true)
     try {
       const res = await reopenRoutePlanForRevision(routePlanId)
+      if (Number(res?.status) === 404 || res?.code === 'NOT_FOUND') {
+        setReopenCapable(false)
+        flash('Reabrir no está disponible en este servidor.', 5000)
+        return
+      }
       if (res?.ok === false || String(res?.status || '').toLowerCase() === 'error') throw res
-      setSnapshotResult(null)
-      setOptimizeResult(null)
-      setReviewResult(null)
+      const cleared = reopenClearsPreparation()
+      setSnapshotResult(cleared.snapshotResult)
+      setOptimizeResult(cleared.optimizeResult)
+      setReviewResult(cleared.reviewResult)
+      setReopenConfirm(false)
       invalidateResourceReadiness()
       await loadData()
       flash('Ruta reabierta. Vuelve a Preparar ruta (snapshot → optimizar → revisar) antes de publicar.', 7000)
     } catch (e) {
+      if (Number(e?.status) === 404 || e?.code === 'NOT_FOUND') {
+        setReopenCapable(false)
+        flash('Reabrir no está disponible en este servidor.', 5000)
+        return
+      }
       logScreenError('PlanearManana', 'reopenRoutePlanForRevision', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
     } finally { setPublishing(false) }
@@ -1097,11 +1127,11 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     return shell(
       <>
         <Card testid="planear-detalle-cabecera">
-          {operationalSources.length > 0 && (
+          {shouldShowCombinedSources(echoedSourceKeys) && (
             <div data-testid="planear-fuentes" style={{ marginBottom: 10, padding: '8px 10px', borderRadius: R.md, background: 'rgba(0,119,187,0.06)' }}>
               <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text }}>Ruta de mañana</div>
               <div style={{ fontSize: 12, color: C.text, marginTop: 4 }}>
-                Planes seleccionados: {operationalSources.map((s) => s.name || `${s.tipo} #${s.id}`).join(' + ')}
+                Planes seleccionados: {echoedSourceKeys.join(' + ')}
               </div>
               <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
                 Clientes combinados: {previewCustomers.length || 'Sin dato'}
@@ -1293,14 +1323,29 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
           ) : (
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>{readiness.reasons[0] || 'Completa la preparación para publicar.'}</div>
           )}
-          {readiness.published && canReopenPublishedRoute(selectedRoute || {}) && (
+          {readiness.published && reopenCapable && canReopenPublishedRoute(selectedRoute || {}) && (
             <div data-testid="planear-reabrir" style={{ marginTop: 10 }}>
               <div style={{ fontSize: 12.5, color: C.text, marginBottom: 8, lineHeight: 1.5 }}>
                 La ruta ya está publicada. Para cambiar clientes o prospectos, reábrela: vuelve a snapshot → optimizar → revisar → publicar.
               </div>
-              <PrimaryButton testid="planear-reabrir-ruta" onClick={handleReopenPublished} busy={publishing}>
-                Revisar ruta publicada
-              </PrimaryButton>
+              {reopenConfirm ? (
+                <div data-testid="planear-reabrir-confirm" style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.warning }}>
+                    Reabrir ruta publicada (dejará de estar publicada)
+                  </div>
+                  <PrimaryButton testid="planear-reabrir-ruta" onClick={handleReopenPublished} busy={publishing}>
+                    Confirmar reapertura
+                  </PrimaryButton>
+                  <button type="button" data-testid="planear-reabrir-cancelar" onClick={() => setReopenConfirm(false)}
+                    style={{ minHeight: 44, color: C.textMuted, fontWeight: 700, cursor: 'pointer' }}>
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <PrimaryButton testid="planear-reabrir-ruta" onClick={handleReopenPublished} busy={publishing}>
+                  Reabrir ruta publicada (dejará de estar publicada)
+                </PrimaryButton>
+              )}
             </div>
           )}
           {!readiness.published && (

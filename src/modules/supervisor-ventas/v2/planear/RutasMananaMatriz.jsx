@@ -12,7 +12,7 @@ import {
   weekdayLabel, toneWord, cellLabel, cellTone, isCurrentDay, todayFromTomorrow,
   tomorrowSummary, rowName, rowRouteId, rowRequiresRouteSelection, rowZone, TYPE_SHORT,
   executiveSummary, actionPhrase, pendingBreakdown, formatCount, cellAssignmentLine,
-  filterMatrixRows, toggleOperationalSelection, tomorrowAction,
+  cellAssignAttr, countGlyph, filterMatrixRows, toggleOperationalSelection, tomorrowAction,
 } from './routesWeekModel'
 
 const C = T.colors
@@ -45,7 +45,7 @@ function DayCell({ cell, todayIso }) {
   const has = cell?.has_plan
   const assign = cellAssignmentLine(cell)
   return (
-    <td data-testid="rw-cell" data-tone={tone} data-assign={cell?.assignment_state || 'no_plan'}
+    <td data-testid="rw-cell" data-tone={tone} data-assign={cellAssignAttr(cell)}
       data-today={isCurrentDay(cell, todayIso) ? '1' : undefined}
       style={{ textAlign: 'center', padding: '6px 4px', borderTop: `1px solid ${C.border}`, minWidth: 56 }}>
       <div
@@ -59,7 +59,7 @@ function DayCell({ cell, todayIso }) {
       >
         <span style={{ fontSize: 12, fontWeight: 800, color: has ? C.text : C.textMuted }}>{cellLabel(cell)}</span>
         <span style={{ fontSize: 8, fontWeight: 700, color }}>{toneWord(tone)}</span>
-        <span style={{ fontSize: 8, fontWeight: 700, color: C.textMuted }}>{assign}</span>
+        {assign ? <span style={{ fontSize: 8, fontWeight: 700, color: C.textMuted }}>{assign}</span> : null}
       </div>
     </td>
   )
@@ -219,10 +219,10 @@ export default function RutasMananaMatriz({ onOpenRoute, onArmarSources }) {
         )}
         <div data-testid="rw-checklist" style={{ display: 'grid', gap: 4, fontSize: 12.5, color: C.text }}>
           <div>PREPARACIÓN DE MAÑANA</div>
-          <div>✓ {formatCount(summary.total)} planes operativos detectados</div>
-          <div>{summary.noPlan === 0 ? '✓' : '⚠'} {formatCount(summary.toAssign)} por asignar · {formatCount(summary.toPrepare)} por dejar completamente preparados</div>
-          <div>{summary.incomplete === 0 ? '✓' : '⚠'} {formatCount(summary.incomplete)} requieren recursos</div>
-          <div>{summary.readyToPublish != null && summary.readyToPublish > 0 ? '✓' : '○'} {formatCount(summary.readyToPublish)} listos para publicar · {formatCount(summary.published)} publicados</div>
+          <div>{countGlyph(summary.total, { zeroGood: false })} {formatCount(summary.total)} planes operativos detectados</div>
+          <div>{countGlyph(summary.toAssign, { zeroGood: true })} {formatCount(summary.toAssign)} por asignar · {formatCount(summary.toPrepare)} por dejar completamente preparados</div>
+          <div>{countGlyph(summary.incomplete, { zeroGood: true })} {formatCount(summary.incomplete)} requieren recursos</div>
+          <div>{countGlyph(summary.readyToPublish)} {formatCount(summary.readyToPublish)} listos para publicar · {formatCount(summary.published)} publicados</div>
         </div>
         <div style={{ fontSize: 12.5, color: C.textMuted }}>
           SEMANA · {formatCount(summary.weekGaps)} planes con algún día sin ruta

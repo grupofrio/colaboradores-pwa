@@ -58,3 +58,21 @@ test('pantalla read-only y chip de mañana', () => {
   assert.match(screen, /\/equipo\/rutas\/planear/)
   assert.doesNotMatch(screen, /publishRoutePlan|optimizeRoutePlan|assignRoutePlanResources/)
 })
+
+test('P0-05/P1-05: copiloto gated + unwrap error + allowlist', async () => {
+  const mod = getModuleById('copiloto_supervisor')
+  assert.equal(mod.status, 'gated')
+  const {
+    unwrapSupervisorCopilotPayload,
+    isAllowedSupervisorCopilotHref,
+  } = await import('../src/modules/supervisor-ventas/v2/copilot/copilotSupervisorModel.js')
+  assert.throws(
+    () => unwrapSupervisorCopilotPayload({ ok: true, status: 'error', user_message: 'apagado', error: 'FEATURE_DISABLED' }),
+    (err) => err.code === 'FEATURE_DISABLED',
+  )
+  assert.equal(isAllowedSupervisorCopilotHref('/equipo/rutas/planear'), true)
+  assert.equal(isAllowedSupervisorCopilotHref('https://evil.example/phish'), false)
+  const shell = src('modules/supervisor-ventas/v2/SupervisorV2Shell.jsx')
+  assert.match(shell, /getSupervisorCopilotCapabilities/)
+  assert.match(shell, /t\.key !== 'copiloto'/)
+})
