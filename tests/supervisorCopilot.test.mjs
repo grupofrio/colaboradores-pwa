@@ -83,6 +83,27 @@ test('P0-05/P1-05: copiloto gated + unwrap error + allowlist', async () => {
   assert.equal(isAllowedSupervisorCopilotHref('/equipo/rutas/planear'), true)
   assert.equal(isAllowedSupervisorCopilotHref('https://evil.example/phish'), false)
   const shell = src('modules/supervisor-ventas/v2/SupervisorV2Shell.jsx')
-  assert.match(shell, /hasSupervisorCopilotCapability/)
+  assert.match(shell, /resolveSupervisorCopilotTabVisible/)
+  assert.match(shell, /getSupervisorCopilotCapabilities/)
   assert.match(shell, /t\.key !== 'copiloto'/)
+})
+
+test('CAPABILITY-FRESCURA: tab Copiloto solo tras capabilities live; fail-closed', async () => {
+  const {
+    resolveSupervisorCopilotTabVisible,
+  } = await import('../src/modules/supervisor-ventas/v2/copilot/copilotSupervisorModel.js')
+  const live = { tools: [{ id: 'get_tomorrow_readiness' }], read_only: true, invoicing_enabled: false }
+  assert.equal(await resolveSupervisorCopilotTabVisible(Promise.resolve(live)), true)
+  const disabled = Object.assign(new Error('apagado'), { code: 'FEATURE_DISABLED' })
+  const missing = Object.assign(new Error('missing'), { status: 404 })
+  const forbidden = Object.assign(new Error('no'), { code: 'FORBIDDEN' })
+  assert.equal(await resolveSupervisorCopilotTabVisible(Promise.reject(disabled)), false)
+  assert.equal(await resolveSupervisorCopilotTabVisible(Promise.reject(missing)), false)
+  assert.equal(await resolveSupervisorCopilotTabVisible(Promise.reject(forbidden)), false)
+  assert.equal(await resolveSupervisorCopilotTabVisible(Promise.reject(new Error('network'))), false)
+  assert.equal(await resolveSupervisorCopilotTabVisible(Promise.resolve(null)), false)
+  const shell = src('modules/supervisor-ventas/v2/SupervisorV2Shell.jsx')
+  assert.match(shell, /useState\(false\)/)
+  assert.doesNotMatch(shell, /getSession\(/)
+  assert.doesNotMatch(shell, /localStorage/)
 })

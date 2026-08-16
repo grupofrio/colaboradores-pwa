@@ -6,6 +6,8 @@ export {
   SUPERVISOR_COPILOT_HREF_ALLOWLIST,
   isAllowedSupervisorCopilotHref,
   unwrapSupervisorCopilotPayload,
+  supervisorCopilotEnabledFromLivePayload,
+  resolveSupervisorCopilotTabVisible,
 } from './copilotSupervisorModel.js'
 
 export function getSupervisorCopilotCapabilities() {

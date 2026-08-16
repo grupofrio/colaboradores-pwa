@@ -15,8 +15,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTypo } from '../../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
-import { getSession } from '../../../lib/api'
-import { hasSupervisorCopilotCapability } from './sessionProjection.js'
+import { getSupervisorCopilotCapabilities } from './copilot/copilotSupervisorApi.js'
+import { resolveSupervisorCopilotTabVisible } from './copilot/copilotSupervisorModel.js'
 
 const C = TOKENS.colors
 
@@ -59,7 +59,7 @@ function TabButton({ tab, active, onClick }) {
 export default function SupervisorV2Shell({ active = 'hoy', children }) {
   const navigate = useNavigate()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
-  const copilotOk = hasSupervisorCopilotCapability(getSession())
+  const [copilotOk, setCopilotOk] = useState(false)
   const typo = useMemo(() => getTypo(sw), [sw])
   const wide = sw >= 900
   const tabs = useMemo(
@@ -71,6 +71,13 @@ export default function SupervisorV2Shell({ active = 'hoy', children }) {
     const h = () => setSw(window.innerWidth)
     window.addEventListener('resize', h)
     return () => window.removeEventListener('resize', h)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    resolveSupervisorCopilotTabVisible(getSupervisorCopilotCapabilities())
+      .then((ok) => { if (!cancelled) setCopilotOk(ok === true) })
+    return () => { cancelled = true }
   }, [])
 
   const go = (tab) => { if (tab.key !== active) navigate(tab.route) }

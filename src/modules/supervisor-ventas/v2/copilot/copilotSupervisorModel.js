@@ -24,3 +24,13 @@ export function unwrapSupervisorCopilotPayload(payload) {
   if (payload && payload.ok === true && payload.data !== undefined) return payload.data
   return payload
 }
+
+export function supervisorCopilotEnabledFromLivePayload(data) {
+  return Boolean(data) && typeof data === 'object' && !Array.isArray(data)
+}
+
+export function resolveSupervisorCopilotTabVisible(capabilitiesPromise) {
+  return Promise.resolve(capabilitiesPromise)
+    .then((data) => supervisorCopilotEnabledFromLivePayload(data))
+    .catch(() => false)
+}
