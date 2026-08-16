@@ -61,6 +61,11 @@ test('write: error de red (throw) ⇒ network retryable', () => {
   assert.equal(r.phase, WRITE_PHASE.NETWORK)
   assert.equal(r.retryable, true)
 })
+test('write: HTTP 404 con code http_error ⇒ not_found', () => {
+  const r = normalizeWriteResponse(null, { status: 404, code: 'http_error', message: 'Not Found' })
+  assert.equal(r.ok, false)
+  assert.equal(r.phase, WRITE_PHASE.NOT_FOUND)
+})
 test('write: payload crudo ok:false ⇒ no éxito', () => {
   assert.equal(normalizeWriteResponse({ ok: false, code: 'VALIDATION_ERROR' }).ok, false)
   assert.equal(normalizeWriteResponse({ ok: true }).ok, true)
