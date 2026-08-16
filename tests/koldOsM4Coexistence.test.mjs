@@ -145,7 +145,7 @@ test('J. M1, M2 y M3 conservan sus gates; M4 tiene el suyo', () => {
 })
 
 test('K. navModel: registro m2/m3/m4 y Tower separado, desconocido fail-closed', () => {
-  const vis = navSrc.slice(navSrc.indexOf('export function isModuleVisibleForSession'))
+  const vis = navSrc.slice(navSrc.indexOf('export function isModuleAccessibleForSession'))
   assert.match(navSrc, /ACCESS_POLICY_RESOLVERS\s*=\s*Object\.freeze\(\{[\s\S]*m2:\s*readM2Access,[\s\S]*m3:\s*readM3Access,[\s\S]*m4:\s*readM4Access,/)
   assert.match(vis, /if \(module\.accessPolicy\) return resolveAccessPolicy\(module\.accessPolicy, session\)/)
   assert.match(vis, /if \(module\.towerGated\) return readAuthoritativeTowerStatus\(session\) != null/)

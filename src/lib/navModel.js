@@ -1,16 +1,16 @@
 // ─── navModel — modelo PURO de navegación global basada en roles ─────────────
 // Fuente ÚNICA de módulos: src/modules/registry.js. Sin JSX ni React → 100%
-// testeable. La MISMA autorización decide tarjeta del home, entrada de nav y
-// acceso por ruta (ModuleRoleRoute en App.jsx): getEffectiveJobKeys +
-// isModuleVisibleForRoles (fail-closed) sobre una sesión VÁLIDA
-// (isValidAuthenticatedSession — Codex PR #66 BLOCKER 1).
+// testeable. isModuleAccessibleForSession decide SOLO autorización (sesión,
+// accessPolicy, tower, roles). isModuleVisibleForSession añade metadata de
+// superficie (showInNav/showOnHome). ModuleRoleRoute usa
+// getModuleRouteDecisionForSession, que delega en la autorización.
 //
 // Tower (torre_operativa → /torre/backlog) es un módulo `towerGated` del
 // registry: su visibilidad se decide por el rol AUTORITATIVO tower_status
 // (readAuthoritativeTowerStatus), NO por x_job_key. Solo lo ven sesiones con
 // tower_status admin_plataforma/supervisor_ventas. Ver src/modules/registry.js.
 
-import { MODULES, isModuleVisibleForRoles } from '../modules/registry.js'
+import { MODULES, getModuleById, isModuleVisibleForRoles } from '../modules/registry.js'
 import {
   getEffectiveJobKeys,
   getModuleEntryDecisionForSession as getRoleAwareModuleEntryDecision,
@@ -186,21 +186,11 @@ function navPriorityOf(module) {
   return Number.isFinite(module?.navPriority) ? module.navPriority : 100
 }
 
-// ── Visibilidad SESSION-AWARE (fuente única para tarjeta + nav + clic) ───────
-// Un módulo con accessPolicy declara que su autoridad NO es x_job_key genérico
-// sino un contrato propio (la MISMA función decide tarjeta, nav, Más, rail y
-// clic; el route guard revalida). Se resuelven por ACCESS_POLICY_RESOLVERS.
-// FAIL-CLOSED en tres capas: sesión inválida => nada; política desconocida =>
-// oculto; y el route guard revalida en la entrada.
-//
-// ORDEN de resolución (un módulo tiene accessPolicy O towerGated, nunca ambos):
-//   1. sesión inválida            => deny
-//   2. module.accessPolicy        => resolver del registro; desconocida => deny
-//   3. module.towerGated          => tower_status autoritativo (M1, intacto)
-//   4. resto                      => roles x_job_key
-export function isModuleVisibleForSession(module, session, attendanceManagerIdsRaw) {
+// ── Autorización de ruta (SIN metadata de superficie) ────────────────────────
+// Decide SOLO si la sesión puede entrar al módulo. No mira showInNav/showOnHome:
+// un módulo puede ser accesible por URL aunque una superficie lo oculte.
+export function isModuleAccessibleForSession(module, session, attendanceManagerIdsRaw) {
   if (!module) return false
-  if (module.showInNav === false && module.showOnHome === false) return false
   if (!isValidAuthenticatedSession(session)) return false
   if (module.accessPolicy === 'attendance_manager') {
     return readAttendanceAccess(session, attendanceManagerIdsRaw).level === 'manager'
@@ -208,6 +198,22 @@ export function isModuleVisibleForSession(module, session, attendanceManagerIdsR
   if (module.accessPolicy) return resolveAccessPolicy(module.accessPolicy, session)
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
+}
+
+export function getModuleRouteDecisionForSession(moduleId, session, attendanceManagerIdsRaw) {
+  if (!isValidAuthenticatedSession(session)) return 'login'
+  const module = getModuleById(moduleId)
+  if (!module) return 'home'
+  if (!isModuleAccessibleForSession(module, session, attendanceManagerIdsRaw)) return 'home'
+  return 'allow'
+}
+
+// ── Visibilidad SESSION-AWARE (tarjeta + nav) ────────────────────────────────
+// Superficie primero; la autorización la decide isModuleAccessibleForSession.
+export function isModuleVisibleForSession(module, session, attendanceManagerIdsRaw) {
+  if (!module) return false
+  if (module.showInNav === false && module.showOnHome === false) return false
+  return isModuleAccessibleForSession(module, session, attendanceManagerIdsRaw)
 }
 
 // Módulos visibles para la sesión en el orden canónico del registry.
