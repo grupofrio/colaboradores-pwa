@@ -7750,6 +7750,10 @@ async function directSupervisorVentas(method, path, body) {
   const query = new URLSearchParams(path.split('?')[1] || '')
   const cleanPath = path.split('?')[0]
   const companyId = getCompanyId()
+  const optionalSegmentId = (payload) => {
+    if (!Object.hasOwn(payload || {}, 'segment_id')) return undefined
+    return payload.segment_id == null ? null : Number(payload.segment_id) || undefined
+  }
 
   if (!cleanPath.startsWith('/pwa-supv/')) return NO_DIRECT
 
@@ -8434,8 +8438,8 @@ async function directSupervisorVentas(method, path, body) {
         // route_plan/ensure persiste un solo subpolígono. Preservarlo como
         // singular permite al backend derivar su polígono padre cuando falta.
         subpolygon_id: subpolygonIds[0] || undefined,
-        // segment_id: plan por segmento (sin polígono ⇒ propuesta = miembros del segmento).
-        segment_id: Number(body?.segment_id || 0) || undefined,
+        // null significa que la supervisora eligió explícitamente Ninguno.
+        segment_id: optionalSegmentId(body),
         channel_ids: cleanNumberList(body?.channel_ids),
         visit_days: Array.isArray(body?.visit_days) ? body.visit_days.filter(Boolean) : [],
         time_window_id: body?.time_window_id ? Number(body.time_window_id) : null,
@@ -8765,9 +8769,8 @@ async function directSupervisorVentas(method, path, body) {
           date_target: dateTarget,
           polygon_id: Number(body?.polygon_id || 0) || undefined,
           subpolygon_id: body?.subpolygon_id ? Number(body.subpolygon_id) : null,
-          // segment_id: plan tipo "Mercado" (lista curada). Sin polígono, el backend
-          // arma la propuesta con los miembros del segmento (branch-scoped).
-          segment_id: Number(body?.segment_id || 0) || undefined,
+          // null significa que la supervisora eligió explícitamente Ninguno.
+          segment_id: optionalSegmentId(body),
           channel_ids: Array.isArray(body?.channel_ids) ? body.channel_ids.map(Number).filter(Boolean) : [],
           visit_days: Array.isArray(body?.visit_days) ? body.visit_days.filter(Boolean) : [],
           time_window_id: body?.time_window_id ? Number(body.time_window_id) : null,
