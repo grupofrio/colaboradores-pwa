@@ -31,7 +31,7 @@ jobs:
       - name: Gerente unit tests (must run, not skip)
         run: |
           set -euo pipefail
-          node --test tests/gerente*.mjs tests/managerCopilot.test.mjs tests/controlsPanel.test.mjs 2>&1 | tee gerente-fe.log
+          node --test --test-reporter=tap tests/gerente*.mjs tests/managerCopilot.test.mjs tests/controlsPanel.test.mjs 2>&1 | tee gerente-fe.log
           # Fail if zero tests or any fail
           grep -q "# pass " gerente-fe.log
           ! grep -q "# fail [1-9]" gerente-fe.log
