@@ -1,0 +1,41 @@
+name: Gerente FE CI
+
+on:
+  pull_request:
+    paths:
+      - "src/modules/gerente/**"
+      - "src/App.jsx"
+      - "src/modules/registry.js"
+      - "tests/gerente*.mjs"
+      - "tests/controlsPanel.test.mjs"
+      - "tests/managerCopilot.test.mjs"
+      - ".github/workflows/gerente-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/modules/gerente/**"
+      - "tests/gerente*.mjs"
+      - "tests/controlsPanel.test.mjs"
+      - "tests/managerCopilot.test.mjs"
+
+jobs:
+  gerente-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Gerente unit tests (must run, not skip)
+        run: |
+          set -euo pipefail
+          node --test tests/gerente*.mjs tests/managerCopilot.test.mjs tests/controlsPanel.test.mjs 2>&1 | tee gerente-fe.log
+          # Fail if zero tests or any fail
+          grep -q "# pass " gerente-fe.log
+          ! grep -q "# fail [1-9]" gerente-fe.log
+          # Nominal: copiloto no-regression must appear
+          grep -q "MGR-GAP-006\|copiloto\|Copiloto" gerente-fe.log
+          echo "Gerente FE CI GREEN"
+      - run: npm run build
