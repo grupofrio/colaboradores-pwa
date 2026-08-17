@@ -1,8 +1,8 @@
 {
   "rewrites": [
     { "source": "/api-n8n/:path*", "destination": "https://n8n.grupofrio.mx/webhook/:path*" },
-    { "source": "/api-odoo/:path*", "destination": "https://grupofrio-gf.odoo.com/api/:path*" },
-    { "source": "/odoo-api/:path*", "destination": "https://grupofrio-gf.odoo.com/:path*" },
+    { "source": "/api-odoo/:path*", "destination": "https://grupofrio-gf-staging10082026-36446797.dev.odoo.com/api/:path*" },
+    { "source": "/odoo-api/:path*", "destination": "https://grupofrio-gf-staging10082026-36446797.dev.odoo.com/:path*" },
     { "source": "/((?!assets|icons|manifest).*)", "destination": "/index.html" }
   ],
   "headers": [
