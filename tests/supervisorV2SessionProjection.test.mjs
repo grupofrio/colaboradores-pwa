@@ -8,10 +8,10 @@ import { buildSupervisorV2SessionProjection } from '../src/modules/supervisor-ve
 
 test('login projection: exact true/true is preserved', () => {
   assert.deepEqual(buildSupervisorV2SessionProjection({
-    capabilities: { supervisorV2: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: true },
     branch: { supervisor_v2_enabled: true },
   }), {
-    capabilities: { supervisorV2: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: true },
     branch: { supervisor_v2_enabled: true },
   })
 })
@@ -30,12 +30,12 @@ test('login projection: malformed values fail closed', () => {
 
 test('login projection: inherited top-level containers fail closed', () => {
   const result = Object.create({
-    capabilities: { supervisorV2: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: true },
   })
 
   assert.deepEqual(buildSupervisorV2SessionProjection(result), {
-    capabilities: { supervisorV2: false },
+    capabilities: { supervisorV2: false, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: false },
   })
 })
@@ -45,7 +45,7 @@ test('login projection: inherited flags fail closed', () => {
     capabilities: Object.create({ supervisorV2: true }),
     branch: Object.create({ supervisor_v2_enabled: true }),
   }), {
-    capabilities: { supervisorV2: false },
+    capabilities: { supervisorV2: false, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: false },
   })
 })
@@ -57,7 +57,7 @@ test('login projection: arrays with true expando flags fail closed', () => {
   branch.supervisor_v2_enabled = true
 
   assert.deepEqual(buildSupervisorV2SessionProjection({ capabilities, branch }), {
-    capabilities: { supervisorV2: false },
+    capabilities: { supervisorV2: false, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: false },
   })
 })
@@ -70,29 +70,29 @@ test('login projection: null-prototype records preserve own true flags', () => {
   result.branch.supervisor_v2_enabled = true
 
   assert.deepEqual(buildSupervisorV2SessionProjection(result), {
-    capabilities: { supervisorV2: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: true },
   })
 })
 
 test('login projection: partial shapes preserve only the exact boolean present', () => {
   assert.deepEqual(buildSupervisorV2SessionProjection({
-    capabilities: { supervisorV2: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false },
   }), {
-    capabilities: { supervisorV2: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: false },
   })
   assert.deepEqual(buildSupervisorV2SessionProjection({
     branch: { supervisor_v2_enabled: true },
   }), {
-    capabilities: { supervisorV2: false },
+    capabilities: { supervisorV2: false, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: true },
   })
 })
 
 test('login projection: each call returns fresh nested objects', () => {
   const input = {
-    capabilities: { supervisorV2: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: true },
   }
   const first = buildSupervisorV2SessionProjection(input)
@@ -117,13 +117,13 @@ test('login projection: projection does not mutate input', () => {
 
 test('login projection: merging an OFF projection overwrites a prior ON projection', () => {
   const on = buildSupervisorV2SessionProjection({
-    capabilities: { supervisorV2: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: true },
   })
   const off = buildSupervisorV2SessionProjection({})
   const rebuiltSession = { ...on, ...off }
   assert.deepEqual(rebuiltSession, {
-    capabilities: { supervisorV2: false },
+    capabilities: { supervisorV2: false, supervisorCopilot: false },
     branch: { supervisor_v2_enabled: false },
   })
 })

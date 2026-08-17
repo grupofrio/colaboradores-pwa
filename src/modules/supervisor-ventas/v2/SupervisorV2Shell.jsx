@@ -14,10 +14,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTypo } from '../../../tokens'
-// Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
-// Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
-// invariante lo verifica tests/brandTokensScope.test.mjs.
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
+import { getSupervisorCopilotCapabilities } from './copilot/copilotSupervisorApi.js'
+import { resolveSupervisorCopilotTabVisible } from './copilot/copilotSupervisorModel.js'
 
 const C = TOKENS.colors
 
@@ -28,6 +27,7 @@ export const V2_TABS = Object.freeze([
   { key: 'clientes', label: 'Clientes', route: '/equipo/clientes', glyph: '⚇' },
   { key: 'prospectos', label: 'Prospectos', route: '/equipo/prospectos', glyph: '+' },
   { key: 'pendientes', label: 'Pendientes', route: '/equipo/pendientes', glyph: '⚑' },
+  { key: 'copiloto', label: 'Copiloto', route: '/equipo/copiloto', glyph: '✎' },
   { key: 'mas', label: 'Más', route: '/equipo/mas', glyph: '⋯' },
 ])
 
@@ -59,15 +59,25 @@ function TabButton({ tab, active, onClick }) {
 export default function SupervisorV2Shell({ active = 'hoy', children }) {
   const navigate = useNavigate()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
+  const [copilotOk, setCopilotOk] = useState(false)
   const typo = useMemo(() => getTypo(sw), [sw])
-  // `wide` NO decide si se ven las pestañas (siempre se ven): solo ensancha el
-  // tablero de 3 columnas de "Hoy" en pantallas amplias.
   const wide = sw >= 900
+  const tabs = useMemo(
+    () => (copilotOk ? V2_TABS : V2_TABS.filter((t) => t.key !== 'copiloto')),
+    [copilotOk],
+  )
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
     window.addEventListener('resize', h)
     return () => window.removeEventListener('resize', h)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    resolveSupervisorCopilotTabVisible(getSupervisorCopilotCapabilities())
+      .then((ok) => { if (!cancelled) setCopilotOk(ok === true) })
+    return () => { cancelled = true }
   }, [])
 
   const go = (tab) => { if (tab.key !== active) navigate(tab.route) }
@@ -92,7 +102,7 @@ export default function SupervisorV2Shell({ active = 'hoy', children }) {
         display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto',
         maxWidth: shellMax, margin: '0 auto', padding: '12px 14px 4px',
       }}>
-        {V2_TABS.map((t) => <TabButton key={t.key} tab={t} active={active} onClick={() => go(t)} />)}
+        {tabs.map((t) => <TabButton key={t.key} tab={t} active={active} onClick={() => go(t)} />)}
       </nav>
 
       {/* 980px es el ancho de lectura de una columna; "Hoy" (tablero de 3

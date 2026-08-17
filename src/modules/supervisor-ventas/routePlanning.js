@@ -143,6 +143,7 @@ export function buildRoutePlanCriteriaPayload({
   visitDays,
   timeWindowId,
   demandClasses,
+  sources,
 }) {
   return {
     route_id: Number(routeId || 0),
@@ -155,6 +156,7 @@ export function buildRoutePlanCriteriaPayload({
     time_window_id: timeWindowId ? Number(timeWindowId) : null,
     // Always send (even []) para limpiar filtros pegados de un ensure previo.
     demand_classes: sanitizeDemandClasses(demandClasses),
+    ...(Array.isArray(sources) && sources.length ? { sources } : {}),
   }
 }
 
@@ -168,6 +170,7 @@ export function buildRoutePlanPreviewPayload({
   visitDays,
   timeWindowId,
   demandClasses,
+  sources,
 }) {
   return {
     route_id: toNumber(routeId),
@@ -179,6 +182,7 @@ export function buildRoutePlanPreviewPayload({
     visit_days: Array.isArray(visitDays) ? visitDays.filter(Boolean) : [],
     time_window_id: timeWindowId ? toNumber(timeWindowId) : null,
     demand_classes: sanitizeDemandClasses(demandClasses),
+    ...(Array.isArray(sources) && sources.length ? { sources } : {}),
   }
 }
 
@@ -242,6 +246,11 @@ export function canEditRoutePlanCustomers(plan = {}) {
   return state === 'draft' && plan.load_sealed !== true && !toM2oId(plan.load_picking_id)
 }
 
+export function canReopenPublishedRoute(plan = {}) {
+  const state = String(plan.plan_state || plan.state || '').toLowerCase()
+  return state === 'published' && plan.load_sealed !== true && !toM2oId(plan.load_picking_id)
+}
+
 export function canPublishRoutePlan({ state, plan_state, customersCount = 0, load_sealed, load_picking_id } = {}) {
   return canEditRoutePlanCustomers({ state, plan_state, load_sealed, load_picking_id })
     && Number(customersCount || 0) > 0
@@ -272,6 +281,7 @@ export function getSupervisorRouteErrorMessage(error = {}) {
     missing_customer_geo: 'El cliente no tiene ubicacion geografica suficiente.',
     customer_already_in_plan: 'El cliente ya esta en este plan diario.',
     plan_not_editable: 'Este plan ya no permite agregar clientes.',
+    revision_mismatch: 'El plan cambió desde que se revisó. Vuelve a Preparar ruta y publica esa revisión.',
     // F1: validación de clases de demanda en backend.
     demand_class_invalid: 'Clasificacion invalida. Usa solo AA, A, B o C.',
     demand_classes_invalid: 'Clasificacion invalida. Usa solo AA, A, B o C.',

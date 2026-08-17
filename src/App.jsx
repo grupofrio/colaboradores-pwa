@@ -9,10 +9,10 @@ import { api } from './lib/api'
 import { isBrandLightSession } from './theme/useBrandPalette'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
-import { getModuleById, isModuleVisibleForRoles } from './modules/registry'
-import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
+import { getModuleById } from './modules/registry'
+import { resolveModuleContextRole } from './lib/roleContext'
 import { isValidAuthenticatedSession } from './lib/session'
-import { isModuleVisibleForSession } from './lib/navModel'
+import { isModuleVisibleForSession, getModuleRouteDecisionForSession } from './lib/navModel'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
@@ -185,6 +185,7 @@ const RutasTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/Rut
 const MisRutasManana = lazy(() => import('./modules/supervisor-ventas/v2/planear/MisRutasManana'))
 const ClientesTab   = lazy(() => import('./modules/supervisor-ventas/v2/tabs/ClientesTab'))
 const ProspectosTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/ProspectosTab'))
+const ScreenCopilotoSupervisor = lazy(() => import('./modules/supervisor-ventas/v2/copilot/ScreenCopilotoSupervisor'))
 const PendientesTab = lazy(() => import('./modules/supervisor-ventas/v2/tabs/PendientesTab'))
 const MasTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/MasTab'))
 const IntegridadEjecucion = lazy(() => import('./modules/supervisor-ventas/v2/equipo/IntegridadEjecucion'))
@@ -247,24 +248,21 @@ function PrivateRoute({ children }) {
 }
 
 // ── ModuleRoleRoute — guard ÚNICO por módulo (BLOCKER 2 Codex) ───────────────
-// La MISMA autoridad decide tarjeta del home, entrada de navegación y ACCESO
-// POR URL DIRECTA: registry (fuente canónica de roles por módulo) +
-// getEffectiveJobKeys + isModuleVisibleForRoles, sobre una sesión válida.
-// Cero allowlists duplicadas en App.jsx (el viejo guard de /ruta desaparece).
+// La autorización de URL la decide getModuleRouteDecisionForSession:
+// sesión válida → módulo conocido → isModuleAccessibleForSession (accessPolicy,
+// towerGated o roles). NO usa showInNav/showOnHome: una superficie puede ocultar
+// el módulo y la ruta seguir siendo accesible. Cero allowlists duplicadas.
 // Orden fail-closed:
 //   1. sesión inválida        → /login
-//   2. moduleId desconocido   → / (fail-closed: nunca montar sin autoridad)
-//   3. rol sin visibilidad    → / (la tenancy final sigue siendo server-side:
-//      cada endpoint /pwa-* revalida al dueño — p. ej. "/pwa-ruta/*")
-//   4. solo entonces monta la ruta.
+//   2. moduleId desconocido o no autorizado → /
+//   3. solo entonces monta la ruta.
 // Tower NO usa este guard: conserva su TowerRoute especializado (rol
 // AUTORITATIVO tower_status servido por Odoo, allowlist dura).
 function ModuleRoleRoute({ moduleId, children }) {
   const { session } = useSession()
-  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
-  const module = getModuleById(moduleId)
-  if (!module) return <Navigate to="/" replace />
-  if (!isModuleVisibleForRoles(module, getEffectiveJobKeys(session))) return <Navigate to="/" replace />
+  const decision = getModuleRouteDecisionForSession(moduleId, session)
+  if (decision === 'login') return <Navigate to="/login" replace />
+  if (decision !== 'allow') return <Navigate to="/" replace />
   return children
 }
 
@@ -914,6 +912,7 @@ export default function App() {
             <Route path="/equipo/rutas/planear" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="rutas" v2Only><MisRutasManana /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/prospectos" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="prospectos" v2Only><ProspectosTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/pendientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="pendientes" v2Only><PendientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo/copiloto" element={<ModuleRoleRoute moduleId="copiloto_supervisor"><SupervisorV2Gate active="copiloto" v2Only><ScreenCopilotoSupervisor /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/mas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="mas" v2Only><MasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             {/* `/equipo/hoy` es una CAPACIDAD V2 (no una ruta legacy permitida):
                 V2 ON ⇒ acceso a la home ejecutable standalone; V2 OFF ⇒ redirect

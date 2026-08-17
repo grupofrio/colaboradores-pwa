@@ -4,28 +4,24 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { MODULES, getModuleById, isModuleVisibleForRoles } from '../src/modules/registry.js'
-import { getEffectiveJobKeys } from '../src/lib/roleContext.js'
-import { isValidAuthenticatedSession } from '../src/lib/session.js'
+import { MODULES, getModuleById } from '../src/modules/registry.js'
+import { getModuleRouteDecisionForSession } from '../src/lib/navModel.js'
 
 const appSrc = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const s = (role, extra = {}) => ({ employee_id: 100, session_token: 'h.p.s', role, ...extra })
 
-// La MISMA decisión que aplica ModuleRoleRoute en runtime (sesión → módulo → rol).
+// La MISMA función que aplica ModuleRoleRoute. No reimplementar el guard aquí.
 function canEnter(session, moduleId) {
-  if (!isValidAuthenticatedSession(session)) return 'login'
-  const module = getModuleById(moduleId)
-  if (!module) return 'home'
-  if (!isModuleVisibleForRoles(module, getEffectiveJobKeys(session))) return 'home'
-  return 'monta'
+  return getModuleRouteDecisionForSession(moduleId, session)
 }
 
 // ── Matriz de autorización (URL directa = card = nav) ───────────────────────
 test('gerente_sucursal: entra Admin/Gerente; NO Equipo/Ruta/Producción/Almacén', () => {
   const g = s('gerente_sucursal')
-  assert.equal(canEnter(g, 'admin_sucursal'), 'monta')
-  assert.equal(canEnter(g, 'gerente'), 'monta')
-  assert.equal(canEnter(g, 'copiloto_gerencial'), 'monta')
+  assert.equal(canEnter(g, 'admin_sucursal'), 'allow')
+  assert.equal(canEnter(g, 'gerente'), 'allow')
+  assert.equal(canEnter(g, 'copiloto_gerencial'), 'allow')
+  assert.equal(canEnter(g, 'copiloto_supervisor'), 'home')
   assert.equal(canEnter(g, 'supervisor_ventas'), 'home')
   assert.equal(canEnter(g, 'cierre_ruta'), 'home')
   assert.equal(canEnter(g, 'registro_produccion'), 'home')
@@ -34,18 +30,23 @@ test('gerente_sucursal: entra Admin/Gerente; NO Equipo/Ruta/Producción/Almacén
 
 test('supervisor_ventas: entra Equipo; NO Admin/Gerente sin permiso explícito', () => {
   const sv = s('supervisor_ventas')
-  assert.equal(canEnter(sv, 'supervisor_ventas'), 'monta')
+  assert.equal(canEnter(sv, 'supervisor_ventas'), 'allow')
   assert.equal(canEnter(sv, 'admin_sucursal'), 'home')
   assert.equal(canEnter(sv, 'gerente'), 'home')
   assert.equal(canEnter(sv, 'copiloto_gerencial'), 'home')
+  assert.equal(canEnter(sv, 'copiloto_supervisor'), 'home')
+  assert.equal(canEnter({
+    ...sv,
+    capabilities: { supervisorCopilot: true },
+  }, 'copiloto_supervisor'), 'allow')
   assert.equal(canEnter(sv, 'torre_control'), 'home')
 })
 
 test('jefe_ruta/auxiliar_ruta: solo Mi Ruta (+universales); NO gestión', () => {
   for (const role of ['jefe_ruta', 'auxiliar_ruta']) {
     const jr = s(role)
-    assert.equal(canEnter(jr, 'cierre_ruta'), 'monta', `${role} entra a Mi Ruta`)
-    assert.equal(canEnter(jr, 'kpis'), 'monta', 'universal')
+    assert.equal(canEnter(jr, 'cierre_ruta'), 'allow', `${role} entra a Mi Ruta`)
+    assert.equal(canEnter(jr, 'kpis'), 'allow', 'universal')
     assert.equal(canEnter(jr, 'admin_sucursal'), 'home')
     assert.equal(canEnter(jr, 'gerente'), 'home')
     assert.equal(canEnter(jr, 'supervisor_ventas'), 'home')
@@ -54,12 +55,12 @@ test('jefe_ruta/auxiliar_ruta: solo Mi Ruta (+universales); NO gestión', () => 
 
 test('rol desconocido/vacío: solo universales; múltiples job keys componen', () => {
   assert.equal(canEnter(s('rol_marciano'), 'admin_sucursal'), 'home')
-  assert.equal(canEnter(s('rol_marciano'), 'kpis'), 'monta')
-  assert.equal(canEnter(s(''), 'encuestas'), 'monta')
+  assert.equal(canEnter(s('rol_marciano'), 'kpis'), 'allow')
+  assert.equal(canEnter(s(''), 'encuestas'), 'allow')
   // multi-rol: gerente + supervisor por additional_job_keys
   const multi = s('gerente_sucursal', { additional_job_keys: ['supervisor_ventas'] })
-  assert.equal(canEnter(multi, 'admin_sucursal'), 'monta')
-  assert.equal(canEnter(multi, 'supervisor_ventas'), 'monta')
+  assert.equal(canEnter(multi, 'admin_sucursal'), 'allow')
+  assert.equal(canEnter(multi, 'supervisor_ventas'), 'allow')
 })
 
 test('sesión inválida: NINGÚN módulo monta (ni universales) → /login', () => {
@@ -76,10 +77,22 @@ test('módulo desconocido: fail-closed a home aunque la sesión sea válida', ()
 })
 
 // ── App.jsx: cableado real de guards (text-scan) ────────────────────────────
-test('ModuleRoleRoute existe y aplica la triple autoridad (sesión→módulo→rol)', () => {
+test('ModuleRoleRoute existe y aplica getModuleRouteDecisionForSession', () => {
   assert.match(appSrc, /function ModuleRoleRoute\(\{ moduleId, children \}\)/)
-  assert.match(appSrc, /if \(!isValidAuthenticatedSession\(session\)\) return <Navigate to="\/login" replace \/>/)
-  assert.match(appSrc, /isModuleVisibleForRoles\(module, getEffectiveJobKeys\(session\)\)/)
+  assert.match(appSrc, /getModuleRouteDecisionForSession\(moduleId, session\)/)
+  assert.match(appSrc, /decision === 'login'/)
+  assert.match(appSrc, /decision !== 'allow'/)
+})
+
+test('URL directa /equipo/copiloto usa copiloto_supervisor y accessPolicy', () => {
+  assert.ok(appSrc.includes('<Route path="/equipo/copiloto" element={<ModuleRoleRoute moduleId="copiloto_supervisor">'))
+  const sv = s('supervisor_ventas')
+  assert.equal(getModuleRouteDecisionForSession('copiloto_supervisor', sv), 'home')
+  assert.equal(getModuleRouteDecisionForSession('copiloto_supervisor', {
+    ...sv,
+    capabilities: { supervisorCopilot: true },
+  }), 'allow')
+  assert.equal(getModuleRouteDecisionForSession('supervisor_ventas', sv), 'allow')
 })
 
 test('cada familia de módulo usa ModuleRoleRoute con su moduleId canónico', () => {
@@ -87,6 +100,7 @@ test('cada familia de módulo usa ModuleRoleRoute con su moduleId canónico', ()
     ['/kpis', 'kpis'], ['/surveys', 'encuestas'], ['/badges', 'logros'],
     ['/pos-diurno', 'pos_diurno'],
     ['/admin', 'admin_sucursal'], ['/gerente', 'gerente'], ['/gerente/copiloto', 'copiloto_gerencial'], ['/equipo', 'supervisor_ventas'],
+    ['/equipo/copiloto', 'copiloto_supervisor'],
     ['/ruta', 'cierre_ruta'], ['/entregas', 'almacen_entregas'], ['/almacen-pt', 'almacen_pt'],
     ['/koldcup', 'koldcup'], ['/supervision', 'supervision_produccion'], ['/torres', 'torre_control'],
   ]

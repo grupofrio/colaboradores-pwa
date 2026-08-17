@@ -42,11 +42,12 @@ function phaseForCode(code) {
 }
 
 function phaseForError(e) {
+  const status = Number(e?.status)
   const code = String(e?.code || e?.status || '').toUpperCase()
   const msg = String(e?.message || e || '')
-  if (code === '401' || code === 'UNAUTHORIZED') return WRITE_PHASE.UNAUTHORIZED
-  if (code === '403' || code === 'FORBIDDEN') return WRITE_PHASE.FORBIDDEN
-  if (code === '404' || code === 'NOT_FOUND') return WRITE_PHASE.NOT_FOUND
+  if (status === 401 || code === '401' || code === 'UNAUTHORIZED') return WRITE_PHASE.UNAUTHORIZED
+  if (status === 403 || code === '403' || code === 'FORBIDDEN') return WRITE_PHASE.FORBIDDEN
+  if (status === 404 || code === '404' || code === 'NOT_FOUND') return WRITE_PHASE.NOT_FOUND
   if (code === '409' || code === 'CONFLICT') return WRITE_PHASE.CONFLICT
   if (code === 'LOCKED') return WRITE_PHASE.LOCKED
   if (code === '422' || code === 'VALIDATION_ERROR') return WRITE_PHASE.VALIDATION

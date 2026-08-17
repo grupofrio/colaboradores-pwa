@@ -15,6 +15,11 @@ function ownRecord(record, key) {
   return isRecord(record[key]) ? record[key] : null
 }
 
+export function hasSupervisorCopilotCapability(session = {}) {
+  const capabilities = ownRecord(session, 'capabilities')
+  return hasOwnTrue(capabilities, 'supervisorCopilot')
+}
+
 export function buildSupervisorV2SessionProjection(result = {}) {
   const capabilities = ownRecord(result, 'capabilities')
   const branch = ownRecord(result, 'branch')
@@ -22,6 +27,7 @@ export function buildSupervisorV2SessionProjection(result = {}) {
   return {
     capabilities: {
       supervisorV2: hasOwnTrue(capabilities, 'supervisorV2'),
+      supervisorCopilot: hasOwnTrue(capabilities, 'supervisorCopilot'),
     },
     branch: {
       supervisor_v2_enabled: hasOwnTrue(branch, 'supervisor_v2_enabled'),

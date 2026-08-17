@@ -6,6 +6,10 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
   weekdayLabel, toneWord, cellLabel, tomorrowSummary, rowName, rowRouteId, rowZone, typeLabel,
+  executiveSummary, actionPhrase, pendingBreakdown, formatCount, toggleOperationalSelection,
+  filterMatrixRows, isReadyTomorrow, encodeSourcesParam, decodeSourcesParam, zoneFromSources,
+  resolveArmarZone, canEnsureRoutePlan, deriveSummaryFromRows, cellAssignmentLine, cellAssignAttr,
+  countGlyph,
 } from '../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -143,4 +147,123 @@ test('wiring: recursos son protagonista con estado honesto; relabel en lenguaje 
   assert.ok(/¿De qué zona propongo los clientes\?/.test(tab))
   assert.ok(/Sugerir clientes de la zona/.test(tab))
   assert.ok(!/Generar propuesta/.test(tab), 'ya no dice "Generar propuesta"')
+})
+
+test('resumen ejecutivo: counts dinámicos y null ≠ 0', () => {
+  const empty = executiveSummary({ counts: { total: 0, SO: 0, SP: 0, P: 0 }, rows: [], summary: {
+    total_operational_plans: 0, ready_tomorrow: 0, pending_tomorrow: 0,
+    no_plan_tomorrow: 0, incomplete_resources_tomorrow: 0, blocked_tomorrow: 0,
+    week_rows_with_missing_route: 0, weekly_coverage_pct: null,
+  } })
+  assert.equal(empty.total, 0)
+  assert.equal(empty.coverage, null)
+  assert.equal(actionPhrase(empty), 'No hay planes operativos.')
+  assert.equal(formatCount(null), 'Sin dato')
+
+  const fifteen = executiveSummary({
+    counts: { total: 15, SO: 5, SP: 8, P: 2 },
+    summary: {
+      total_operational_plans: 15, ready_tomorrow: 9, pending_tomorrow: 6,
+      no_plan_tomorrow: 3, incomplete_resources_tomorrow: 2, blocked_tomorrow: 1,
+      to_assign_tomorrow: 5, to_prepare_tomorrow: 1,
+      week_rows_with_missing_route: 3, weekly_coverage_pct: 78,
+      SO: 5, SP: 8, P: 2,
+    },
+  })
+  assert.equal(fifteen.total, 15)
+  assert.equal(fifteen.pending, 6)
+  assert.equal(fifteen.toAssign, 5)
+  assert.equal(fifteen.toPrepare, 1)
+  assert.equal(actionPhrase(fifteen), 'Te faltan 5 por asignar y 1 por dejar completamente preparados.')
+  assert.ok(pendingBreakdown(fifteen).some((p) => p.text.includes('por asignar')))
+  assert.ok(pendingBreakdown(fifteen).some((p) => p.text.includes('completamente preparado')))
+
+  const n = executiveSummary({ counts: { total: 2, SO: 2, SP: 0, P: 0 }, rows: [{}, {}] })
+  assert.equal(n.total, 2)
+})
+
+test('selección 1–2: no sustituye al intentar 3', () => {
+  const a = { tipo: 'SO', id: 1, name: 'A', key: 'SO:1' }
+  const b = { tipo: 'SP', id: 2, name: 'B', key: 'SP:2' }
+  const c = { tipo: 'P', id: 3, name: 'C', key: 'P:3' }
+  const one = toggleOperationalSelection([], a)
+  assert.equal(one.selected.length, 1)
+  const two = toggleOperationalSelection(one.selected, b)
+  assert.equal(two.selected.length, 2)
+  assert.equal(two.error, null)
+  const three = toggleOperationalSelection(two.selected, c)
+  assert.equal(three.selected.length, 2)
+  assert.match(three.error, /No puedes combinar más de 2/)
+  const off = toggleOperationalSelection(two.selected, a)
+  assert.equal(off.selected.length, 1)
+})
+
+test('filtros de matriz: SO/SP/P y pendientes', () => {
+  const rows = [
+    { tipo: 'SO', tomorrow: { assignment_state: 'assigned', planning_readiness: 'ready_to_publish' }, days: [{ has_plan: true }] },
+    { tipo: 'SP', tomorrow: { assignment_state: 'no_plan' }, days: [{ has_plan: false }] },
+    { tipo: 'P', tomorrow: { assignment_state: 'unassigned' }, days: [{ has_plan: true }] },
+  ]
+  assert.equal(filterMatrixRows(rows, 'SO').length, 1)
+  assert.equal(filterMatrixRows(rows, 'pending_tomorrow').length, 2)
+  assert.equal(filterMatrixRows(rows, 'ready_tomorrow').length, 1)
+  assert.equal(filterMatrixRows(rows, 'week_gaps').length, 1)
+})
+
+test('assigned ≠ ready_to_publish', () => {
+  const assigned = { tomorrow: { assignment_state: 'assigned', planning_readiness: 'needs_snapshot' } }
+  const ready = { tomorrow: { assignment_state: 'assigned', planning_readiness: 'ready_to_publish' } }
+  const published = { tomorrow: { assignment_state: 'published', planning_readiness: 'published' } }
+  assert.equal(isReadyTomorrow(assigned), false)
+  assert.equal(isReadyTomorrow(ready), true)
+  assert.equal(isReadyTomorrow(published), true)
+})
+
+test('wiring: resumen + filtros + selección en la matriz', () => {
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.match(m, /rw-filter-pending_tomorrow/)
+  assert.match(m, /Armar una ruta/)
+  assert.match(m, /rw-select/)
+  assert.match(m, /actionPhrase/)
+})
+
+test('P0-03: polígono sobrevive roundtrip SP + poly gana sobre src', () => {
+  const row = { tipo: 'SP', id: 39, key: 'SP:39', polygon: { id: 26 }, name: 'Norte' }
+  const encoded = encodeSourcesParam([row])
+  assert.match(encoded, /SP:39/)
+  assert.match(encoded, /P:26/)
+  const decoded = decodeSourcesParam(encoded)
+  const zone = zoneFromSources(decoded)
+  assert.equal(zone.subpolygonId, 39)
+  assert.equal(zone.polygonId, 26)
+  const won = resolveArmarZone({ poly: '26', sub: '39', seg: '', src: 'SP:39' })
+  assert.equal(won.polygonId, 26)
+  assert.equal(won.subpolygonId, 39)
+  assert.equal(canEnsureRoutePlan({ polygonId: 0, subpolygonId: 0, segmentId: 0, sources: [] }), false)
+  assert.equal(canEnsureRoutePlan({ polygonId: 26, sources: [] }), true)
+  assert.equal(canEnsureRoutePlan({
+    polygonId: 0, subpolygonId: 0, segmentId: 0, sources: [{ tipo: 'SP', id: 39 }],
+  }), false)
+})
+
+test('P1-04: pre-contrato null ≠ 0 y breakdown sin doble conteo', () => {
+  const pre = deriveSummaryFromRows([
+    { tipo: 'SO', id: 1, tomorrow: { plan_count: 1 }, days: [{ has_plan: true }] },
+    { tipo: 'SP', id: 2, tomorrow: {}, days: [{ has_plan: false }] },
+  ])
+  assert.equal(pre.published, null)
+  assert.equal(pre.readyToPublish, null)
+  assert.equal(pre.ready, null)
+  assert.equal(formatCount(pre.published), 'Sin dato')
+  assert.equal(cellAssignmentLine({ has_plan: true }), '')
+  assert.equal(cellAssignAttr({ has_plan: true }), 'unknown')
+  assert.notEqual(cellAssignAttr({ has_plan: true }), 'no_plan')
+  assert.equal(countGlyph(null), '○')
+  assert.equal(countGlyph(0, { zeroGood: true }), '✓')
+  assert.equal(countGlyph(3, { zeroGood: true }), '⚠')
+  const bd = pendingBreakdown({ toAssign: 5, toPrepare: 1, noPlan: 3, incomplete: 2, blocked: 1 })
+  const texts = bd.map((p) => p.text).join(' ')
+  assert.ok(texts.includes('por asignar'))
+  assert.ok(!texts.includes('todavía no tiene'))
+  assert.ok(!texts.includes('completar recursos'))
 })

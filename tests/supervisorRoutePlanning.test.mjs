@@ -15,6 +15,7 @@ import {
   normalizeRoutePlanCustomer,
   normalizeCustomerSearchResult,
   canEditRoutePlanCustomers,
+  canReopenPublishedRoute,
   canPublishRoutePlan,
   getSupervisorRouteErrorMessage,
   buildPolygonMarkerStyle,
@@ -208,6 +209,15 @@ test('canEditRoutePlanCustomers only allows draft editable plans', () => {
 test('canEditRoutePlanCustomers prefers backend plan_state over UI lifecycle state', () => {
   assert.equal(canEditRoutePlanCustomers({ state: 'plan_draft', plan_state: 'draft' }), true)
   assert.equal(canEditRoutePlanCustomers({ state: 'plan_draft', plan_state: 'draft', load_picking_id: 55 }), false)
+})
+
+test('published only editable via canReopenPublishedRoute', () => {
+  assert.equal(canReopenPublishedRoute({ state: 'published' }), true)
+  assert.equal(canReopenPublishedRoute({ plan_state: 'published' }), true)
+  assert.equal(canReopenPublishedRoute({ state: 'draft' }), false)
+  assert.equal(canReopenPublishedRoute({ state: 'in_progress' }), false)
+  assert.equal(canReopenPublishedRoute({ state: 'published', load_sealed: true }), false)
+  assert.equal(canReopenPublishedRoute({ state: 'published', load_picking_id: 9 }), false)
 })
 
 test('canPublishRoutePlan only allows draft plans with customers', () => {

@@ -48,7 +48,7 @@ const entersInto = (mod, sess) => getModuleEntryDecisionForSession(mod, sess).ty
 test('ACCESS_POLICY_RESOLVERS registra POS nocturno, M2-M7 e Igualas; Tower NO entra al registro', () => {
   assert.deepEqual(
     Object.keys(ACCESS_POLICY_RESOLVERS).sort(),
-    ['hectorNightPos', 'iguala_sales', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'talent_rh'],
+    ['hectorNightPos', 'iguala_sales', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'supervisor_copilot', 'talent_rh'],
   )
   // Tower conserva su propia autoridad (towerGated + tower_status), no se
   // convierte a accessPolicy ni a x_job_key.

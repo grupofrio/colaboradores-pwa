@@ -83,6 +83,33 @@ export function routeReadiness(route = {}, customersCount = 0, coverage = null) 
   }
 }
 
+/** Gate de publicación de la PWA: snapshot + optimizer + veredicto positivo de review. */
+export const PUBLISHABLE_REVIEW_STATES = Object.freeze(['ready', 'warning'])
+
+export function canPublishPreparedRoute({
+  customersCount = 0,
+  snapshotOk = false,
+  optimizeBlocked = true,
+  planRevision = null,
+  unassigned = 0,
+  missingGeo = 0,
+  reviewFailed = false,
+  reviewState = '',
+} = {}) {
+  if (Number(customersCount || 0) <= 0) return { ok: false, reason: 'No tiene clientes.' }
+  if (!snapshotOk) return { ok: false, reason: 'Falta preparar la demanda.' }
+  if (optimizeBlocked) return { ok: false, reason: 'Falta una optimización vigente.' }
+  if (!planRevision) return { ok: false, reason: 'Falta la revisión vigente.' }
+  if (Number(unassigned || 0) > 0) return { ok: false, reason: 'Hay clientes sin asignar.' }
+  if (Number(missingGeo || 0) > 0) return { ok: false, reason: 'Hay clientes sin ubicación.' }
+  if (reviewFailed) return { ok: false, reason: 'La revisión bloquea la publicación.' }
+  const state = String(reviewState || '').toLowerCase()
+  if (!PUBLISHABLE_REVIEW_STATES.includes(state)) {
+    return { ok: false, reason: 'La ruta no tiene un veredicto de revisión publicable.' }
+  }
+  return { ok: true, reason: null }
+}
+
 // ── Resumen de recursos del día (read-only) ──────────────────────────────────
 // A partir del payload de /available-resources. Cuenta libres vs tomados y marca
 // cuántas unidades no tienen capacidad registrada (para no prometer "cabe").
@@ -234,6 +261,8 @@ export function interpretOptimizeResponse(opt = {}) {
         capacityKg: (d.capacity_kg ?? null),
         utilizationPct: (d.utilization_pct ?? null),
         unassigned: (Number(d.unassigned_count ?? 0) || 0),
+        distanceSource: d.distance_source || null,
+        sequence: Array.isArray(d.sequence) ? d.sequence : [],
       },
     }
   }
@@ -255,11 +284,13 @@ export function interpretReviewResponse(resp = {}) {
   return {
     failed: isErr,
     message: isErr ? (resp?.message || resp?.data?.message || 'No se pudo revisar el plan.') : '',
-    state: String((isErr ? '' : d.readiness_state) || 'ready').toLowerCase(),
+    state: String((isErr ? '' : d.readiness_state) || '').toLowerCase(),
     blockers: Array.isArray(d.blockers) ? d.blockers : [],
     warnings: Array.isArray(d.warnings) ? d.warnings : [],
     missingGeo: (Number(d.missing_geo_count ?? 0) || 0),
     overcapacity: Boolean(d.overcapacity),
+    distanceSource: d.distance_source || null,
+    unassigned: (Number(d.unassigned_count ?? 0) || 0),
     revision: d.plan_revision || null,
   }
 }
@@ -305,4 +336,83 @@ export function interpretPublishResponse(resp = {}) {
     warnings: Array.isArray(d.warnings) ? d.warnings : [],
     message: resp?.message || resp?.data?.message || '',
   }
+}
+
+export function reviewedPublishRevision(reviewResult) {
+  const revision = reviewResult?.revision
+  if (!revision) return null
+  return revision
+}
+
+export async function runPrepareSequence({ generateSnapshot, runOptimize, runReview }) {
+  const snapshot = await generateSnapshot()
+  if (!snapshot?.ok || (snapshot.lineCount != null && snapshot.lineCount <= 0)) {
+    return { snapshot, optimize: null, review: null, complete: false }
+  }
+  const optimize = await runOptimize()
+  if (optimize?.blocked || Number(optimize?.metrics?.unassigned || optimize?.unassigned || 0) > 0) {
+    return { snapshot, optimize, review: null, complete: false }
+  }
+  try {
+    const review = await runReview()
+    const complete = Boolean(review && !review.failed && PUBLISHABLE_REVIEW_STATES.includes(String(review.state || '').toLowerCase()))
+    return { snapshot, optimize, review, complete }
+  } catch {
+    return { snapshot, optimize, review: { failed: true, state: '', revision: null }, complete: false }
+  }
+}
+
+export async function runPublishSequence({
+  customersCount,
+  snapshotOk,
+  optimizeResult,
+  reviewResult,
+  publish,
+}) {
+  const revision = reviewedPublishRevision(reviewResult)
+  const gate = canPublishPreparedRoute({
+    customersCount,
+    snapshotOk,
+    optimizeBlocked: Boolean(optimizeResult == null || !optimizeResult.revision),
+    planRevision: revision,
+    unassigned: Number(optimizeResult?.unassigned || reviewResult?.unassigned || 0),
+    missingGeo: Number(reviewResult?.missingGeo || 0),
+    reviewFailed: Boolean(reviewResult?.failed),
+    reviewState: reviewResult?.state || '',
+  })
+  if (!gate.ok) return { ok: false, published: false, revision: null, gate, publishCalled: false, pub: null }
+  const pub = interpretPublishResponse(await publish(revision))
+  return {
+    ok: Boolean(pub.ok),
+    published: Boolean(pub.ok),
+    revision,
+    gate,
+    publishCalled: true,
+    pub,
+  }
+}
+
+export function preparationAfterReopen() {
+  return { snapshotResult: null, optimizeResult: null, reviewResult: null }
+}
+
+export function isReopenNotFound(res) {
+  if (String(res?.phase || '').toLowerCase() === 'not_found') return true
+  // Raw ApiError before the shim attaches phase: HTTP 404 of a missing endpoint.
+  if (res && res.phase == null && Number(res.status) === 404) return true
+  return false
+}
+
+export function shouldAutoOpenEnsure({ alreadyOpened, hasRoute, zoneReady }) {
+  return Boolean(!alreadyOpened && hasRoute && zoneReady)
+}
+
+export function echoedUnionKeys(ensureResp) {
+  const data = ensureResp?.data || ensureResp || {}
+  const keys = data.source_keys
+  return Array.isArray(keys) ? keys.filter(Boolean) : null
+}
+
+export function shouldShowCombinedSources(sourceKeys) {
+  return Array.isArray(sourceKeys) && sourceKeys.length >= 2
 }

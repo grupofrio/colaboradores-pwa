@@ -47,6 +47,18 @@ export const MODULES = [
     navPriority: 35,
   },
   {
+    id:     'copiloto_supervisor',
+    label:  'Copiloto comercial',
+    shortLabel: 'Copiloto',
+    route:  '/equipo/copiloto',
+    tone:   'blue',
+    roles:  ['supervisor_ventas'],
+    accessPolicy: 'supervisor_copilot',
+    status: 'gated',
+    icon:   'copiloto',
+    navPriority: 36,
+  },
+  {
     id:     'encuestas',
     label:  'Encuestas',
     shortLabel: 'Encuestas',

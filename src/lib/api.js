@@ -46,6 +46,12 @@ import {
   MANAGER_COPILOT_INVOICE_RESEND,
 } from './managerCopilotRoute.js'
 import {
+  isSupervisorCopilotPath,
+  filterSupervisorCopilotParams,
+  buildSupervisorCopilotChatBody,
+  SUPERVISOR_COPILOT_CHAT,
+} from './supervisorCopilotRoute.js'
+import {
   isPwaHrNamespace,
   matchPwaHrAttendanceRoute,
 } from './pwaHrRoute.js'
@@ -1223,6 +1229,20 @@ async function directManagerCopilot(method, path, body) {
   }
   if (method === 'POST' && cleanPath === MANAGER_COPILOT_INVOICE_RESEND) {
     return odooHttp('POST', cleanPath, {}, buildCopilotInvoiceResendBody(body || {}))
+  }
+  throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
+}
+
+async function directSupervisorCopilot(method, path, body) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+  if (!isSupervisorCopilotPath(cleanPath)) return NO_DIRECT
+
+  if (method === 'GET') {
+    return odooHttp('GET', cleanPath, filterSupervisorCopilotParams(query))
+  }
+  if (method === 'POST' && cleanPath === SUPERVISOR_COPILOT_CHAT) {
+    return odooHttp('POST', cleanPath, {}, buildSupervisorCopilotChatBody(body || {}))
   }
   throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
 }
@@ -8415,8 +8435,9 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/route-plan-preview-customers' && method === 'POST') {
+    const sources = Array.isArray(body?.sources) ? body.sources : []
     const subpolygonIds = cleanNumberList(body?.subpolygon_ids)
-    if (subpolygonIds.length > 1) {
+    if (sources.length === 0 && subpolygonIds.length > 1) {
       return {
         ok: false,
         status: 'error',
@@ -8431,11 +8452,9 @@ async function directSupervisorVentas(method, path, body) {
         route_id: Number(body?.route_id || 0),
         date_target: body?.date_target || undefined,
         polygon_id: Number(body?.polygon_id || 0) || undefined,
-        // route_plan/ensure persiste un solo subpolígono. Preservarlo como
-        // singular permite al backend derivar su polígono padre cuando falta.
         subpolygon_id: subpolygonIds[0] || undefined,
-        // segment_id: plan por segmento (sin polígono ⇒ propuesta = miembros del segmento).
         segment_id: Number(body?.segment_id || 0) || undefined,
+        ...(sources.length ? { sources } : {}),
         channel_ids: cleanNumberList(body?.channel_ids),
         visit_days: Array.isArray(body?.visit_days) ? body.visit_days.filter(Boolean) : [],
         time_window_id: body?.time_window_id ? Number(body.time_window_id) : null,
@@ -8597,6 +8616,34 @@ async function directSupervisorVentas(method, path, body) {
     return {
       ok: true, status: 'ok', phase: snapshotRes.phase, message: 'Snapshot de demanda generado',
       data: (snapshotRes.data && (snapshotRes.data.demand_snapshot_id ? snapshotRes.data : snapshotRes.data.data)) || { route_plan_id: routePlanId },
+      meta: supervisorMeta(),
+    }
+  }
+
+  if (cleanPath === '/pwa-supv/route-plan-reopen-for-revision' && method === 'POST') {
+    const routePlanId = Number(body?.route_plan_id || 0)
+    if (!routePlanId) {
+      return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'route_plan_id requerido' }
+    }
+    let reopenRes
+    try {
+      reopenRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/route_plan/reopen_for_revision', {
+        meta: supervisorMeta(),
+        data: { route_plan_id: routePlanId },
+      }), null)
+    } catch (e) {
+      reopenRes = normalizeWriteResponse(null, e)
+    }
+    if (!reopenRes.ok) {
+      return {
+        ok: false, status: 'error', phase: reopenRes.phase, code: reopenRes.code,
+        message: reopenRes.message || 'No se pudo reabrir la ruta para revisión.', retryable: reopenRes.retryable,
+        data: reopenRes.data || {},
+      }
+    }
+    return {
+      ok: true, status: 'ok', phase: reopenRes.phase, message: 'Ruta reabierta para revisión',
+      data: (reopenRes.data && (reopenRes.data.route_plan_id ? reopenRes.data : reopenRes.data.data)) || { route_plan_id: routePlanId },
       meta: supervisorMeta(),
     }
   }
@@ -8768,6 +8815,7 @@ async function directSupervisorVentas(method, path, body) {
           // segment_id: plan tipo "Mercado" (lista curada). Sin polígono, el backend
           // arma la propuesta con los miembros del segmento (branch-scoped).
           segment_id: Number(body?.segment_id || 0) || undefined,
+          sources: Array.isArray(body?.sources) ? body.sources : undefined,
           channel_ids: Array.isArray(body?.channel_ids) ? body.channel_ids.map(Number).filter(Boolean) : [],
           visit_days: Array.isArray(body?.visit_days) ? body.visit_days.filter(Boolean) : [],
           time_window_id: body?.time_window_id ? Number(body.time_window_id) : null,
@@ -9594,6 +9642,7 @@ async function routeDirect(method, path, body) {
     directKoldOsM7,
     directProfile,
     directManagerCopilot,
+    directSupervisorCopilot,
     directGerente,
     directAdmin,
     directProduction,
