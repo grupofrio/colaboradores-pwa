@@ -441,14 +441,21 @@ export const MODULES = [
     navPriority: 10,
   },
 
-  // ── Gerente de Sucursal ────────────────────────────────────────────────
+  // ── Gerente de Sucursal · "Mi Sucursal" (shell V2, MGR-05) ──────────────
+  // Renombrado de "Gerente" a "Mi Sucursal" al portar el shell de pestañas
+  // (draft feat/gerente-v2-shell): el módulo sigue siendo la MISMA puerta
+  // `/gerente`; con el flag gerente_v2 OFF (default) se ve byte a byte igual
+  // que antes (ScreenGerente legacy). direccion_general se suma SOLO para
+  // revisión del shell V2; el dato de cada pestaña lo gatea su endpoint
+  // server-side por token. navPriority se conserva en 12 (no se reordena la
+  // barra) para no romper el contrato de navegación ya probado.
   {
     id:     'gerente',
-    label:  'Gerente',
-    shortLabel: 'Gerente',
+    label:  'Mi Sucursal',
+    shortLabel: 'Sucursal',
     route:  '/gerente',
     tone:   'blueDeep',
-    roles:  ['gerente_sucursal'],
+    roles:  ['gerente_sucursal', 'direccion_general'],
     status: 'live',
     icon:   'admin',
     navPriority: 12,
