@@ -11,9 +11,13 @@ function getSession() {
   }
 }
 
-function employeeToken() {
-  const session = getSession()
-  return session.odoo_employee_token || session.gf_employee_token || session.session_token || ''
+function employeeToken(currentSession = null) {
+  const session = currentSession && typeof currentSession === 'object' && !Array.isArray(currentSession)
+    ? currentSession
+    : getSession()
+  // `session_token` autentica la sesión general de la PWA, pero no es una
+  // capability de empleado para Talento. Nunca lo promovemos a este header.
+  return session.odoo_employee_token || session.gf_employee_token || ''
 }
 
 export const TALENT_ERROR_MESSAGES = {
@@ -109,8 +113,8 @@ export function mergeCapacitacionAndMe(capRes, meRes) {
   }
 }
 
-export async function talentFetch(path) {
-  const token = employeeToken()
+export async function talentFetch(path, currentSession = null) {
+  const token = employeeToken(currentSession)
   const res = await fetch(`${ODOO_BASE}${path}`, {
     headers: {
       Accept: 'application/json',
@@ -132,8 +136,8 @@ export async function talentFetch(path) {
   return data
 }
 
-export function fetchMe() {
-  return talentFetch('/pwa-talento/me')
+export function fetchMe(currentSession = null) {
+  return talentFetch('/pwa-talento/me', currentSession)
 }
 
 export function fetchCapacitacion() {

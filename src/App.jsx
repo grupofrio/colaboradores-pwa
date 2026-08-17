@@ -369,7 +369,9 @@ function TalentRhBootstrap() {
     if (!identity) return undefined
     if (status && status !== 'unknown') return undefined
     let cancelled = false
-    fetchMe()
+    // En el login recién completado React aún puede no haber persistido
+    // `gf_session`. La sesión en memoria es la autoridad para este bootstrap.
+    fetchMe(session)
       .then((me) => {
         if (!cancelled) updateSession(entitlementFromMe(me))
       })
@@ -722,13 +724,15 @@ export default function App() {
     }
     const nextEmpId = next?.employee_id || null
     const prevEmpId = session?.employee_id || null
+    // Persistir antes de publicar el estado: los efectos hijos (p.ej. Talento)
+    // pueden arrancar en el mismo commit del login y algunos clientes aún leen
+    // la sesión durable como fallback.
+    try { localStorage.setItem('gf_session', JSON.stringify(next)) } catch {}
     setSession(next)
     // Si entra otro empleado distinto al que estaba (raro, pero pasa cuando
     // el mismo navegador cambia de usuario), forzamos reload despues de
     // persistir la sesion para limpiar history y estado de modulos viejos.
     if (prevEmpId && nextEmpId && prevEmpId !== nextEmpId) {
-      // Persistir primero para que el reload ya lea la nueva sesion.
-      try { localStorage.setItem('gf_session', JSON.stringify(next)) } catch {}
       window.location.replace('/')
     }
   }
