@@ -130,7 +130,7 @@ export const MODULES = [
     shortLabel: 'Brief',
     route:  '/brief-produccion',
     tone:   'blue',
-    roles:  ['supervisor_produccion', 'direccion_general'],
+    roles:  ['supervisor_produccion', 'direccion_general', 'gerente_sucursal'],
     status: 'live',
     icon:   'kpis',
     // Mismo 16 que el brief de ventas: entra después de las superficies
