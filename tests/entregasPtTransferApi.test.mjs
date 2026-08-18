@@ -70,6 +70,46 @@ test('SalesOps prefers the configured deployment token over a stale session toke
   )
 })
 
+test('pwa entregas van-manual-load uses only the SalesOps authority endpoint', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return createJsonResponse(200, {
+      result: {
+        status: 'ok',
+        user_message: 'Carga pendiente de aceptación',
+        data: { picking_id: 901, route_plan_linked: true },
+      },
+    })
+  }
+
+  const result = await api('POST', '/pwa-entregas/van-manual-load', {
+    mobile_location_id: 1895,
+    lines: [{ product_id: 761, qty: 1 }],
+    driver_employee_id: 683,
+  })
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, '/odoo-api/gf/salesops/warehouse/van_load/create_execute')
+  assert.equal(calls.some(({ url }) => /\/get_records(?:_sorted)?$/.test(url)), false)
+  assert.equal(calls.some(({ url }) => /\/api\/create_update$/.test(url)), false)
+  const payload = JSON.parse(calls[0].options.body)
+  assert.equal(payload.params.meta.employee_id, 730)
+  assert.equal(payload.params.meta.warehouse_id, 89)
+  assert.deepEqual(payload.params.data, {
+    mobile_location_id: 1895,
+    lines: [{ product_id: 761, qty: 1 }],
+    driver_employee_id: 683,
+  })
+  assert.deepEqual(result, {
+    ok: true,
+    message: 'Carga pendiente de aceptación',
+    data: { picking_id: 901, route_plan_linked: true },
+  })
+})
+
 test('pwa pt accept-transfer sends negative pending ids to gf_salesops receive_pt accept', async () => {
   setSession()
 
