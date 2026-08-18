@@ -121,9 +121,9 @@ export default function ScreenGerente() {
               }}>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 12 }}>RESUMEN DEL DIA</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  <StatMini label="Venta Hoy" value={kpi.sales_today ?? '-'} color={TOKENS.colors.blue2} />
-                  <StatMini label="Forecast" value={kpi.forecast ?? '-'} color={TOKENS.colors.warning} />
-                  <StatMini label="Disponible" value={kpi.available ?? '-'} color={TOKENS.colors.success} />
+                  <StatMini label="Venta Hoy" value={kpi.has_data === false || kpi.sales_today == null ? '—' : kpi.sales_today} color={TOKENS.colors.blue2} />
+                  <StatMini label="Forecast" value={kpi.has_data === false || kpi.forecast == null ? '—' : kpi.forecast} color={TOKENS.colors.warning} />
+                  <StatMini label="Disponible" value={kpi.has_data === false || kpi.available == null ? '—' : kpi.available} color={TOKENS.colors.success} />
                 </div>
               </div>
             )}

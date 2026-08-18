@@ -1275,94 +1275,82 @@ function unwrapGerenteEnvelope(envelope, { onEmpty }) {
 }
 
 async function directGerente(method, path, body) {
+  // MGR-FINAL-02 / FE#159 selectivo: alertas/KPI/forecasts/unlock dejan el ORM
+  // cliente+sudo (fuga company-wide) y pasan por `/gf/salesops/gerente/v2/*`
+  // token-only. Fail-closed con flags OFF ⇒ FEATURE_DISABLED (no fallback ORM).
+  // null ≠ 0 en KPI. Unlock exige `gerente_writes.enabled` en el servidor.
   if (path === '/pwa-gerente/alerts' && method === 'GET') {
-    const companyId = getCompanyId()
-    const [start, end] = todayRange()
-    const domain = [['date', '>=', start], ['date', '<=', end]]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    const result = await readModelSorted('gf.ops.event_log', {
-      fields: ['id', 'source', 'event_type', 'analytic_account_id', 'company_id', 'status', 'date', 'response_status'],
-      domain,
-      sort_column: 'date',
-      sort_desc: true,
-      limit: 50,
-      sudo: 1,
-    })
-    const rows = pickListResponse(result).map((row) => ({
-      id: row.id,
-      event_type: row.event_type || 'event',
-      status: row.status || 'new',
-      source: row.source || '',
-      sucursal: row.analytic_account_id?.[1] || row.company_id?.[1] || '',
-      date: row.date || null,
-    }))
-    return rows
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/alerts`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: { items: [] } },
+    )
+    if (!res.ok) {
+      throw new ApiError(res.message || 'alerts_unavailable', {
+        status: 403,
+        code: res.code || 'FEATURE_DISABLED',
+      })
+    }
+    return Array.isArray(res.data?.items) ? res.data.items : []
   }
 
   if (path === '/pwa-gerente/kpi-summary' && method === 'GET') {
-    const companyId = getCompanyId()
-    const today = new Date()
-    const [startMonth, endMonth] = monthRange(today)
-    const domain = [['date_kpi', '>=', startMonth], ['date_kpi', '<', endMonth]]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    const result = await readModelSorted('gf.saleops.kpi.snapshot', {
-      fields: ['id', 'date_kpi', 'analytic_account_id', 'company_id', 'sales_qty', 'forecast_qty', 'pt_available_qty', 'en_available_qty', 'vans_available_qty'],
-      domain,
-      sort_column: 'date_kpi',
-      sort_desc: true,
-      limit: 1,
-      sudo: 1,
-    })
-    const row = pickFirstResponse(result)
-    if (!row) {
-      return { sales_today: 0, forecast: 0, available: 0 }
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/kpi-summary`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: { has_data: false, sales_today: null, forecast: null, available: null, date_kpi: null } },
+    )
+    if (!res.ok) {
+      return {
+        has_data: false,
+        sales_today: null,
+        forecast: null,
+        available: null,
+        date_kpi: null,
+        code: res.code || 'FEATURE_DISABLED',
+        message: res.message,
+      }
     }
+    const d = res.data || {}
     return {
-      sales_today: Number(row.sales_qty || 0),
-      forecast: Number(row.forecast_qty || 0),
-      available: Number(row.pt_available_qty || 0) + Number(row.en_available_qty || 0) + Number(row.vans_available_qty || 0),
-      date_kpi: row.date_kpi || null,
-      sucursal: row.analytic_account_id?.[1] || row.company_id?.[1] || '',
+      has_data: d.has_data === true,
+      sales_today: d.has_data ? d.sales_today : null,
+      forecast: d.has_data ? d.forecast : null,
+      available: d.has_data ? d.available : null,
+      date_kpi: d.date_kpi || null,
+      sucursal: res.meta?.scope?.analytic_name || '',
     }
   }
 
   if (path === '/pwa-gerente/forecasts-locked' && method === 'GET') {
-    const companyId = getCompanyId()
-    const domain = [['state', '=', 'confirmed']]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    const result = await readModelSorted('gf.saleops.forecast', {
-      fields: ['id', 'name', 'analytic_account_id', 'company_id', 'date_target', 'state', 'created_by_employee_id', 'confirmed_by_employee_id', 'confirmed_at'],
-      domain,
-      sort_column: 'date_target',
-      sort_desc: true,
-      limit: 50,
-      sudo: 1,
-    })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name,
-      analytic_account_id: row.analytic_account_id,
-      company_id: row.company_id,
-      date_target: row.date_target,
-      state: row.state,
-      created_by_employee_id: row.created_by_employee_id,
-      confirmed_by_employee_id: row.confirmed_by_employee_id,
-      confirmed_at: row.confirmed_at,
-    }))
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/forecasts-locked`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: { items: [] } },
+    )
+    if (!res.ok) {
+      throw new ApiError(res.message || 'forecasts_unavailable', {
+        status: 403,
+        code: res.code || 'FEATURE_DISABLED',
+      })
+    }
+    return Array.isArray(res.data?.items) ? res.data.items : []
   }
 
   if (path === '/pwa-gerente/forecast-unlock' && method === 'POST') {
     const forecastId = Number(body?.forecast_id || 0)
     if (!forecastId) return { success: false, error: 'forecast_id requerido' }
-    const result = await createUpdate({
-      model: 'gf.saleops.forecast',
-      method: 'function',
-      ids: [forecastId],
-      function: 'action_reset_to_draft',
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-    return { success: true, data: result }
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/forecast-unlock`, {
+        meta: gerenteMeta(),
+        data: { forecast_id: forecastId },
+      }),
+      { onEmpty: {} },
+    )
+    if (!res.ok) {
+      throw new ApiError(res.message || 'forecast_unlock_denied', {
+        status: 403,
+        code: res.code || 'FEATURE_DISABLED',
+      })
+    }
+    return { success: true, data: res.data }
   }
 
   // ── Gerente V2 · "Mi Sucursal" (shell de pestañas, detrás del flag
