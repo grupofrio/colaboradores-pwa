@@ -163,6 +163,110 @@ test('supervisor route templates uses dedicated V2 endpoint without get_records_
   assert.equal(JSON.stringify(calls[0].params).includes('"sudo"'), false)
 })
 
+test('supervisor team-targets uses dedicated V2 endpoint without get_records_sorted/sudo', async () => {
+  setSession()
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const params = JSON.parse(options.body).params || {}
+    calls.push({ url, params, headers: options.headers })
+    return createJsonResponse(200, {
+      result: {
+        status: 'ok',
+        code: 'OK',
+        data: [{
+          id: 1,
+          employee_id: [21, 'Ruta 21'],
+          employee_name: 'Ruta 21',
+          target_month: '2026-06-01',
+          sales_target: 1000,
+          collection_target: 500,
+          sales_actual: 0,
+          collection_actual: 0,
+        }],
+      },
+    })
+  }
+
+  const rows = await api('GET', '/pwa-supv/team-targets?date=2026-06-07')
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].sales_target, 1000)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, '/odoo-api/gf/salesops/supervisor/v2/team-targets')
+  assert.equal(calls[0].params.data.date, '2026-06-07')
+  assert.equal(calls[0].headers['X-GF-Employee-Token'], 'employee-token-test')
+  assertNoAuthorityInPayload(calls[0].params)
+  assert.equal(calls.some((c) => c.url.endsWith('/get_records_sorted')), false)
+  assert.equal(JSON.stringify(calls[0].params).includes('"sudo"'), false)
+})
+
+test('supervisor week-routes uses dedicated V2 endpoint; week bounds are functional only', async () => {
+  setSession()
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const params = JSON.parse(options.body).params || {}
+    calls.push({ url, params, headers: options.headers })
+    return createJsonResponse(200, {
+      result: {
+        status: 'ok',
+        code: 'OK',
+        // Backend already reduced universe; FE must not treat filtering as security.
+        data: [
+          { id: 800, name: 'PLAN/A', date: '2026-06-02', driver_id: 21, salesperson_id: 0, stops_total: 5, stops_done: 2 },
+          { id: 999, name: 'PLAN/B-cross', date: '2026-06-03', driver_id: 77, salesperson_id: 0, stops_total: 1, stops_done: 0 },
+        ],
+      },
+    })
+  }
+
+  const rows = await api('GET', '/pwa-supv/week-routes?week_start=2026-06-01&week_end=2026-06-07')
+  assert.equal(rows.length, 2, 'FE returns backend universe as-is; security is server-side')
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, '/odoo-api/gf/salesops/supervisor/v2/week-routes')
+  assert.equal(calls[0].params.data.week_start, '2026-06-01')
+  assert.equal(calls[0].params.data.week_end, '2026-06-07')
+  assert.equal(calls[0].headers['X-GF-Employee-Token'], 'employee-token-test')
+  assertNoAuthorityInPayload(calls[0].params)
+  assert.equal(calls.some((c) => c.url.endsWith('/get_records_sorted')), false)
+  assert.equal(JSON.stringify(calls[0].params).includes('"sudo"'), false)
+})
+
+test('supervisor month-sales-summary uses dedicated V2 endpoint without client warehouse/company authority', async () => {
+  setSession({ company_id: 34, warehouse_id: 89, x_analytic_account_id: [901, 'CEDIS Iguala'] })
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const params = JSON.parse(options.body).params || {}
+    calls.push({ url, params, headers: options.headers })
+    return createJsonResponse(200, {
+      result: {
+        status: 'ok',
+        code: 'OK',
+        data: {
+          start_month: '2026-06-01',
+          end_month: '2026-07-01',
+          warehouse_id: 89,
+          company_id: 34,
+          sales_count: 2,
+          sales_actual: 4000,
+          employee_sales: [
+            { employee_id: 10, sales_actual: 1500, sales_count: 1 },
+            { employee_id: 11, sales_actual: 2500, sales_count: 1 },
+          ],
+        },
+      },
+    })
+  }
+
+  const summary = await api('GET', '/pwa-supv/month-sales-summary?date=2026-06-07')
+  assert.equal(summary.sales_actual, 4000)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, '/odoo-api/gf/salesops/supervisor/v2/month-sales-summary')
+  assert.equal(calls[0].params.data.date, '2026-06-07')
+  assert.equal(calls[0].headers['X-GF-Employee-Token'], 'employee-token-test')
+  assertNoAuthorityInPayload(calls[0].params)
+  assert.equal(calls.some((c) => c.url.endsWith('/get_records_sorted')), false)
+  assert.equal(JSON.stringify(calls[0].params).includes('"sudo"'), false)
+})
+
 test('supervisor route plan preview uses ensure + stops_preview (nunca sudo)', async () => {
   setSession()
   const calls = []

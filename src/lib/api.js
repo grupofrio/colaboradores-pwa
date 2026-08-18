@@ -79,16 +79,9 @@ import {
   saveLocalPackingEntries,
 } from '../modules/shared/packingLocalStore.js'
 import {
-  collectRouteEmployeeIds,
   filterRouteSuggestionsByDriverScope,
-  filterRoutesByEmployeeScope,
   SUPV_ROUTE_EMPLOYEE_FIELDS,
 } from '../modules/supervisor-ventas/teamScope.js'
-import {
-  buildEmployeeMonthlySalesFromRouteData,
-  buildCedisMonthlySalesDomain,
-  sumSaleOrderTotals,
-} from '../modules/supervisor-ventas/monthSales.js'
 import {
   buildSupervisorCustomerDomains,
   resolveSupervisorCustomerAnalyticUnitId,
@@ -8875,107 +8868,47 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/team-targets' && method === 'GET') {
-    const scope = await supervisorAnalyticScope()
-    if (!scope.analyticAccountId) return []
-    const [startMonth, endMonth] = monthRange()
-    const domain = [['target_month', '>=', startMonth], ['target_month', '<', endMonth]]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    domain.push(['employee_id', 'in', scope.employeeIds])
-    const result = await readModelSorted('hr.employee.monthly.target', {
-      fields: ['id', 'employee_id', 'target_month', 'sales_target', 'collection_target', 'actual_sales', 'actual_collection'],
-      domain,
-      sort_column: 'employee_id',
-      sort_desc: false,
-      limit: 200,
-      sudo: 1,
+    // P1 Sebastián: metas mensuales — scope server-side (empleados de la sucursal).
+    const data = {}
+    const requestedDate = query.get('date') || query.get('period') || ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) data.date = requestedDate
+    const envelope = await odooJson('/gf/salesops/supervisor/v2/team-targets', {
+      meta: { tz: 'America/Mexico_City' },
+      data,
     })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      employee_id: row.employee_id,
-      employee_name: row.employee_id?.[1] || '',
-      target_month: row.target_month,
-      sales_target: Number(row.sales_target || 0),
-      collection_target: Number(row.collection_target || 0),
-      sales_actual: Number(row.actual_sales || 0),
-      collection_actual: Number(row.actual_collection || 0),
-    }))
+    if (envelope?.status === 'error' || envelope?.ok === false) {
+      throw new ApiError(envelope?.user_message || 'No se pudieron cargar las metas del equipo', {
+        status: String(envelope?.code || '').toUpperCase() === 'UNAUTHORIZED' ? 401 : 403,
+        code: envelope?.code || 'team_targets_scope_failed',
+      })
+    }
+    return Array.isArray(envelope?.data) ? envelope.data : []
   }
 
   if (cleanPath === '/pwa-supv/month-sales-summary' && method === 'GET') {
-    const warehouseId = Number(query.get('warehouse_id') || getWarehouseId() || 0)
-    const scope = await supervisorAnalyticScope()
+    // P1 Sebastián: resumen mensual — dominio territorial 100% server-side.
+    // NO mandar warehouse_id/company_id/analytic del cliente.
+    const data = {}
     const requestedDate = String(query.get('date') || '')
-    const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
-      ? new Date(`${requestedDate}T12:00:00`)
-      : new Date()
-    const [startMonth, endMonth] = monthRange(anchorDate)
-    const domain = buildCedisMonthlySalesDomain({
-      startMonth,
-      endMonth,
-      warehouseId,
-      companyId,
+    if (/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) data.date = requestedDate
+    const envelope = await odooJson('/gf/salesops/supervisor/v2/month-sales-summary', {
+      meta: { tz: 'America/Mexico_City' },
+      data,
     })
-    const result = await readModelSorted('sale.order', {
-      fields: ['id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'company_id'],
-      domain,
-      sort_column: 'date_order',
-      sort_desc: true,
-      limit: 0,
-      sudo: 1,
-    })
-    const rows = pickListResponse(result)
-    const planRows = scope.analyticAccountId
-      ? pickListResponse(await readModelSorted('gf.route.plan', {
-          fields: ['id', 'date', 'driver_employee_id', 'salesperson_employee_id'],
-          domain: [
-            ['date', '>=', startMonth],
-            ['date', '<', endMonth],
-            ...(companyId ? [['company_id', '=', companyId]] : []),
-          ],
-          sort_column: 'date',
-          sort_desc: false,
-          limit: 1000,
-          sudo: 1,
-        })).filter((row) => employeeInScope(row, scope))
-      : []
-    const planIds = planRows.map((row) => Number(row.id || 0)).filter(Boolean)
-    const stopRows = planIds.length
-      ? pickListResponse(await readModelSorted('gf.route.stop', {
-          fields: ['id', 'route_plan_id', 'sale_order_ids'],
-          domain: [['route_plan_id', 'in', planIds]],
-          sort_column: 'id',
-          sort_desc: false,
-          limit: 5000,
-          sudo: 1,
-        }))
-      : []
-    const routeSaleOrderIds = [...new Set(stopRows.flatMap((row) => (
-      Array.isArray(row.sale_order_ids)
-        ? row.sale_order_ids.map((value) => Array.isArray(value) ? Number(value[0] || 0) : Number(value || 0)).filter(Boolean)
-        : []
-    )))]
-    const routeSaleOrders = routeSaleOrderIds.length
-      ? pickListResponse(await readModelSorted('sale.order', {
-          fields: ['id', 'amount_total'],
-          domain: [['id', 'in', routeSaleOrderIds]],
-          sort_column: 'id',
-          sort_desc: false,
-          limit: routeSaleOrderIds.length,
-          sudo: 1,
-        }))
-      : []
-    return {
-      start_month: startMonth,
-      end_month: endMonth,
-      warehouse_id: warehouseId,
-      company_id: companyId || 0,
-      sales_count: rows.length,
-      sales_actual: sumSaleOrderTotals(rows),
-      employee_sales: buildEmployeeMonthlySalesFromRouteData({
-        plans: planRows,
-        stops: stopRows,
-        saleOrders: routeSaleOrders,
-      }),
+    if (envelope?.status === 'error' || envelope?.ok === false) {
+      throw new ApiError(envelope?.user_message || 'No se pudo cargar el resumen de ventas', {
+        status: String(envelope?.code || '').toUpperCase() === 'UNAUTHORIZED' ? 401 : 403,
+        code: envelope?.code || 'month_sales_scope_failed',
+      })
+    }
+    return envelope?.data && typeof envelope.data === 'object' ? envelope.data : {
+      start_month: '',
+      end_month: '',
+      warehouse_id: 0,
+      company_id: 0,
+      sales_count: 0,
+      sales_actual: 0,
+      employee_sales: [],
     }
   }
 
@@ -9054,57 +8987,28 @@ async function directSupervisorVentas(method, path, body) {
 
   // ── Week Routes (rutas lunes a domingo para score semanal) ──
   if (cleanPath === '/pwa-supv/week-routes' && method === 'GET') {
-    const scope = await supervisorAnalyticScope()
-    if (!scope.analyticAccountId) return []
-    // Codex §14: si el caller ancla la semana con la fecha del SERVIDOR
-    // (week_start/week_end, derivada de day-control en tz de la sucursal), se usa
-    // esa. El cálculo con `new Date()` del dispositivo queda SOLO como defensa
-    // para llamadas directas sin anclaje (getWeeklyScore ya no lo usa).
-    const pad = (n) => String(n).padStart(2, '0')
+    // P1 Sebastián: week-routes server-authoritative. week_start/week_end son
+    // funcionales (anclaje de semana). NO company/employee/analytic del cliente.
+    // La seguridad NO se aplica filtrando en frontend.
     const isYmd = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))
-    let monStr = query.get('week_start')
-    let sunStr = query.get('week_end')
-    if (!isYmd(monStr) || !isYmd(sunStr)) {
-      const today = new Date()
-      const dayOfWeek = today.getDay()
-      const monday = new Date(today)
-      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-      const sunday = new Date(monday)
-      sunday.setDate(monday.getDate() + 6)
-      monStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
-      sunStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`
+    const data = {}
+    const monStr = query.get('week_start')
+    const sunStr = query.get('week_end')
+    if (isYmd(monStr) && isYmd(sunStr)) {
+      data.week_start = monStr
+      data.week_end = sunStr
     }
-
-    const domain = [['date', '>=', monStr], ['date', '<=', sunStr]]
-    if (companyId) domain.push(['company_id', '=', companyId])
-
-    const result = await readModelSorted('gf.route.plan', {
-      fields: [
-        'id', 'name', 'date', 'route_id', 'state',
-        'driver_employee_id', 'salesperson_employee_id',
-        'stops_total', 'stops_done', 'progress_pct',
-        'delivery_effectiveness_pct',
-      ],
-      domain,
-      sort_column: 'date',
-      sort_desc: false,
-      limit: 500,
-      sudo: 1,
+    const envelope = await odooJson('/gf/salesops/supervisor/v2/week-routes', {
+      meta: { tz: 'America/Mexico_City' },
+      data,
     })
-    return pickListResponse(result).filter((row) => employeeInScope(row, scope)).map((row) => ({
-      id: row.id,
-      name: row.name,
-      date: row.date,
-      state: row.state,
-      driver_id: row.driver_employee_id?.[0] || 0,
-      driver: row.driver_employee_id?.[1] || '',
-      salesperson_id: row.salesperson_employee_id?.[0] || 0,
-      salesperson: row.salesperson_employee_id?.[1] || '',
-      stops_total: Number(row.stops_total || 0),
-      stops_done: Number(row.stops_done || 0),
-      progress: Number(row.progress_pct || 0),
-      effectiveness: Number(row.delivery_effectiveness_pct || 0),
-    }))
+    if (envelope?.status === 'error' || envelope?.ok === false) {
+      throw new ApiError(envelope?.user_message || 'No se pudieron cargar las rutas de la semana', {
+        status: String(envelope?.code || '').toUpperCase() === 'UNAUTHORIZED' ? 401 : 403,
+        code: envelope?.code || 'week_routes_scope_failed',
+      })
+    }
+    return Array.isArray(envelope?.data) ? envelope.data : []
   }
 
   // ── Sprint 5: Tareas del supervisor (guía §8) ─────────────────────────────

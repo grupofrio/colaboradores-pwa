@@ -204,86 +204,61 @@ test('getDayOverview uses monthly CEDIS sales total and per-driver sales instead
       })
     }
 
-    if (url === '/odoo-api/get_records_sorted' && model === 'gf.route') {
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/team-targets') {
       return jsonResponse({
         result: {
-          response: [
-            { id: 501, warehouse_dispatch_id: [89, 'CEDIS Iguala'], driver_employee_id: [10, 'Ruta 10'] },
-            { id: 502, warehouse_dispatch_id: [89, 'CEDIS Iguala'], driver_employee_id: [11, 'Ruta 11'] },
-          ],
-        },
-      })
-    }
-
-    if (url === '/odoo-api/get_records_sorted' && model === 'hr.employee') {
-      return jsonResponse({
-        result: {
-          response: [
-            { id: 10, name: 'Ruta 10', x_analytic_account_id: [820, 'CEDIS Iguala'] },
-            { id: 11, name: 'Ruta 11', x_analytic_account_id: [820, 'CEDIS Iguala'] },
-          ],
-        },
-      })
-    }
-
-    if (url === '/odoo-api/get_records_sorted' && model === 'gf.route.plan') {
-      return jsonResponse({
-        result: {
-          response: [
+          status: 'ok',
+          code: 'OK',
+          data: [
             {
               id: 1,
-              name: 'PLAN/1',
-              date: '2026-06-07',
-              driver_employee_id: [10, 'Ruta 10'],
-              salesperson_employee_id: false,
-              stops_total: 10,
-              stops_done: 8,
+              employee_id: [10, 'Ruta 10'],
+              employee_name: 'Ruta 10',
+              target_month: '2026-06-01',
+              sales_target: 1000,
+              collection_target: 0,
+              sales_actual: 0,
+              collection_actual: 0,
             },
             {
               id: 2,
-              name: 'PLAN/2',
-              date: '2026-06-07',
-              driver_employee_id: [11, 'Ruta 11'],
-              salesperson_employee_id: false,
-              stops_total: 10,
-              stops_done: 9,
+              employee_id: [11, 'Ruta 11'],
+              employee_name: 'Ruta 11',
+              target_month: '2026-06-01',
+              sales_target: 2000,
+              collection_target: 0,
+              sales_actual: 0,
+              collection_actual: 0,
             },
           ],
         },
       })
     }
 
-    if (url === '/odoo-api/get_records_sorted' && model === 'gf.route.stop') {
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/month-sales-summary') {
       return jsonResponse({
         result: {
-          response: [
-            { id: 201, route_plan_id: [1, 'PLAN/1'], sale_order_ids: [100] },
-            { id: 202, route_plan_id: [2, 'PLAN/2'], sale_order_ids: [101] },
-          ],
+          status: 'ok',
+          code: 'OK',
+          data: {
+            start_month: '2026-06-01',
+            end_month: '2026-07-01',
+            warehouse_id: 89,
+            company_id: 34,
+            sales_count: 2,
+            sales_actual: 4000,
+            employee_sales: [
+              { employee_id: 10, sales_actual: 1500, sales_count: 1 },
+              { employee_id: 11, sales_actual: 2500, sales_count: 1 },
+            ],
+          },
         },
       })
     }
 
-    if (url === '/odoo-api/get_records_sorted' && model === 'hr.employee.monthly.target') {
-      return jsonResponse({
-        result: {
-          response: [
-            { id: 1, employee_id: [10, 'Ruta 10'], sales_target: 1000, actual_sales: 0 },
-            { id: 2, employee_id: [11, 'Ruta 11'], sales_target: 2000, actual_sales: 0 },
-          ],
-        },
-      })
-    }
-
-    if (url === '/odoo-api/get_records_sorted' && model === 'sale.order') {
-      return jsonResponse({
-        result: {
-          response: [
-            { id: 100, amount_total: 1500 },
-            { id: 101, amount_total: 2500 },
-          ],
-        },
-      })
+    // Liquidations / other overview helpers may still hit generic reads.
+    if (url === '/odoo-api/get_records_sorted') {
+      return jsonResponse({ result: { response: [] } })
     }
 
     throw new Error(`Unexpected request ${url}`)
