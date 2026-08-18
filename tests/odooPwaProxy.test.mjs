@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { buildOdooPwaRequest, PwaProxyError } from '../api/_odooPwaProxy.js'
 import { createOdooPwaProxyHandler } from '../api/odoo/[...path].js'
+import { createPwaAdminProxyHandler } from '../api/pwa-admin.js'
 
 const serviceApiKey = 'server-only-test-key'
 const employeeToken = 'employee-mobile-token'
@@ -121,4 +122,29 @@ test('server handler rejects missing token and missing service key', async () =>
     headers: { 'x-gf-employee-token': employeeToken },
   }, noKeyResponse)
   assert.equal(noKeyResponse.statusCode, 503)
+})
+
+test('flat PWA admin handler maps nested paths into the protected proxy', async () => {
+  let forwarded = null
+  const handler = createPwaAdminProxyHandler({
+    serviceApiKey,
+    fetchFn: async (url, options) => {
+      forwarded = { url, options }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    },
+  })
+  const res = responseRecorder()
+
+  await handler({
+    method: 'GET',
+    query: { path: 'products/search', company_id: '34' },
+    headers: { 'x-gf-employee-token': employeeToken },
+  }, res)
+
+  assert.equal(
+    forwarded.url,
+    'https://grupofrio-gf.odoo.com/pwa-admin/products/search?company_id=34',
+  )
+  assert.equal(forwarded.options.headers['Api-Key'], serviceApiKey)
+  assert.equal(res.statusCode, 200)
 })

@@ -9,3 +9,13 @@ test('SPA fallback does not intercept internal API routes', async () => {
   assert.ok(fallback)
   assert.match(fallback.source, /api/)
 })
+
+test('PWA admin paths rewrite to a flat serverless function', async () => {
+  const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'))
+  const proxy = config.rewrites.find((rewrite) => rewrite.source === '/odoo-api/pwa-admin/:proxyPath*')
+
+  assert.deepEqual(proxy, {
+    source: '/odoo-api/pwa-admin/:proxyPath*',
+    destination: '/api/pwa-admin?path=:proxyPath',
+  })
+})
