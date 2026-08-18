@@ -148,25 +148,28 @@ function getEmployeeToken() {
   return session.odoo_employee_token || session.gf_employee_token || ''
 }
 
-function getSalesOpsToken() {
-  const session = getSession()
-  return session.gf_salesops_token
-    || session.salesops_api_token
-    || session.x_gf_token
-    || import.meta?.env?.VITE_GF_SALESOPS_TOKEN
-    || ''
+function getSessionSalesOpsToken(session = getSession()) {
+  return session.gf_salesops_token || session.salesops_api_token || session.x_gf_token || ''
+}
+
+export function selectSalesOpsToken({ sessionToken = '', environmentToken = '' } = {}) {
+  const envToken = String(environmentToken || '').trim()
+  const storedSessionToken = String(sessionToken || '').trim()
+  if (envToken) return { token: envToken, source: 'env' }
+  if (storedSessionToken) return { token: storedSessionToken, source: 'session' }
+  return { token: '', source: 'missing' }
 }
 
 function getSalesOpsTokenMeta() {
   const session = getSession()
-  const sessionToken = session.gf_salesops_token || session.salesops_api_token || session.x_gf_token || ''
+  const sessionToken = getSessionSalesOpsToken(session)
   const envToken = import.meta?.env?.VITE_GF_SALESOPS_TOKEN || ''
-  const token = sessionToken || envToken || ''
+  const { token, source } = selectSalesOpsToken({ sessionToken, environmentToken: envToken })
   return {
     token,
     present: Boolean(token),
     length: String(token || '').length,
-    source: sessionToken ? 'session' : (envToken ? 'env' : 'missing'),
+    source,
     session_present: Boolean(sessionToken),
     env_present: Boolean(envToken),
   }
