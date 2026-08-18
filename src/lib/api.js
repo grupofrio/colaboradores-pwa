@@ -7922,22 +7922,6 @@ async function directSupervisorVentas(method, path, body) {
     return supported
   }
 
-  function firstM2o(row, fields) {
-    for (const field of fields) {
-      const value = row?.[field]
-      const id = Array.isArray(value) ? Number(value[0] || 0) : Number(value || 0)
-      if (id) return value
-    }
-    return null
-  }
-
-  function tomorrowDateString() {
-    const d = new Date()
-    d.setDate(d.getDate() + 1)
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  }
-
   function supervisorMeta() {
     return {
       employee_id: getEmployeeId() || undefined,
@@ -7973,237 +7957,57 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/team' && method === 'GET') {
-    const warehouseId = getWarehouseId()
-    const scope = await supervisorAnalyticScope()
-    if (!scope.analyticAccountId) return []
-
-    // Obtener employee_ids de las rutas asignadas al CEDIS del supervisor.
-    // hr.employee.warehouse_id frecuentemente no está configurado, así que
-    // derivamos el scope del CEDIS desde gf.route.warehouse_dispatch_id.
-    let employeeIdFilter = null
-    if (warehouseId) {
-      const routeHasCompany = await modelHasField('gf.route', 'company_id')
-      const routeHasActive = await modelHasField('gf.route', 'active')
-      const empFields = await getSupportedFields('gf.route', SUPV_ROUTE_EMPLOYEE_FIELDS)
-      const routeDomain = [['warehouse_dispatch_id', '=', warehouseId]]
-      if (companyId && routeHasCompany) routeDomain.push(['company_id', '=', companyId])
-      if (routeHasActive) routeDomain.push(['active', '=', true])
-      const routeRows = pickListResponse(await readModelSorted('gf.route', {
-        fields: ['id', ...empFields],
-        domain: routeDomain,
-        sort_column: 'id', sort_desc: false, limit: 200, sudo: 1,
-      }))
-      const empIds = collectRouteEmployeeIds(routeRows, empFields)
-      const scopedEmpIds = empIds.filter((id) => scope.employeeIdSet.has(id))
-      if (scopedEmpIds.length > 0) employeeIdFilter = scopedEmpIds
-    }
-
-    const domain = []
-    if (employeeIdFilter) {
-      domain.push(['id', 'in', employeeIdFilter])
-    } else {
-      domain.push(['x_job_key', 'in', ['jefe_ruta', 'auxiliar_ruta']])
-      if (companyId) domain.push(['company_id', '=', companyId])
-    }
-    domain.push(['x_analytic_account_id', '=', scope.analyticAccountId])
-    const result = await readModelSorted('hr.employee', {
-      fields: ['id', 'name', 'barcode', 'job_id', 'x_job_key', 'warehouse_id', 'company_id', 'image_128', 'work_phone', 'mobile_phone'],
-      domain,
-      sort_column: 'name',
-      sort_desc: false,
-      limit: 200,
-      sudo: 1,
-      file: 'url',
+    // P1 Sebastián: scope SOLO server-side. No localStorage company/warehouse/
+    // analytic/employee_id. X-GF-Employee-Token es la autoridad.
+    const envelope = await odooJson('/gf/salesops/supervisor/v2/team', {
+      meta: { tz: 'America/Mexico_City' },
+      data: {},
     })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name,
-      barcode: row.barcode || '',
-      job_id: row.job_id,
-      x_job_key: row.x_job_key || '',
-      warehouse_id: row.warehouse_id?.[0] || 0,
-      image_128: row.image_128 || false,
-      phone: row.work_phone || row.mobile_phone || '',
-    }))
+    if (envelope?.status === 'error' || envelope?.ok === false) {
+      throw new ApiError(envelope?.user_message || 'No se pudo cargar el equipo', {
+        status: String(envelope?.code || '').toUpperCase() === 'UNAUTHORIZED' ? 401 : 403,
+        code: envelope?.code || 'team_scope_failed',
+      })
+    }
+    return Array.isArray(envelope?.data) ? envelope.data : []
   }
 
   if (cleanPath === '/pwa-supv/team-routes' && method === 'GET') {
-    const scope = await supervisorAnalyticScope()
-    if (!scope.analyticAccountId) return []
-    const pad = (n) => String(n).padStart(2, '0')
-    // Accept optional ?date=YYYY-MM-DD param, default to today
     const dateParam = query.get('date')
-    let dateStr
+    const data = {}
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
-      dateStr = dateParam
-    } else {
-      const today = new Date()
-      dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+      data.date = dateParam
     }
-    const domain = [['date', '=', dateStr]]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    const result = await readModelSorted('gf.route.plan', {
-      fields: [
-        'id', 'name', 'date', 'route_id', 'state',
-        'driver_employee_id', 'salesperson_employee_id',
-        'stops_total', 'stops_done',
-        'load_sealed', 'departure_time_target', 'departure_time_real', 'departure_on_time',
-        'closure_time', 'reconciliation_id', 'force_close_reason',
-        'delivery_effectiveness_pct', 'progress_pct',
-        'bridge_key',
-      ],
-      domain,
-      sort_column: 'name',
-      sort_desc: false,
-      limit: 200,
-      sudo: 1,
+    const envelope = await odooJson('/gf/salesops/supervisor/v2/team-routes', {
+      meta: { tz: 'America/Mexico_City' },
+      data,
     })
-    return pickListResponse(result).filter((row) => employeeInScope(row, scope)).map((row) => {
-      const stopsTotal = Number(row.stops_total || 0)
-      const stopsDone = Number(row.stops_done || 0)
-      return {
-        id: row.id,
-        name: row.name,
-        date: row.date,
-        route_id: row.route_id,
-        state: row.state,
-        driver_id: row.driver_employee_id?.[0] || 0,
-        driver: row.driver_employee_id?.[1] || '',
-        salesperson_id: row.salesperson_employee_id?.[0] || 0,
-        salesperson: row.salesperson_employee_id?.[1] || '',
-        stops_total: stopsTotal,
-        stops_done: stopsDone,
-        progress: stopsTotal > 0 ? Math.round((stopsDone / stopsTotal) * 100) : 0,
-        effectiveness: Number(row.delivery_effectiveness_pct || 0),
-        load_sealed: row.load_sealed === true,
-        departure_target: row.departure_time_target || null,
-        departure_real: row.departure_time_real || null,
-        departure_on_time: row.departure_on_time === true,
-        closure_time: row.closure_time || null,
-        reconciliation_id: row.reconciliation_id?.[0] || null,
-        reconciliation_name: row.reconciliation_id?.[1] || '',
-        force_close_reason: row.force_close_reason || null,
-      }
-    })
+    if (envelope?.status === 'error' || envelope?.ok === false) {
+      throw new ApiError(envelope?.user_message || 'No se pudieron cargar las rutas del equipo', {
+        status: String(envelope?.code || '').toUpperCase() === 'UNAUTHORIZED' ? 401 : 403,
+        code: envelope?.code || 'team_routes_scope_failed',
+      })
+    }
+    return Array.isArray(envelope?.data) ? envelope.data : []
   }
 
   if (cleanPath === '/pwa-supv/route-templates' && method === 'GET') {
-    const warehouseId = getWarehouseId()
-    const scope = await supervisorAnalyticScope()
-    if (!warehouseId) {
-      throw new ApiError(
-        'Tu usuario no tiene CEDIS asignado. Pide a administracion que configure warehouse_id.',
-        { status: 400, code: 'missing_warehouse_id' }
-      )
-    }
-    if (!scope.analyticAccountId) return []
-
     const requestedDate = query.get('date_target') || ''
-    const dateTarget = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : tomorrowDateString()
-    const routeHasCompany = await modelHasField('gf.route', 'company_id')
-    const routeHasActive = await modelHasField('gf.route', 'active')
-    const employeeFields = await getSupportedFields('gf.route', SUPV_ROUTE_EMPLOYEE_FIELDS)
-
-    const routeFields = [
-      'id',
-      'name',
-      'warehouse_dispatch_id',
-      ...(routeHasCompany ? ['company_id'] : []),
-      ...(routeHasActive ? ['active'] : []),
-      ...employeeFields,
-    ]
-
-    const domain = [['warehouse_dispatch_id', '=', warehouseId]]
-    if (companyId && routeHasCompany) domain.push(['company_id', '=', companyId])
-    if (routeHasActive) domain.push(['active', '=', true])
-
-    const routeRows = filterRoutesByEmployeeScope(pickListResponse(await readModelSorted('gf.route', {
-      fields: routeFields,
-      domain,
-      sort_column: 'name',
-      sort_desc: false,
-      limit: 200,
-      sudo: 1,
-    })), scope.employeeIds, employeeFields)
-
-    const assignedRoutes = routeRows
-      .map((route) => ({ route, employeeRef: firstM2o(route, employeeFields) }))
-      .filter((item) => item.employeeRef)
-
-    const routeIds = assignedRoutes.map((item) => Number(item.route.id || 0)).filter(Boolean)
-    const planRows = routeIds.length
-      ? pickListResponse(await readModelSorted('gf.route.plan', {
-          fields: [
-            'id', 'name', 'date', 'route_id', 'state',
-            'driver_employee_id', 'salesperson_employee_id',
-            'stops_total', 'stops_done', 'load_picking_id', 'load_sealed',
-          ],
-          domain: [['route_id', 'in', routeIds], ['date', '=', dateTarget]],
-          sort_column: 'id',
-          sort_desc: false,
-          limit: routeIds.length,
-          sudo: 1,
-        }))
-      : []
-    const planByRouteId = new Map(planRows.map((plan) => [Number(plan.route_id?.[0] || plan.route_id || 0), plan]))
-
-    const forecastHasRoutePlan = await modelHasField('gf.saleops.forecast', 'route_plan_id')
-    const forecastHasRoute = await modelHasField('gf.saleops.forecast', 'route_id')
-    const planIds = planRows.map((plan) => Number(plan.id || 0)).filter(Boolean)
-    let forecastRows = []
-    if (forecastHasRoutePlan && planIds.length) {
-      forecastRows = pickListResponse(await readModelSorted('gf.saleops.forecast', {
-        fields: ['id', 'state', 'date_target', 'route_plan_id'],
-        domain: [['route_plan_id', 'in', planIds], ['date_target', '=', dateTarget]],
-        sort_column: 'id',
-        sort_desc: true,
-        limit: planIds.length,
-        sudo: 1,
-      }))
-    } else if (forecastHasRoute && routeIds.length) {
-      forecastRows = pickListResponse(await readModelSorted('gf.saleops.forecast', {
-        fields: ['id', 'state', 'date_target', 'route_id'],
-        domain: [['route_id', 'in', routeIds], ['date_target', '=', dateTarget]],
-        sort_column: 'id',
-        sort_desc: true,
-        limit: routeIds.length,
-        sudo: 1,
-      }))
+    const data = {}
+    if (/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+      data.date_target = requestedDate
     }
-    const forecastByPlanId = new Map()
-    const forecastByRouteId = new Map()
-    for (const forecast of forecastRows) {
-      const planId = Number(forecast.route_plan_id?.[0] || forecast.route_plan_id || 0)
-      const routeId = Number(forecast.route_id?.[0] || forecast.route_id || 0)
-      if (planId && !forecastByPlanId.has(planId)) forecastByPlanId.set(planId, forecast)
-      if (routeId && !forecastByRouteId.has(routeId)) forecastByRouteId.set(routeId, forecast)
-    }
-
-    return assignedRoutes.map(({ route, employeeRef }) => {
-      const routeId = Number(route.id || 0)
-      const plan = planByRouteId.get(routeId) || null
-      const forecast = plan?.id
-        ? forecastByPlanId.get(Number(plan.id)) || forecastByRouteId.get(routeId) || null
-        : forecastByRouteId.get(routeId) || null
-      return {
-        route_id: routeId,
-        route_name: route.name || '',
-        warehouse_id: route.warehouse_dispatch_id?.[0] || warehouseId,
-        warehouse_name: route.warehouse_dispatch_id?.[1] || '',
-        employee_id: Array.isArray(employeeRef) ? employeeRef[0] : employeeRef,
-        employee_name: Array.isArray(employeeRef) ? employeeRef[1] : '',
-        plan_id: plan?.id || 0,
-        plan_name: plan?.name || '',
-        plan_state: plan?.state || '',
-        stops_total: Number(plan?.stops_total || 0),
-        stops_done: Number(plan?.stops_done || 0),
-        forecast_id: forecast?.id || 0,
-        forecast_state: forecast?.state || '',
-        load_picking_id: plan?.load_picking_id || null,
-        load_sealed: plan?.load_sealed === true,
-        date_target: dateTarget,
-      }
+    const envelope = await odooJson('/gf/salesops/supervisor/v2/route-templates', {
+      meta: { tz: 'America/Mexico_City' },
+      data,
     })
+    if (envelope?.status === 'error' || envelope?.ok === false) {
+      throw new ApiError(envelope?.user_message || 'No se pudieron cargar las rutas maestras', {
+        status: String(envelope?.code || '').toUpperCase() === 'UNAUTHORIZED' ? 401 : 403,
+        code: envelope?.code || 'route_templates_scope_failed',
+      })
+    }
+    return Array.isArray(envelope?.data) ? envelope.data : []
   }
 
   if (cleanPath === '/pwa-supv/polygons' && method === 'GET') {

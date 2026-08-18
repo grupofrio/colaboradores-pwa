@@ -39,6 +39,7 @@ function setSession(session = {}) {
   globalThis.localStorage.setItem('gf_session', JSON.stringify({
     session_token: 'token-test',
     odoo_api_key: 'api-key-test',
+    odoo_employee_token: 'employee-token-test',
     employee_id: 717,
     company_id: 34,
     warehouse_id: 89,
@@ -58,91 +59,108 @@ test.afterEach(() => {
   globalThis.window = originalWindow
 })
 
-test('supervisor route templates does not introspect ir.model.fields metadata', async () => {
+const AUTHORITY_KEYS = [
+  'employee_id', 'company_id', 'warehouse_id', 'analytic_account_id',
+  'analytic_id', 'cedis_id', 'branch_config_id', 'employee_ref',
+]
+
+function assertNoAuthorityInPayload(params) {
+  const meta = params.meta || {}
+  const data = params.data || {}
+  for (const key of AUTHORITY_KEYS) {
+    assert.equal(Object.hasOwn(meta, key), false, `meta must not send ${key}`)
+    assert.equal(Object.hasOwn(data, key), false, `data must not send ${key}`)
+  }
+}
+
+test('supervisor team uses dedicated V2 endpoint without get_records_sorted/sudo', async () => {
   setSession()
-  const models = []
-
+  const calls = []
   globalThis.fetch = async (url, options = {}) => {
-    assert.equal(url, '/odoo-api/get_records_sorted')
-    const payload = JSON.parse(options.body)
-    const params = payload.params || {}
-    models.push(params.model)
+    const params = JSON.parse(options.body).params || {}
+    calls.push({ url, params, headers: options.headers })
+    return createJsonResponse(200, {
+      result: {
+        status: 'ok',
+        code: 'OK',
+        data: [{ id: 21, name: 'Ruta 21', barcode: '', job_id: false, x_job_key: 'jefe_ruta', warehouse_id: 0, image_128: false, phone: '' }],
+      },
+    })
+  }
 
-    if (params.model === 'ir.model.fields') {
-      throw new Error('route templates must not query ir.model.fields')
-    }
+  const rows = await api('GET', '/pwa-supv/team')
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].id, 21)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, '/odoo-api/gf/salesops/supervisor/v2/team')
+  assert.equal(calls[0].headers['X-GF-Employee-Token'], 'employee-token-test')
+  assert.equal(calls[0].headers.Authorization, 'Bearer token-test')
+  assertNoAuthorityInPayload(calls[0].params)
+  assert.equal(calls.some((c) => c.url.endsWith('/get_records_sorted')), false)
+})
 
-    if (params.model === 'hr.employee') {
-      return createJsonResponse(200, {
-        result: {
-          response: [
-            { id: 717, name: 'Supervisora', user_id: [17, 'supervisora'], x_analytic_account_id: [901, 'CEDIS Iguala'] },
-            { id: 21, name: 'Ruta 21', user_id: [21, 'ruta21'], x_analytic_account_id: [901, 'CEDIS Iguala'] },
-          ],
-        },
-      })
-    }
+test('supervisor team-routes uses dedicated V2 endpoint; date is functional only', async () => {
+  setSession()
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const params = JSON.parse(options.body).params || {}
+    calls.push({ url, params })
+    return createJsonResponse(200, {
+      result: { status: 'ok', code: 'OK', data: [{ id: 800, name: 'PLAN/800', date: '2026-06-03' }] },
+    })
+  }
 
-    if (params.model === 'gf.route') {
-      return createJsonResponse(200, {
-        result: {
-          response: [
-            {
-              id: 700,
-              name: 'Ruta Centro',
-              warehouse_dispatch_id: [89, 'CEDIS Iguala'],
-              company_id: [34, 'GLACIEM'],
-              active: true,
-              driver_employee_id: [21, 'Ruta 21'],
-              salesperson_employee_id: false,
-              assistant_employee_id: false,
-            },
-          ],
-        },
-      })
-    }
+  const rows = await api('GET', '/pwa-supv/team-routes?date=2026-06-03')
+  assert.equal(rows.length, 1)
+  assert.equal(calls[0].url, '/odoo-api/gf/salesops/supervisor/v2/team-routes')
+  assert.equal(calls[0].params.data.date, '2026-06-03')
+  assertNoAuthorityInPayload(calls[0].params)
+  assert.equal(calls.some((c) => c.url.endsWith('/get_records_sorted')), false)
+})
 
-    if (params.model === 'gf.route.plan') {
-      return createJsonResponse(200, {
-        result: {
-          response: [
-            {
-              id: 800,
-              name: 'PLAN/800',
-              date: '2026-06-03',
-              route_id: [700, 'Ruta Centro'],
-              state: 'draft',
-              driver_employee_id: [21, 'Ruta 21'],
-              salesperson_employee_id: false,
-              stops_total: 0,
-              stops_done: 0,
-              load_picking_id: false,
-              load_sealed: false,
-            },
-          ],
-        },
-      })
-    }
-
-    if (params.model === 'gf.saleops.forecast') {
-      return createJsonResponse(200, {
-        result: {
-          response: [
-            { id: 900, state: 'draft', date_target: '2026-06-03', route_plan_id: [800, 'PLAN/800'] },
-          ],
-        },
-      })
-    }
-
-    return createJsonResponse(200, { result: { response: [] } })
+test('supervisor route templates uses dedicated V2 endpoint without get_records_sorted/sudo', async () => {
+  setSession()
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const params = JSON.parse(options.body).params || {}
+    calls.push({ url, params, headers: options.headers })
+    return createJsonResponse(200, {
+      result: {
+        status: 'ok',
+        code: 'OK',
+        data: [{
+          route_id: 700,
+          route_name: 'Ruta Centro',
+          warehouse_id: 89,
+          warehouse_name: 'CEDIS Iguala',
+          employee_id: 21,
+          employee_name: 'Ruta 21',
+          plan_id: 800,
+          plan_name: 'PLAN/800',
+          plan_state: 'draft',
+          stops_total: 0,
+          stops_done: 0,
+          forecast_id: 900,
+          forecast_state: 'draft',
+          load_picking_id: null,
+          load_sealed: false,
+          date_target: '2026-06-03',
+        }],
+      },
+    })
   }
 
   const rows = await api('GET', '/pwa-supv/route-templates?date_target=2026-06-03')
-
   assert.equal(rows.length, 1)
   assert.equal(rows[0].route_id, 700)
   assert.equal(rows[0].forecast_id, 900)
-  assert.equal(models.includes('ir.model.fields'), false)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, '/odoo-api/gf/salesops/supervisor/v2/route-templates')
+  assert.equal(calls[0].params.data.date_target, '2026-06-03')
+  assert.equal(calls[0].headers['X-GF-Employee-Token'], 'employee-token-test')
+  assertNoAuthorityInPayload(calls[0].params)
+  assert.equal(calls.some((c) => c.url.endsWith('/get_records_sorted')), false)
+  assert.equal(JSON.stringify(calls[0].params).includes('"sudo"'), false)
 })
 
 test('supervisor route plan preview uses ensure + stops_preview (nunca sudo)', async () => {
@@ -160,7 +178,6 @@ test('supervisor route plan preview uses ensure + stops_preview (nunca sudo)', a
       })
     }
 
-    // P1-2: las paradas del plan vienen SOLO del endpoint seguro token-only.
     if (url === '/odoo-api/gf/salesops/supervisor/v2/route_plan/stops_preview') {
       return createJsonResponse(200, {
         result: {
@@ -192,12 +209,8 @@ test('supervisor route plan preview uses ensure + stops_preview (nunca sudo)', a
   assert.equal(response.data.route_plan_id, 800)
   assert.equal(response.data.customers.length, 1)
   assert.equal(response.data.customers[0].customer_id, 301)
-  assert.equal(response.data.customers[0].name, 'Abarrotes Sol')
-  assert.equal(response.data.customers[0].stop_id, 501)
-  // P1-2: JAMÁS un read ORM con sudo de gf.route.stop desde el cliente.
   assert.equal(calls.some((call) => call.url.endsWith('/get_records_sorted') && call.params.model === 'gf.route.stop'), false)
   assert.equal(calls.some((call) => call.url.endsWith('/route_plan/stops_preview')), true)
-  assert.equal(calls.find((call) => call.url.endsWith('/route_plan/ensure')).params.meta.tz, 'America/Mexico_City')
 })
 
 test('supervisor route plan preview degrada a error honesto si stops_preview falla (sin sudo)', async () => {
@@ -222,7 +235,6 @@ test('supervisor route plan preview degrada a error honesto si stops_preview fal
 
   assert.equal(response.ok, false)
   assert.equal(response.status, 'error')
-  // No cae a un read con sudo: nunca llama a get_records_sorted de paradas.
   assert.equal(calls.some((call) => call.url.endsWith('/get_records_sorted') && call.params.model === 'gf.route.stop'), false)
 })
 

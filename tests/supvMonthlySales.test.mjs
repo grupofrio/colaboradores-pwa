@@ -134,6 +134,76 @@ test('getDayOverview uses monthly CEDIS sales total and per-driver sales instead
     const payload = options.body ? JSON.parse(options.body) : null
     const model = payload?.params?.model
 
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/team') {
+      return jsonResponse({
+        result: {
+          status: 'ok',
+          code: 'OK',
+          data: [
+            { id: 10, name: 'Ruta 10', barcode: '', job_id: false, x_job_key: 'jefe_ruta', warehouse_id: 0, image_128: false, phone: '' },
+            { id: 11, name: 'Ruta 11', barcode: '', job_id: false, x_job_key: 'jefe_ruta', warehouse_id: 0, image_128: false, phone: '' },
+          ],
+        },
+      })
+    }
+
+    if (url === '/odoo-api/gf/salesops/supervisor/v2/team-routes') {
+      return jsonResponse({
+        result: {
+          status: 'ok',
+          code: 'OK',
+          data: [
+            {
+              id: 1,
+              name: 'PLAN/1',
+              date: '2026-06-07',
+              route_id: [501, 'Ruta 10'],
+              state: 'in_progress',
+              driver_id: 10,
+              driver: 'Ruta 10',
+              salesperson_id: 0,
+              salesperson: '',
+              stops_total: 10,
+              stops_done: 8,
+              progress: 80,
+              effectiveness: 0,
+              load_sealed: false,
+              departure_target: null,
+              departure_real: null,
+              departure_on_time: false,
+              closure_time: null,
+              reconciliation_id: null,
+              reconciliation_name: '',
+              force_close_reason: null,
+            },
+            {
+              id: 2,
+              name: 'PLAN/2',
+              date: '2026-06-07',
+              route_id: [502, 'Ruta 11'],
+              state: 'in_progress',
+              driver_id: 11,
+              driver: 'Ruta 11',
+              salesperson_id: 0,
+              salesperson: '',
+              stops_total: 10,
+              stops_done: 9,
+              progress: 90,
+              effectiveness: 0,
+              load_sealed: false,
+              departure_target: null,
+              departure_real: null,
+              departure_on_time: false,
+              closure_time: null,
+              reconciliation_id: null,
+              reconciliation_name: '',
+              force_close_reason: null,
+            },
+          ],
+        },
+      })
+    }
+
     if (url === '/odoo-api/get_records_sorted' && model === 'gf.route') {
       return jsonResponse({
         result: {
