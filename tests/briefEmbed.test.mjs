@@ -343,7 +343,10 @@ test('cada quien ve su brief en la barra sin perder su superficie operativa', ()
   assert.deepEqual(nav('supervisor_ventas', 718).slice(0, 2), ['supervisor_ventas', 'brief_dia'])
   assert.deepEqual(nav('supervisor_produccion', 577).slice(0, 2), ['supervision_produccion', 'brief_produccion'])
 
-  // Gerencia: Admin(10) y Gerente(12) conservan la barra; el brief entra después.
+  // Gerencia: Admin/Gerente/Copiloto conservan la barra; briefs de planta y
+  // gerencia quedan disponibles (MGR-GAP-010 autoriza brief_produccion).
   const gerente = nav('gerente_sucursal', 699)
-  assert.deepEqual(gerente.slice(0, 4), ['admin_sucursal', 'gerente', 'copiloto_gerencial', 'brief_gerencia'])
+  assert.deepEqual(gerente.slice(0, 3), ['admin_sucursal', 'gerente', 'copiloto_gerencial'])
+  assert.ok(gerente.includes('brief_gerencia'))
+  assert.ok(gerente.includes('brief_produccion'), 'gerente puede abrir brief de planta')
 })

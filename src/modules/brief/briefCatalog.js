@@ -41,7 +41,7 @@ export const BRIEFS = Object.freeze([
     endpoint: '/api-n8n/brief-produccion',
     title: 'Mi Brief de planta',
     subtitle: 'Producción del día en Planta Iguala',
-    viewerRoles: ['supervisor_produccion', 'direccion_general'],
+    viewerRoles: ['supervisor_produccion', 'direccion_general', 'gerente_sucursal'],
     // Acepta ?d=YYYY-MM-DD para revisar días pasados; sin él trae "ayer".
     dateParam: 'd',
   }),
