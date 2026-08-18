@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { api } from '../src/lib/api.js'
+import { api, selectSalesOpsToken } from '../src/lib/api.js'
 
 const originalLocalStorage = globalThis.localStorage
 const originalFetch = globalThis.fetch
@@ -58,6 +58,16 @@ test.afterEach(() => {
   globalThis.localStorage = originalLocalStorage
   globalThis.fetch = originalFetch
   globalThis.window = originalWindow
+})
+
+test('SalesOps prefers the configured deployment token over a stale session token', () => {
+  assert.deepEqual(
+    selectSalesOpsToken({
+      sessionToken: 'obsolete-session-token',
+      environmentToken: 'current-deployment-token',
+    }),
+    { token: 'current-deployment-token', source: 'env' },
+  )
 })
 
 test('pwa pt accept-transfer sends negative pending ids to gf_salesops receive_pt accept', async () => {
