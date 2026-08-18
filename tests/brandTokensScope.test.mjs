@@ -37,7 +37,12 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
   assert.ok(LIGHT_FILES.length > 0, 'hay archivos con tema claro')
 
   for (const f of LIGHT_FILES) {
-    if (f.startsWith('modules/supervisor-ventas/') || f.startsWith('theme/')) continue
+    // modules/gerente/v2/**: shell "Mi Sucursal" (MGR-05), montado SOLO bajo
+    // ModuleRoleRoute moduleId="gerente" (gerente_sucursal/direccion_general)
+    // y detrás del flag gerente_v2 (fail-closed, default OFF). Mismo patrón
+    // que supervisor-ventas/v2: un árbol de rutas exclusivo del rol puede
+    // adoptar el tema claro sin conmutar por sesión.
+    if (f.startsWith('modules/supervisor-ventas/') || f.startsWith('modules/gerente/v2/') || f.startsWith('theme/')) continue
 
     // Un archivo COMPARTIDO puede usar el tema claro, pero solo si lo elige por
     // ROL en tiempo de ejecución (la nav global es el caso: la ve todo mundo).

@@ -1247,7 +1247,31 @@ async function directSupervisorCopilot(method, path, body) {
   throw new ApiError('method_not_allowed', { status: 405, code: 'method_not_allowed' })
 }
 
-async function directGerente(method, path) {
+const GERENTE_V2_BASE = '/gf/salesops/gerente/v2'
+
+function gerenteMeta() {
+  // Solo identidad accesoria: el servidor NO la usa para elegir alcance, y
+  // rechaza `company_id`/`analytic_account_id` si intentaran imponerlo.
+  return {
+    employee_id: getEmployeeId() || undefined,
+    request_id: `gerente-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+  }
+}
+
+/** Desenvuelve el envelope V2 (`status`/`code`/`data`) del backend de Fase 2/3
+ *  del gerente ("Mi Sucursal"), preservando el motivo del fallo. */
+function unwrapGerenteEnvelope(envelope, { onEmpty }) {
+  const status = String(envelope?.status || '').toLowerCase()
+  if (status === 'ok') return { ok: true, data: envelope?.data || {}, meta: envelope?.meta || {} }
+  return {
+    ok: false,
+    code: envelope?.code || 'UNKNOWN',
+    message: envelope?.user_message || envelope?.message || 'No disponible.',
+    data: onEmpty,
+  }
+}
+
+async function directGerente(method, path, body) {
   if (path === '/pwa-gerente/alerts' && method === 'GET') {
     const companyId = getCompanyId()
     const [start, end] = todayRange()
@@ -1336,6 +1360,84 @@ async function directGerente(method, path) {
       app: 'pwa_colaboradores',
     })
     return { success: true, data: result }
+  }
+
+  // ── Gerente V2 · "Mi Sucursal" (shell de pestañas, detrás del flag
+  // gerente_v2) · tablero read-only + panel de controles ─────────────────────
+  // Estos endpoints viven en Odoo (`/gf/salesops/gerente/v2/*`) y derivan
+  // compañía y sucursal del token del empleado (no del `company_id` del
+  // cliente). Fail-closed: cualquier código de error del backend se preserva,
+  // nunca se degrada a un valor inventado (null ≠ 0).
+  if (path === '/pwa-gerente/today' && method === 'GET') {
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/today`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: null },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, data: null }
+    return { success: true, data: res.data, scope: res.meta?.scope || null }
+  }
+
+  if (path === '/pwa-gerente/inventory' && method === 'GET') {
+    const warehouseId = Number(body?.warehouse_id || 0) || undefined
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/inventory`, {
+        meta: gerenteMeta(),
+        data: warehouseId ? { warehouse_id: warehouseId } : {},
+      }),
+      { onEmpty: { warehouses: [] } },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, warehouses: [] }
+    return { success: true, ...res.data }
+  }
+
+  if (path === '/pwa-gerente/production' && method === 'GET') {
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/production`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: null },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, data: null }
+    return { success: true, data: res.data }
+  }
+
+  // Pendientes (tareas + notas) SOLO LECTURA de la sucursal.
+  if (path === '/pwa-gerente/pendientes' && method === 'GET') {
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/pendientes`, { meta: gerenteMeta(), data: {} }),
+      { onEmpty: { tasks: [], notes: [] } },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, data: null }
+    return { success: true, data: res.data }
+  }
+
+  // ── Panel de controles (detección read-only) ───────────────────────────────
+  const gzClean = path.split('?')[0]
+  if (gzClean === '/pwa-gerente/controls' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const period = query.get('period') || 'today'
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/controls`, {
+        meta: gerenteMeta(),
+        data: { period, branch_id: Number(body?.branch_id || query.get('branch_id') || 0) || undefined },
+      }),
+      { onEmpty: { rules: [] } },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, rules: [] }
+    return { success: true, ...res.data, scope: res.meta?.scope || null }
+  }
+
+  if (gzClean === '/pwa-gerente/controls/detail' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const rule = query.get('rule') || ''
+    const period = query.get('period') || 'today'
+    const res = unwrapGerenteEnvelope(
+      await odooJson(`${GERENTE_V2_BASE}/controls/detail`, {
+        meta: gerenteMeta(),
+        data: { rule, period, branch_id: Number(body?.branch_id || query.get('branch_id') || 0) || undefined },
+      }),
+      { onEmpty: { items: [] } },
+    )
+    if (!res.ok) return { success: false, code: res.code, message: res.message, items: [] }
+    return { success: true, ...res.data }
   }
 
   return NO_DIRECT
