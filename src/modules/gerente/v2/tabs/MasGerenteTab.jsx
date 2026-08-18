@@ -1,9 +1,7 @@
 // ─── Gerente V2 · pestaña Más ────────────────────────────────────────────────
-// Accesos de respaldo del rol: Copiloto Gerencial (MGR-GAP-006, preexistente en
-// main y preservado al portar el shell), brief de gerencia, forecast (con el
-// fix de campos de Fase 1), alertas completas, y las superficies universales
-// (encuestas, premios, perfil). Asistencias se ofrece siempre; la autoridad
-// real es la allowlist del endpoint (quien no esté, recibe 403).
+// Accesos de respaldo del rol: Copiloto Gerencial (MGR-GAP-006), brief de
+// gerencia, alertas (token-only V2), asistencias y superficies universales.
+// Unlock de forecast queda fuera del shell read-only (piloto); deep-link en App.
 import { useNavigate } from 'react-router-dom'
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 
@@ -15,7 +13,6 @@ const GROUPS = [
     items: [
       { key: 'copiloto', label: 'Copiloto Gerencial', route: '/gerente/copiloto', glyph: '◈' },
       { key: 'brief', label: 'Brief de gerencia', route: '/brief-gerencia', glyph: '▦' },
-      { key: 'forecast', label: 'Desbloquear forecast', route: '/gerente/forecast', glyph: '⚿' },
       { key: 'alertas', label: 'Alertas completas', route: '/gerente/alertas', glyph: '⚠' },
       { key: 'asistencias', label: 'Asistencias', route: '/asistencias', glyph: '✓' },
     ],
