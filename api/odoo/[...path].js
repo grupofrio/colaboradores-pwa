@@ -1,4 +1,5 @@
 import { buildOdooPwaRequest, PwaProxyError } from '../_odooPwaProxy.js'
+import { sanitizeUpstreamAuthBody } from '../../src/lib/sanitizeAuthErrors.js'
 
 function headerValue(headers, name) {
   const found = Object.entries(headers || {}).find(
@@ -60,11 +61,14 @@ export function createOdooPwaProxyHandler({
         body,
       })
       const contentType = upstream.headers.get('content-type') || 'application/json'
-      const responseBody = Buffer.from(await upstream.arrayBuffer())
+      const rawBody = Buffer.from(await upstream.arrayBuffer())
+      // Never forward Odoo auth errors that embed the raw Api-Key
+      // ("The key <secret> is not allowed") to the browser.
+      const sanitized = sanitizeUpstreamAuthBody(rawBody, contentType)
 
-      res.setHeader('Content-Type', contentType)
+      res.setHeader('Content-Type', sanitized.contentType || contentType)
       res.setHeader('Cache-Control', 'no-store')
-      res.status(upstream.status).send(responseBody)
+      res.status(upstream.status).send(sanitized.body)
     } catch (error) {
       if (error instanceof PwaProxyError) {
         sendJson(res, error.status, { ok: false, message: error.message })

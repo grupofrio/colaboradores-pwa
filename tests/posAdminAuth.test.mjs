@@ -167,7 +167,7 @@ test('today sales delegates employee scope to the Odoo backend endpoint', async 
 
   const call = calls.find((entry) => entry.url.startsWith('/odoo-api/pwa-admin/today-sales'))
   assert.ok(call, 'today sales did not call the Odoo backend endpoint')
-  assert.equal(call.options.headers['Api-Key'], 'stale-api-key')
+  assert.equal(call.options.headers['Api-Key'], undefined)
   assert.equal(call.options.headers['X-GF-Employee-Token'], 'employee-token-test')
   assert.equal(
     calls.some((entry) => entry.payload?.params?.model === 'sale.order'),
@@ -199,7 +199,7 @@ test('night today sales sends only night intent for a cross-company warehouse se
 
   assert.equal(calls.length, 1)
   const [call] = calls
-  assert.equal(call.options.headers['Api-Key'], 'stale-api-key')
+  assert.equal(call.options.headers['Api-Key'], undefined)
   assert.equal(call.options.headers['X-GF-Employee-Token'], 'employee-token-test')
   const query = new URL(call.url, 'https://pwa.test').searchParams
   assert.equal(call.url, '/odoo-api/pwa-admin/today-sales?night_pos=1')
@@ -344,7 +344,7 @@ test('night sale cancel sends only order_id and reason_code to the secured contr
 
   assert.equal(calls.length, 1)
   const [call] = calls
-  assert.equal(call.options.headers['Api-Key'], 'stale-api-key')
+  assert.equal(call.options.headers['Api-Key'], undefined)
   assert.equal(call.options.headers['X-GF-Employee-Token'], 'employee-token-test')
   assert.deepEqual(call.payload.params, {
     order_id: 9001,

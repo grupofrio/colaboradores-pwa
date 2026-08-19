@@ -216,8 +216,14 @@ function buildBaseHeaders(path = '') {
   }
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
-  const apiKey = getApiKey()
-  if (apiKey) headers['Api-Key'] = apiKey
+  // pwa-admin/* goes through the Vercel proxy that injects ODOO_PWA_SERVICE_API_KEY.
+  // Never attach a client/session Api-Key on those paths — it is not authority
+  // and a rejected key can leak into Odoo error HTML ("The key … is not allowed").
+  const clean = String(path || '').split('?')[0]
+  if (!clean.startsWith('/pwa-admin/') && !clean.includes('/pwa-admin/')) {
+    const apiKey = getApiKey()
+    if (apiKey) headers['Api-Key'] = apiKey
+  }
   const employeeToken = getEmployeeToken()
   if (employeeToken) headers['X-GF-Employee-Token'] = employeeToken
   return headers
@@ -232,6 +238,8 @@ function buildJsonRpcPayload(params) {
   }
 }
 
+import { sanitizeAuthErrorMessage } from './sanitizeAuthErrors.js'
+
 function extractErrorDetails(payload, status = 0) {
   // F4-E.6: tambien leer payload.data.code/message para el shape de
   // gf_route_compliance controllers (pwa_route_suggestions): el response
@@ -245,7 +253,7 @@ function extractErrorDetails(payload, status = 0) {
       || payload?.code
       || 'http_error'
   )
-  const message =
+  const rawMessage =
     payload?.error?.data?.message
     || payload?.error?.message
     || payload?.user_message
@@ -256,7 +264,8 @@ function extractErrorDetails(payload, status = 0) {
 
   return {
     code,
-    message: String(message),
+    // Never surface Api-Key material (Odoo "The key <secret> is not allowed").
+    message: sanitizeAuthErrorMessage(String(rawMessage)),
     details: payload?.error?.details && typeof payload.error.details === 'object'
       ? payload.error.details
       : {},
@@ -2477,7 +2486,8 @@ async function directAdmin(method, path, body) {
   // Passthrough al controller de Odoo. Backend valida permiso por flag del empleado.
 
   if (cleanPath === '/pwa-admin/expenses-pending-approval' && method === 'GET') {
-    return odooJson('/pwa-admin/expenses-pending-approval', {
+    // Odoo registra type=http methods=["GET"]. odooJson haría POST → 405.
+    return odooHttp('GET', '/pwa-admin/expenses-pending-approval', {
       company_id:   Number(query.get('company_id'))   || companyId || undefined,
       warehouse_id: Number(query.get('warehouse_id')) || warehouseId || undefined,
       limit:        Number(query.get('limit'))        || undefined,
