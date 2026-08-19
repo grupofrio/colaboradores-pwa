@@ -101,6 +101,9 @@ export const BACKEND_CAPS = {
   cashShiftPendingDetail: false,
   cashShiftReopen: false,
   cashShiftPrint: false,
+
+  // Piloto Gerente Iguala: fail-closed until GET /pwa-admin/capabilities confirms ON.
+  gerenteWritesEnabled: false,
 }
 
 const CASH_SHIFT_CAPABILITY_KEYS = Object.freeze([
@@ -177,6 +180,8 @@ export async function bootCapabilities(session = null) {
   // Cerrar permisos sensibles antes de esperar la respuesta remota; así una
   // sesión nueva/stale nunca hereda temporalmente permisos del empleado previo.
   resetCashShiftCapabilities()
+  // Fail-closed for pure gerente_sucursal while capabilities are in-flight.
+  applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
   if (!snapshot.employeeToken) return BACKEND_CAPS
   try {
     const res = await apiGetCapabilities()
@@ -185,8 +190,11 @@ export async function bootCapabilities(session = null) {
     const caps = res?.data || res
     return applyCapabilities(caps, session || readSessionRaw())
   } catch {
-    // Los permisos de cortes nunca sobreviven una lectura fallida o parcial.
-    if (isCurrentCapabilityRequest(generation, snapshot)) resetCashShiftCapabilities()
+    // Los permisos de cortes y escrituras Gerente nunca sobreviven error HTTP.
+    if (isCurrentCapabilityRequest(generation, snapshot)) {
+      resetCashShiftCapabilities()
+      applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
+    }
     return BACKEND_CAPS
   }
 }

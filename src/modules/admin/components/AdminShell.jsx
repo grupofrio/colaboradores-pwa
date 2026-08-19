@@ -20,6 +20,7 @@ import { BACKEND_CAPS } from '../adminService.js'
 import {
   ADMIN_NAV_ACCESS,
   filterAdminNavForGerentePilot,
+  resolveGerentePilotCapabilities,
 } from '../gerentePilotCaps.js'
 import CompanySelector from './CompanySelector'
 import ActivityFeed from './ActivityFeed'
@@ -96,17 +97,22 @@ export default function AdminShell({
   // contenido comprimido (hallazgo Codex PR #66 — triple panel a 1024–1280).
   const showActivityFeed = !hideNavigation && !hideActivityFeed && sw >= 1366
 
+  const effectiveCaps = useMemo(
+    () => resolveGerentePilotCapabilities(session, BACKEND_CAPS, capsReady),
+    [capsReady, session],
+  )
+
   // Filtrar módulos según rol del usuario + piloto Gerente read-only.
   const visibleNavItems = useMemo(
     () => filterAdminNavForGerentePilot(
       navItemsForRoles(
         getEffectiveJobKeys(session),
-        capsReady ? BACKEND_CAPS : {},
+        effectiveCaps,
       ),
       session,
-      capsReady ? BACKEND_CAPS : {},
+      effectiveCaps,
     ),
-    [capsReady, session],
+    [effectiveCaps, session],
   )
 
   useEffect(() => {
@@ -121,7 +127,8 @@ export default function AdminShell({
   }
 
   function handleNav(item) {
-    if (item.status === 'pending_backend' || !item.route) return
+    if (!item.route) return
+    if (item.status === 'pending_backend') return
     navigate(item.route, item.routeState ? { state: item.routeState } : undefined)
   }
 
@@ -239,25 +246,27 @@ export default function AdminShell({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {visibleNavItems.map(item => {
                 const active = item.id === activeBlock
-                const locked = item.status === 'pending_backend'
+                const pending = item.status === 'pending_backend'
+                const readOnlyPilot = item.readOnlyPilot === true
+                const showReadOnlyBadge = readOnlyPilot || (pending && item.lockedReason)
                 return (
                   <button
                     key={item.id}
                     onClick={() => handleNav(item)}
-                    disabled={locked}
+                    disabled={pending}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 12px', borderRadius: TOKENS.radius.sm,
                       background: active ? `${TOKENS.colors.blue2}1f` : 'transparent',
                       border: `1px solid ${active ? TOKENS.colors.blue2 : 'transparent'}`,
-                      cursor: locked ? 'not-allowed' : 'pointer',
-                      opacity: locked ? 0.45 : 1,
+                      cursor: pending ? 'not-allowed' : 'pointer',
+                      opacity: pending ? 0.45 : (readOnlyPilot ? 0.92 : 1),
                       textAlign: 'left', width: '100%',
                     }}
                   >
                     <div style={{
                       width: 6, height: 6, borderRadius: '50%',
-                      background: active ? TOKENS.colors.blue3 : (locked ? TOKENS.colors.textLow : TOKENS.colors.textMuted),
+                      background: active ? TOKENS.colors.blue3 : (pending ? TOKENS.colors.textLow : TOKENS.colors.textMuted),
                       flexShrink: 0,
                     }} />
                     <span style={{
@@ -266,7 +275,7 @@ export default function AdminShell({
                     }}>
                       {item.label}
                     </span>
-                    {locked && (
+                    {showReadOnlyBadge && (
                       <span
                         title={item.lockedReason || 'Disponible pronto'}
                         style={{
