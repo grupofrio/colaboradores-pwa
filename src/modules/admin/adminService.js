@@ -19,6 +19,7 @@ import {
   buildSessionIdentity,
   readSessionRaw,
 } from '../supervisor-ventas/v2/sessionScope.js'
+import { clampGerentePilotWriteCapabilities } from './gerentePilotCaps.js'
 
 // ── Feature caps del backend ────────────────────────────────────────────────
 // Los defaults están en true porque `gf_pwa_admin` ya expone todos estos
@@ -144,12 +145,13 @@ export function invalidateCashShiftCapabilities() {
 
 /** Aplica en runtime la respuesta de GET /pwa-admin/capabilities.
  *  Si el backend no conoce un flag, se mantiene el default local. */
-export function applyCapabilities(caps) {
+export function applyCapabilities(caps, session = null) {
   resetCashShiftCapabilities()
-  if (!caps || typeof caps !== 'object') return BACKEND_CAPS
+  const safeCaps = clampGerentePilotWriteCapabilities(session || readSessionRaw(), caps)
+  if (!safeCaps || typeof safeCaps !== 'object') return BACKEND_CAPS
   for (const key of Object.keys(BACKEND_CAPS)) {
-    if (!Object.prototype.hasOwnProperty.call(caps, key)) continue
-    const incoming = caps[key]
+    if (!Object.prototype.hasOwnProperty.call(safeCaps, key)) continue
+    const incoming = safeCaps[key]
     const currentType = typeof BACKEND_CAPS[key]
     // Preservar el tipo del default — los umbrales (Number) y flags (Boolean)
     // ahora conviven en BACKEND_CAPS. Convertir siempre a Boolean rompía los
@@ -181,7 +183,7 @@ export async function bootCapabilities(session = null) {
     if (!isCurrentCapabilityRequest(generation, snapshot)) return BACKEND_CAPS
     // El módulo devuelve { ok: true, data: {...} } o el dict plano
     const caps = res?.data || res
-    return applyCapabilities(caps)
+    return applyCapabilities(caps, session || readSessionRaw())
   } catch {
     // Los permisos de cortes nunca sobreviven una lectura fallida o parcial.
     if (isCurrentCapabilityRequest(generation, snapshot)) resetCashShiftCapabilities()

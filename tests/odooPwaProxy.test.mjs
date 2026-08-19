@@ -3,7 +3,10 @@ import test from 'node:test'
 
 import { buildOdooPwaRequest, PwaProxyError } from '../api/_odooPwaProxy.js'
 import { createOdooPwaProxyHandler } from '../api/odoo/[...path].js'
-import { createPwaAdminProxyHandler } from '../api/pwa-admin.js'
+import {
+  buildPwaAdminProxyRequest,
+  createPwaAdminProxyHandler,
+} from '../api/pwa-admin.js'
 
 const serviceApiKey = 'server-only-test-key'
 const employeeToken = 'employee-mobile-token'
@@ -79,6 +82,24 @@ function responseRecorder() {
   }
 }
 
+/** Mimic Vercel/Node IncomingMessage: headers often non-enumerable. */
+function vercelLikeReq({ method = 'GET', path = 'capabilities', token = employeeToken } = {}) {
+  const req = {
+    method,
+    query: { path, warehouse_id: '89', company_id: '34' },
+    body: undefined,
+  }
+  Object.defineProperty(req, 'headers', {
+    value: {
+      'X-GF-Employee-Token': token,
+      accept: 'application/json',
+    },
+    enumerable: false,
+    configurable: true,
+  })
+  return req
+}
+
 test('server handler injects the environment key without returning it to the browser', async () => {
   let forwarded = null
   const handler = createOdooPwaProxyHandler({
@@ -147,4 +168,55 @@ test('flat PWA admin handler maps nested paths into the protected proxy', async 
   )
   assert.equal(forwarded.options.headers['Api-Key'], serviceApiKey)
   assert.equal(res.statusCode, 200)
+})
+
+test('P0 Gerente→Admin: non-enumerable headers still forward X-GF-Employee-Token', async () => {
+  // Regression for production: {...req} dropped headers → 401 → gf:session-expired.
+  const spreadLostHeaders = { ...vercelLikeReq() }
+  assert.equal(spreadLostHeaders.headers, undefined, 'precondition: spread drops headers')
+
+  const preserved = buildPwaAdminProxyRequest(vercelLikeReq({ path: 'today-sales' }))
+  assert.equal(preserved.headers['X-GF-Employee-Token'], employeeToken)
+  assert.deepEqual(preserved.query.path, ['pwa-admin', 'today-sales'])
+
+  let forwarded = null
+  const handler = createPwaAdminProxyHandler({
+    serviceApiKey,
+    fetchFn: async (url, options) => {
+      forwarded = { url, options }
+      return new Response(JSON.stringify({
+        ok: true,
+        data: { warehouse_id: 89, company_id: 34, count: 0, items: [] },
+      }), { status: 200 })
+    },
+  })
+  const res = responseRecorder()
+  await handler(vercelLikeReq({ path: 'today-sales' }), res)
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(
+    forwarded.options.headers['X-GF-Employee-Token'],
+    employeeToken,
+  )
+  assert.match(forwarded.url, /\/pwa-admin\/today-sales\?/)
+  assert.match(forwarded.url, /warehouse_id=89/)
+})
+
+test('proxy accepts mixed-case employee token header (salesops parity)', async () => {
+  let forwarded = null
+  const handler = createOdooPwaProxyHandler({
+    serviceApiKey,
+    fetchFn: async (url, options) => {
+      forwarded = { url, options }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    },
+  })
+  const res = responseRecorder()
+  await handler({
+    method: 'GET',
+    query: { path: ['pwa-admin', 'capabilities'] },
+    headers: { 'X-GF-Employee-Token': employeeToken },
+  }, res)
+  assert.equal(res.statusCode, 200)
+  assert.equal(forwarded.options.headers['X-GF-Employee-Token'], employeeToken)
 })
