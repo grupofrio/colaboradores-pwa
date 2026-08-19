@@ -320,6 +320,7 @@ export function executiveSummary(data) {
     incomplete: incomplete ?? derived?.incomplete ?? null,
     blocked: blocked ?? derived?.blocked ?? null,
     published: published ?? derived?.published ?? null,
+    uniquePublished: asCount(s?.unique_published_plans_tomorrow) ?? published ?? derived?.published ?? null,
     toAssign: toAssign ?? derived?.toAssign ?? null,
     toPrepare: toPrepare ?? derived?.toPrepare ?? null,
     assigned: assigned ?? derived?.assigned ?? null,
@@ -346,6 +347,7 @@ export function deriveSummaryFromRows(rows, counts = {}) {
   let readyToPublish = 0
   let weekGaps = 0
   const cov = []
+  const publishedPlanIds = new Set()
   for (const row of list) {
     const prep = row?.tomorrow?.planning_readiness
     const state = prep
@@ -356,7 +358,18 @@ export function deriveSummaryFromRows(rows, counts = {}) {
     if (state === 'no_plan') noPlan += 1
     else if (state === 'blocked') blocked += 1
     else if (state === 'unassigned') incomplete += 1
-    if (state === 'published') published += 1
+    if (state === 'published') {
+      const meta = row?.tomorrow?.plans_meta
+      if (Array.isArray(meta) && meta.length) {
+        for (const pm of meta) {
+          if (String(pm?.state || '').toLowerCase() === 'published' && pm?.plan_id) {
+            publishedPlanIds.add(Number(pm.plan_id))
+          }
+        }
+      } else {
+        for (const pid of planIdsFromCell(row?.tomorrow)) publishedPlanIds.add(pid)
+      }
+    }
     if (state === 'ready_to_publish') readyToPublish += 1
     if ((row?.days || []).some((c) => !c?.has_plan)) weekGaps += 1
     if (row?.weekly_coverage_pct != null) cov.push(Number(row.weekly_coverage_pct))
@@ -369,7 +382,8 @@ export function deriveSummaryFromRows(rows, counts = {}) {
     noPlan,
     incomplete,
     blocked,
-    published: hasPrep || hasAssign ? published : null,
+    published: hasPrep || hasAssign ? publishedPlanIds.size : null,
+    uniquePublished: hasPrep || hasAssign ? publishedPlanIds.size : null,
     assigned,
     readyToPublish: hasPrep ? readyToPublish : null,
     toAssign,
@@ -436,6 +450,140 @@ export function countGlyph(n, { zeroGood = false } = {}) {
   if (n == null || !Number.isFinite(Number(n))) return '○'
   if (zeroGood) return Number(n) === 0 ? '✓' : '⚠'
   return Number(n) > 0 ? '✓' : '○'
+}
+
+/** Planes branch-scoped sin fila SO/SP/P (contrato aditivo routes-week). */
+export function collectUnmappedPlans(data) {
+  const list = data?.unmapped_plans
+  return Array.isArray(list) ? list : []
+}
+
+/** Orden operativo: hoy → mañana → resto cronológico. */
+export function sortUnmappedPlans(items, { todayIso = null, tomorrowIso = null } = {}) {
+  const rank = (date) => {
+    const d = String(date || '')
+    if (todayIso && d === String(todayIso)) return 0
+    if (tomorrowIso && d === String(tomorrowIso)) return 1
+    return 2
+  }
+  return [...(items || [])].sort((a, b) => {
+    const ra = rank(a?.date)
+    const rb = rank(b?.date)
+    if (ra !== rb) return ra - rb
+    const dc = String(a?.date || '').localeCompare(String(b?.date || ''))
+    if (dc !== 0) return dc
+    return (Number(a?.plan_id || 0) || 0) - (Number(b?.plan_id || 0) || 0)
+  })
+}
+
+export function unmappedDateLabel(iso, { todayIso = null, tomorrowIso = null } = {}) {
+  if (!iso) return 'Sin fecha'
+  if (todayIso && String(iso) === String(todayIso)) return `Hoy · ${weekdayLabel(iso)}`
+  if (tomorrowIso && String(iso) === String(tomorrowIso)) return `Mañana · ${weekdayLabel(iso)}`
+  return weekdayLabel(iso)
+}
+
+const HIGH_ATTENTION_STATES = new Set(['published', 'in_progress', 'closed'])
+
+/** Severidad visual de un plan no mapeado. */
+export function unmappedAttentionLevel(item) {
+  const state = String(item?.state || item?.assignment_state || '').toLowerCase()
+  return HIGH_ATTENTION_STATES.has(state) ? 'high' : 'low'
+}
+
+/** Celda de una fila para una fecha ISO (día semanal o columna mañana). */
+export function cellForDate(row, dateIso, tomorrowIso = null) {
+  if (tomorrowIso && String(dateIso) === String(tomorrowIso)) return row?.tomorrow
+  return (row?.days || []).find((c) => String(c?.date) === String(dateIso))
+}
+
+/** plan_id(s) reales de una celda (N planes por día). */
+export function planIdsFromCell(cell) {
+  if (!cell) return []
+  const raw = cell?.plan_ids
+  if (Array.isArray(raw) && raw.length) {
+    return raw.map((id) => Number(id)).filter(Boolean)
+  }
+  const single = Number(cell?.plan_id || 0) || 0
+  return single ? [single] : []
+}
+
+/** Índice plan_id → filas que lo comparten en la fecha D. */
+export function buildSharedPlanIndex(rows, { dateIso, tomorrowIso = null } = {}) {
+  const index = new Map()
+  if (!dateIso) return index
+  for (const row of rows || []) {
+    const cell = cellForDate(row, dateIso, tomorrowIso)
+    if (!cell || (!cell.has_plan && !Number(cell.plan_count || 0))) continue
+    const meta = Array.isArray(cell.plans_meta) ? cell.plans_meta : []
+    const ids = planIdsFromCell(cell)
+    for (const planId of ids) {
+      const entry = index.get(planId) || {
+        plan_id: planId,
+        plan_name: null,
+        row_keys: [],
+      }
+      const fromMeta = meta.find((m) => Number(m?.plan_id || 0) === planId)
+      const name = fromMeta?.plan_name || cell?.plan_name
+      if (name && !entry.plan_name) entry.plan_name = name
+      entry.row_keys.push(row.key || `${row.tipo}:${row.id}`)
+      index.set(planId, entry)
+    }
+  }
+  return index
+}
+
+/** Etiqueta discreta cuando varias filas operativas comparten el mismo plan en D. */
+export function sharedPlanLabel(row, sharedIndex, { dateIso, tomorrowIso = null } = {}) {
+  const cell = cellForDate(row, dateIso, tomorrowIso)
+  const ids = planIdsFromCell(cell)
+  if (!ids.length) return null
+  for (const planId of ids) {
+    const entry = sharedIndex?.get?.(planId)
+    if (entry && entry.row_keys.length >= 2) {
+      const name = entry.plan_name || cell?.plan_name || `Plan ${planId}`
+      return `Ruta compartida · ${name}`
+    }
+  }
+  return null
+}
+
+/** Índice compartido por cada fecha visible de la semana (+ mañana). */
+export function buildSharedPlanIndexByDate(rows, days, tomorrowIso) {
+  const out = {}
+  for (const d of days || []) {
+    out[d] = buildSharedPlanIndex(rows, { dateIso: d, tomorrowIso })
+  }
+  if (tomorrowIso && !out[tomorrowIso]) {
+    out[tomorrowIso] = buildSharedPlanIndex(rows, { dateIso: tomorrowIso, tomorrowIso })
+  }
+  return out
+}
+
+/** Rutas físicas publicadas mañana (deduplicadas por plan_id real). */
+export function uniquePublishedPlanCount(summary, rows = []) {
+  const fromSummary = asCount(summary?.unique_published_plans_tomorrow)
+    ?? asCount(summary?.published)
+  if (fromSummary != null) return fromSummary
+  const ids = new Set()
+  for (const row of rows || []) {
+    const t = row?.tomorrow || {}
+    const meta = Array.isArray(t.plans_meta) ? t.plans_meta : []
+    if (meta.length) {
+      for (const pm of meta) {
+        if (String(pm?.state || '').toLowerCase() === 'published' && pm?.plan_id) {
+          ids.add(Number(pm.plan_id))
+        }
+      }
+      continue
+    }
+    const pids = planIdsFromCell(t)
+    const state = t.planning_readiness || t.assignment_state
+    if (state === 'published') {
+      for (const pid of pids) ids.add(pid)
+    }
+  }
+  return ids.size || null
 }
 
 export function cellAssignmentLine(cell) {
