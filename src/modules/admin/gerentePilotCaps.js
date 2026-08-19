@@ -24,6 +24,37 @@ const GERENTE_PILOT_WRITE_CAP_KEYS = Object.freeze([
   'evidenceUpload',
 ])
 
+/** Admin nav / launcher access mode for the Iguala Gerente pilot. */
+export const ADMIN_NAV_ACCESS = Object.freeze({
+  READ: 'read',
+  WRITE: 'write',
+  MIXED: 'mixed',
+})
+
+/**
+ * When gerente_writes is OFF, pure gerente_sucursal must not see write invitations
+ * (Aprobar / Registrar / Validar) as if they were active. Backend remains authority.
+ */
+export function isGerentePilotReadOnly(session, capabilities = {}) {
+  if (!isGerenteSucursalPilotSession(session)) return false
+  return capabilities?.gerenteWritesEnabled !== true
+}
+
+export function filterAdminNavForGerentePilot(items, session, capabilities = {}) {
+  const list = Array.isArray(items) ? items : []
+  if (!isGerentePilotReadOnly(session, capabilities)) return list
+  return list
+    .filter((item) => item && item.access !== ADMIN_NAV_ACCESS.WRITE)
+    .map((item) => {
+      if (item.access !== ADMIN_NAV_ACCESS.MIXED) return item
+      return {
+        ...item,
+        status: 'pending_backend',
+        lockedReason: 'Solo lectura en el piloto Gerente (escrituras desactivadas).',
+      }
+    })
+}
+
 export function isGerenteSucursalPilotSession(session) {
   const role = String(session?.role || '').trim()
   if (role !== 'gerente_sucursal') return false
