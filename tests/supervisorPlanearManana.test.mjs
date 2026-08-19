@@ -13,6 +13,10 @@ import {
   interpretReviewResponse,
   interpretDemandSnapshotResponse,
   interpretPublishResponse,
+  interpretCapacityReloadPreview,
+  canApplyCapacityReloadPreview,
+  shouldShowCapacityReloadPanel,
+  preparationAfterCapacityReload,
   canPublishPreparedRoute,
   echoedUnionKeys, shouldShowCombinedSources, runPrepareSequence, runPublishSequence,
   reviewedPublishRevision, isReopenNotFound, shouldAutoOpenEnsure, preparationAfterReopen,
@@ -586,9 +590,175 @@ test('B8: la recarga se resuelve server-side y no crea inventario desde la PWA',
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
   assert.ok(/previewRoutePlanCapacityReload/.test(api) && /applyRoutePlanCapacityReload/.test(api), 'wrappers B8')
   assert.ok(/route-plan-capacity-reload-preview/.test(lib) && /route-plan-apply-capacity-reload/.test(lib), 'shims B8')
-  assert.ok(/Planear recarga en CEDIS/.test(tab) && /CEDIS · recarga programada/.test(tab), 'superficie operativa de recarga')
+  assert.ok(/Esta ruta necesita una recarga/.test(tab) && /Ruta con recarga en CEDIS/.test(tab), 'superficie operativa de recarga')
+  assert.ok(/Ver propuesta de recarga/.test(tab) && /Aplicar recarga/.test(tab), 'preview y apply son pasos separados')
+  assert.ok(/handleCapacityReloadPreview/.test(tab) && /handleCapacityReloadApply/.test(tab), 'handlers separados')
   assert.ok(/requires_reoptimization|Optimiza y revisa antes de publicar/.test(tab), 'exige reoptimizar tras aplicar')
   assert.ok(!/create.*picking|reserve.*inventory/i.test(api), 'cliente no crea stock ni pickings')
+})
+
+test('capacity-reload A/B: gate por overcapacity autoritativa propagada', () => {
+  const hidden = routeReadiness(
+    { plan_id: 10, plan_state: 'draft' },
+    5,
+    { coverage_state: 'ready', overcapacity: false, demand_kg: 2000, capacity_kg: 3000 },
+  )
+  assert.equal(hidden.overcapacity, false)
+  assert.equal(shouldShowCapacityReloadPanel({
+    published: hidden.published, overcapacity: hidden.overcapacity, reloadApplied: false,
+  }), false)
+
+  const shown = routeReadiness(
+    { plan_id: 10, plan_state: 'draft' },
+    5,
+    {
+      coverage_state: 'blocked',
+      overcapacity: true,
+      demand_kg: 3517.8,
+      capacity_kg: 3000,
+      blockers: ['Sobrecapacidad: demanda 3517.8 kg > capacidad 3000.0 kg.'],
+    },
+  )
+  assert.equal(shown.overcapacity, true)
+  assert.equal(shown.demandKg, 3517.8)
+  assert.equal(shown.capacityKg, 3000)
+  assert.equal(shouldShowCapacityReloadPanel({
+    published: shown.published, overcapacity: shown.overcapacity, reloadApplied: false,
+  }), true)
+  assert.equal(shouldShowCapacityReloadPanel({
+    published: shown.published, overcapacity: shown.overcapacity, reloadApplied: true,
+  }), false)
+})
+
+test('capacity-reload C/D: preview PASS muestra viajes y no aplica; trip>cap bloquea', () => {
+  const pass = interpretCapacityReloadPreview({
+    ok: true,
+    data: {
+      reload: {
+        route_plan_id: 6927,
+        resolution: 'reload',
+        depot_id: 89,
+        reload_after_stop_id: 205455,
+        first_trip_kg: 2977.9,
+        second_trip_kg: 539.9,
+        reload_kg: 539.9,
+        trip_count: 2,
+      },
+    },
+  }, 3000)
+  assert.equal(pass.ok, true)
+  assert.equal(pass.reload.trip_count, 2)
+  assert.equal(pass.reload.first_trip_kg, 2977.9)
+  assert.equal(pass.reload.second_trip_kg, 539.9)
+  assert.equal(pass.withinCapacity, true)
+  assert.equal(canApplyCapacityReloadPreview(pass), true)
+
+  const over = interpretCapacityReloadPreview({
+    ok: true,
+    data: {
+      reload: {
+        first_trip_kg: 3200,
+        second_trip_kg: 400,
+        reload_kg: 400,
+        trip_count: 2,
+        reload_after_stop_id: 1,
+        depot_id: 89,
+      },
+    },
+  }, 3000)
+  assert.equal(over.ok, true)
+  assert.equal(over.withinCapacity, false)
+  assert.equal(canApplyCapacityReloadPreview(over), false)
+
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  assert.match(tab, /planear-ver-propuesta-recarga/)
+  assert.match(tab, /planear-aplicar-recarga/)
+  assert.match(tab, /planear-recarga-apply-bloqueada/)
+  // Preview handler must not call apply.
+  const previewFn = tab.slice(tab.indexOf('async function handleCapacityReloadPreview'), tab.indexOf('async function handleCapacityReloadApply'))
+  assert.ok(/previewRoutePlanCapacityReload/.test(previewFn))
+  assert.ok(!/applyRoutePlanCapacityReload/.test(previewFn))
+})
+
+test('capacity-reload E/F: apply confirmado una vez e invalida preparación', () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  const applyFn = tab.slice(tab.indexOf('async function handleCapacityReloadApply'), tab.indexOf('async function handleGenerateDemandSnapshot'))
+  assert.ok(/reloadConfirm/.test(applyFn), 'exige confirmación explícita')
+  assert.ok(/applyRoutePlanCapacityReload/.test(applyFn))
+  assert.equal((applyFn.match(/applyRoutePlanCapacityReload/g) || []).length, 1)
+  assert.ok(!/previewRoutePlanCapacityReload/.test(applyFn), 'apply no re-hace preview')
+  const cleared = preparationAfterCapacityReload()
+  assert.equal(cleared.snapshotResult, null)
+  assert.equal(cleared.optimizeResult, null)
+  assert.equal(cleared.reviewResult, null)
+  assert.ok(/preparationAfterCapacityReload/.test(tab))
+  assert.ok(/setSnapshotResult\(cleared\.snapshotResult\)/.test(tab))
+})
+
+test('capacity-reload G/H: unassigned bloquea publish; reload+review PASS habilita', () => {
+  const before = canPublishPreparedRoute({
+    customersCount: 64,
+    snapshotOk: true,
+    optimizeBlocked: false,
+    planRevision: 'rev-old',
+    unassigned: 2,
+    missingGeo: 0,
+    reviewFailed: false,
+    reviewState: 'ready',
+  })
+  assert.equal(before.ok, false)
+
+  const afterReload = routeReadiness(
+    { plan_id: 6927, plan_state: 'draft' },
+    64,
+    {
+      coverage_state: 'blocked',
+      overcapacity: true,
+      demand_kg: 3517.8,
+      capacity_kg: 3000,
+      blockers: ['Sobrecapacidad: demanda 3517.8 kg > capacidad 3000.0 kg.'],
+    },
+    { reloadApplied: true },
+  )
+  assert.equal(afterReload.publishable, true, 'recarga aplicada no deja el gate UI atrapado en sobrecapacidad')
+  assert.equal(afterReload.overcapacity, true, 'sigue mostrando la señal autoritativa')
+
+  const publishable = canPublishPreparedRoute({
+    customersCount: 64,
+    snapshotOk: true,
+    optimizeBlocked: false,
+    planRevision: 'rev-new',
+    unassigned: 0,
+    missingGeo: 0,
+    reviewFailed: false,
+    reviewState: 'ready',
+  })
+  assert.equal(publishable.ok, true)
+  assert.equal(Boolean(afterReload.publishable && publishable.ok), true)
+})
+
+test('capacity-reload I: ruta normal ≤ capacidad sin cambios de flujo', () => {
+  const r = routeReadiness(
+    { plan_id: 11, plan_state: 'draft' },
+    8,
+    { coverage_state: 'ready', overcapacity: false, demand_kg: 1800, capacity_kg: 3000, blockers: [] },
+  )
+  assert.equal(r.overcapacity, false)
+  assert.equal(r.publishable, true)
+  assert.equal(shouldShowCapacityReloadPanel({
+    published: false, overcapacity: r.overcapacity, reloadApplied: false,
+  }), false)
+  const ready = canPublishPreparedRoute({
+    customersCount: 8,
+    snapshotOk: true,
+    optimizeBlocked: false,
+    planRevision: 'rev-1',
+    unassigned: 0,
+    missingGeo: 0,
+    reviewFailed: false,
+    reviewState: 'ready',
+  })
+  assert.equal(ready.ok, true)
 })
 
 test('publicación: snapshot + revision + unassigned 0 + geo 0', () => {

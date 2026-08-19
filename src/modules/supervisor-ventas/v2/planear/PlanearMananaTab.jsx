@@ -68,6 +68,10 @@ import {
   interpretOptimizeResponse,
   interpretReviewResponse,
   interpretDemandSnapshotResponse,
+  interpretCapacityReloadPreview,
+  canApplyCapacityReloadPreview,
+  shouldShowCapacityReloadPanel,
+  preparationAfterCapacityReload,
   canPublishPreparedRoute,
   echoedUnionKeys,
   shouldShowCombinedSources,
@@ -411,8 +415,10 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const [reviewResult, setReviewResult] = useState(null)
   const [snapshotResult, setSnapshotResult] = useState(null)
   const [snapshotBusy, setSnapshotBusy] = useState(false)
+  const [reloadPreview, setReloadPreview] = useState(null)
   const [reloadResult, setReloadResult] = useState(null)
   const [reloadBusy, setReloadBusy] = useState(false)
+  const [reloadConfirm, setReloadConfirm] = useState(false)
   const [rowBusy, setRowBusy] = useState(null)        // add-/remove-<id>
   const [assignBusy, setAssignBusy] = useState(null)  // vehicle_id | driver_employee_id | salesperson_employee_id
   const [assignReadiness, setAssignReadiness] = useState(null)  // readiness del backend (incluye sobrecapacidad)
@@ -445,7 +451,17 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   // Readiness a mostrar: la del backend (con sobrecapacidad) si ya hubo un write;
   // si no, la de presencia (falta unidad/chofer/vendedor) derivada localmente.
   const coverage = assignReadiness || resourceReadiness(assignment)
-  const readiness = selectedRoute ? routeReadiness(selectedRoute, previewCustomers.length, coverage) : null
+  const reloadApplied = Boolean(reloadResult?.resolution === 'reload' || reloadResult?.reload_after_stop_id)
+  const readiness = selectedRoute
+    ? routeReadiness(selectedRoute, previewCustomers.length, coverage, { reloadApplied })
+    : null
+  const showReloadPanel = readiness
+    ? shouldShowCapacityReloadPanel({
+      published: readiness.published,
+      overcapacity: readiness.overcapacity,
+      reloadApplied,
+    })
+    : false
   const preparedPublish = canPublishPreparedRoute({
     customersCount: previewCustomers.length,
     snapshotOk: Boolean(snapshotResult?.ok && snapshotResult?.snapshotId),
@@ -667,6 +683,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     setSnapshotResult(null)
     setOptimizeResult(null)
     setReviewResult(null)
+    setReloadPreview(null)
+    setReloadResult(null)
+    setReloadConfirm(false)
     try {
       const criteria = buildRoutePlanCriteriaPayload({
         routeId: route.route_id, dateTarget, polygonId, subpolygonId, segmentId,
@@ -841,24 +860,56 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     } finally { setRowBusy(null) }
   }
 
-  async function handleCapacityReload() {
+  async function handleCapacityReloadPreview() {
     if (!routePlanId || reloadBusy || publishing) return
     setReloadBusy(true)
+    setReloadConfirm(false)
     try {
-      const preview = await previewRoutePlanCapacityReload(routePlanId)
-      if (!preview?.ok) throw preview
+      const raw = await previewRoutePlanCapacityReload(routePlanId)
+      const preview = interpretCapacityReloadPreview(raw, readiness?.capacityKg ?? coverage?.capacity_kg ?? null)
+      setReloadPreview(preview)
+      if (!preview.ok) {
+        flash(preview.message, 6000)
+        return
+      }
+      if (!preview.applyAllowed) {
+        flash('La propuesta supera la capacidad de la unidad; no se puede aplicar.', 6000)
+      }
+    } catch (e) {
+      logScreenError('PlanearManana', 'capacityReloadPreview', e)
+      setReloadPreview(null)
+      flash(getSupervisorRouteErrorMessage(e), 5000)
+    } finally { setReloadBusy(false) }
+  }
+
+  async function handleCapacityReloadApply() {
+    if (!routePlanId || reloadBusy || publishing) return
+    if (!canApplyCapacityReloadPreview(reloadPreview)) {
+      flash('Primero genera una propuesta de recarga válida.', 5000)
+      return
+    }
+    if (!reloadConfirm) {
+      setReloadConfirm(true)
+      return
+    }
+    setReloadBusy(true)
+    try {
       const applied = await applyRoutePlanCapacityReload(routePlanId)
       if (!applied?.ok) throw applied
       const reload = applied?.data?.reload || applied?.data?.data?.reload
       if (!reload) throw new Error('La respuesta de recarga está incompleta.')
       setReloadResult(reload)
-      setOptimizeResult(null)
-      setReviewResult(null)
+      setReloadPreview(null)
+      setReloadConfirm(false)
+      const cleared = preparationAfterCapacityReload()
+      setSnapshotResult(cleared.snapshotResult)
+      setOptimizeResult(cleared.optimizeResult)
+      setReviewResult(cleared.reviewResult)
       invalidateResourceReadiness()
       await refreshReadinessFromServer(routePlanId)
       flash('Recarga programada. Optimiza y revisa antes de publicar.', 6000)
     } catch (e) {
-      logScreenError('PlanearManana', 'capacityReload', e)
+      logScreenError('PlanearManana', 'capacityReloadApply', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
     } finally { setReloadBusy(false) }
   }
@@ -999,7 +1050,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       flash('Ruta optimizada publicada para mañana')
       await loadData()
       if (onExit) { onExit(); return }
-      setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([]); setOptimizeResult(null); setReviewResult(null); setSnapshotResult(null)
+      setView('list'); setRoutePlanId(null); setPreviewCustomers([]); setQuery(''); setResults([]); setOptimizeResult(null); setReviewResult(null); setSnapshotResult(null); setReloadPreview(null); setReloadResult(null); setReloadConfirm(false)
     } catch (e) {
       logScreenError('PlanearManana', 'publishOptimizedRoute', e)
       flash(getSupervisorRouteErrorMessage(e), 5000)
@@ -1022,6 +1073,9 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       setSnapshotResult(cleared.snapshotResult)
       setOptimizeResult(cleared.optimizeResult)
       setReviewResult(cleared.reviewResult)
+      setReloadPreview(null)
+      setReloadResult(null)
+      setReloadConfirm(false)
       setReopenConfirm(false)
       invalidateResourceReadiness()
       await loadData()
@@ -1382,19 +1436,81 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
               </PrimaryButton>
             </>
           )}
-          {!readiness.published && readiness.overcapacity && (
+          {showReloadPanel && (
             <div data-testid="planear-recarga" style={{ marginTop: 10, padding: '10px 12px', borderRadius: R.md, background: C.warningSoft, border: '1px solid rgba(180,83,9,0.30)' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.warning }}>La ruta no cabe en una sola carga</div>
-              <div style={{ fontSize: 12, color: C.text, marginTop: 3, lineHeight: 1.5 }}>Programa un regreso virtual al CEDIS. Almacén confirma la carga física después; no se reserva inventario aquí.</div>
-              <PrimaryButton testid="planear-programar-recarga" onClick={handleCapacityReload} busy={reloadBusy} disabled={!canEdit || Boolean(publishing || snapshotBusy || assignBusy || rowBusy || preparing || previewing)}>
-                Planear recarga en CEDIS
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.warning }}>Esta ruta necesita una recarga</div>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 3, lineHeight: 1.5 }}>
+                Demanda total: {readiness.demandKg != null ? `${readiness.demandKg} kg` : 'Sin dato'}
+                {' · '}
+                Capacidad unidad: {readiness.capacityKg != null ? `${readiness.capacityKg} kg` : 'Sin dato'}
+              </div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 3, lineHeight: 1.5 }}>
+                Programa un regreso virtual al CEDIS. Almacén confirma la carga física después; no se reserva inventario aquí.
+              </div>
+              <PrimaryButton
+                testid="planear-ver-propuesta-recarga"
+                onClick={handleCapacityReloadPreview}
+                busy={reloadBusy}
+                disabled={!canEdit || Boolean(publishing || snapshotBusy || assignBusy || rowBusy || preparing || previewing)}
+              >
+                Ver propuesta de recarga
               </PrimaryButton>
+              {reloadPreview?.ok && reloadPreview.reload && (
+                <div data-testid="planear-recarga-propuesta" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(180,83,9,0.20)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 4 }}>Propuesta (sin aplicar)</div>
+                  <ul style={{ margin: '0 0 8px', paddingLeft: 18, fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+                    <li data-testid="planear-recarga-viaje-1">
+                      Viaje 1: {reloadPreview.reload.first_trip_kg != null ? `${reloadPreview.reload.first_trip_kg} kg` : 'Sin dato'}
+                    </li>
+                    <li data-testid="planear-recarga-cedis">
+                      Regreso: CEDIS{reloadPreview.reload.depot_id ? ` #${reloadPreview.reload.depot_id}` : ''}
+                      {reloadPreview.reload.reload_after_stop_id
+                        ? ` · después de parada #${reloadPreview.reload.reload_after_stop_id}`
+                        : ''}
+                    </li>
+                    <li data-testid="planear-recarga-viaje-2">
+                      Viaje 2: {reloadPreview.reload.second_trip_kg != null ? `${reloadPreview.reload.second_trip_kg} kg` : 'Sin dato'}
+                      {reloadPreview.reload.reload_kg != null ? ` · recarga ${reloadPreview.reload.reload_kg} kg` : ''}
+                    </li>
+                  </ul>
+                  {!reloadPreview.applyAllowed ? (
+                    <div data-testid="planear-recarga-apply-bloqueada" style={{ fontSize: 12, fontWeight: 700, color: C.error, marginBottom: 6 }}>
+                      Un viaje supera la capacidad; no se puede aplicar.
+                    </div>
+                  ) : (
+                    <>
+                      {reloadConfirm && (
+                        <div data-testid="planear-recarga-confirmar" style={{ fontSize: 12, color: C.text, marginBottom: 6, lineHeight: 1.5 }}>
+                          ¿Aplicar esta recarga al plan? Invalidará demanda/optimización/revisión anteriores.
+                        </div>
+                      )}
+                      <PrimaryButton
+                        testid="planear-aplicar-recarga"
+                        onClick={handleCapacityReloadApply}
+                        busy={reloadBusy}
+                        disabled={!canEdit || Boolean(publishing || snapshotBusy || assignBusy || rowBusy || preparing || previewing)}
+                      >
+                        {reloadConfirm ? 'Confirmar aplicar recarga' : 'Aplicar recarga'}
+                      </PrimaryButton>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
-          {reloadResult && (
+          {reloadApplied && reloadResult && (
             <div data-testid="planear-recarga-programada" style={{ marginTop: 10, padding: '10px 12px', borderRadius: R.md, background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.30)' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.success }}>CEDIS · recarga programada</div>
-              <div style={{ fontSize: 12, color: C.text, marginTop: 3 }}>Tras la parada #{reloadResult.reload_after_stop_id}: tramo 1 {reloadResult.first_trip_kg} kg · recarga {reloadResult.reload_kg} kg · tramo 2 {reloadResult.second_trip_kg} kg.</div>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.success }}>Ruta con recarga en CEDIS</div>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 3, lineHeight: 1.5 }}>
+                Viaje 1: {reloadResult.first_trip_kg != null ? `${reloadResult.first_trip_kg} kg` : 'Sin dato'}
+                {' · '}
+                Recarga: {reloadResult.reload_kg != null ? `${reloadResult.reload_kg} kg` : 'Sin dato'}
+                {' · '}
+                Viaje 2: {reloadResult.second_trip_kg != null ? `${reloadResult.second_trip_kg} kg` : 'Sin dato'}
+              </div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 3 }}>
+                Los clientes permanecen en la ruta. Tras la parada #{reloadResult.reload_after_stop_id}: optimiza y revisa de nuevo antes de publicar.
+              </div>
             </div>
           )}
           {/* Veredicto de la revisión (B5+): bloqueos (rojo, no publica) o avisos
@@ -1453,9 +1569,14 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
                   ].filter(Boolean).join(' · ')}
                 </div>
               )}
-              {optimizeResult.unassigned > 0 && (
+              {optimizeResult.unassigned > 0 && !reloadApplied && (
                 <div data-testid="planear-unassigned" style={{ color: C.error, fontWeight: 700, marginTop: 4 }}>
                   {optimizeResult.unassigned} clientes no pudieron entrar en la ruta optimizada.
+                </div>
+              )}
+              {optimizeResult.unassigned > 0 && reloadApplied && (
+                <div data-testid="planear-unassigned-con-recarga" style={{ color: C.warning, fontWeight: 700, marginTop: 4 }}>
+                  Con recarga aplicada, {optimizeResult.unassigned} paradas quedaron sin asignar tras optimizar. Revisa el corte o vuelve a preparar.
                 </div>
               )}
               {optimizeResult.distanceSource && (
@@ -1481,9 +1602,14 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
                   )}
                 </div>
               )}
-              {optimizeResult.unassigned > 0 && (
+              {optimizeResult.unassigned > 0 && !reloadApplied && (
                 <div data-testid="planear-optimizacion-noasignadas" style={{ fontSize: 11.5, fontWeight: 700, color: C.warning, marginTop: 3 }}>
                   {optimizeResult.unassigned} {optimizeResult.unassigned === 1 ? 'cliente no cupo' : 'clientes no cupieron'} en esta unidad
+                </div>
+              )}
+              {reloadApplied && (
+                <div data-testid="planear-optimizacion-recarga" style={{ fontSize: 11.5, fontWeight: 700, color: C.success, marginTop: 3 }}>
+                  Ruta con recarga en CEDIS — los clientes permanecen en la ruta
                 </div>
               )}
               {optimizeResult.revision ? <div style={{ fontSize: 10.5, color: C.textLow, marginTop: 2 }}>Revisión {optimizeResult.revision} — se publica exactamente esta secuencia</div> : null}
