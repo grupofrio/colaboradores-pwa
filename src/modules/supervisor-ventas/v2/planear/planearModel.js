@@ -50,6 +50,8 @@ export function isCapacityOverloadBlocker(text) {
 
 function coverageBlocksPublishing(coverage, { reloadApplied = false } = {}) {
   if (!coverage) return false
+  // Recarga no perdona recursos faltantes: la excepción es SOLO sobrecapacidad.
+  if (coverage.missing_vehicle || coverage.missing_driver || coverage.missing_salesperson) return true
   const state = String(coverage.coverage_state || '').toLowerCase()
   const blockers = Array.isArray(coverage.blockers) ? coverage.blockers.filter(Boolean) : []
   const relevant = reloadApplied
@@ -65,6 +67,20 @@ function coverageBlocksPublishing(coverage, { reloadApplied = false } = {}) {
     return true
   }
   return false
+}
+
+/** Única decisión de recursos para checklist y Preparar: readiness.resourceBlocked. */
+export function shouldHaltPrepareForResources(readiness) {
+  return Boolean(readiness?.resourceBlocked)
+}
+
+export function prepareResourceHaltMessage(readiness) {
+  if (!shouldHaltPrepareForResources(readiness)) return null
+  return readiness?.reasons?.[0] || 'Completa la asignación de recursos antes de preparar la ruta.'
+}
+
+export function resourcesChecklistReady(readiness) {
+  return Boolean(readiness && !readiness.resourceBlocked)
 }
 
 export function routeReadiness(route = {}, customersCount = 0, coverage = null, opts = {}) {

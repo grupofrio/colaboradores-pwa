@@ -16,6 +16,9 @@ import {
   interpretCapacityReloadPreview,
   canApplyCapacityReloadPreview,
   shouldShowCapacityReloadPanel,
+  shouldHaltPrepareForResources,
+  prepareResourceHaltMessage,
+  resourcesChecklistReady,
   preparationAfterCapacityReload,
   canPublishPreparedRoute,
   echoedUnionKeys, shouldShowCombinedSources, runPrepareSequence, runPublishSequence,
@@ -759,6 +762,130 @@ test('capacity-reload I: ruta normal ≤ capacidad sin cambios de flujo', () => 
     reviewState: 'ready',
   })
   assert.equal(ready.ok, true)
+})
+
+const postReloadCoverage = {
+  coverage_state: 'blocked',
+  overcapacity: true,
+  demand_kg: 3517.8,
+  capacity_kg: 3000,
+  missing_vehicle: false,
+  missing_driver: false,
+  missing_salesperson: false,
+  blockers: ['Sobrecapacidad: demanda 3517.8 kg > capacidad 3000.0 kg.'],
+}
+
+test('post-reload resources 1: reloadApplied + solo sobrecapacidad ⇒ Recursos ✓ y Preparar no se detiene', async () => {
+  const r = routeReadiness(
+    { plan_id: 6927, plan_state: 'draft' },
+    64,
+    postReloadCoverage,
+    { reloadApplied: true },
+  )
+  assert.equal(r.resourceBlocked, false)
+  assert.equal(resourcesChecklistReady(r), true)
+  assert.equal(shouldHaltPrepareForResources(r), false)
+  assert.equal(prepareResourceHaltMessage(r), null)
+  let snapshotCalls = 0
+  const prepared = await runPrepareSequence({
+    generateSnapshot: async () => { snapshotCalls += 1; return { ok: true, snapshotId: 1, lineCount: 64 } },
+    runOptimize: async () => ({ revision: 'opt-1', blocked: false, metrics: { revision: 'opt-1', unassigned: 0 } }),
+    runReview: async () => ({ revision: 'rev-1', state: 'ready', failed: false, missingGeo: 0 }),
+  })
+  assert.equal(shouldHaltPrepareForResources(r), false, 'el guard no corta antes de snapshot')
+  assert.equal(snapshotCalls, 1)
+  assert.equal(prepared.complete, true)
+})
+
+test('post-reload resources 2: mismo DTO sin reloadApplied ⇒ blocked', () => {
+  const r = routeReadiness(
+    { plan_id: 6927, plan_state: 'draft' },
+    64,
+    postReloadCoverage,
+    { reloadApplied: false },
+  )
+  assert.equal(r.resourceBlocked, true)
+  assert.equal(resourcesChecklistReady(r), false)
+  assert.equal(shouldHaltPrepareForResources(r), true)
+})
+
+test('post-reload resources 3: reloadApplied + missing_driver ⇒ blocked', () => {
+  const r = routeReadiness(
+    { plan_id: 6927, plan_state: 'draft' },
+    64,
+    { ...postReloadCoverage, missing_driver: true },
+    { reloadApplied: true },
+  )
+  assert.equal(r.resourceBlocked, true)
+  assert.equal(shouldHaltPrepareForResources(r), true)
+})
+
+test('post-reload resources 4: reloadApplied + coverage_state=incomplete ⇒ blocked', () => {
+  const r = routeReadiness(
+    { plan_id: 6927, plan_state: 'draft' },
+    64,
+    { ...postReloadCoverage, coverage_state: 'incomplete', overcapacity: false, blockers: [] },
+    { reloadApplied: true },
+  )
+  assert.equal(r.resourceBlocked, true)
+  assert.equal(shouldHaltPrepareForResources(r), true)
+})
+
+test('post-reload resources 5: reloadApplied + blocker extra de chofer ⇒ blocked', () => {
+  const r = routeReadiness(
+    { plan_id: 6927, plan_state: 'draft' },
+    64,
+    {
+      ...postReloadCoverage,
+      blockers: [
+        'Sobrecapacidad: demanda 3517.8 kg > capacidad 3000.0 kg.',
+        'Falta chofer asignado.',
+      ],
+    },
+    { reloadApplied: true },
+  )
+  assert.equal(r.resourceBlocked, true)
+  assert.equal(shouldHaltPrepareForResources(r), true)
+})
+
+test('post-reload resources 6: ruta normal completa sin recarga ⇒ sin regresión', () => {
+  const r = routeReadiness(
+    { plan_id: 11, plan_state: 'draft' },
+    8,
+    { coverage_state: 'ready', overcapacity: false, demand_kg: 1800, capacity_kg: 3000, blockers: [] },
+  )
+  assert.equal(r.resourceBlocked, false)
+  assert.equal(resourcesChecklistReady(r), true)
+  assert.equal(shouldHaltPrepareForResources(r), false)
+})
+
+test('post-reload resources 7: Preparar usa readiness.resourceBlocked y llega a snapshot', async () => {
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  const prepareFn = tab.slice(tab.indexOf('async function handlePrepareRoute'), tab.indexOf('async function handlePublish') >= 0 ? tab.indexOf('async function handlePublish') : tab.length)
+  assert.match(prepareFn, /shouldHaltPrepareForResources\(readiness\)/)
+  assert.doesNotMatch(prepareFn, /coverage\?\.missing_vehicle/)
+  assert.doesNotMatch(prepareFn, /coverage_state === 'blocked'/)
+  assert.doesNotMatch(prepareFn, /Asigna unidad, chofer y vendedor/)
+  assert.match(prepareFn, /runPrepareSequence/)
+  assert.match(prepareFn, /generateRoutePlanDemandSnapshot/)
+  assert.match(tab, /resourcesChecklistReady\(readiness\)/)
+  assert.doesNotMatch(tab, /coverage\?\.coverage_state === 'ready' \? '✓' : '○' \} Recursos/)
+
+  const r = routeReadiness(
+    { plan_id: 6927, plan_state: 'draft' },
+    64,
+    postReloadCoverage,
+    { reloadApplied: true },
+  )
+  assert.equal(shouldHaltPrepareForResources(r), false)
+  const calls = { snapshot: 0 }
+  const prepared = await runPrepareSequence({
+    generateSnapshot: async () => { calls.snapshot += 1; return { ok: true, snapshotId: 22, lineCount: 64 } },
+    runOptimize: async () => ({ revision: 'opt-r', blocked: false, metrics: { revision: 'opt-r', unassigned: 0 } }),
+    runReview: async () => ({ revision: 'rev-r', state: 'ready', failed: false }),
+  })
+  assert.equal(calls.snapshot, 1, 'click Preparar post-reload llega a generate snapshot')
+  assert.equal(prepared.complete, true)
 })
 
 test('publicación: snapshot + revision + unassigned 0 + geo 0', () => {
