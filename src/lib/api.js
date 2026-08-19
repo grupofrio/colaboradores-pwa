@@ -141,33 +141,6 @@ function getEmployeeToken() {
   return session.odoo_employee_token || session.gf_employee_token || ''
 }
 
-function getSessionSalesOpsToken(session = getSession()) {
-  return session.gf_salesops_token || session.salesops_api_token || session.x_gf_token || ''
-}
-
-export function selectSalesOpsToken({ sessionToken = '', environmentToken = '' } = {}) {
-  const envToken = String(environmentToken || '').trim()
-  const storedSessionToken = String(sessionToken || '').trim()
-  if (envToken) return { token: envToken, source: 'env' }
-  if (storedSessionToken) return { token: storedSessionToken, source: 'session' }
-  return { token: '', source: 'missing' }
-}
-
-function getSalesOpsTokenMeta() {
-  const session = getSession()
-  const sessionToken = getSessionSalesOpsToken(session)
-  const envToken = import.meta?.env?.VITE_GF_SALESOPS_TOKEN || ''
-  const { token, source } = selectSalesOpsToken({ sessionToken, environmentToken: envToken })
-  return {
-    token,
-    present: Boolean(token),
-    length: String(token || '').length,
-    source,
-    session_present: Boolean(sessionToken),
-    env_present: Boolean(envToken),
-  }
-}
-
 function getEmployeeId() {
   const session = getSession()
   return Number(session.employee_id || session.employee?.id || 0) || 0
@@ -247,10 +220,6 @@ function buildBaseHeaders(path = '') {
   if (apiKey) headers['Api-Key'] = apiKey
   const employeeToken = getEmployeeToken()
   if (employeeToken) headers['X-GF-Employee-Token'] = employeeToken
-  if (String(path || '').startsWith('/gf/salesops/')) {
-    const salesOpsMeta = getSalesOpsTokenMeta()
-    if (salesOpsMeta.token) headers['X-GF-Token'] = salesOpsMeta.token
-  }
   return headers
 }
 
@@ -6409,17 +6378,13 @@ async function directAlmacenPT(method, path, body) {
 
   // ── Transfer orchestrate PT→CEDIS (Sebastián commit 16341c5) ─────────────
   if (cleanPath === '/pwa-pt/transfer-orchestrate' && method === 'POST') {
-    const salesOpsMeta = getSalesOpsTokenMeta()
-    // Log operativo (sin metadata de token/credenciales) para debugging de transfers.
+    // Log operativo sin credenciales: Vercel añade el token SalesOps en servidor.
     console.info('[gf_salesops] orchestrate preflight', {
       warehouse_id: body?.warehouse_id || warehouseId,
       cedis_id: body?.destination_warehouse_id || body?.cedis_id || 0,
       employee_id: body?.employee_id || getEmployeeId() || 0,
       lines_count: Array.isArray(body?.lines) ? body.lines.length : 0,
     })
-    if (!salesOpsMeta.token) {
-      throw new Error('Falta configurar X-GF-Token para SalesOps. Revisa gf_salesops.api_token en la PWA.')
-    }
     const envelope = await odooJson('/gf/salesops/pt/transfer/orchestrate', {
       warehouse_id: body?.warehouse_id || warehouseId,
       cedis_id: body?.destination_warehouse_id || body?.cedis_id || 0,

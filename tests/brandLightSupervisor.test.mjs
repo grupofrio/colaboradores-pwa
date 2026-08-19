@@ -125,6 +125,7 @@ test('el login NO toca la lógica de autenticación', () => {
   // La piel cambia; el contrato con Odoo no.
   assert.ok(src.includes('/api-odoo/employee-sign-in'), 'mismo endpoint')
   assert.ok(src.includes('buildSessionFromOdoo'), 'misma construcción de sesión')
+  assert.doesNotMatch(src, /gf_salesops_token|salesops_api_token|x_gf_token/, 'el login no persiste el token global de SalesOps')
   assert.ok(src.includes('handleAdminTap'), 'el bypass de 5 taps sigue ahí')
   assert.match(src, /pin|barcode/i, 'PIN y barcode siguen siendo la entrada')
 })

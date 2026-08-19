@@ -34,7 +34,7 @@ Punto de entrada para sesiones de Claude Code. Lee esto antes de explorar el có
 - `lib/api.js` es un god-object de 6500+ líneas. No agregar más funcionalidad ahí — refactorizar progresivamente.
 - Webhooks de n8n no se re-registran tras `n8n_update_full_workflow`. Toggle manual OFF→ON requerido.
 - Tareas y notas de supervisores viven en `localStorage` (flag `IS_STUB`), no en backend. Migración pendiente (gap G006).
-- Auth NO usa JWT — son tokens opacos (`gf_employee_token`, `gf_salesops_token`) validados contra BD. Ver §4.3 del manual.
+- Auth NO usa JWT — usa un token opaco de empleado validado contra BD; el secreto global de SalesOps vive sólo en el proxy de Vercel. Ver §4.3 del manual.
 
 ## 6. Antes de cualquier sesión
 
