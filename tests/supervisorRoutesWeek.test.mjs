@@ -11,7 +11,8 @@ import {
   resolveArmarZone, canEnsureRoutePlan, deriveSummaryFromRows, cellAssignmentLine, cellAssignAttr,
   countGlyph,
   collectUnmappedPlans, unmappedAttentionLevel, buildSharedPlanIndex, sharedPlanLabel,
-  uniquePublishedPlanCount, assignmentLabel,
+  uniquePublishedPlanCount, assignmentLabel, sortUnmappedPlans, unmappedDateLabel,
+  buildSharedPlanIndexByDate, planIdsFromCell,
 } from '../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -270,15 +271,38 @@ test('P1-04: pre-contrato null ≠ 0 y breakdown sin doble conteo', () => {
   assert.ok(!texts.includes('completar recursos'))
 })
 
-// ── P1 unmapped + shared plan UX (A–G) ───────────────────────────────────────
+// ── P1 unmapped + shared plan UX (A–G) + pre-review corrections ──────────────
 
 const SHARED_PLAN_ID = 6926
 const SHARED_PLAN_NAME = 'RPLAN/2026/00896'
+const TODAY = '2026-08-19'
+const TOMORROW = '2026-08-20'
 
-function sharedPlanRows() {
+function todaySharedRows() {
+  const todayCell = {
+    date: TODAY,
+    has_plan: true,
+    plan_id: SHARED_PLAN_ID,
+    plan_ids: [SHARED_PLAN_ID],
+    plan_name: SHARED_PLAN_NAME,
+    plan_count: 1,
+    assignment_state: 'published',
+  }
+  const emptyTomorrow = { plan_count: 0, plan_ids: [], has_plan: false, assignment_state: 'no_plan' }
+  return [
+    { key: 'SO:13', tipo: 'SO', id: 13, name: 'Recorridos Norte', days: [todayCell], tomorrow: emptyTomorrow },
+    { key: 'SP:40', tipo: 'SP', id: 40, name: 'Iguala NORTE B', days: [todayCell], tomorrow: emptyTomorrow },
+    { key: 'P:14', tipo: 'P', id: 14, name: 'Iguala NORTE', days: [todayCell], tomorrow: emptyTomorrow },
+  ]
+}
+
+function sharedPlanRowsTomorrow() {
   const tomorrow = {
     plan_id: SHARED_PLAN_ID,
+    plan_ids: [SHARED_PLAN_ID],
+    plans_meta: [{ plan_id: SHARED_PLAN_ID, plan_name: SHARED_PLAN_NAME, state: 'published' }],
     plan_name: SHARED_PLAN_NAME,
+    plan_count: 1,
     assignment_state: 'published',
     planning_readiness: 'published',
     assigned: true,
@@ -290,26 +314,82 @@ function sharedPlanRows() {
   ]
 }
 
-test('A: plan SO+SP+P → 3 filas visibles + badge Ruta compartida', () => {
-  const rows = sharedPlanRows()
-  assert.equal(rows.length, 3)
-  const index = buildSharedPlanIndex(rows, { scope: 'tomorrow' })
+test('P1-A TODAY: 6926 solo en hoy → badge en celdas de hoy', () => {
+  const rows = todaySharedRows()
+  const index = buildSharedPlanIndex(rows, { dateIso: TODAY, tomorrowIso: TOMORROW })
   assert.equal(index.get(SHARED_PLAN_ID).row_keys.length, 3)
   for (const row of rows) {
-    assert.match(sharedPlanLabel(row, index, { scope: 'tomorrow' }), /Ruta compartida · RPLAN/)
+    const label = sharedPlanLabel(row, index, { dateIso: TODAY, tomorrowIso: TOMORROW })
+    assert.match(label, /Ruta compartida · RPLAN\/2026\/00896/)
   }
-  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
-  assert.match(m, /rw-shared-plan/)
-  assert.match(m, /sharedPlanLabel/)
 })
 
-test('B: conteo rutas publicadas deduplica por plan_id (1, no 3)', () => {
-  const rows = sharedPlanRows()
+test('P1-A TOMORROW: 6926 solo en hoy → sin badge falso en mañana', () => {
+  const rows = todaySharedRows()
+  const index = buildSharedPlanIndex(rows, { dateIso: TOMORROW, tomorrowIso: TOMORROW })
+  for (const row of rows) {
+    assert.equal(sharedPlanLabel(row, index, { dateIso: TOMORROW, tomorrowIso: TOMORROW }), null)
+  }
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.match(m, /sharedByDate\[cell\.date\]/)
+  assert.doesNotMatch(m, /sharedLabel.*rowName/)
+})
+
+test('A: plan SO+SP+P → 3 filas + badge Ruta compartida (mañana)', () => {
+  const rows = sharedPlanRowsTomorrow()
+  assert.equal(rows.length, 3)
+  const index = buildSharedPlanIndex(rows, { dateIso: TOMORROW, tomorrowIso: TOMORROW })
+  assert.equal(index.get(SHARED_PLAN_ID).row_keys.length, 3)
+  for (const row of rows) {
+    assert.match(sharedPlanLabel(row, index, { dateIso: TOMORROW, tomorrowIso: TOMORROW }), /Ruta compartida · RPLAN/)
+  }
+})
+
+test('B: 1 plan compartido en 3 filas => published unique = 1', () => {
+  const rows = sharedPlanRowsTomorrow()
   const summary = deriveSummaryFromRows(rows, { total: 3 })
   assert.equal(summary.published, 1)
   assert.equal(uniquePublishedPlanCount({ unique_published_plans_tomorrow: 1 }, rows), 1)
-  const exec = executiveSummary({ rows, summary: { ...summary, published_tomorrow: 1, unique_published_plans_tomorrow: 1 } })
-  assert.equal(exec.uniquePublished, 1)
+})
+
+test('P1-B: 2 planes distintos en 1 fila => published unique = 2', () => {
+  const tomorrow = {
+    plan_count: 2,
+    plan_ids: [7001, 7002],
+    plans_meta: [
+      { plan_id: 7001, plan_name: 'RPLAN/A', state: 'published' },
+      { plan_id: 7002, plan_name: 'RPLAN/B', state: 'published' },
+    ],
+    assignment_state: 'published',
+    planning_readiness: 'published',
+  }
+  const rows = [{ key: 'P:14', tipo: 'P', id: 14, name: 'Iguala NORTE', tomorrow }]
+  assert.equal(uniquePublishedPlanCount(null, rows), 2)
+})
+
+test('P1-B: 2 planes, uno compartido con otra fila => unique = 2', () => {
+  const sharedTomorrow = {
+    plan_count: 1,
+    plan_ids: [7001],
+    plans_meta: [{ plan_id: 7001, state: 'published', plan_name: 'RPLAN/S' }],
+    assignment_state: 'published',
+    planning_readiness: 'published',
+  }
+  const dualTomorrow = {
+    plan_count: 2,
+    plan_ids: [7001, 7002],
+    plans_meta: [
+      { plan_id: 7001, state: 'published', plan_name: 'RPLAN/S' },
+      { plan_id: 7002, state: 'published', plan_name: 'RPLAN/T' },
+    ],
+    assignment_state: 'published',
+    planning_readiness: 'published',
+  }
+  const rows = [
+    { key: 'SP:40', tipo: 'SP', id: 40, name: 'Norte B', tomorrow: sharedTomorrow },
+    { key: 'P:14', tipo: 'P', id: 14, name: 'Norte', tomorrow: dualTomorrow },
+  ]
+  assert.equal(uniquePublishedPlanCount(null, rows), 2)
 })
 
 test('C: plan published sin match aparece en unmapped_plans', () => {
@@ -347,12 +427,26 @@ test('E: plan draft unmapped usa severidad menor', () => {
 })
 
 test('F: sin unmapped → UI sin alerta (regresión)', () => {
-  const data = { rows: sharedPlanRows(), unmapped_plans: [] }
+  const data = { rows: sharedPlanRowsTomorrow(), unmapped_plans: [] }
   assert.equal(collectUnmappedPlans(data).length, 0)
   const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
   assert.match(m, /UnmappedPlansAlert/)
   assert.match(m, /if \(!items\.length\) return null/)
   assert.match(m, /Hay rutas que no están ligadas a un plan operativo/)
+})
+
+test('P2: unmapped muestra fecha y orden hoy → mañana → resto', () => {
+  const items = sortUnmappedPlans([
+    { plan_id: 3, date: '2026-08-18' },
+    { plan_id: 1, date: TODAY },
+    { plan_id: 2, date: TOMORROW },
+  ], { todayIso: TODAY, tomorrowIso: TOMORROW })
+  assert.deepEqual(items.map((i) => i.plan_id), [1, 2, 3])
+  assert.match(unmappedDateLabel(TODAY, { todayIso: TODAY, tomorrowIso: TOMORROW }), /^Hoy ·/)
+  assert.match(unmappedDateLabel(TOMORROW, { todayIso: TODAY, tomorrowIso: TOMORROW }), /^Mañana ·/)
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.match(m, /unmappedDateLabel/)
+  assert.match(m, /sortUnmappedPlans/)
 })
 
 test('G: scope — unmapped solo viene del backend branch-scoped (contrato)', () => {
@@ -373,7 +467,9 @@ test('wiring: alerta unmapped + copy operativo en Mis planes de mañana', () => 
   const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
   assert.match(m, /rw-unmapped-alert/)
   assert.match(m, /rw-unmapped-item/)
+  assert.match(m, /Fecha:/)
   assert.match(m, /Vendedor/)
   assert.match(m, /Unidad/)
   assert.match(m, /uniquePublishedPlanCount/)
+  assert.match(m, /data-shared/)
 })

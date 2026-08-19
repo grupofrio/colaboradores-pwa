@@ -13,8 +13,9 @@ import {
   tomorrowSummary, rowName, rowRouteId, rowRequiresRouteSelection, rowZone, TYPE_SHORT,
   executiveSummary, actionPhrase, pendingBreakdown, formatCount, cellAssignmentLine,
   cellAssignAttr, countGlyph, filterMatrixRows, toggleOperationalSelection, tomorrowAction,
-  collectUnmappedPlans, unmappedAttentionLevel, buildSharedPlanIndex, sharedPlanLabel,
-  uniquePublishedPlanCount, assignmentLabel,
+  collectUnmappedPlans, unmappedAttentionLevel, sharedPlanLabel,
+  uniquePublishedPlanCount, assignmentLabel, sortUnmappedPlans, unmappedDateLabel,
+  buildSharedPlanIndexByDate,
 } from './routesWeekModel'
 
 const C = T.colors
@@ -41,7 +42,7 @@ function TypeChip({ tipo }) {
   )
 }
 
-function DayCell({ cell, todayIso }) {
+function DayCell({ cell, todayIso, sharedLabel }) {
   const tone = cellTone(cell, todayIso)
   const color = TONE_COLOR[tone] || C.textMuted
   const has = cell?.has_plan
@@ -49,9 +50,10 @@ function DayCell({ cell, todayIso }) {
   return (
     <td data-testid="rw-cell" data-tone={tone} data-assign={cellAssignAttr(cell)}
       data-today={isCurrentDay(cell, todayIso) ? '1' : undefined}
+      data-shared={sharedLabel ? '1' : undefined}
       style={{ textAlign: 'center', padding: '6px 4px', borderTop: `1px solid ${C.border}`, minWidth: 56 }}>
       <div
-        title={`${toneWord(tone)} · ${assign}`}
+        title={`${toneWord(tone)} · ${assign}${sharedLabel ? ` · ${sharedLabel}` : ''}`}
         style={{
           minWidth: 52, minHeight: 52, margin: '0 auto', borderRadius: 10, padding: '4px 2px',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
@@ -61,13 +63,18 @@ function DayCell({ cell, todayIso }) {
       >
         <span style={{ fontSize: 12, fontWeight: 800, color: has ? C.text : C.textMuted }}>{cellLabel(cell)}</span>
         <span style={{ fontSize: 8, fontWeight: 700, color }}>{toneWord(tone)}</span>
+        {sharedLabel ? (
+          <span data-testid="rw-shared-plan" style={{ fontSize: 7, fontWeight: 700, color: C.textMuted, lineHeight: 1.1 }}>
+            {sharedLabel}
+          </span>
+        ) : null}
         {assign ? <span style={{ fontSize: 8, fontWeight: 700, color: C.textMuted }}>{assign}</span> : null}
       </div>
     </td>
   )
 }
 
-function UnmappedPlansAlert({ items }) {
+function UnmappedPlansAlert({ items, todayIso, tomorrowIso }) {
   if (!items.length) return null
   return (
     <div
@@ -101,6 +108,7 @@ function UnmappedPlansAlert({ items }) {
               }}
             >
               <div style={{ display: 'grid', gap: 2, fontSize: 12.5, color: C.text }}>
+                <div><strong>Fecha:</strong> {unmappedDateLabel(item.date, { todayIso, tomorrowIso })}</div>
                 <div><strong>Ruta:</strong> {routeName}</div>
                 <div><strong>Vendedor:</strong> {vendor}</div>
                 <div><strong>Unidad:</strong> {unit}</div>
@@ -185,15 +193,25 @@ export default function RutasMananaMatriz({ onOpenRoute, onArmarSources }) {
   useEffect(() => load(), [load])
 
   const summary = useMemo(() => executiveSummary(state.data || {}), [state.data])
-  const unmappedPlans = useMemo(() => collectUnmappedPlans(state.data || {}), [state.data])
+  const todayIso = useMemo(() => todayFromTomorrow(state.data?.tomorrow), [state.data?.tomorrow])
+  const unmappedPlans = useMemo(
+    () => sortUnmappedPlans(collectUnmappedPlans(state.data || {}), {
+      todayIso,
+      tomorrowIso: state.data?.tomorrow,
+    }),
+    [state.data, todayIso],
+  )
   const visibleRows = useMemo(
     () => filterMatrixRows(state.data?.rows || [], filter),
     [state.data, filter],
   )
-  const todayIso = useMemo(() => todayFromTomorrow(state.data?.tomorrow), [state.data?.tomorrow])
-  const sharedPlanIndex = useMemo(
-    () => buildSharedPlanIndex(state.data?.rows || [], { scope: 'tomorrow', todayIso }),
-    [state.data, todayIso],
+  const sharedByDate = useMemo(
+    () => buildSharedPlanIndexByDate(
+      state.data?.rows || [],
+      state.data?.week?.days || [],
+      state.data?.tomorrow,
+    ),
+    [state.data],
   )
   const publishedUnique = useMemo(
     () => uniquePublishedPlanCount(state.data?.summary, state.data?.rows),
@@ -260,7 +278,7 @@ export default function RutasMananaMatriz({ onOpenRoute, onArmarSources }) {
   const totalLabel = formatCount(summary.total)
   return shell(
     <>
-      <UnmappedPlansAlert items={unmappedPlans} />
+      <UnmappedPlansAlert items={unmappedPlans} todayIso={todayIso} tomorrowIso={data.tomorrow} />
 
       <div data-testid="rw-resumen" style={{
         display: 'grid', gap: 10, padding: 14, border: `1px solid ${C.border}`,
@@ -341,7 +359,11 @@ export default function RutasMananaMatriz({ onOpenRoute, onArmarSources }) {
           <tbody>
             {visibleRows.map((row) => {
               const on = selected.some((s) => s.key === row.key)
-              const sharedLabel = sharedPlanLabel(row, sharedPlanIndex, { scope: 'tomorrow', todayIso })
+              const tomorrowShared = sharedPlanLabel(
+                row,
+                sharedByDate[data.tomorrow],
+                { dateIso: data.tomorrow, tomorrowIso: data.tomorrow },
+              )
               return (
                 <tr key={row.key} data-testid="rw-row" data-selected={on ? '1' : '0'}>
                   <td style={{ padding: '6px 10px', borderTop: `1px solid ${C.border}`, position: 'sticky', left: 0, background: on ? 'rgba(0,119,187,0.06)' : C.surface, minWidth: 188, zIndex: 1 }}>
@@ -356,11 +378,6 @@ export default function RutasMananaMatriz({ onOpenRoute, onArmarSources }) {
                       <span>
                         <div style={{ marginBottom: 2 }}><TypeChip tipo={row.tipo} /></div>
                         <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>{rowName(row)}</div>
-                        {sharedLabel ? (
-                          <div data-testid="rw-shared-plan" style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, marginTop: 2 }}>
-                            {sharedLabel}
-                          </div>
-                        ) : null}
                         {row.weekly_coverage_pct != null ? (
                           <div style={{ fontSize: 10.5, color: C.textMuted }}>Semana: {row.weekly_coverage_pct}%</div>
                         ) : (
@@ -369,8 +386,22 @@ export default function RutasMananaMatriz({ onOpenRoute, onArmarSources }) {
                       </span>
                     </label>
                   </td>
-                  {(row.days || []).map((cell) => <DayCell key={cell.date} cell={cell} todayIso={todayIso} />)}
-                  <TomorrowCell row={row} onOpen={open} sharedLabel={sharedLabel} />
+                  {(row.days || []).map((cell) => {
+                    const dayShared = sharedPlanLabel(
+                      row,
+                      sharedByDate[cell.date],
+                      { dateIso: cell.date, tomorrowIso: data.tomorrow },
+                    )
+                    return (
+                      <DayCell
+                        key={cell.date}
+                        cell={cell}
+                        todayIso={todayIso}
+                        sharedLabel={dayShared}
+                      />
+                    )
+                  })}
+                  <TomorrowCell row={row} onOpen={open} sharedLabel={tomorrowShared} />
                 </tr>
               )
             })}
