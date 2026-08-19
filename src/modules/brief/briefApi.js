@@ -127,6 +127,10 @@ export async function fetchBriefHtml({ session, brief, date = '', fetchImpl, sig
   const status = Number(res?.status) || 0
   if (status === 401) return fail(BRIEF_STATE.UNAUTHORIZED, 'unauthorized', status)
   if (status === 403) return fail(BRIEF_STATE.FORBIDDEN, 'forbidden', status)
+  if (status === 503) {
+    // n8n auth gate: "brief authorization unavailable" when token lookup fails.
+    return fail(BRIEF_STATE.UNAVAILABLE, 'brief_authorization_unavailable', status)
+  }
   if (!res?.ok) return fail(BRIEF_STATE.UNAVAILABLE, 'http_error', status)
 
   // Un 200 con JSON es un error disfrazado (n8n responde 200 por defecto en

@@ -156,6 +156,46 @@ test('401 → unauthorized · 403 → forbidden (no se colapsan en un error gen�
   assert.equal(r403.html, '')
 })
 
+test('503 brief authorization unavailable → UNAVAILABLE con reason específico (contrato n8n)', async () => {
+  const result = await fetchBriefHtml({
+    session: SESSION,
+    brief: GERENCIA,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 503,
+      headers: { get: () => 'text/plain; charset=utf-8' },
+      text: async () => 'brief authorization unavailable',
+    }),
+  })
+  assert.equal(result.state, BRIEF_STATE.UNAVAILABLE)
+  assert.equal(result.reason, 'brief_authorization_unavailable')
+  assert.equal(result.status, 503)
+  assert.equal(result.html, '')
+})
+
+test('contrato briefs: 200 text/html es el único éxito montable', async () => {
+  const ok = await fetchBriefHtml({
+    session: SESSION,
+    brief: PRODUCCION,
+    fetchImpl: async () => okResponse('<html><body>ok</body></html>'),
+  })
+  assert.equal(ok.state, BRIEF_STATE.OK)
+  assert.match(ok.html, /<html>/)
+
+  const badType = await fetchBriefHtml({
+    session: SESSION,
+    brief: PRODUCCION,
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      headers: JSON_HEADERS,
+      text: async () => JSON.stringify({ ok: false }),
+    }),
+  })
+  assert.equal(badType.state, BRIEF_STATE.UNAVAILABLE)
+  assert.equal(badType.reason, 'bad_content_type')
+})
+
 test('un 401/403 se pide UNA vez: sin reintento en bucle', async () => {
   for (const status of [401, 403]) {
     let calls = 0
