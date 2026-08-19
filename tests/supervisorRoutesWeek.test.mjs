@@ -10,6 +10,8 @@ import {
   filterMatrixRows, isReadyTomorrow, encodeSourcesParam, decodeSourcesParam, zoneFromSources,
   resolveArmarZone, canEnsureRoutePlan, deriveSummaryFromRows, cellAssignmentLine, cellAssignAttr,
   countGlyph,
+  collectUnmappedPlans, unmappedAttentionLevel, buildSharedPlanIndex, sharedPlanLabel,
+  uniquePublishedPlanCount, assignmentLabel,
 } from '../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -266,4 +268,112 @@ test('P1-04: pre-contrato null ≠ 0 y breakdown sin doble conteo', () => {
   assert.ok(texts.includes('por asignar'))
   assert.ok(!texts.includes('todavía no tiene'))
   assert.ok(!texts.includes('completar recursos'))
+})
+
+// ── P1 unmapped + shared plan UX (A–G) ───────────────────────────────────────
+
+const SHARED_PLAN_ID = 6926
+const SHARED_PLAN_NAME = 'RPLAN/2026/00896'
+
+function sharedPlanRows() {
+  const tomorrow = {
+    plan_id: SHARED_PLAN_ID,
+    plan_name: SHARED_PLAN_NAME,
+    assignment_state: 'published',
+    planning_readiness: 'published',
+    assigned: true,
+  }
+  return [
+    { key: 'SO:13', tipo: 'SO', id: 13, name: 'Recorridos Norte', tomorrow },
+    { key: 'SP:40', tipo: 'SP', id: 40, name: 'Iguala NORTE B', tomorrow },
+    { key: 'P:14', tipo: 'P', id: 14, name: 'Iguala NORTE', tomorrow },
+  ]
+}
+
+test('A: plan SO+SP+P → 3 filas visibles + badge Ruta compartida', () => {
+  const rows = sharedPlanRows()
+  assert.equal(rows.length, 3)
+  const index = buildSharedPlanIndex(rows, { scope: 'tomorrow' })
+  assert.equal(index.get(SHARED_PLAN_ID).row_keys.length, 3)
+  for (const row of rows) {
+    assert.match(sharedPlanLabel(row, index, { scope: 'tomorrow' }), /Ruta compartida · RPLAN/)
+  }
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.match(m, /rw-shared-plan/)
+  assert.match(m, /sharedPlanLabel/)
+})
+
+test('B: conteo rutas publicadas deduplica por plan_id (1, no 3)', () => {
+  const rows = sharedPlanRows()
+  const summary = deriveSummaryFromRows(rows, { total: 3 })
+  assert.equal(summary.published, 1)
+  assert.equal(uniquePublishedPlanCount({ unique_published_plans_tomorrow: 1 }, rows), 1)
+  const exec = executiveSummary({ rows, summary: { ...summary, published_tomorrow: 1, unique_published_plans_tomorrow: 1 } })
+  assert.equal(exec.uniquePublished, 1)
+})
+
+test('C: plan published sin match aparece en unmapped_plans', () => {
+  const orphan = {
+    plan_id: 6930,
+    plan_name: 'RPLAN/2026/00900',
+    date: '2026-08-19',
+    state: 'published',
+    assignment_state: 'published',
+    route: { id: 15, name: 'MANUEL CRUZ ARMENTA' },
+    vehicle: { id: 10, name: 'NP300' },
+    salesperson: { id: 682, name: 'MANUEL CRUZ ARMENTA' },
+  }
+  const data = { rows: [{ key: 'SO:13', tipo: 'SO', id: 13, name: 'Recorridos Norte', tomorrow: {} }], unmapped_plans: [orphan] }
+  const list = collectUnmappedPlans(data)
+  assert.equal(list.length, 1)
+  assert.equal(list[0].plan_id, 6930)
+  assert.equal(unmappedAttentionLevel(list[0]), 'high')
+})
+
+test('D: unmapped NO crea fila operativa SO/SP/P', () => {
+  const data = {
+    rows: [{ key: 'SO:13', tipo: 'SO', id: 13, name: 'Recorridos Norte', tomorrow: { assignment_state: 'no_plan' } }],
+    unmapped_plans: [{ plan_id: 6930, state: 'published', route: { name: 'X' } }],
+  }
+  assert.equal(data.rows.length, 1)
+  assert.equal(collectUnmappedPlans(data).length, 1)
+  assert.ok(!data.rows.some((r) => r.tipo === 'unmapped'))
+})
+
+test('E: plan draft unmapped usa severidad menor', () => {
+  const draft = { plan_id: 99, state: 'draft', assignment_state: 'unassigned' }
+  assert.equal(unmappedAttentionLevel(draft), 'low')
+  assert.equal(unmappedAttentionLevel({ state: 'published' }), 'high')
+})
+
+test('F: sin unmapped → UI sin alerta (regresión)', () => {
+  const data = { rows: sharedPlanRows(), unmapped_plans: [] }
+  assert.equal(collectUnmappedPlans(data).length, 0)
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.match(m, /UnmappedPlansAlert/)
+  assert.match(m, /if \(!items\.length\) return null/)
+  assert.match(m, /Hay rutas que no están ligadas a un plan operativo/)
+})
+
+test('G: scope — unmapped solo viene del backend branch-scoped (contrato)', () => {
+  const data = {
+    rows: [],
+    unmapped_plans: [{ plan_id: 1, date: '2026-08-19', route: { name: 'Local' } }],
+    data_notes: { scope: 'branch_config_id == 29' },
+  }
+  assert.equal(collectUnmappedPlans(data).length, 1)
+  const api = src('modules/supervisor-ventas/api.js')
+  assert.match(api, /routes-week/)
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.doesNotMatch(m, /unmapped_plans.*filter.*branch/)
+  assert.match(m, /collectUnmappedPlans/)
+})
+
+test('wiring: alerta unmapped + copy operativo en Mis planes de mañana', () => {
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.match(m, /rw-unmapped-alert/)
+  assert.match(m, /rw-unmapped-item/)
+  assert.match(m, /Vendedor/)
+  assert.match(m, /Unidad/)
+  assert.match(m, /uniquePublishedPlanCount/)
 })

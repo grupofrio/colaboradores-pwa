@@ -320,6 +320,7 @@ export function executiveSummary(data) {
     incomplete: incomplete ?? derived?.incomplete ?? null,
     blocked: blocked ?? derived?.blocked ?? null,
     published: published ?? derived?.published ?? null,
+    uniquePublished: asCount(s?.unique_published_plans_tomorrow) ?? published ?? derived?.published ?? null,
     toAssign: toAssign ?? derived?.toAssign ?? null,
     toPrepare: toPrepare ?? derived?.toPrepare ?? null,
     assigned: assigned ?? derived?.assigned ?? null,
@@ -346,6 +347,7 @@ export function deriveSummaryFromRows(rows, counts = {}) {
   let readyToPublish = 0
   let weekGaps = 0
   const cov = []
+  const publishedPlanIds = new Set()
   for (const row of list) {
     const prep = row?.tomorrow?.planning_readiness
     const state = prep
@@ -356,7 +358,10 @@ export function deriveSummaryFromRows(rows, counts = {}) {
     if (state === 'no_plan') noPlan += 1
     else if (state === 'blocked') blocked += 1
     else if (state === 'unassigned') incomplete += 1
-    if (state === 'published') published += 1
+    if (state === 'published') {
+      const pid = Number(row?.tomorrow?.plan_id || 0) || 0
+      if (pid) publishedPlanIds.add(pid)
+    }
     if (state === 'ready_to_publish') readyToPublish += 1
     if ((row?.days || []).some((c) => !c?.has_plan)) weekGaps += 1
     if (row?.weekly_coverage_pct != null) cov.push(Number(row.weekly_coverage_pct))
@@ -369,7 +374,8 @@ export function deriveSummaryFromRows(rows, counts = {}) {
     noPlan,
     incomplete,
     blocked,
-    published: hasPrep || hasAssign ? published : null,
+    published: hasPrep || hasAssign ? publishedPlanIds.size : null,
+    uniquePublished: hasPrep || hasAssign ? publishedPlanIds.size : null,
     assigned,
     readyToPublish: hasPrep ? readyToPublish : null,
     toAssign,
@@ -436,6 +442,70 @@ export function countGlyph(n, { zeroGood = false } = {}) {
   if (n == null || !Number.isFinite(Number(n))) return '○'
   if (zeroGood) return Number(n) === 0 ? '✓' : '⚠'
   return Number(n) > 0 ? '✓' : '○'
+}
+
+/** Planes branch-scoped sin fila SO/SP/P (contrato aditivo routes-week). */
+export function collectUnmappedPlans(data) {
+  const list = data?.unmapped_plans
+  return Array.isArray(list) ? list : []
+}
+
+const HIGH_ATTENTION_STATES = new Set(['published', 'in_progress', 'closed'])
+
+/** Severidad visual de un plan no mapeado. */
+export function unmappedAttentionLevel(item) {
+  const state = String(item?.state || item?.assignment_state || '').toLowerCase()
+  return HIGH_ATTENTION_STATES.has(state) ? 'high' : 'low'
+}
+
+/** Índice plan_id → filas que lo comparten en mañana (o celda de hoy). */
+export function buildSharedPlanIndex(rows, { scope = 'tomorrow', todayIso = null } = {}) {
+  const index = new Map()
+  for (const row of rows || []) {
+    const cell = scope === 'tomorrow'
+      ? row?.tomorrow
+      : (row?.days || []).find((c) => todayIso && String(c?.date) === String(todayIso))
+    const planId = Number(cell?.plan_id || 0) || 0
+    if (!planId) continue
+    const entry = index.get(planId) || {
+      plan_id: planId,
+      plan_name: cell?.plan_name || null,
+      row_keys: [],
+    }
+    if (cell?.plan_name && !entry.plan_name) entry.plan_name = cell.plan_name
+    entry.row_keys.push(row.key || `${row.tipo}:${row.id}`)
+    index.set(planId, entry)
+  }
+  return index
+}
+
+/** Etiqueta discreta cuando varias filas operativas comparten el mismo plan. */
+export function sharedPlanLabel(row, sharedIndex, { scope = 'tomorrow', todayIso = null } = {}) {
+  const cell = scope === 'tomorrow'
+    ? row?.tomorrow
+    : (row?.days || []).find((c) => todayIso && String(c?.date) === String(todayIso))
+  const planId = Number(cell?.plan_id || 0) || 0
+  if (!planId) return null
+  const entry = sharedIndex?.get?.(planId)
+  if (!entry || entry.row_keys.length < 2) return null
+  const name = entry.plan_name || `Plan ${planId}`
+  return `Ruta compartida · ${name}`
+}
+
+/** Rutas físicas publicadas mañana (deduplicadas por plan_id). */
+export function uniquePublishedPlanCount(summary, rows = []) {
+  const fromSummary = asCount(summary?.unique_published_plans_tomorrow)
+    ?? asCount(summary?.published)
+  if (fromSummary != null) return fromSummary
+  const ids = new Set()
+  for (const row of rows || []) {
+    const t = row?.tomorrow || {}
+    const state = t.planning_readiness || t.assignment_state
+    if (state !== 'published') continue
+    const pid = Number(t.plan_id || 0) || 0
+    if (pid) ids.add(pid)
+  }
+  return ids.size || null
 }
 
 export function cellAssignmentLine(cell) {
