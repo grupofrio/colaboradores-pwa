@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { getPosCatalog, searchCustomers, getDefaultCustomer, createSaleOrder } from './api'
 import { AdminProvider } from './AdminContext'
@@ -458,7 +459,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
               background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(15,42,61,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -489,7 +490,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: '2px solid rgba(15,42,61,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <>
@@ -605,7 +606,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
                 />
                 {searchingCustomer && (
                   <div style={{ display: 'flex', justifyContent: 'center', padding: 10 }}>
-                    <div style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    <div style={{ width: 18, height: 18, border: '2px solid rgba(15,42,61,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                   </div>
                 )}
                 {customerResults.map(c => (

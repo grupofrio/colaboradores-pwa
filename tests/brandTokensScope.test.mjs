@@ -42,7 +42,18 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
     // y detrás del flag gerente_v2 (fail-closed, default OFF). Mismo patrón
     // que supervisor-ventas/v2: un árbol de rutas exclusivo del rol puede
     // adoptar el tema claro sin conmutar por sesión.
-    if (f.startsWith('modules/supervisor-ventas/') || f.startsWith('modules/gerente/v2/') || f.startsWith('theme/')) continue
+    //
+    // modules/admin/**: Admin Sucursal (ModuleRoleRoute moduleId="admin_sucursal",
+    // roles auxiliar_admin/gerente_sucursal/direccion_general) — mismo patrón:
+    // árbol de rutas exclusivo de esos 3 roles, tema claro incondicional desde
+    // 2026-08-19 (reemplaza el hack de filter:invert() que causaba el bug de
+    // texto ilegible). Ver ADMIN_THEME_SCOPE_STYLE en adminTheme.js.
+    if (
+      f.startsWith('modules/supervisor-ventas/')
+      || f.startsWith('modules/gerente/v2/')
+      || f.startsWith('modules/admin/')
+      || f.startsWith('theme/')
+    ) continue
 
     // Un archivo COMPARTIDO puede usar el tema claro, pero solo si lo elige por
     // ROL en tiempo de ejecución (la nav global es el caso: la ve todo mundo).
@@ -221,9 +232,15 @@ test('los estados del semáforo son legibles sobre claro', async () => {
 
 test('no quedan restos del tema oscuro en las vistas convertidas', () => {
   const OSCUROS = /#c084fc|rgba\(255,\s*255,\s*255,\s*0\.(3|5)/
+  // Excepción angosta: el aro del spinner DENTRO de un botón con degradado azul
+  // (ScreenPOS.jsx / ScreenRequisiciones.jsx, botón "Confirmar"/"Crear
+  // Requisicion") es blanco a propósito en cualquier tema — el fondo del botón
+  // sigue siendo azul, no la página. No es un resto del tema oscuro.
+  const BUTTON_SPINNER = /border: '2px solid rgba\(255,255,255,0\.3\)', borderTop: '2px solid white'/g
   for (const f of LIGHT_FILES) {
     if (f.startsWith('theme/')) continue
     const src = readFileSync(path.join(SRC, f), 'utf8')
+      .replace(BUTTON_SPINNER, '')
     assert.ok(!OSCUROS.test(src), `${f} conserva colores pensados para fondo oscuro`)
   }
 })

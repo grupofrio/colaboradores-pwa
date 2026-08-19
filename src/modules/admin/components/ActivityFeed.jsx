@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { getTodayExpenses, getTodayMpTransfers, getTodaySales } from '../api'
 import { buildModuleActivityFeed, resolveActivityFeedScope } from '../activityFeedModel'
@@ -93,7 +93,7 @@ export default function ActivityFeed({ moduleId = 'hub', variant = 'sidebar' }) 
       {loading && events.length === 0 ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
           <div style={{
-            width: 22, height: 22, border: '2px solid rgba(255,255,255,0.12)',
+            width: 22, height: 22, border: '2px solid rgba(15,42,61,0.12)',
             borderTop: '2px solid #2B8FE0', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }} />

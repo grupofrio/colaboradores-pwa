@@ -6,7 +6,7 @@
 //   GET  /pwa-admin/requisition-receipt-detail?id=PO_ID
 //   POST /pwa-admin/requisition-receive { id, lines: [{move_id, receive_now_qty}] }
 import { useEffect, useState, useCallback } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { getRequisitionReceiptDetail, receiveRequisitionProducts } from '../api'
 import {
   buildEditableReceiptLines,
@@ -20,7 +20,7 @@ function Spinner() {
     <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
       <div style={{
         width: 26, height: 26,
-        border: '2px solid rgba(255,255,255,0.12)',
+        border: '2px solid rgba(15,42,61,0.12)',
         borderTop: '2px solid #2B8FE0',
         borderRadius: '50%',
         animation: 'spin 0.8s linear infinite',

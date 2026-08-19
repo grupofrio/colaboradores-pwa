@@ -2,7 +2,7 @@
 // Muestra los movimientos (stock.move) de un producto en un rango de fechas
 // vía GET /pwa-admin/materia-prima/moves?product_id&company_id&warehouse_id&date_from&date_to
 import { useEffect, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { getMpMoves } from '../api'
 import { localDateString } from '../../../lib/api'
 
@@ -187,7 +187,7 @@ export default function MpKardexModal({ product, companyId, warehouseId, onClose
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 50 }}>
               <div style={{
-                width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)',
+                width: 28, height: 28, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />

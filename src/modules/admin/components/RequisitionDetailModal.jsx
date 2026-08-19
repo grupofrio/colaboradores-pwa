@@ -6,7 +6,7 @@
 // Muestra líneas (product, qty, price_unit, subtotal), estado y totales.
 // Permite cancelar si el estado es `draft` o `sent`.
 import { useEffect, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { getRequisitionDetail, cancelRequisition } from '../api'
 import { BACKEND_CAPS } from '../adminService'
 import {
@@ -151,7 +151,7 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 50 }}>
             <div style={{
-              width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)',
+              width: 28, height: 28, border: '2px solid rgba(15,42,61,0.12)',
               borderTop: '2px solid #2B8FE0', borderRadius: '50%',
               animation: 'spin 0.8s linear infinite',
             }} />

@@ -7,7 +7,7 @@
 //   · Validación cross-company en el backend; acá sólo seleccionamos cuentas
 //     que ya vienen filtradas por company_id de la razón social activa.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import {
   getTodayExpenses,
@@ -690,7 +690,7 @@ export default function AdminGastosForm() {
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 30 }}>
               <div style={{
-                width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)',
+                width: 24, height: 24, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />

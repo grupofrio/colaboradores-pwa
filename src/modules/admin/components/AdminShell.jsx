@@ -9,9 +9,8 @@
 // En <1024px cae a columna única centrada (fallback mobile).
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS as DARK_TOKENS, getTypo } from '../../../tokens'
-import { BRAND_TOKENS } from '../../../theme/brandTokens'
-import { isGerenteBrandSurface } from '../../../theme/gerenteBrandSurface.js'
+import { getTypo } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { useSession } from '../../../App'
 import { getEffectiveJobKeys } from '../../../lib/roleContext'
@@ -89,9 +88,7 @@ export default function AdminShell({
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const typo = useMemo(() => getTypo(sw), [sw])
   const isDesktop = sw >= 1024
-  const brandLight = isGerenteBrandSurface(session)
-  const TOKENS = brandLight ? BRAND_TOKENS : DARK_TOKENS
-  const iconStroke = brandLight ? 'rgba(15,42,61,0.7)' : 'rgba(255,255,255,0.7)'
+  const iconStroke = 'rgba(15,42,61,0.7)'
   // Feed de actividad (320px) solo con ancho holgado: bajo 1366px el rail
   // global compacto (76px) + sidebar interno (220px) + feed dejarían el
   // contenido comprimido (hallazgo Codex PR #66 — triple panel a 1024–1280).

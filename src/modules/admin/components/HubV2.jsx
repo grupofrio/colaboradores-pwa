@@ -3,7 +3,7 @@
 //   - Tira de KPIs del día (filtrados por razón social activa)
 //   - Actividad del día en el flujo principal
 import { useEffect, useMemo, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { getDashboardData } from '../adminService'
 import { isAngelicaJaimesSession } from '../angyPosSalesBreakdown'
