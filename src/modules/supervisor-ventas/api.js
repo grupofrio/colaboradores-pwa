@@ -1,29 +1,28 @@
 // ─── API Supervisor de Ventas ────────────────────────────────────────────────
 // Capa de endpoints para el módulo Supervisor de Ventas V2.
 //
-// ESTADO ACTUAL (2026-04-09):
-// Todos los endpoints se resuelven via directSupervisorVentas() en lib/api.js
-// como queries JSON-RPC directas a Odoo (readModelSorted / createUpdate).
+// TOKEN CONTRACT (Sebastián P1):
+// - X-GF-Employee-Token = credencial autoritativa de Employee Mobile Session
+//   para Supervisora (identidad + rol + sucursal). Lo envía `api()`/`odooJson`
+//   vía buildBaseHeaders.
+// - Authorization: Bearer = token local/general de sesión PWA (transporte).
+//   NO es equivalente al employee token; NO se promociona a autoridad.
 //
-// CUANDO SEBASTIÁN SUBA gf_saleops/controllers/supervisor.py:
-// Estas funciones NO necesitan cambiar — api() rutea automáticamente.
-// Los controllers deben exponer las mismas rutas /pwa-supv/*.
-//
-// SCOPE:
-// - company_id se extrae de la sesión automáticamente en lib/api.js
-// - employee_id se pasa explícitamente donde aplica (forecast, kpi)
+// SCOPE (team / team-routes / route-templates):
+// Server-authoritative vía /gf/salesops/supervisor/v2/*. El cliente NO manda
+// employee_id / company_id / warehouse_id / analytic para autoridad.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { api, todayLocal } from '../../lib/api.js'
 
 // ── Dashboard / Equipo ───────────────────────────────────────────────────────
 
-/** Lista de vendedores del equipo (filtra por company_id de sesión) */
+/** Lista de vendedores del equipo (scope server-side por token). */
 export function getTeam() {
   return api('GET', '/pwa-supv/team')
 }
 
-/** Rutas del equipo para una fecha (default: hoy) */
+/** Rutas del equipo para una fecha (default: hoy operativo server-side). */
 export function getTeamRoutes(date) {
   const qs = date ? `?date=${date}` : ''
   return api('GET', `/pwa-supv/team-routes${qs}`)

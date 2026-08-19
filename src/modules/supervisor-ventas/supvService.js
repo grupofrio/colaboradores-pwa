@@ -93,7 +93,7 @@ export async function getDayOverview(date) {
   ] = await Promise.allSettled([
     api('GET', '/pwa-supv/team'),
     api('GET', `/pwa-supv/team-routes?date=${dateStr}`),
-    api('GET', '/pwa-supv/team-targets'),
+    api('GET', `/pwa-supv/team-targets?date=${dateStr}`),
     api('GET', `/pwa-supv/month-sales-summary?date=${dateStr}`),
     getPendingLiquidations({ companyId, warehouseId }),
     getLiquidationsHistory({
