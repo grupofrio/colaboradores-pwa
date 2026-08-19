@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import {
   buildRouteFormatsViewModel,
   formatRouteMoney,

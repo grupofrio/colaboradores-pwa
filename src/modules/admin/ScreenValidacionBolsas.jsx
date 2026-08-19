@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { useSession } from '../../App'
 import { logScreenError } from '../shared/logScreenError'
 import { getPendingBagCustody, validateBagCustody, computeBagDifference } from '../almacen-pt/bagCustodyService'
@@ -48,7 +49,7 @@ function MobileValidacionBolsas() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(15,42,61,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -336,7 +337,7 @@ function ValidacionBolsasContent() {
               }}>
                 {item.state === 'declared_by_worker' ? 'DECLARADO' : 'EMITIDO'}
               </span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(15,42,61,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 18l6-6-6-6"/>
               </svg>
             </div>
@@ -359,7 +360,7 @@ function Row({ label, value, typo, accent }) {
 function Spinner() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-      <div style={{ width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: '2px solid rgba(15,42,61,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
     </div>
   )
 }

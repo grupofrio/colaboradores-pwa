@@ -14,7 +14,7 @@
 //   │                   │  · Validar          │
 //   └───────────────────┴─────────────────────┘
 import { useEffect, useMemo, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import {
   getPendingLiquidations,
@@ -282,7 +282,7 @@ export default function AdminLiquidacionesForm() {
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}>
               <div style={{
-                width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)',
+                width: 24, height: 24, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
@@ -363,7 +363,7 @@ export default function AdminLiquidacionesForm() {
           ) : detailLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
               <div style={{
-                width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)',
+                width: 28, height: 28, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
@@ -712,7 +712,7 @@ function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}>
               <div style={{
-                width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)',
+                width: 24, height: 24, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
@@ -794,7 +794,7 @@ function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null
           ) : detailLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
               <div style={{
-                width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)',
+                width: 28, height: 28, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />

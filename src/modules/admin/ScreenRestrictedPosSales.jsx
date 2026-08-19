@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ErrorState, EmptyState, Loader } from '../../components/Loader'
-import { TOKENS } from '../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import {
   getPosSaleStateLabel,
   normalizeRestrictedPosSalesResponse,

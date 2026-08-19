@@ -6,7 +6,7 @@
 // La razón social activa viene del AdminContext (top bar). Los demás
 // filtros están controlados localmente.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { getExpensesHistory } from '../api'
 import { localDateString } from '../../../lib/api'
@@ -304,7 +304,7 @@ export default function AdminHistorialGastosView() {
         {loading ? (
           <div style={{ padding: '40px 0', display: 'flex', justifyContent: 'center' }}>
             <div style={{
-              width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)',
+              width: 28, height: 28, border: '2px solid rgba(15,42,61,0.12)',
               borderTop: '2px solid #2B8FE0', borderRadius: '50%',
               animation: 'spin 0.8s linear infinite',
             }} />

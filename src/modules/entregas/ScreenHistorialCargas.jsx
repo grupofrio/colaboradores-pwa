@@ -2,22 +2,23 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useSession } from '../../App'
 import { softWarehouse } from '../../lib/sessionGuards'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
 import SessionErrorState from '../../components/SessionErrorState'
 import { getVanLoadHistory } from './entregasService'
 import { buildVanLoadHistorySummary, groupVanLoadHistoryByVan, mexicoTodayDateKey } from './vanLoadHistory'
 import { ScreenShell, EmptyState } from './components'
 import { AdminProvider } from '../admin/AdminContext'
 import AdminShell from '../admin/components/AdminShell'
+import { getHistorialCargasTheme } from './historialCargasTheme.js'
 
-function Spinner() {
+function Spinner({ tokens }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 48 }}>
       <div style={{
         width: 32,
         height: 32,
-        border: '2px solid rgba(255,255,255,0.12)',
-        borderTop: `2px solid ${TOKENS.colors.blue2}`,
+        border: `2px solid ${tokens.colors.spinnerTrack}`,
+        borderTop: `2px solid ${tokens.colors.blue2}`,
         borderRadius: '50%',
         animation: 'spin 0.8s linear infinite',
       }} />
@@ -36,45 +37,45 @@ function formatDateLabel(value) {
   })
 }
 
-function SummaryTile({ label, value, typo }) {
+function SummaryTile({ label, value, typo, tokens }) {
   return (
     <div style={{
       padding: 12,
-      borderRadius: TOKENS.radius.md,
-      background: TOKENS.colors.surfaceSoft,
-      border: `1px solid ${TOKENS.colors.border}`,
+      borderRadius: tokens.radius.md,
+      background: tokens.colors.surfaceSoft,
+      border: `1px solid ${tokens.colors.border}`,
       minWidth: 0,
     }}>
-      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>{label}</p>
-      <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: '4px 0 0' }}>{value}</p>
+      <p style={{ ...typo.caption, color: tokens.colors.textMuted, margin: 0 }}>{label}</p>
+      <p style={{ ...typo.h2, color: tokens.colors.text, margin: '4px 0 0' }}>{value}</p>
     </div>
   )
 }
 
-function LoadStateBadge({ item }) {
+function LoadStateBadge({ item, tokens }) {
   const done = item.state === 'done'
   const refill = item.loadKind === 'refill'
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
       <span style={{
         padding: '3px 8px',
-        borderRadius: TOKENS.radius.pill,
+        borderRadius: tokens.radius.pill,
         fontSize: 11,
         fontWeight: 700,
-        color: refill ? TOKENS.colors.warning : TOKENS.colors.blue2,
-        background: refill ? TOKENS.colors.warningSoft : 'rgba(43,143,224,0.12)',
-        border: `1px solid ${refill ? 'rgba(245,158,11,0.24)' : 'rgba(43,143,224,0.24)'}`,
+        color: refill ? tokens.colors.warning : tokens.colors.blue2,
+        background: refill ? tokens.colors.warningSoft : tokens.colors.chipInfoBg,
+        border: `1px solid ${refill ? `${tokens.colors.warning}3d` : `${tokens.colors.blue}3d`}`,
       }}>
         {item.loadKindLabel}
       </span>
       <span style={{
         padding: '3px 8px',
-        borderRadius: TOKENS.radius.pill,
+        borderRadius: tokens.radius.pill,
         fontSize: 11,
         fontWeight: 700,
-        color: done ? TOKENS.colors.success : TOKENS.colors.textMuted,
-        background: done ? TOKENS.colors.successSoft : TOKENS.colors.surface,
-        border: `1px solid ${done ? 'rgba(34,197,94,0.25)' : TOKENS.colors.border}`,
+        color: done ? tokens.colors.success : tokens.colors.textMuted,
+        background: done ? tokens.colors.successSoft : tokens.colors.surface,
+        border: `1px solid ${done ? `${tokens.colors.success}40` : tokens.colors.border}`,
       }}>
         {item.stateLabel}
       </span>
@@ -86,6 +87,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
   const { session } = useSession()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 390)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const tokens = useMemo(() => getHistorialCargasTheme(isAdmin), [isAdmin])
   const [date, setDate] = useState(mexicoTodayDateKey())
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -131,7 +133,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
     <>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        input { color-scheme: dark; }
+        input { color-scheme: ${isAdmin ? 'light' : 'dark'}; }
       `}</style>
 
       <div style={{
@@ -142,7 +144,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
         marginBottom: 14,
       }}>
         <div>
-          <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '0 0 6px' }}>
+          <p style={{ ...typo.overline, color: tokens.colors.textLow, margin: '0 0 6px' }}>
             DIA DE REGISTRO
           </p>
           <input
@@ -153,10 +155,10 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
               width: '100%',
               minHeight: 44,
               padding: '10px 12px',
-              borderRadius: TOKENS.radius.md,
-              background: TOKENS.colors.surface,
-              border: `1px solid ${TOKENS.colors.border}`,
-              color: TOKENS.colors.text,
+              borderRadius: tokens.radius.md,
+              background: tokens.colors.surface,
+              border: `1px solid ${tokens.colors.border}`,
+              color: tokens.colors.text,
               fontSize: 14,
               outline: 'none',
             }}
@@ -167,10 +169,10 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
           style={{
             minHeight: 44,
             padding: '0 14px',
-            borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surfaceSoft,
-            border: `1px solid ${TOKENS.colors.border}`,
-            color: TOKENS.colors.textSoft,
+            borderRadius: tokens.radius.md,
+            background: tokens.colors.surfaceSoft,
+            border: `1px solid ${tokens.colors.border}`,
+            color: tokens.colors.textSoft,
             fontSize: 13,
             fontWeight: 700,
           }}
@@ -183,8 +185,8 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
           style={{
             minHeight: 44,
             padding: '0 16px',
-            borderRadius: TOKENS.radius.md,
-            background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
+            borderRadius: tokens.radius.md,
+            background: tokens.colors.ctaGradient,
             color: 'white',
             fontSize: 13,
             fontWeight: 700,
@@ -195,7 +197,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
         </button>
       </div>
 
-      <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: '0 0 14px', textTransform: 'capitalize' }}>
+      <p style={{ ...typo.body, color: tokens.colors.textSoft, margin: '0 0 14px', textTransform: 'capitalize' }}>
         {formatDateLabel(date)}
       </p>
 
@@ -203,10 +205,10 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
         <div style={{
           marginBottom: 12,
           padding: 12,
-          borderRadius: TOKENS.radius.md,
-          background: TOKENS.colors.errorSoft,
-          border: '1px solid rgba(239,68,68,0.22)',
-          color: TOKENS.colors.error,
+          borderRadius: tokens.radius.md,
+          background: tokens.colors.errorSoft,
+          border: `1px solid ${tokens.colors.error}38`,
+          color: tokens.colors.error,
           fontSize: 13,
         }}>
           {error}
@@ -220,39 +222,39 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
           gap: 8,
           marginBottom: 16,
         }}>
-          <SummaryTile label="Movimientos" value={summary.totalLoads} typo={typo} />
-          <SummaryTile label="Camionetas" value={summary.totalVans} typo={typo} />
-          <SummaryTile label="Piezas" value={summary.totalQty} typo={typo} />
+          <SummaryTile label="Movimientos" value={summary.totalLoads} typo={typo} tokens={tokens} />
+          <SummaryTile label="Camionetas" value={summary.totalVans} typo={typo} tokens={tokens} />
+          <SummaryTile label="Piezas" value={summary.totalQty} typo={typo} tokens={tokens} />
         </div>
       )}
 
       {loading ? (
-        <Spinner />
+        <Spinner tokens={tokens} />
       ) : groups.length === 0 ? (
         <EmptyState icon="🚚" title="Sin cargas registradas ese día" subtitle={isAdmin ? 'El admin verá aquí lo registrado por almacén de entregas.' : 'Cuando registres cargas o recargas aparecerán aquí.'} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {groups.map((group) => (
             <section key={group.key} style={{
-              borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.panel,
-              border: `1px solid ${TOKENS.colors.border}`,
-              boxShadow: TOKENS.shadow.soft,
+              borderRadius: tokens.radius.xl,
+              background: tokens.glass.panel,
+              border: `1px solid ${tokens.colors.border}`,
+              boxShadow: tokens.shadow.soft,
               overflow: 'hidden',
             }}>
               <div style={{
                 padding: 14,
-                borderBottom: `1px solid ${TOKENS.colors.border}`,
+                borderBottom: `1px solid ${tokens.colors.border}`,
                 display: 'flex',
                 justifyContent: 'space-between',
                 gap: 12,
                 alignItems: 'flex-start',
               }}>
                 <div style={{ minWidth: 0 }}>
-                  <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0, fontSize: 15 }}>
+                  <p style={{ ...typo.h2, color: tokens.colors.text, margin: 0, fontSize: 15 }}>
                     {group.label}
                   </p>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                  <p style={{ ...typo.caption, color: tokens.colors.textMuted, margin: '4px 0 0' }}>
                     {group.totalLoads} movimiento{group.totalLoads !== 1 ? 's' : ''} · {group.totalQty} piezas
                   </p>
                 </div>
@@ -262,7 +264,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
                 {group.items.map((item, index) => (
                   <div key={item.id || index} style={{
                     padding: 14,
-                    borderBottom: index < group.items.length - 1 ? `1px solid ${TOKENS.colors.border}` : 'none',
+                    borderBottom: index < group.items.length - 1 ? `1px solid ${tokens.colors.border}` : 'none',
                   }}>
                     <div style={{
                       display: 'flex',
@@ -272,20 +274,20 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
                       marginBottom: 10,
                     }}>
                       <div style={{ minWidth: 0 }}>
-                        <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>
+                        <p style={{ ...typo.title, color: tokens.colors.text, margin: 0 }}>
                           {item.time || '--:--'} {item.name ? `· ${item.name}` : ''}
                         </p>
-                        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                        <p style={{ ...typo.caption, color: tokens.colors.textMuted, margin: '4px 0 0' }}>
                           {item.mobileLocationName || 'Unidad sin ubicación'}
                           {item.registeredByName ? ` · Registro: ${item.registeredByName}` : ''}
                         </p>
                       </div>
-                      <LoadStateBadge item={item} />
+                      <LoadStateBadge item={item} tokens={tokens} />
                     </div>
 
                     <div style={{
-                      borderRadius: TOKENS.radius.md,
-                      border: `1px solid ${TOKENS.colors.border}`,
+                      borderRadius: tokens.radius.md,
+                      border: `1px solid ${tokens.colors.border}`,
                       overflow: 'hidden',
                     }}>
                       {item.lines.map((line, lineIndex) => (
@@ -294,13 +296,13 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
                           justifyContent: 'space-between',
                           gap: 12,
                           padding: '9px 11px',
-                          background: lineIndex % 2 === 0 ? TOKENS.colors.surfaceSoft : 'transparent',
-                          borderBottom: lineIndex < item.lines.length - 1 ? `1px solid ${TOKENS.colors.border}` : 'none',
+                          background: lineIndex % 2 === 0 ? tokens.colors.surfaceSoft : 'transparent',
+                          borderBottom: lineIndex < item.lines.length - 1 ? `1px solid ${tokens.colors.border}` : 'none',
                         }}>
-                          <span style={{ ...typo.caption, color: TOKENS.colors.textSoft, fontWeight: 600 }}>
+                          <span style={{ ...typo.caption, color: tokens.colors.textSoft, fontWeight: 600 }}>
                             {line.productName}
                           </span>
-                          <span style={{ ...typo.caption, color: TOKENS.colors.blue2, fontWeight: 800 }}>
+                          <span style={{ ...typo.caption, color: tokens.colors.blue2, fontWeight: 800 }}>
                             {line.qty}
                           </span>
                         </div>

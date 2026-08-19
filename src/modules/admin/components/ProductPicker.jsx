@@ -12,7 +12,7 @@
 //   placeholder:  texto del placeholder
 //   disabled
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { getPosProducts, searchProducts } from '../api'
 import { BACKEND_CAPS } from '../adminService'
 
@@ -184,7 +184,7 @@ export default function ProductPicker({
             {serverMode && loading && (
               <div style={{
                 position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                width: 12, height: 12, border: '2px solid rgba(255,255,255,0.12)',
+                width: 12, height: 12, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite', pointerEvents: 'none',
               }} />

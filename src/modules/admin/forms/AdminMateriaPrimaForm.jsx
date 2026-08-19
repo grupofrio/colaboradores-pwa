@@ -9,7 +9,7 @@
 //   · Recepciones → stock.picking incoming del día (proveedor / cantidades)
 //   · Consumos    → gf.transformation.order del día (input product / qty)
 import { useEffect, useMemo, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { getMpStock, getMpReceipts, getMpConsumption } from '../api'
 import { BACKEND_CAPS } from '../adminService'
@@ -212,7 +212,7 @@ export default function AdminMateriaPrimaForm() {
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 50 }}>
             <div style={{
-              width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)',
+              width: 28, height: 28, border: '2px solid rgba(15,42,61,0.12)',
               borderTop: '2px solid #2B8FE0', borderRadius: '50%',
               animation: 'spin 0.8s linear infinite',
             }} />

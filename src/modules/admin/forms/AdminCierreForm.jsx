@@ -11,7 +11,7 @@
 //
 // Mobile legacy sigue en ScreenCierreCaja.jsx.
 import { useEffect, useMemo, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import AuthBanner from '../../../components/AuthBanner'
 import PhotoCapture from '../../../components/PhotoCapture'
@@ -522,7 +522,7 @@ export default function AdminCierreForm() {
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
               <div style={{
-                width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)',
+                width: 24, height: 24, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
@@ -779,7 +779,7 @@ function CashClosingHistory({ companyId, warehouseId }) {
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}>
               <div style={{
-                width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)',
+                width: 24, height: 24, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
@@ -850,7 +850,7 @@ function CashClosingHistory({ companyId, warehouseId }) {
           ) : detailLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
               <div style={{
-                width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)',
+                width: 28, height: 28, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />

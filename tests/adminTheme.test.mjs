@@ -6,12 +6,10 @@ import {
   getAdminThemeScopeStyle,
 } from '../src/modules/admin/adminTheme.js'
 
-test('admin theme scope uses the light inversion filter', () => {
+test('admin theme scope uses a light background, no inversion filter', () => {
   assert.deepEqual(ADMIN_THEME_SCOPE_STYLE, {
     minHeight: '100dvh',
-    background: '#05070a',
-    filter: 'invert(1) hue-rotate(180deg)',
-    isolation: 'isolate',
+    background: '#F0F9FF',
   })
 })
 
@@ -21,8 +19,6 @@ test('getAdminThemeScopeStyle merges overrides last', () => {
     {
       minHeight: '100dvh',
       background: '#111111',
-      filter: 'invert(1) hue-rotate(180deg)',
-      isolation: 'isolate',
       paddingBottom: '24px',
     },
   )

@@ -4,7 +4,7 @@
 // Mobile (<1024px): MobileNotice (no hay legacy mobile para este rol).
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS } from '../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { AdminProvider } from './AdminContext'
 import AdminShell from './components/AdminShell'
 import AdminMateriaPrimaForm from './forms/AdminMateriaPrimaForm'
@@ -51,7 +51,7 @@ function MobileNotice() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(15,42,61,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>

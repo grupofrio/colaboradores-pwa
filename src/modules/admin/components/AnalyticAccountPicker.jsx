@@ -10,7 +10,7 @@
 //   companyId: razón social activa (requerido — refetch al cambiar)
 //   label, required
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { BACKEND_CAPS } from '../adminService'
 import { getAnalyticAccounts } from '../api'
 

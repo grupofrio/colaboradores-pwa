@@ -3,7 +3,7 @@
 // global del rol. Al cambiar, persiste el valor en el AdminContext y a través
 // de éste en session.company_id → localStorage → headers de api.js.
 import { useState, useRef, useEffect } from 'react'
-import { TOKENS } from '../../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 
 export default function CompanySelector() {
@@ -38,7 +38,7 @@ export default function CompanySelector() {
           background: TOKENS.colors.blue3, flexShrink: 0,
         }} />
         <span style={{ flex: 1, textAlign: 'left' }}>{companyLabel}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(15,42,61,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }}>
           <path d="M6 9l6 6 6-6"/>
         </svg>
       </button>
