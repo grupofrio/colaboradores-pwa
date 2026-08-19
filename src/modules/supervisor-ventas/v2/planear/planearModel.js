@@ -40,14 +40,35 @@ function resourceBlockerReason(coverage = {}) {
   return 'Completa la asignación de recursos antes de publicar.'
 }
 
-function coverageBlocksPublishing(coverage) {
+/** Bloqueo de sobrecapacidad total (demanda > unidad). Tras apply de recarga
+ *  el backend sigue marcando overcapacity en assign readiness, pero review/
+ *  publish lo resuelven vía capacity_resolution=reload. */
+export function isCapacityOverloadBlocker(text) {
+  const t = String(text || '').toLowerCase()
+  return t.includes('sobrecapacidad') || t.includes('overcapacity')
+}
+
+function coverageBlocksPublishing(coverage, { reloadApplied = false } = {}) {
   if (!coverage) return false
   const state = String(coverage.coverage_state || '').toLowerCase()
   const blockers = Array.isArray(coverage.blockers) ? coverage.blockers.filter(Boolean) : []
-  return blockers.length > 0 || state === 'blocked' || state === 'incomplete'
+  const relevant = reloadApplied
+    ? blockers.filter((b) => !isCapacityOverloadBlocker(b))
+    : blockers
+  if (relevant.length > 0) return true
+  if (state === 'incomplete') return true
+  if (state === 'blocked') {
+    // Solo sobrecapacidad + recarga ya aplicada ⇒ no bloquear el gate de UI;
+    // review/publish del backend siguen siendo fail-closed.
+    if (reloadApplied && blockers.every(isCapacityOverloadBlocker)) return false
+    if (reloadApplied && blockers.length === 0 && Boolean(coverage.overcapacity)) return false
+    return true
+  }
+  return false
 }
 
-export function routeReadiness(route = {}, customersCount = 0, coverage = null) {
+export function routeReadiness(route = {}, customersCount = 0, coverage = null, opts = {}) {
+  const reloadApplied = Boolean(opts.reloadApplied)
   const editable = canEditRoutePlanCustomers(route)
   const planPublishable = canPublishRoutePlan({
     state: route.state,
@@ -56,7 +77,7 @@ export function routeReadiness(route = {}, customersCount = 0, coverage = null) 
     load_sealed: route.load_sealed,
     load_picking_id: route.load_picking_id,
   })
-  const resourceBlocked = coverageBlocksPublishing(coverage)
+  const resourceBlocked = coverageBlocksPublishing(coverage, { reloadApplied })
   const publishable = planPublishable && !resourceBlocked
   const reasons = []
   const st = getRoutePlanningState(route)
@@ -71,6 +92,11 @@ export function routeReadiness(route = {}, customersCount = 0, coverage = null) 
   } else if (resourceBlocked) {
     reasons.push(resourceBlockerReason(coverage))
   }
+  const overcapacity = Boolean(coverage?.overcapacity)
+  const demandRaw = coverage?.demand_kg
+  const capacityRaw = coverage?.capacity_kg
+  const demandKg = demandRaw == null || demandRaw === '' ? null : Number(demandRaw)
+  const capacityKg = capacityRaw == null || capacityRaw === '' ? null : Number(capacityRaw)
   return {
     state: st,
     stateLabel: planStateLabel(route),
@@ -80,7 +106,75 @@ export function routeReadiness(route = {}, customersCount = 0, coverage = null) 
     customersCount: Number(customersCount || 0),
     resourceBlocked,
     reasons,
+    // Señales autoritativas del DTO de assign/readiness (no inventadas aquí).
+    overcapacity,
+    demandKg: Number.isFinite(demandKg) ? demandKg : null,
+    capacityKg: Number.isFinite(capacityKg) ? capacityKg : null,
+    reloadApplied,
   }
+}
+
+/** Panel "necesita recarga": sobrecapacidad autoritativa y aún sin apply. */
+export function shouldShowCapacityReloadPanel({
+  published = false,
+  overcapacity = false,
+  reloadApplied = false,
+} = {}) {
+  return Boolean(!published && overcapacity && !reloadApplied)
+}
+
+/** Interpreta capacity-reload-preview. NO escribe. withinCapacity usa kg del
+ *  backend vs capacidad autoritativa; si falta capacidad, no se afirma seguro. */
+export function interpretCapacityReloadPreview(resp = {}, capacityKg = null) {
+  const isErr = resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error'
+  const d = isErr ? {} : (resp?.data || resp || {})
+  const reload = d.reload || d.data?.reload || null
+  if (isErr || !reload) {
+    return {
+      ok: false,
+      reload: null,
+      message: resp?.message || resp?.data?.message || 'No hay una recarga viable para este plan.',
+      code: String(resp?.code || resp?.data?.code || '').toLowerCase() || 'reload_preview_failed',
+      withinCapacity: false,
+      applyAllowed: false,
+    }
+  }
+  const firstKg = Number(reload.first_trip_kg)
+  const secondKg = Number(reload.second_trip_kg)
+  const reloadKg = Number(reload.reload_kg)
+  const cap = capacityKg == null || capacityKg === '' ? null : Number(capacityKg)
+  const hasTrips = Number.isFinite(firstKg) && Number.isFinite(secondKg)
+  let withinCapacity = false
+  if (hasTrips && Number.isFinite(cap) && cap > 0) {
+    withinCapacity = firstKg <= cap + 1e-6 && secondKg <= cap + 1e-6
+  }
+  return {
+    ok: true,
+    reload: {
+      route_plan_id: reload.route_plan_id ?? null,
+      resolution: reload.resolution || 'reload',
+      depot_id: reload.depot_id ?? null,
+      reload_after_stop_id: reload.reload_after_stop_id ?? null,
+      first_trip_kg: Number.isFinite(firstKg) ? firstKg : null,
+      second_trip_kg: Number.isFinite(secondKg) ? secondKg : null,
+      reload_kg: Number.isFinite(reloadKg) ? reloadKg : (Number.isFinite(secondKg) ? secondKg : null),
+      trip_count: Number(reload.trip_count || 2) || 2,
+      physical_load: reload.physical_load || 'not_created',
+    },
+    message: resp?.message || 'Recarga propuesta',
+    code: '',
+    withinCapacity,
+    applyAllowed: Boolean(withinCapacity),
+  }
+}
+
+export function canApplyCapacityReloadPreview(preview) {
+  return Boolean(preview?.ok && preview?.applyAllowed && preview?.reload)
+}
+
+/** Tras apply exitoso: invalidar preparación previa (fail-closed). */
+export function preparationAfterCapacityReload() {
+  return { snapshotResult: null, optimizeResult: null, reviewResult: null, reloadPreview: null }
 }
 
 /** Gate de publicación de la PWA: snapshot + optimizer + veredicto positivo de review. */
