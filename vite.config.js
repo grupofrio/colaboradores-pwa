@@ -101,7 +101,14 @@ export default defineConfig(({ command, mode }) => {
     ],
 
     define: {
-      __APP_VERSION__: JSON.stringify(process.env.npm_package_version)
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
+      // Commit SHA en Vercel; fallback a versión npm en local/CI sin Vercel.
+      // Alimenta el one-shot reload de resetLegacyPwaState tras un deploy.
+      __APP_BUILD_ID__: JSON.stringify(
+        process.env.VERCEL_GIT_COMMIT_SHA
+          || process.env.npm_package_version
+          || 'dev',
+      ),
     },
 
     server: {
