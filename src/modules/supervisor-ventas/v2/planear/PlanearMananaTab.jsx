@@ -74,6 +74,7 @@ import {
   shouldHaltPrepareForResources,
   prepareResourceHaltMessage,
   resourcesChecklistReady,
+  interpretPlanReadinessResponse,
   preparationAfterCapacityReload,
   canPublishPreparedRoute,
   echoedUnionKeys,
@@ -642,7 +643,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   // devuelve readiness, degrada a la derivación local (setAssignReadiness(null) ⇒
   // coverage local) — sigue mejor que el POST vacío, y se cierra al desplegar B1.
   async function refreshReadinessFromServer(planId) {
-    if (!planId) return
+    if (!planId) return { readiness: null, stale: false, source: 'none' }
     const reqId = ++resourceReq.current
     // Codex P1 (2ª): un resultado NO autoritativo NO debe habilitar publicar por la
     // derivación local (que no conoce sobrecapacidad ni bloqueos del backend). Se
@@ -653,21 +654,25 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     const blocked = { coverage_state: 'blocked', blockers: ['No se pudo verificar la cobertura con el servidor. Reintenta.'] }
     try {
       const resp = await getRoutePlanReadiness(planId)
-      if (reqId !== resourceReq.current) return
-      const isErr = resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error'
-      const data = resp?.data || resp || {}
-      if (!isErr && data.readiness) { setAssignReadiness(data.readiness); return }
+      if (reqId !== resourceReq.current) return { readiness: null, stale: true, source: 'superseded' }
+      const parsed = interpretPlanReadinessResponse(resp)
+      if (parsed.ok) {
+        setAssignReadiness(parsed.readiness)
+        return { readiness: parsed.readiness, stale: false, source: parsed.source }
+      }
       setAssignReadiness(blocked)
+      return { readiness: blocked, stale: false, source: parsed.source }
     } catch (e) {
-      if (reqId !== resourceReq.current) return
+      if (reqId !== resourceReq.current) return { readiness: null, stale: true, source: 'superseded' }
       const status = Number(e?.status || 0)
       if (status === 404) {
         // Capacidad ausente (endpoint B1 no desplegado): derivación local transitoria.
         setAssignReadiness(null)
-        return
+        return { readiness: null, stale: false, source: 'missing_endpoint' }
       }
       logScreenError('PlanearManana', 'getRoutePlanReadiness', e)
       setAssignReadiness(blocked)
+      return { readiness: blocked, stale: false, source: 'error' }
     }
   }
 
@@ -951,10 +956,16 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
     }
     setPublishing(true)
     try {
+      let postSnapshotCoverage = null
       const prepared = await runPrepareSequence({
         generateSnapshot: async () => {
           setPrepareStage('Preparando demanda…')
           return interpretDemandSnapshotResponse(await generateRoutePlanDemandSnapshot(routePlanId))
+        },
+        afterSnapshot: async () => {
+          setPrepareStage('Actualizando cobertura…')
+          const refreshed = await refreshReadinessFromServer(routePlanId)
+          postSnapshotCoverage = refreshed?.readiness || null
         },
         runOptimize: async () => {
           setPrepareStage('Optimizando recorrido…')
@@ -975,7 +986,10 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
         return
       }
       if (Number(prepared.optimize.metrics?.unassigned || 0) > 0) {
-        flash(`${prepared.optimize.metrics.unassigned} clientes no pudieron entrar en la ruta optimizada.`, 6000)
+        const needsReload = Boolean(postSnapshotCoverage?.overcapacity) && !reloadApplied
+        flash(needsReload
+          ? 'La demanda no cabe en una sola carga. Revisa la propuesta de recarga.'
+          : `${prepared.optimize.metrics.unassigned} clientes no pudieron entrar en la ruta optimizada.`, 6000)
         return
       }
       setReviewResult(prepared.review || { failed: true, state: '', revision: null })

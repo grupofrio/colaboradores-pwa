@@ -13,6 +13,7 @@ import {
   interpretReviewResponse,
   interpretDemandSnapshotResponse,
   interpretPublishResponse,
+  interpretPlanReadinessResponse,
   interpretCapacityReloadPreview,
   canApplyCapacityReloadPreview,
   shouldShowCapacityReloadPanel,
@@ -886,6 +887,108 @@ test('post-reload resources 7: Preparar usa readiness.resourceBlocked y llega a 
   })
   assert.equal(calls.snapshot, 1, 'click Preparar post-reload llega a generate snapshot')
   assert.equal(prepared.complete, true)
+})
+
+test('snapshot-readiness A–G: Preparar refresca overcapacity y muestra panel sin apply', async () => {
+  const initial = routeReadiness(
+    { plan_id: 6926, plan_state: 'draft' },
+    37,
+    { coverage_state: 'ready', overcapacity: false, demand_kg: null, capacity_kg: 1600, blockers: [] },
+  )
+  assert.equal(initial.overcapacity, false)
+  assert.equal(shouldShowCapacityReloadPanel({
+    published: false, overcapacity: initial.overcapacity, reloadApplied: false,
+  }), false)
+
+  const order = []
+  let coverage = { coverage_state: 'ready', overcapacity: false, demand_kg: null, capacity_kg: 1600, blockers: [] }
+  const applyCalls = []
+  const prepared = await runPrepareSequence({
+    generateSnapshot: async () => {
+      order.push('snapshot')
+      return { ok: true, snapshotId: 670, lineCount: 37 }
+    },
+    afterSnapshot: async () => {
+      order.push('refresh')
+      const parsed = interpretPlanReadinessResponse({
+        ok: true,
+        data: {
+          readiness: {
+            coverage_state: 'blocked',
+            overcapacity: true,
+            demand_kg: 1712.7,
+            capacity_kg: 1600,
+            missing_vehicle: false,
+            missing_driver: false,
+            missing_salesperson: false,
+            blockers: ['Sobrecapacidad: demanda 1712.7 kg > capacidad 1600.0 kg.'],
+          },
+        },
+      })
+      assert.equal(parsed.ok, true)
+      coverage = parsed.readiness
+    },
+    runOptimize: async () => {
+      order.push('optimize')
+      return { revision: 'opt-6926', blocked: false, metrics: { revision: 'opt-6926', unassigned: 2 } }
+    },
+    runReview: async () => {
+      order.push('review')
+      applyCalls.push('review')
+      return { revision: 'rev-6926', state: 'ready', failed: false }
+    },
+  })
+  assert.deepEqual(order, ['snapshot', 'refresh', 'optimize'])
+  assert.equal(prepared.complete, false)
+  assert.equal(coverage.overcapacity, true)
+  assert.equal(coverage.demand_kg, 1712.7)
+  assert.equal(coverage.capacity_kg, 1600)
+
+  const after = routeReadiness(
+    { plan_id: 6926, plan_state: 'draft' },
+    37,
+    coverage,
+    { reloadApplied: false },
+  )
+  assert.equal(after.overcapacity, true)
+  assert.equal(shouldShowCapacityReloadPanel({
+    published: after.published, overcapacity: after.overcapacity, reloadApplied: false,
+  }), true)
+  assert.equal(coverage.missing_vehicle, false)
+  assert.equal(coverage.missing_driver, false)
+  assert.equal(coverage.missing_salesperson, false)
+  assert.equal(applyCalls.length, 0, 'no aplica reload ni review si hay unassigned')
+
+  const normal = routeReadiness(
+    { plan_id: 11, plan_state: 'draft' },
+    8,
+    { coverage_state: 'ready', overcapacity: false, demand_kg: 1500, capacity_kg: 1600, blockers: [] },
+  )
+  assert.equal(shouldShowCapacityReloadPanel({
+    published: false, overcapacity: normal.overcapacity, reloadApplied: false,
+  }), false)
+
+  const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
+  const prepareFn = tab.slice(tab.indexOf('async function handlePrepareRoute'), tab.indexOf('async function handlePublish'))
+  assert.match(prepareFn, /afterSnapshot/)
+  assert.match(prepareFn, /refreshReadinessFromServer\(routePlanId\)/)
+  assert.match(prepareFn, /propuesta de recarga/)
+  assert.doesNotMatch(prepareFn, /applyRoutePlanCapacityReload/)
+})
+
+test('snapshot-readiness H: Mercado post-reload no reabre panel ni bloquea recursos', () => {
+  const mercado = routeReadiness(
+    { plan_id: 6927, plan_state: 'draft' },
+    64,
+    postReloadCoverage,
+    { reloadApplied: true },
+  )
+  assert.equal(mercado.overcapacity, true)
+  assert.equal(shouldShowCapacityReloadPanel({
+    published: false, overcapacity: mercado.overcapacity, reloadApplied: true,
+  }), false)
+  assert.equal(shouldHaltPrepareForResources(mercado), false)
+  assert.equal(resourcesChecklistReady(mercado), true)
 })
 
 test('publicación: snapshot + revision + unassigned 0 + geo 0', () => {
