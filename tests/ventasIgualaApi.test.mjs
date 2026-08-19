@@ -81,7 +81,7 @@ test('routes Iguala sales-history GET to Odoo with only its allowlisted filters'
     '/odoo-api/pwa-admin/iguala-sales-history?date_from=2026-07-29&date_to=2026-07-30&search=S25375&page=2&page_size=50'
   )
   assert.equal(calls[0].url.includes('/api-n8n'), false)
-  assert.equal(calls[0].options.headers['Api-Key'], 'api-key-test')
+  assert.equal(calls[0].options.headers['Api-Key'], undefined)
   assert.equal(calls[0].options.headers['X-GF-Employee-Token'], 'employee-token-test')
 })
 

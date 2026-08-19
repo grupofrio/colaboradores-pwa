@@ -326,7 +326,7 @@ test('bootCapabilities consulta el controller Odoo autenticado y aplica cashShif
 
   assert.equal(calls.length, 1)
   assert.equal(calls[0].url, '/odoo-api/pwa-admin/capabilities')
-  assert.equal(calls[0].headers['Api-Key'], 'api-key')
+  assert.equal(calls[0].headers['Api-Key'], undefined)
   assert.equal(calls[0].headers['X-GF-Employee-Token'], 'employee-token')
   assert.equal(caps.cashShiftRead, true)
   assert.equal(caps.cashShiftManage, true)
@@ -863,7 +863,7 @@ test('adminService elimina siempre employee_id del gasto aunque el caller lo iny
   const directPayload = calls.find((call) => call.url === '/odoo-api/pwa-admin/expense-create')
   assert.ok(directPayload, 'expense-create debe llegar al controller autenticado')
   assert.equal(Object.hasOwn(directPayload.payload.params, 'employee_id'), false)
-  assert.equal(directPayload.headers['Api-Key'], 'api-key')
+  assert.equal(directPayload.headers['Api-Key'], undefined)
   assert.equal(directPayload.headers['X-GF-Employee-Token'], 'employee-token')
   assert.equal(JSON.stringify(calls).includes('999999'), false)
 })
