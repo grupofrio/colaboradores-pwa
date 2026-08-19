@@ -71,6 +71,9 @@ import {
   interpretCapacityReloadPreview,
   canApplyCapacityReloadPreview,
   shouldShowCapacityReloadPanel,
+  shouldHaltPrepareForResources,
+  prepareResourceHaltMessage,
+  resourcesChecklistReady,
   preparationAfterCapacityReload,
   canPublishPreparedRoute,
   echoedUnionKeys,
@@ -942,8 +945,8 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   async function handlePrepareRoute() {
     if (!routePlanId || publishing || snapshotBusy || previewing || preparing) return
     if (!previewCustomers.length) { flash('Cierra la lista de clientes antes de preparar la ruta.'); return }
-    if (coverage?.missing_vehicle || coverage?.coverage_state === 'blocked') {
-      flash('Asigna unidad, chofer y vendedor antes de preparar la ruta.', 5000)
+    if (shouldHaltPrepareForResources(readiness)) {
+      flash(prepareResourceHaltMessage(readiness) || 'Completa la asignación de recursos antes de preparar la ruta.', 5000)
       return
     }
     setPublishing(true)
@@ -1415,7 +1418,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
               <div data-testid="planear-pasos" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10, fontSize: 11.5, fontWeight: 700, color: C.textMuted }}>
                 <span>{operationalSources.length || polygonId || segmentId ? '✓' : '○'} Planes</span>
                 <span>{previewCustomers.length > 0 ? '✓' : '○'} {previewCustomers.length || 0} clientes</span>
-                <span>{coverage?.coverage_state === 'ready' ? '✓' : '○'} Recursos</span>
+                <span>{resourcesChecklistReady(readiness) ? '✓' : '○'} Recursos</span>
                 <span>{snapshotResult?.ok ? '✓' : '○'} Demanda</span>
                 <span>{optimizeResult && !optimizeResult.unassigned ? '✓' : '○'} Optimizada</span>
                 <span>{reviewResult && reviewResult.state !== 'blocked' ? '✓' : '○'} Revisada</span>
