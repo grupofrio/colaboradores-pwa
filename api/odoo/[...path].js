@@ -1,5 +1,12 @@
 import { buildOdooPwaRequest, PwaProxyError } from '../_odooPwaProxy.js'
 
+function headerValue(headers, name) {
+  const found = Object.entries(headers || {}).find(
+    ([key]) => key.toLowerCase() === name.toLowerCase(),
+  )
+  return found ? String(found[1] || '').trim() : ''
+}
+
 function requestQuery(query = {}) {
   const search = new URLSearchParams()
   for (const [key, rawValue] of Object.entries(query)) {
@@ -39,7 +46,9 @@ export function createOdooPwaProxyHandler({
         path: req.query?.path,
         method: req.method,
         query: requestQuery(req.query),
-        employeeToken: req.headers?.['x-gf-employee-token'],
+        // Case-insensitive: same contract as api/salesops.js. Bracket access on
+        // a single lowercase key fails when the runtime preserves header casing.
+        employeeToken: headerValue(req.headers, 'x-gf-employee-token'),
         serviceApiKey: serviceApiKey === undefined
           ? process.env.ODOO_PWA_SERVICE_API_KEY
           : serviceApiKey,
