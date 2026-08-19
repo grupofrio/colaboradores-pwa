@@ -20,6 +20,11 @@ export function hasSupervisorCopilotCapability(session = {}) {
   return hasOwnTrue(capabilities, 'supervisorCopilot')
 }
 
+/**
+ * Proyecta los gates V2 del sign-in (supervisor + gerente) hacia la sesión PWA.
+ * Aditivo: no inventa flags; solo copia booleans exactos `=== true`.
+ * El shell Gerente V2 exige capabilities.gerenteV2 AND branch.gerente_v2_enabled.
+ */
 export function buildSupervisorV2SessionProjection(result = {}) {
   const capabilities = ownRecord(result, 'capabilities')
   const branch = ownRecord(result, 'branch')
@@ -28,9 +33,11 @@ export function buildSupervisorV2SessionProjection(result = {}) {
     capabilities: {
       supervisorV2: hasOwnTrue(capabilities, 'supervisorV2'),
       supervisorCopilot: hasOwnTrue(capabilities, 'supervisorCopilot'),
+      gerenteV2: hasOwnTrue(capabilities, 'gerenteV2'),
     },
     branch: {
       supervisor_v2_enabled: hasOwnTrue(branch, 'supervisor_v2_enabled'),
+      gerente_v2_enabled: hasOwnTrue(branch, 'gerente_v2_enabled'),
     },
   }
 }

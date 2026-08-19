@@ -5,60 +5,79 @@ import { parse } from '@babel/parser'
 import { readUtf8Lf } from './helpers/readUtf8Lf.mjs'
 
 import { buildSupervisorV2SessionProjection } from '../src/modules/supervisor-ventas/v2/sessionProjection.js'
+import {
+  computeGerenteV2Flag,
+  isGerenteV2Active,
+  readGerenteV2FlagFrom,
+} from '../src/modules/gerente/v2/gerenteV2Flag.js'
+
+const emptyCaps = {
+  supervisorV2: false,
+  supervisorCopilot: false,
+  gerenteV2: false,
+}
+const emptyBranch = {
+  supervisor_v2_enabled: false,
+  gerente_v2_enabled: false,
+}
 
 test('login projection: exact true/true is preserved', () => {
   assert.deepEqual(buildSupervisorV2SessionProjection({
-    capabilities: { supervisorV2: true, supervisorCopilot: true },
-    branch: { supervisor_v2_enabled: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: true, gerenteV2: true },
+    branch: { supervisor_v2_enabled: true, gerente_v2_enabled: true },
   }), {
-    capabilities: { supervisorV2: true, supervisorCopilot: true },
-    branch: { supervisor_v2_enabled: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: true, gerenteV2: true },
+    branch: { supervisor_v2_enabled: true, gerente_v2_enabled: true },
   })
 })
 
 test('login projection: malformed values fail closed', () => {
   for (const raw of [
     null, {},
-    { capabilities: { supervisorV2: 1 }, branch: { supervisor_v2_enabled: 'true' } },
+    { capabilities: { supervisorV2: 1, gerenteV2: 1 }, branch: { supervisor_v2_enabled: 'true', gerente_v2_enabled: 'true' } },
     { capabilities: [], branch: [] },
   ]) {
     const projected = buildSupervisorV2SessionProjection(raw)
     assert.equal(projected.capabilities.supervisorV2, false)
+    assert.equal(projected.capabilities.gerenteV2, false)
     assert.equal(projected.branch.supervisor_v2_enabled, false)
+    assert.equal(projected.branch.gerente_v2_enabled, false)
   }
 })
 
 test('login projection: inherited top-level containers fail closed', () => {
   const result = Object.create({
-    capabilities: { supervisorV2: true, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false, gerenteV2: true },
+    branch: { supervisor_v2_enabled: true, gerente_v2_enabled: true },
   })
 
   assert.deepEqual(buildSupervisorV2SessionProjection(result), {
-    capabilities: { supervisorV2: false, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: false },
+    capabilities: emptyCaps,
+    branch: emptyBranch,
   })
 })
 
 test('login projection: inherited flags fail closed', () => {
   assert.deepEqual(buildSupervisorV2SessionProjection({
-    capabilities: Object.create({ supervisorV2: true }),
-    branch: Object.create({ supervisor_v2_enabled: true }),
+    capabilities: Object.create({ supervisorV2: true, gerenteV2: true }),
+    branch: Object.create({ supervisor_v2_enabled: true, gerente_v2_enabled: true }),
   }), {
-    capabilities: { supervisorV2: false, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: false },
+    capabilities: emptyCaps,
+    branch: emptyBranch,
   })
 })
 
 test('login projection: arrays with true expando flags fail closed', () => {
   const capabilities = []
   capabilities.supervisorV2 = true
+  capabilities.gerenteV2 = true
   const branch = []
   branch.supervisor_v2_enabled = true
+  branch.gerente_v2_enabled = true
 
   assert.deepEqual(buildSupervisorV2SessionProjection({ capabilities, branch }), {
-    capabilities: { supervisorV2: false, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: false },
+    capabilities: emptyCaps,
+    branch: emptyBranch,
   })
 })
 
@@ -66,34 +85,36 @@ test('login projection: null-prototype records preserve own true flags', () => {
   const result = Object.create(null)
   result.capabilities = Object.create(null)
   result.capabilities.supervisorV2 = true
+  result.capabilities.gerenteV2 = true
   result.branch = Object.create(null)
   result.branch.supervisor_v2_enabled = true
+  result.branch.gerente_v2_enabled = true
 
   assert.deepEqual(buildSupervisorV2SessionProjection(result), {
-    capabilities: { supervisorV2: true, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false, gerenteV2: true },
+    branch: { supervisor_v2_enabled: true, gerente_v2_enabled: true },
   })
 })
 
 test('login projection: partial shapes preserve only the exact boolean present', () => {
   assert.deepEqual(buildSupervisorV2SessionProjection({
-    capabilities: { supervisorV2: true, supervisorCopilot: false },
+    capabilities: { supervisorV2: true, supervisorCopilot: false, gerenteV2: true },
   }), {
-    capabilities: { supervisorV2: true, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: false },
+    capabilities: { supervisorV2: true, supervisorCopilot: false, gerenteV2: true },
+    branch: emptyBranch,
   })
   assert.deepEqual(buildSupervisorV2SessionProjection({
-    branch: { supervisor_v2_enabled: true },
+    branch: { supervisor_v2_enabled: true, gerente_v2_enabled: true },
   }), {
-    capabilities: { supervisorV2: false, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: true },
+    capabilities: emptyCaps,
+    branch: { supervisor_v2_enabled: true, gerente_v2_enabled: true },
   })
 })
 
 test('login projection: each call returns fresh nested objects', () => {
   const input = {
-    capabilities: { supervisorV2: true, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false, gerenteV2: true },
+    branch: { supervisor_v2_enabled: true, gerente_v2_enabled: false },
   }
   const first = buildSupervisorV2SessionProjection(input)
   const second = buildSupervisorV2SessionProjection(input)
@@ -104,8 +125,8 @@ test('login projection: each call returns fresh nested objects', () => {
 
 test('login projection: projection does not mutate input', () => {
   const input = {
-    capabilities: { supervisorV2: true, untouched: 'capabilities' },
-    branch: { supervisor_v2_enabled: true, untouched: 'branch' },
+    capabilities: { supervisorV2: true, gerenteV2: true, untouched: 'capabilities' },
+    branch: { supervisor_v2_enabled: true, gerente_v2_enabled: true, untouched: 'branch' },
     untouched: 'result',
   }
   const before = structuredClone(input)
@@ -117,15 +138,55 @@ test('login projection: projection does not mutate input', () => {
 
 test('login projection: merging an OFF projection overwrites a prior ON projection', () => {
   const on = buildSupervisorV2SessionProjection({
-    capabilities: { supervisorV2: true, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: true },
+    capabilities: { supervisorV2: true, supervisorCopilot: false, gerenteV2: true },
+    branch: { supervisor_v2_enabled: true, gerente_v2_enabled: true },
   })
   const off = buildSupervisorV2SessionProjection({})
   const rebuiltSession = { ...on, ...off }
   assert.deepEqual(rebuiltSession, {
-    capabilities: { supervisorV2: false, supervisorCopilot: false },
-    branch: { supervisor_v2_enabled: false },
+    capabilities: emptyCaps,
+    branch: emptyBranch,
   })
+})
+
+test('login projection: gerente gates are independent of supervisor gates', () => {
+  assert.deepEqual(buildSupervisorV2SessionProjection({
+    capabilities: { gerenteV2: true },
+    branch: { gerente_v2_enabled: true },
+  }), {
+    capabilities: { supervisorV2: false, supervisorCopilot: false, gerenteV2: true },
+    branch: { supervisor_v2_enabled: false, gerente_v2_enabled: true },
+  })
+})
+
+test('sign-in projection matrix drives Gerente V2 shell gate', () => {
+  const cases = [
+    { global: true, branch: true, expect: true, source: 'both' },
+    { global: true, branch: false, expect: false, source: 'branch-off' },
+    { global: false, branch: true, expect: false, source: 'global-off' },
+    { global: false, branch: false, expect: false, source: 'unknown' },
+  ]
+  for (const c of cases) {
+    const projected = buildSupervisorV2SessionProjection({
+      capabilities: { gerenteV2: c.global },
+      branch: { gerente_v2_enabled: c.branch },
+    })
+    const flag = readGerenteV2FlagFrom(projected, projected.capabilities)
+    assert.equal(flag.enabled, c.expect, JSON.stringify(c))
+    assert.equal(flag.source, c.source, JSON.stringify(c))
+    assert.equal(isGerenteV2Active(projected), c.expect)
+  }
+  assert.equal(computeGerenteV2Flag({ globalEnabled: true, branchEnabled: true }).enabled, true)
+})
+
+test('non-manager projection stays legacy (no gerenteV2)', () => {
+  const projected = buildSupervisorV2SessionProjection({
+    capabilities: { supervisorV2: true },
+    branch: { supervisor_v2_enabled: true },
+  })
+  assert.equal(projected.capabilities.gerenteV2, false)
+  assert.equal(projected.branch.gerente_v2_enabled, false)
+  assert.equal(isGerenteV2Active(projected), false)
 })
 
 const screenLoginSource = readUtf8Lf(fileURLToPath(
