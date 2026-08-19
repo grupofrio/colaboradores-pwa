@@ -454,10 +454,24 @@ export function reviewedPublishRevision(reviewResult) {
   return revision
 }
 
-export async function runPrepareSequence({ generateSnapshot, runOptimize, runReview }) {
+export function interpretPlanReadinessResponse(resp = {}) {
+  const isErr = resp?.ok === false || String(resp?.status || '').toLowerCase() === 'error'
+  const data = isErr ? {} : (resp?.data || resp || {})
+  if (!isErr && data.readiness) {
+    return { ok: true, readiness: data.readiness, source: 'authoritative' }
+  }
+  return { ok: false, readiness: null, source: isErr ? 'error' : 'invalid' }
+}
+
+export async function runPrepareSequence({ generateSnapshot, afterSnapshot, runOptimize, runReview }) {
   const snapshot = await generateSnapshot()
   if (!snapshot?.ok || (snapshot.lineCount != null && snapshot.lineCount <= 0)) {
     return { snapshot, optimize: null, review: null, complete: false }
+  }
+  // El snapshot cambia demand_kg/overcapacity. Hay que refrescar readiness
+  // AUTORITATIVA antes de optimize/UI para no dejar overcapacity stale.
+  if (typeof afterSnapshot === 'function') {
+    await afterSnapshot(snapshot)
   }
   const optimize = await runOptimize()
   if (optimize?.blocked || Number(optimize?.metrics?.unassigned || optimize?.unassigned || 0) > 0) {
