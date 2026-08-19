@@ -27,8 +27,8 @@ import StateScreen from '../../components/kold/StateScreen'
 import { logScreenError } from '../shared/logScreenError'
 import { fetchBriefHtml, isValidBriefDate, BRIEF_STATE } from './briefApi'
 import { getBriefById, briefSupportsDate } from './briefCatalog'
-import { resolvePalette } from '../../theme/useBrandPalette'
 import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 
 // Copy por estado: qué pasó y qué puede hacer quien lo lee. Sin jerga, sin
 // stack traces, sin "Unexpected token".
@@ -80,15 +80,15 @@ export default function BriefEmbedScreen({ briefId }) {
   const { session } = useSession()
   const brief = getBriefById(briefId)
   const withDate = briefSupportsDate(brief)
-  // Identidad clara SOLO para supervisión de ventas; los demás roles siguen en
-  // oscuro. Afecta al CONTENEDOR (fondo, título, controles): el documento del
-  // brief va dentro del iframe con su propio estilo y NO se toca.
-  const { light, c: C } = resolvePalette(session, TOKENS.colors)
+  // Contenedor brand-light para supervisor_ventas y gerente_sucursal (Mi Sucursal).
+  // El documento del brief va dentro del iframe con su propio estilo y NO se toca.
+  const brandLight = isGerenteBrandSurface(session)
+  const light = brandLight
+  const C = light ? BRAND_TOKENS.colors : TOKENS.colors
   // `StateScreen` ya acepta tokens y su default es el tema oscuro. Sin pasarlos,
   // en la cáscara clara el mensaje quedaba en blanco translúcido sobre fondo
   // claro: 1.07:1 medido, ilegible. Los demás roles no cambian.
   const stateTokens = light ? BRAND_TOKENS : TOKENS
-
   const [status, setStatus] = useState('loading') // loading | ok | <BRIEF_STATE>
   const [html, setHtml] = useState('')
   const [reloadKey, setReloadKey] = useState(0)

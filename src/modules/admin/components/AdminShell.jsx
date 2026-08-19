@@ -9,12 +9,19 @@
 // En <1024px cae a columna única centrada (fallback mobile).
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../../tokens'
+import { BRAND_TOKENS } from '../../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../../theme/gerenteBrandSurface.js'
 import { useAdmin } from '../AdminContext'
 import { useSession } from '../../../App'
 import { getEffectiveJobKeys } from '../../../lib/roleContext'
 import { isCashShiftNavigationVisible } from '../../../lib/navModel.js'
 import { BACKEND_CAPS } from '../adminService.js'
+import {
+  ADMIN_NAV_ACCESS,
+  filterAdminNavForGerentePilot,
+  resolveGerentePilotCapabilities,
+} from '../gerentePilotCaps.js'
 import CompanySelector from './CompanySelector'
 import ActivityFeed from './ActivityFeed'
 
@@ -26,21 +33,22 @@ import ActivityFeed from './ActivityFeed'
 //
 // Regla: si un rol no está en `roles`, el ítem se oculta de la UI.
 // Backend valida permisos en DB — este filtrado es solo UX.
+// `access`: read | write | mixed — piloto Gerente (gerente_writes=0) oculta writes.
 // eslint-disable-next-line react-refresh/only-export-components
 export const NAV_ITEMS = [
-  { id: 'hub',          label: 'Caja del día',     route: '/admin',                    roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'gastos',       label: 'Gastos',           route: '/admin/gastos',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'gastos-hist',  label: 'Historial gastos', route: '/admin/gastos-historial',   roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'historial-cargas', label: 'Historial cargas', route: '/admin/historial-cargas', roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'hub',          label: 'Caja del día',     route: '/admin',                    roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.READ },
+  { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.MIXED },
+  { id: 'gastos',       label: 'Gastos',           route: '/admin/gastos',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.MIXED },
+  { id: 'gastos-hist',  label: 'Historial gastos', route: '/admin/gastos-historial',   roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.READ },
+  { id: 'historial-cargas', label: 'Historial cargas', route: '/admin/historial-cargas', roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.READ },
   // Aprobar gastos: SOLO gerente/dirección (auxiliar_admin NO aprueba — ver guía §2d)
-  { id: 'gastos-aprobar', label: 'Aprobar gastos', route: '/admin/gastos/aprobar',     roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'cierre',       label: 'Cortes de caja',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'gastos-aprobar', label: 'Aprobar gastos', route: '/admin/gastos/aprobar',     roles: ['gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.WRITE },
+  { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.MIXED },
+  { id: 'cierre',       label: 'Cortes de caja',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.MIXED },
   // ── Restringidos a gerente / dirección ──────────────────────────────────
-  { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'traspaso-mp',  label: 'Traspaso MP',      route: '/admin/traspaso-materia-prima', roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.MIXED },
+  { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.READ },
+  { id: 'traspaso-mp',  label: 'Traspaso MP',      route: '/admin/traspaso-materia-prima', roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.WRITE },
   // Validar materiales / Validar bolsas: ELIMINADO (2026-04-25).
   // El traspaso MP ahora mueve stock real al confirmar, y la declaración del
   // operador al cierre devuelve el remanente automáticamente — no requiere
@@ -81,18 +89,30 @@ export default function AdminShell({
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const typo = useMemo(() => getTypo(sw), [sw])
   const isDesktop = sw >= 1024
+  const brandLight = isGerenteBrandSurface(session)
+  const TOKENS = brandLight ? BRAND_TOKENS : DARK_TOKENS
+  const iconStroke = brandLight ? 'rgba(15,42,61,0.7)' : 'rgba(255,255,255,0.7)'
   // Feed de actividad (320px) solo con ancho holgado: bajo 1366px el rail
   // global compacto (76px) + sidebar interno (220px) + feed dejarían el
   // contenido comprimido (hallazgo Codex PR #66 — triple panel a 1024–1280).
   const showActivityFeed = !hideNavigation && !hideActivityFeed && sw >= 1366
 
-  // Filtrar módulos según rol del usuario
-  const visibleNavItems = useMemo(
-    () => navItemsForRoles(
-      getEffectiveJobKeys(session),
-      capsReady ? BACKEND_CAPS : {},
-    ),
+  const effectiveCaps = useMemo(
+    () => resolveGerentePilotCapabilities(session, BACKEND_CAPS, capsReady),
     [capsReady, session],
+  )
+
+  // Filtrar módulos según rol del usuario + piloto Gerente read-only.
+  const visibleNavItems = useMemo(
+    () => filterAdminNavForGerentePilot(
+      navItemsForRoles(
+        getEffectiveJobKeys(session),
+        effectiveCaps,
+      ),
+      session,
+      effectiveCaps,
+    ),
+    [effectiveCaps, session],
   )
 
   useEffect(() => {
@@ -107,7 +127,8 @@ export default function AdminShell({
   }
 
   function handleNav(item) {
-    if (item.status === 'pending_backend' || !item.route) return
+    if (!item.route) return
+    if (item.status === 'pending_backend') return
     navigate(item.route, item.routeState ? { state: item.routeState } : undefined)
   }
 
@@ -144,7 +165,7 @@ export default function AdminShell({
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={iconStroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
           </svg>
         </button>
@@ -170,7 +191,7 @@ export default function AdminShell({
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={iconStroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
           </svg>
@@ -225,25 +246,27 @@ export default function AdminShell({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {visibleNavItems.map(item => {
                 const active = item.id === activeBlock
-                const locked = item.status === 'pending_backend'
+                const pending = item.status === 'pending_backend'
+                const readOnlyPilot = item.readOnlyPilot === true
+                const showReadOnlyBadge = readOnlyPilot || (pending && item.lockedReason)
                 return (
                   <button
                     key={item.id}
                     onClick={() => handleNav(item)}
-                    disabled={locked}
+                    disabled={pending}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 12px', borderRadius: TOKENS.radius.sm,
                       background: active ? `${TOKENS.colors.blue2}1f` : 'transparent',
                       border: `1px solid ${active ? TOKENS.colors.blue2 : 'transparent'}`,
-                      cursor: locked ? 'not-allowed' : 'pointer',
-                      opacity: locked ? 0.45 : 1,
+                      cursor: pending ? 'not-allowed' : 'pointer',
+                      opacity: pending ? 0.45 : (readOnlyPilot ? 0.92 : 1),
                       textAlign: 'left', width: '100%',
                     }}
                   >
                     <div style={{
                       width: 6, height: 6, borderRadius: '50%',
-                      background: active ? TOKENS.colors.blue3 : (locked ? TOKENS.colors.textLow : TOKENS.colors.textMuted),
+                      background: active ? TOKENS.colors.blue3 : (pending ? TOKENS.colors.textLow : TOKENS.colors.textMuted),
                       flexShrink: 0,
                     }} />
                     <span style={{
@@ -252,14 +275,16 @@ export default function AdminShell({
                     }}>
                       {item.label}
                     </span>
-                    {locked && (
-                      <span style={{
+                    {showReadOnlyBadge && (
+                      <span
+                        title={item.lockedReason || 'Disponible pronto'}
+                        style={{
                         fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
                         padding: '2px 6px', borderRadius: 4,
                         background: TOKENS.colors.warningSoft,
                         color: TOKENS.colors.warning,
                       }}>
-                        PRONTO
+                        {item.lockedReason ? 'SOLO LECTURA' : 'PRONTO'}
                       </span>
                     )}
                   </button>

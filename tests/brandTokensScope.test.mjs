@@ -53,7 +53,7 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
     // función y devuelve además la paleta. Lo que NO vale es importar el tema
     // claro a secas: eso dejaría a producción/almacén con la paleta equivocada.
     assert.match(
-      src, /isBrandLightSession|resolvePalette\(session/,
+      src, /isBrandLightSession|resolvePalette\(session|isGerenteBrandSurface/,
       `${f} es compartido y adopta el tema claro sin conmutar por rol`,
     )
     assert.match(
