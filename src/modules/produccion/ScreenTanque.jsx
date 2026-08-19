@@ -40,7 +40,10 @@ function parseSlotName(name) {
   return { col: m[1].toUpperCase(), row: parseInt(m[2], 10) }
 }
 
-export default function ScreenTanque() {
+// `readOnly` — el supervisor de produccion entra a ver el tanque desde su hub
+// (la tarjeta navegaba a una ruta que su rol no podia abrir). Ve el mismo
+// estado, sin las acciones del operador: no cosecha ni reporta incidencia.
+export default function ScreenTanque({ readOnly = false }) {
   const navigate = useNavigate()
   const { session } = useSession()
   const { machineId: machineIdParam } = useParams()
@@ -78,7 +81,7 @@ export default function ScreenTanque() {
 
   useEffect(() => {
     if (!machineId) {
-      navigate('/produccion/tanque', { replace: true })
+      navigate(readOnly ? '/supervision' : '/produccion/tanque', { replace: true })
       return
     }
     load()
@@ -419,7 +422,7 @@ export default function ScreenTanque() {
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
-          <button onClick={() => navigate('/produccion/tanque')} style={{
+          <button onClick={() => navigate(readOnly ? '/supervision' : '/produccion/tanque')} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -526,7 +529,7 @@ export default function ScreenTanque() {
             </div>
 
             {/* Siguiente a cosechar */}
-            {nextReadyId && (() => {
+            {!readOnly && nextReadyId && (() => {
               const s = slots.find(x => x.id === nextReadyId)
               if (!s) return null
               return (
@@ -605,7 +608,7 @@ export default function ScreenTanque() {
                         if (!slot) return <div key={col} />
                         const meta = stateMeta(slot.state)
                         const isNext = slot.id === nextReadyId
-                        const clickable = slot.state === 'ready'
+                        const clickable = !readOnly && slot.state === 'ready'
                         return (
                           <button
                             key={col}
@@ -640,7 +643,8 @@ export default function ScreenTanque() {
               </div>
             )}
 
-            {/* Botón incidencia */}
+            {/* Botón incidencia — solo el operador reporta */}
+            {!readOnly && (
             <button
               onClick={() => { setIncidentOpen(true); setError('') }}
               style={{
@@ -659,6 +663,18 @@ export default function ScreenTanque() {
               </svg>
               Reportar incidencia
             </button>
+            )}
+
+            {readOnly && (
+              <div style={{
+                marginTop: 4, padding: '12px 14px', borderRadius: TOKENS.radius.md,
+                background: TOKENS.glass.panelSoft, border: `1px solid ${TOKENS.colors.border}`,
+              }}>
+                <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>
+                  Vista de supervision (solo lectura). Cosecha e incidencias las registra el operador de barra.
+                </span>
+              </div>
+            )}
 
             {error && (
               <div style={{

@@ -11,6 +11,7 @@ import { fmtTime } from './rolitoService'
 import OpeningStateBanner from './OpeningStateBanner'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from '../shared/operatorTurnCloseStore'
 import ScreenTurnoEntregado from './ScreenTurnoEntregado'
+import CompresoresSection from '../shared/compresores/CompresoresSection'
 
 // V2: Rolito users get redirected to the new guided hub
 import ScreenTurnoRolito from './ScreenTurnoRolito'
@@ -279,6 +280,14 @@ export default function ScreenMiTurno() {
 
             {/* Opening State — qué recibe este turno del anterior */}
             <OpeningStateBanner shiftId={shift.id} typo={typo} />
+
+            {/* Compresores — decisión de dirección: QUIEN APAGA, REGISTRA.
+                De noche el que apaga es el operador de barra, así que la
+                sección vive también aquí, no solo en el hub del supervisor.
+                Solo con el turno abierto: `can_write` lo decide el backend. */}
+            {isBarras && shift.state === 'in_progress' && (
+              <CompresoresSection shiftId={shift.id} typo={typo} screenName="ScreenMiTurno" />
+            )}
 
             {/* Barra: CTA principal — ir al tanque */}
             {isBarras && tankData && (tankData.ready_slots_count || 0) > 0 && (

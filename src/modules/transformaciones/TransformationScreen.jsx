@@ -23,6 +23,9 @@ import { todayLocal } from '../../lib/api'
 function todayIso() {
   return todayLocal()
 }
+import { evaluateMillingVariance, recordMillingCounts } from '../shared/millingAPI'
+import { logScreenError } from '../shared/logScreenError'
+import RecountNotice from './components/RecountNotice'
 
 export default function TransformationScreen({ roleScope }) {
   const { session } = useSession()
@@ -55,6 +58,11 @@ export default function TransformationScreen({ roleScope }) {
   const selectedInputOption = findTransformationInputOption(selectedRecipe, draft.input_product_id)
   const suggestedOutputQty = suggestTransformationOutputQty(selectedRecipe, draft.input_product_id, draft.input_qty_units)
 
+  // Recuento: cuando el servidor dice que la captura se aleja del esperado,
+  // se VACIA el campo y se pide volver a contar. Un "¿estas seguro?" se
+  // contesta que si sin ir a contar; un campo vacio obliga a ir.
+  const [recount, setRecount] = useState(null) // {firstCount, evaluation} | null
+
   function updateDraft(field, value) {
     setDraft((current) => {
       const next = { ...current, [field]: value }
@@ -73,6 +81,30 @@ export default function TransformationScreen({ roleScope }) {
     setErrors(validationErrors)
     if (Object.keys(validationErrors).length) return
 
+    const resolvedRecipe = selectedInputOption?.recipe_code || draft.recipe_code
+
+    // Paso 1: preguntar al servidor ANTES de guardar. El umbral y el esperado
+    // los decide Odoo; aqui no se compara nada.
+    if (!recount) {
+      try {
+        const evaluation = await evaluateMillingVariance({
+          recipeCode: resolvedRecipe,
+          inputQtyUnits: draft.input_qty_units,
+          outputQtyUnits: draft.output_qty_units,
+        })
+        if (evaluation?.requires_recount) {
+          setRecount({ firstCount: Number(draft.output_qty_units), evaluation })
+          setDraft((current) => ({ ...current, output_qty_units: '' }))
+          setSavingError('')
+          return
+        }
+      } catch (err) {
+        // Si la verificacion no responde, NO se bloquea la captura: la
+        // operacion fisica no puede detenerse por una consulta de control.
+        logScreenError('TransformationScreen', 'evaluateMillingVariance', err)
+      }
+    }
+
     setSaving(true)
     setSavingError('')
     try {
@@ -89,6 +121,34 @@ export default function TransformationScreen({ roleScope }) {
       })
       const result = await createTransformation(payload)
       setSummary(result)
+
+      // Paso 2: dejar la evidencia. El par (primer conteo, recuento) es el
+      // dato que hoy no existe y el que distingue apunte de faltante.
+      //
+      // NO se silencia el fallo: la transformación física ya ocurrió (movió
+      // stock), pero si la evidencia no se guarda, la pantalla NO debe
+      // aparentar que sí. Antes se tragaba el error y el recuento se perdía
+      // sin que nadie lo supiera (P0).
+      if (recount) {
+        const orderId = result?.transformation_id || result?.order_id || result?.id
+        try {
+          if (!orderId) {
+            throw new Error('No se recibió el id de la transformación')
+          }
+          await recordMillingCounts({
+            orderId,
+            firstCount: recount.firstCount,
+            recount: Number(draft.output_qty_units),
+          })
+        } catch (err) {
+          logScreenError('TransformationScreen', 'recordMillingCounts', err)
+          setSavingError(
+            'La transformación se guardó, pero el recuento NO quedó registrado: '
+            + (err.message || 'error al guardar la evidencia') + '. Avisa a tu supervisor.',
+          )
+        }
+        setRecount(null)
+      }
       setDraft({
         recipe_code: '',
         input_product_id: '',
@@ -181,6 +241,18 @@ export default function TransformationScreen({ roleScope }) {
           <div style={{ marginBottom: 12, padding: 12, borderRadius: TOKENS.radius.lg, background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.20)' }}>
             <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{catalogError}</p>
           </div>
+        ) : null}
+
+        {recount ? (
+          <RecountNotice
+            evaluation={recount.evaluation}
+            firstCount={recount.firstCount}
+            typo={typo}
+            onCancel={() => {
+              setDraft((current) => ({ ...current, output_qty_units: String(recount.firstCount) }))
+              setRecount(null)
+            }}
+          />
         ) : null}
 
         <TransformationForm
