@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
-import { api, selectSalesOpsToken } from '../src/lib/api.js'
+import { api } from '../src/lib/api.js'
+
+const API_SOURCE = () => readFileSync(new URL('../src/lib/api.js', import.meta.url), 'utf8')
 
 const originalLocalStorage = globalThis.localStorage
 const originalFetch = globalThis.fetch
@@ -44,7 +47,7 @@ function setSession(session = {}) {
     employee_id: 730,
     warehouse_id: 89,
     company_id: 34,
-    gf_salesops_token: 'salesops-token',
+    odoo_employee_token: 'employee-mobile-token',
     ...session,
   }))
 }
@@ -60,13 +63,10 @@ test.afterEach(() => {
   globalThis.window = originalWindow
 })
 
-test('SalesOps prefers the configured deployment token over a stale session token', () => {
-  assert.deepEqual(
-    selectSalesOpsToken({
-      sessionToken: 'obsolete-session-token',
-      environmentToken: 'current-deployment-token',
-    }),
-    { token: 'current-deployment-token', source: 'env' },
+test('SalesOps token handling never runs in the browser', () => {
+  assert.doesNotMatch(
+    API_SOURCE(),
+    /VITE_GF_SALESOPS_TOKEN|X-GF-Token|gf_salesops_token|salesops_api_token|x_gf_token/,
   )
 })
 
@@ -93,6 +93,8 @@ test('pwa entregas van-manual-load uses only the SalesOps authority endpoint', a
 
   assert.equal(calls.length, 1)
   assert.equal(calls[0].url, '/odoo-api/gf/salesops/warehouse/van_load/create_execute')
+  assert.equal(calls[0].options.headers['X-GF-Token'], undefined)
+  assert.equal(calls[0].options.headers['X-GF-Employee-Token'], 'employee-mobile-token')
   assert.equal(calls.some(({ url }) => /\/get_records(?:_sorted)?$/.test(url)), false)
   assert.equal(calls.some(({ url }) => /\/api\/create_update$/.test(url)), false)
   const payload = JSON.parse(calls[0].options.body)
@@ -141,7 +143,8 @@ test('pwa pt accept-transfer sends negative pending ids to gf_salesops receive_p
   assert.equal(payload.params.data.picking_id, -38)
   assert.match(String(payload.params.meta.request_id || ''), /^pwa-pt-accept-transfer-/)
   assert.equal(payload.params.meta.idempotency_key, payload.params.meta.request_id)
-  assert.equal(calls[0].options.headers['X-GF-Token'], 'salesops-token')
+  assert.equal(calls[0].options.headers['X-GF-Token'], undefined)
+  assert.equal(calls[0].options.headers['X-GF-Employee-Token'], 'employee-mobile-token')
   assert.deepEqual(result, {
     ok: true,
     message: 'El pendiente PT sigue procesandose',

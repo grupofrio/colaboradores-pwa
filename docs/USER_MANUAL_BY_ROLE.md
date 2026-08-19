@@ -763,7 +763,7 @@ Adicional: **Inventario Vivo** disponible en cualquier momento como referencia.
 - El Jefe de Ruta puede ahora **aceptar** la carga desde su PWA.
 
 **Errores comunes:**
-- **"X-GF-Token inválido"**: falta variable `VITE_GF_SALESOPS_TOKEN` en Vercel. Reportar a Sebastián. Sebastián confirmó configuración 2026-04-26; si vuelve a aparecer, fue rotada.
+- **"X-GF-Token inválido"**: el proxy SalesOps de Vercel no tiene configurado `GF_SALESOPS_TOKEN` o el valor no coincide con Odoo. Reportar a Sebastián.
 - **"Sin carga asignada"**: no existe carga para hoy o ya fue aceptada por el Jefe de Ruta. Verificar con el Supervisor.
 - **"Operación temporalmente bloqueada"**: otro almacenista está ejecutando la misma carga simultáneamente. Esperar y reintentar.
 
@@ -1254,7 +1254,7 @@ por un archivo permitido de hasta 5 MiB.
 |---------|-------------|-----------|
 | "Algo salió mal" | Error JS no manejado | Pulsar "Volver al inicio". Si se repite, capturar pantalla y reportar. |
 | "Sin sesión" / vuelve a login | Sesión expiró (7 días) o cerraste en otra pestaña | Volver a entrar con PIN + barcode. |
-| "X-GF-Token inválido" | Falta `VITE_GF_SALESOPS_TOKEN` en Vercel | Reportar a Sebastián. |
+| "X-GF-Token inválido" | Falta o no coincide `GF_SALESOPS_TOKEN` del proxy Vercel | Reportar a Sebastián. |
 | "No tienes acceso a este plan" | Plan/recurso no es tuyo | Verificar con jefe que el recurso esté asignado a tu empleado. |
 | "Backend rechazó la operación" | Falla de negocio (sin stock, dato inválido) | Leer el mensaje, corregir el dato y reintentar. |
 | "Sesión drift detectado" | Otra sesión activa con tu PIN | Esperar el reload automático. |

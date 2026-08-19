@@ -209,29 +209,29 @@ El sistema **NO usa JWT** para autenticar requests. Los tokens reales que valida
 | Token | Tipo | TTL | Scope | Validación backend |
 |-------|------|-----|-------|--------------------|
 | `gf_employee_token` | opaco (`secrets.token_urlsafe(32)`) | 30 días sliding | Por empleado | Tabla en BD Odoo (`gf.employee.session` o equivalente) |
-| `gf_salesops_token` | string estático | nunca expira | Global compartido entre todos los empleados | `ir.config_parameter` |
+| Secreto SalesOps | string estático | nunca expira | Proxy Vercel server-side | `ir.config_parameter` → `GF_SALESOPS_TOKEN` |
 | `api_key` | opaco | sin expiración explícita | Por empleado | Tabla en BD Odoo |
 
-El frontend almacena todos estos tokens en `localStorage.gf_session` junto con un campo llamado `session_token` que **NO es lo que autoriza** los requests — es un placeholder local con metadatos del empleado (envuelto en formato JWT-like, ver §4.4).
+El frontend sólo almacena credenciales de identidad por empleado en `localStorage.gf_session` junto con un campo llamado `session_token` que **NO es lo que autoriza** los requests — es un placeholder local con metadatos del empleado (envuelto en formato JWT-like, ver §4.4). El secreto global SalesOps no entra al navegador.
 
 ```mermaid
 sequenceDiagram
   participant U as Usuario
   participant L as ScreenLogin.jsx
-  participant V as Vercel rewrite<br/>/api-odoo/*
+  participant V as Vercel relay<br/>/api-odoo/employee-sign-in
   participant O as Odoo /api/employee-sign-in
   participant LS as localStorage
 
   U->>L: PIN + barcode + Enter
   L->>V: POST /api-odoo/employee-sign-in<br/>{jsonrpc, method:"call", params:{barcode, pin, app, app_ver, device_name}}
   V->>O: POST /api/employee-sign-in<br/>(forwarded)
-  O-->>V: {result:{status:200, case:1, employee:{...},<br/>api_key, gf_employee_token (opaco, 30d sliding),<br/>gf_salesops_token (estático global), ...}}
-  V-->>L: response
+  O-->>V: {result:{status:200, case:1, employee:{...},<br/>api_key, gf_employee_token (opaco, 30d sliding), ...}}
+  V-->>L: response sanitizada
   Note over L: buildSessionFromOdoo()<br/>1. resolveRole(employee, jobTitle)<br/>2. inferCompanyId(role)<br/>3. exp = now + 7 días (UI hint)
-  L->>LS: localStorage.setItem('gf_session', {...tokens, exp})
+  L->>LS: localStorage.setItem('gf_session', {...credenciales de empleado, exp})
   L->>L: navigate('/', replace:true)
 
-  Note over LS: Tokens persistidos:<br/>· gf_employee_token (autoriza por empleado)<br/>· gf_salesops_token (global, scope reducido server-side)<br/>· api_key
+  Note over LS: Tokens persistidos:<br/>· gf_employee_token (autoriza por empleado)<br/>· api_key
 ```
 
 Cada request posterior añade headers desde la sesión local (ver [`src/lib/api.js:133-156`](../src/lib/api.js)):
@@ -239,7 +239,7 @@ Cada request posterior añade headers desde la sesión local (ver [`src/lib/api.
 | Header | Origen | Cuándo | Función real |
 |--------|--------|--------|--------------|
 | `X-GF-Employee-Token` | `session.gf_employee_token` | Siempre | **Fuente de verdad para autorización por empleado.** Backend valida contra BD y deriva el rol desde aquí. |
-| `X-GF-Token` | `session.gf_salesops_token` o `VITE_GF_SALESOPS_TOKEN` | Solo paths `/gf/salesops/*` | Token compartido global. Por sí solo NO autoriza acciones con `required_role` — el rol se deriva del `X-GF-Employee-Token` (ver ADR-08). |
+| `X-GF-Token` | Proxy Vercel: `GF_SALESOPS_TOKEN` | Solo paths `/gf/salesops/*` | Secreto compartido inyectado sólo en servidor. Por sí solo NO autoriza acciones con `required_role` — el rol se deriva del `X-GF-Employee-Token` (ver ADR-08). |
 | `Api-Key` | `session.api_key` | Siempre, si existe | Compatibilidad con controllers Odoo legacy que la requieren. |
 | `Authorization: Bearer <session_token>` | `session.session_token` | Siempre, si existe | Compatibilidad con clientes que esperan formato Bearer. **NO es el header que autoriza** los endpoints `/pwa-*` críticos. |
 
@@ -431,7 +431,6 @@ esquema exacto antes de aceptar respuestas del backend.
   api_key: '<odoo api key>',
   odoo_api_key: '<idem>',
   odoo_employee_token: '<gf_employee_token>',
-  gf_salesops_token: '<x_gf_token>',
   odoo_employee_session_id: <int> | null,
   odoo_employee_session_expires_at: '<iso>',
   employee_has_user: true | false,
@@ -670,7 +669,6 @@ Respuesta éxito:
     "session_token": "<placeholder local con formato JWT-like, NO autoriza requests>",
     "api_key": "<base64>",
     "gf_employee_token": "<base64>",
-    "gf_salesops_token": "<base64>",
     "gf_employee_session_id": 12345,
     "gf_employee_session_expires_at": "2026-05-04T...",
     "employee_has_user": true,
@@ -799,7 +797,7 @@ Endpoints ~17 en [`src/modules/entregas/api.js`](../src/modules/entregas/api.js)
 | Endpoint | Método | Side effects / Notas |
 |----------|--------|----------------------|
 | `/pwa-entregas/today-routes` | GET | Plan del día con stops y status. |
-| `/pwa-entregas/load-execute` | POST | **PR #25.** Wrapper sobre `POST /gf/salesops/warehouse/load/execute` (envelope gf_saleops). Resuelve `picking_ids` desde `plan_id` automáticamente, mueve stock CEDIS → unidad. Backend resuelve `analytic_account_id` desde `warehouse_id`. Requiere `VITE_GF_SALESOPS_TOKEN` configurado en Vercel. NO sella el plan; el sello `load_sealed=true` lo hace el vendedor con `accept-load`. Idempotente: respuestas con `already_done:true` se traducen a `ok:true` con mensaje "ya estaba ejecutada". |
+| `/pwa-entregas/load-execute` | POST | **PR #25.** Wrapper sobre `POST /gf/salesops/warehouse/load/execute` (envelope gf_saleops). Resuelve `picking_ids` desde `plan_id` automáticamente, mueve stock CEDIS → unidad. Backend resuelve `analytic_account_id` desde `warehouse_id`. El proxy Vercel inyecta `GF_SALESOPS_TOKEN` sólo en servidor. NO sella el plan; el sello `load_sealed=true` lo hace el vendedor con `accept-load`. Idempotente: respuestas con `already_done:true` se traducen a `ok:true` con mensaje "ya estaba ejecutada". |
 | `/pwa-entregas/confirm-load` | POST | Alias legacy de `load-execute` mantenido para no tocar UI. Mismo handler. |
 | `/pwa-entregas/returns` | GET | **PR #24.** Lista líneas de retorno desde `gf.route.stop.line` (campos reales del modelo). Devuelve líneas + datos del stop. |
 | `/pwa-entregas/return-accept` | POST | **PR #24.** Acepta líneas de devolución. Crea return picking sin auto-validación. Backend autoriza `almacenista_entregas` por `warehouse_id`. **QA PASS** con return picking creado. |
@@ -1163,7 +1161,7 @@ Los 11 roles operativos de sucursal son el scope oficial del sistema: **9 primar
 | URL | `https://grupofrio.odoo.com` |
 | Variable | `VITE_ODOO_URL` |
 | Auth | PIN + barcode → `/api/employee-sign-in` (JSON-RPC 2.0) |
-| Tokens en cliente | `api_key` (header `Api-Key`), `gf_employee_token` (`X-GF-Employee-Token`), `gf_salesops_token` (`X-GF-Token` solo para `/gf/salesops/*`), `session_token` (`Authorization: Bearer`) |
+| Tokens en cliente | `api_key` (header `Api-Key`), `gf_employee_token` (`X-GF-Employee-Token`), `session_token` (`Authorization: Bearer`). El secreto de SalesOps vive sólo en Vercel. |
 | Variable de password | NO existe en frontend. `ODOO_PASSWORD` es solo backend (no aparece en este repo). `ODOO_PASS` (prohibida) **no existe**. |
 | Modelos accedidos | `hr.employee`, `gf.cash.closing`, `gf.production.shift|cycle|packing|harvest|tank|brine_reading|downtime|scrap|maintenance|energy|machine|line`, `gf.route.plan|target|load|delivery|return|incident|stop|liquidation`, `gf.saleops.forecast|kpi.snapshot`, `gf.shift.handover`, `gf.transformation.order`, `gf.pwa.requisition`, `gf.ops.event_log`, `gf.inventory.posting`, `gf.task.task`, `gf.note.note`, `gf.supv.note`, `gf.pallet`, `gf.pt.reception`, `sale.order`, `purchase.order`, `purchase.order.line`, `stock.warehouse|quant|picking|move|location|scrap|transfer`, `res.partner`, `account.analytic.account`, `ir.attachment`, `ir.config_parameter`, `ir.model.fields`. |
 | Métodos | JSON-RPC `web/dataset/call_kw` con `read`, `search_read`, `create`, `write`, `unlink`. Wrappers en [`src/lib/api.js`](../src/lib/api.js): `readModel`, `readModelSorted`, `createUpdate`, `odooJson`, `odooHttp`. |
@@ -1245,7 +1243,7 @@ Para reactivar, según comentarios y BACKEND_TODO:
 | `VITE_N8N_VOICE_FEEDBACK_URL` | solo si voice activo | sí | `voiceFeedback.js:4` | `https://n8n.grupofrio.mx/webhook/voice-feedback` |
 | `VITE_N8N_VOICE_TOKEN` | solo si voice activo | sí | `VoiceInputButton.jsx:41`, `voiceFeedback.js:5` | (rotar con `scripts/voice/init_token.mjs`) |
 | `VITE_ODOO_URL` | sí | sí | `vite.config.js` proxy, `ScreenSurveys.jsx` | `https://grupofrio.odoo.com` |
-| `VITE_GF_SALESOPS_TOKEN` | **requerida en Vercel** para producción | sí | `lib/api.js:69, 76` (header `X-GF-Token`) | Token compartido global usado por todos los endpoints `/gf/salesops/*`, especialmente `/gf/salesops/warehouse/load/execute` (consumido por `/pwa-entregas/load-execute`, PR #25). El sistema prefiere `session.gf_salesops_token` cuando viene en el JWT, pero hace fallback a esta env var si la sesión no lo trae. **Si falta en Vercel**, los endpoints responden `UNAUTHORIZED: X-GF-Token inválido`. Sebastián confirmó configuración en Vercel para el deploy actual. NO incluir el valor real en `.env.example`. La autorización por rol se deriva del header `X-GF-Employee-Token` (ver ADR-08), no de este token. |
+| `GF_SALESOPS_TOKEN` | **requerida en Vercel** para producción | **no** | `api/salesops.js` | Secreto compartido usado por los endpoints `/gf/salesops/*`; Vercel lo inyecta server-side y nunca se incluye en el bundle, sesión ni login. Si falta o no coincide con Odoo, el endpoint responde `UNAUTHORIZED`. La autorización por rol se deriva del header `X-GF-Employee-Token` (ver ADR-08). |
 | `VITE_METABASE_URL` | sí | sí | `ScreenDashboardGerente.jsx`, `ScreenDashboardVentas.jsx` | `https://bi.grupofrio.mx` |
 | `VITE_WA_PHONE_ID_OPERACIONES` | informativo | sí (referencia) | NO se usa programáticamente en `src/` | (ID línea operaciones) |
 | `WA_ACCESS_TOKEN_OPERACIONES` | server-side n8n | **no** (sin VITE) | NO en frontend; vive en `/opt/kold-n8n/.env` de n8n | (token Cloud API) |
@@ -1454,7 +1452,7 @@ Tomadas de la lectura del código real, no de un linter genérico.
 
 ### ADR-03 — Sesión en localStorage con `gf_session`
 
-- **Contexto.** PWA debe sobrevivir a reload y a switch de pestaña. Backend Odoo devuelve tokens opacos al login (`gf_employee_token` por empleado en BD con TTL sliding 30d, `gf_salesops_token` global estático en `ir.config_parameter`, `api_key` opaco).
+- **Contexto.** PWA debe sobrevivir a reload y a switch de pestaña. Backend Odoo devuelve credenciales opacas por empleado al login (`gf_employee_token` con TTL sliding 30d y `api_key`); el secreto global SalesOps se elimina del relay antes de llegar al navegador.
 - **Decisión.** `localStorage.gf_session` guarda todos los tokens más metadatos del empleado (rol, company_id, warehouse_id, exp). El campo `session_token` es un placeholder local con formato JWT-like (puede venir firmado por Odoo o construirse en cliente con `buildLocalSessionToken`); **no es lo que autoriza** — la autorización real ocurre server-side validando `X-GF-Employee-Token` contra BD (ver ADR-08). `App.jsx` valida el campo `exp` cada carga y al cambiar de tab solo como UX hint.
 - **Consecuencias.** Robusto para offline-friendliness y multi-tab. La preocupación inicial sobre "JWT alg:none modificable" en G002 fue corregida: el campo modificable no autoriza. El vector real de privilege escalation estaba en `gf_saleops` y se resolvió con ADR-08.
 
@@ -1464,11 +1462,11 @@ Tomadas de la lectura del código real, no de un linter genérico.
 - **Decisión.** [`App.jsx`](../src/App.jsx) usa `lazy()` por pantalla. Cada módulo se carga al navegar a su ruta. `manualChunks: { vendor: ['react', ...] }` separa libs.
 - **Consecuencias.** First load bajo (≈ vendor + Login + Home). Costo de 100ms en primera entrada a cada módulo, aceptable.
 
-### ADR-05 — Tokens por sesión, no env vars
+### ADR-05 — Secreto SalesOps sólo en Vercel
 
-- **Contexto.** Múltiples roles, cada uno con su token de Odoo y eventualmente su `gf_salesops_token`.
-- **Decisión.** Login devuelve todos los tokens, los guardamos en sesión. Headers se construyen por request. `VITE_GF_SALESOPS_TOKEN` queda solo como **fallback de desarrollo** (cuando backend aún no devuelve el token).
-- **Consecuencias.** Tokens viven solo en cliente con la sesión. Riesgo: bundle expone `VITE_GF_SALESOPS_TOKEN` y `VITE_N8N_VOICE_TOKEN` — gap G003 (P2). Mitigación pendiente: server-side proxy.
+- **Contexto.** SalesOps requiere un secreto global adicional al token de empleado.
+- **Decisión.** Login y sesión nunca contienen el secreto. La PWA envía sólo la identidad de empleado; el proxy restringido de Vercel agrega `GF_SALESOPS_TOKEN` exclusivamente para `/gf/salesops/*`.
+- **Consecuencias.** El bundle y `localStorage` no exponen la credencial global. El token de voz sigue siendo un riesgo independiente en G003.
 
 ### ADR-06 — Stub-adapter para servicios sin backend
 
@@ -1484,7 +1482,7 @@ Tomadas de la lectura del código real, no de un linter genérico.
 
 ### ADR-08 — Autorización en `gf_saleops` derivada de token autenticado, no de payload
 
-- **Contexto.** El guard original de `gf_saleops` (`gf_saleops/services/guard.py:52`) derivaba el rol del usuario desde el `employee_id` enviado en el body del request. Combinado con `gf_salesops_token` global compartido entre todos los empleados, esto creaba un vector de privilege escalation: cualquier rol con sesión activa podía operar como Supervisor de Ventas (16 endpoints) o Gerente de Unidad (1 endpoint, `forecast/unlock`) mandando `employee_id` ajeno. Los demás módulos (`gf_logistics_ops`, `gf_production_ops`) ya validaban `X-GF-Employee-Token` correctamente y no estaban expuestos.
+- **Contexto.** El guard original de `gf_saleops` (`gf_saleops/services/guard.py:52`) derivaba el rol del usuario desde el `employee_id` enviado en el body del request. Combinado con el secreto global compartido de SalesOps, esto creaba un vector de privilege escalation: cualquier rol con sesión activa podía operar como Supervisor de Ventas (16 endpoints) o Gerente de Unidad (1 endpoint, `forecast/unlock`) mandando `employee_id` ajeno. Los demás módulos (`gf_logistics_ops`, `gf_production_ops`) ya validaban `X-GF-Employee-Token` correctamente y no estaban expuestos.
 - **Decisión.** El rol del usuario se deriva exclusivamente del `X-GF-Employee-Token` validado contra BD. El `employee_id` del payload sigue siendo válido para contexto (qué datos consultar, ej. supervisor revisando datos de un vendedor) pero no autoriza. Implementación con flag `require_employee_token` para rollout gradual: modo permisivo durante 7 días planeados (reducidos a 3 tras inventario de consumidores con cero impacto externo) → modo estricto. Sistema de logging permanente `gf.saleops.guard.log` con cron diario provee observabilidad del vector y de cualquier intento futuro (ver G027 cerrado en simultáneo).
 - **Consecuencias.**
   - Cualquier consumidor de `gf_saleops/*` debe enviar `X-GF-Employee-Token` válido (PWA Colaboradores y KOLD Field ya lo hacen). Otros futuros consumidores deben implementarlo desde el inicio.
@@ -1537,7 +1535,7 @@ Una entrada por trampa: síntoma → causa → fix.
 ### G15.11 — [Resuelto 2026-05-05] Privilege escalation en `gf_saleops` via `employee_id` no verificado
 
 - **Síntoma histórico:** Cualquier rol con sesión activa podía operar como Supervisor de Ventas (o Gerente de Unidad en `forecast/unlock`) mandando `employee_id` ajeno en el body del request.
-- **Causa:** `gf_salesops_token` global + guard (`gf_saleops/services/guard.py:52`) derivando rol del payload, no del token autenticado.
+- **Causa:** secreto global de SalesOps + guard (`gf_saleops/services/guard.py:52`) derivando rol del payload, no del token autenticado.
 - **Fix:** Header `X-GF-Employee-Token` ahora es fuente de verdad del rol. Flag `require_employee_token=True` activo en producción desde 2026-05-05 AM. Sistema de monitoreo `gf.saleops.guard.log` activo permanentemente. Detalle completo en ADR-08 y en G002 (resuelto).
 - **Si se vuelve a abrir el flag a `False`:** documenta razón en este manual y avisa a Yamil. La activación del modo permisivo solo es válida durante migraciones controladas con monitoreo activo del log.
 
@@ -1572,8 +1570,8 @@ Una entrada por trampa: síntoma → causa → fix.
 ### G15.13 — `/pwa-entregas/load-execute` responde "UNAUTHORIZED: X-GF-Token inválido"
 
 - **Síntoma:** Almacenista Entregas presiona "Ejecutar carga" y el endpoint responde 401.
-- **Causa:** `VITE_GF_SALESOPS_TOKEN` no está configurado en Vercel, o el JWT del usuario no trae `gf_salesops_token`, o ambos.
-- **Fix:** Configurar `VITE_GF_SALESOPS_TOKEN` en Vercel Project Settings → Environment Variables (valor en Odoo: `gf_salesops.api_token`). El frontend prefiere `session.gf_salesops_token` cuando viene en el JWT y cae a la env var como fallback. Sebastián confirmó configuración en Vercel para el deploy actual.
+- **Causa:** `GF_SALESOPS_TOKEN` falta o no coincide con `gf_salesops.api_token` en Odoo.
+- **Fix:** Configurar `GF_SALESOPS_TOKEN` como secreto de Production en Vercel Project Settings → Environment Variables. El proxy la agrega server-side; el navegador no debe enviarla.
 
 ---
 
@@ -1585,7 +1583,7 @@ Lista priorizada en [`docs/GAPS_BACKLOG.md`](./GAPS_BACKLOG.md). Resumen de los 
 2. **G006** — Conectar `tareasService` y `notasService` a backend real (P1, Sebastián). Datos del Supervisor de Ventas en localStorage.
 3. **G016** — Persistir corte y liquidación de ruta en backend (P1, Sebastián). Hoy en localStorage; Jefe de Ruta pierde estado.
 4. **G024** — Configurar dominio custom `colaboradores.grupofrio.mx` o actualizar referencias (P2, Carlos + Yamil).
-5. **G003** — Migrar `VITE_GF_SALESOPS_TOKEN` y `VITE_N8N_VOICE_TOKEN` a server-side proxy (P2, Carlos + Sebastián).
+5. **G003** — Migrar `VITE_N8N_VOICE_TOKEN` a server-side proxy (P2, Carlos + Sebastián). SalesOps ya usa proxy Vercel.
 6. **G004** — Cubrir tests en `admin/`, `ruta/`, `gerente/`, `supervisor-ventas/` (P2, TBD).
 7. **G005** — Configurar GitHub Actions CI/CD (P2, Carlos).
 8. **G008** — Endpoint centralizado `/pwa/evidence/upload` (P2, Sebastián).
@@ -1631,7 +1629,7 @@ Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_s
 | Optional endpoint | Path cuyo 401 no dispara `gf:session-expired`. |
 | Session token | Placeholder local con metadatos del empleado, formato JWT-like. Persiste en `localStorage.gf_session.session_token`. **No es lo que autoriza** los requests — se manda como `Authorization: Bearer` por compatibilidad, pero el backend autoriza con `X-GF-Employee-Token` (token opaco validado contra BD). |
 | `gf_employee_token` | Token opaco generado con `secrets.token_urlsafe(32)`, validado contra BD Odoo. TTL 30d sliding por empleado. **Fuente de verdad de autorización** en endpoints `/pwa-*` y `gf_saleops/*` (post ADR-08). |
-| `gf_salesops_token` | Token estático global guardado en `ir.config_parameter`. Compartido entre todos los empleados. Por sí solo NO autoriza acciones con `required_role` — el rol se deriva de `X-GF-Employee-Token` (ver ADR-08). |
+| Secreto SalesOps | Token estático global guardado en `ir.config_parameter`, inyectado por `GF_SALESOPS_TOKEN` sólo en Vercel. Por sí solo NO autoriza acciones con `required_role` — el rol se deriva de `X-GF-Employee-Token` (ver ADR-08). |
 | Voice envelope | Estructura JSON normalizada que devuelve W120 después de pasar audio por Deepgram + OpenAI. |
 | `IS_STUB` | Flag en servicios que indica persistencia en localStorage en lugar de backend. |
 | `MODULE_ROLE_VARIANTS` | Mapa de módulos multirol a sus roles compatibles (registro_produccion → barra/rolito/aux). |
@@ -1649,5 +1647,5 @@ Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_s
 | 2026-07-28 | Codex (cortes POS por turno) | §6.6 documenta alcance autoritativo, periodos manuales, snapshots, evidencia, idempotencia, concurrencia e invariantes. §7.4 agrega endpoints/capacidades Noche-Día y separa Legacy. §12.4 fija el orden de upgrade backend-first y rollback antes/después de activación. El manual por rol añade la operación completa de Angy. |
 | 2026-04-27 | Claude (auto-generado, review por Yamil) | Generación inicial. Cubre 18 secciones, 162+ endpoints, 9 roles operativos + 7 fuera de scope, 5 diagramas Mermaid embebidos. Branch: `docs/code-manual-initial`. Necesita review humano antes de considerarse fuente única de verdad. |
 | 2026-04-27 | Claude (verificación P1 + ajustes scope) | Reescritura de §8 a 11 roles operativos (9 primarios + 2 secundarios `auxiliar_produccion` y `auxiliar_ruta`). §8.12 reducida a 5 roles fuera de scope. Matriz Mermaid §4.4 actualizada con 2 nuevos nodos. §12 actualizada con dominio real `colaboradores-pwa.vercel.app`. §7.7 anota que `gf.inventory.posting` vive en `gf_production_ops` y que tiene 56.2% records en error en producción al momento de la auditoría. |
-| 2026-05-05 | Claude (Fase 4 — cierre del ciclo de seguridad/inventario) | §4.3 reescrito: el sistema NO usa JWT, los tokens reales son opacos (`gf_employee_token` en BD, `gf_salesops_token` estático global). §6 actualiza modelo de sesión. §7.7 cierra el aviso de bloqueador en `/pwa-pt/reception-create`. §8.6 (Almacenista PT) marca G013 cerrado y referencia G026 con la mitigación preventiva (`setup-plantas-produccion.md` en repo backend). §9.1 y §12.2 incorporan referencia obligatoria al setup de plantas. ADR-03 corregido para reflejar diagnóstico real del session_token. **Nuevo ADR-08:** autorización en `gf_saleops` derivada de `X-GF-Employee-Token`, no de payload, con flag `require_employee_token=True` en producción desde 2026-05-05. §15 actualiza gotcha G15.6 (gf.inventory.posting resuelto) y agrega G15.11 (privilege escalation resuelto). §16 reordena top 10 sin G002/G013. §17 expande glosario con definiciones precisas de `gf_employee_token`, `gf_salesops_token`, `session_token`. |
-| 2026-04-27 | Claude (actualización post-fixes operativos PR #21–#29) | Revisión incremental tras los fixes operativos ya en `main`. **§2 estado actual:** entregas/ruta/supervisor-ventas con QA PASS reciente y rangos de completitud actualizados. **§7.8 `/pwa-entregas/*`:** tabla detallada con `load-execute` (envelope gf_saleops, requiere `VITE_GF_SALESOPS_TOKEN`), `confirm-load` (alias legacy), `returns`/`return-accept` (modelo `gf.route.stop.line`), `scrap-create` (defensa `ok:false`), `live-inventory` (`available = quantity - reserved_quantity`). **§7.9 `/pwa-ruta/*`:** filtros de `my-plan`, `accept-load` validado con carga por forecast, `vehicle-checklist*` integrados. **§7.10 `/pwa-supv/*`:** detalle de cascada de `analytic_account_id` y normalización de `channel` a lowercase. **§8.7, §8.8, §8.9** actualizadas con QA PASS y fixes recientes. **§10:** `VITE_GF_SALESOPS_TOKEN` documentada como requerida con mensaje de error si falta. **§15:** nuevos gotchas G15.12 (`missing_x_analytic_account_id`) y G15.13 (UNAUTHORIZED X-GF-Token). |
+| 2026-05-05 | Claude (Fase 4 — cierre del ciclo de seguridad/inventario) | §4.3 reescrito: el sistema NO usa JWT, los tokens reales son opacos (`gf_employee_token` en BD y secreto estático de SalesOps). §6 actualiza modelo de sesión. §7.7 cierra el aviso de bloqueador en `/pwa-pt/reception-create`. §8.6 (Almacenista PT) marca G013 cerrado y referencia G026 con la mitigación preventiva (`setup-plantas-produccion.md` en repo backend). §9.1 y §12.2 incorporan referencia obligatoria al setup de plantas. ADR-03 corregido para reflejar diagnóstico real del session_token. **Nuevo ADR-08:** autorización en `gf_saleops` derivada de `X-GF-Employee-Token`, no de payload, con flag `require_employee_token=True` en producción desde 2026-05-05. §15 actualiza gotcha G15.6 (gf.inventory.posting resuelto) y agrega G15.11 (privilege escalation resuelto). §16 reordena top 10 sin G002/G013. §17 expande glosario con definiciones precisas de `gf_employee_token`, secreto SalesOps y `session_token`. |
+| 2026-04-27 | Claude (actualización post-fixes operativos PR #21–#29) | Revisión incremental tras los fixes operativos ya en `main`. **§2 estado actual:** entregas/ruta/supervisor-ventas con QA PASS reciente y rangos de completitud actualizados. **§7.8 `/pwa-entregas/*`:** tabla detallada con `load-execute` (envelope gf_saleops, hoy autenticado por proxy server-side), `confirm-load` (alias legacy), `returns`/`return-accept` (modelo `gf.route.stop.line`), `scrap-create` (defensa `ok:false`), `live-inventory` (`available = quantity - reserved_quantity`). **§7.9 `/pwa-ruta/*`:** filtros de `my-plan`, `accept-load` validado con carga por forecast, `vehicle-checklist*` integrados. **§7.10 `/pwa-supv/*`:** detalle de cascada de `analytic_account_id` y normalización de `channel` a lowercase. **§8.7, §8.8, §8.9** actualizadas con QA PASS y fixes recientes. **§15:** nuevos gotchas G15.12 (`missing_x_analytic_account_id`) y G15.13 (UNAUTHORIZED SalesOps). |
