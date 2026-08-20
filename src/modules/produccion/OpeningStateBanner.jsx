@@ -14,8 +14,10 @@
 // ───────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useCallback } from 'react'
+import { useSession } from '../../App'
 import { TOKENS } from '../../tokens'
 import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getOpeningState } from './api'
 
 // Componente compartido, pero SOLO lo montan ScreenMiTurno.jsx y
@@ -64,6 +66,9 @@ function extractSnapshot(res) {
 }
 
 export default function OpeningStateBanner({ shiftId, typo }) {
+  const { session } = useSession()
+  // Invariante de tests/brandTokensScope: superficie compartida por operador_rolito/operador_barra/auxiliar_produccion (ruta exclusiva de esos roles), adopta el tema claro incondicionalmente.
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role) || isBrandLightSession(session)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
