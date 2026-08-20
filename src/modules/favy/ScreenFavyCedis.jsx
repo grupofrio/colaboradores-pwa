@@ -129,6 +129,8 @@ export default function ScreenFavyCedis() {
     loadRequisitions()
     loadVans()
     loadAttendance()
+    // Estas cargas se actualizan solo cuando cambia el contexto de la sesion.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.company_id, session?.employee_id])
 
   const doctorsOnlyVans = useMemo(() => {
