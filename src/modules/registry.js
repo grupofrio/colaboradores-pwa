@@ -109,6 +109,18 @@ export const MODULES = [
     navPriority: 10,
   },
   {
+    id:     'favy_cedis',
+    label:  'FAVY CEDIS',
+    shortLabel: 'FAVY',
+    route:  '/favy',
+    tone:   'steel',
+    roles:  ['favy_cedis'],
+    roleContextRoles: ['favy_cedis'],
+    status: 'live',
+    icon:   'almacen',
+    navPriority: 9,
+  },
+  {
     id:     'supervision_produccion',
     label:  'Supervisión',
     shortLabel: 'Superv.',
