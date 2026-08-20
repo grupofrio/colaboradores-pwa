@@ -688,7 +688,7 @@ export default function App() {
   useEffect(() => {
     const root = document.documentElement
     const isProductionLightRole = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role)
-    if (isBrandLightSession(session) || isProductionLightRole) root.setAttribute('data-brand-light', '1')
+    if (isProductionLightRole || isBrandLightSession(session)) root.setAttribute('data-brand-light', '1')
     else root.removeAttribute('data-brand-light')
     return () => root.removeAttribute('data-brand-light')
   }, [session])
