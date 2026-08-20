@@ -54,7 +54,7 @@ test.afterEach(() => {
   globalThis.window = originalWindow
 })
 
-test('expense create sends allowed amounts without employee identity to the authenticated controller', async () => {
+test('expense create sends allowed amounts without employee identity or payment_mode', async () => {
   const calls = []
 
   globalThis.fetch = async (url, options = {}) => {
@@ -74,11 +74,10 @@ test('expense create sends allowed amounts without employee identity to the auth
     name: 'dddd',
     date: '2026-05-12',
     company_id: 34,
-    payment_mode: 'company_account',
     quantity: 1,
-    total_amount: 0,
-    account_id: 959,
+    total_amount: 10,
     description: 'zzz',
+    product_id: 55,
   })
 
   const controllerCall = calls.find((call) => call.url === '/odoo-api/pwa-admin/expense-create')
@@ -88,11 +87,11 @@ test('expense create sends allowed amounts without employee identity to the auth
   assert.ok(dict, 'expected JSON-RPC controller params')
   assert.equal(dict.name, 'dddd')
   assert.equal('employee_id' in dict, false)
+  assert.equal('payment_mode' in dict, false)
   assert.equal(dict.company_id, 34)
   assert.equal(dict.quantity, 1)
-  assert.equal(dict.payment_mode, 'company_account')
-  assert.equal(dict.total_amount, 0)
+  assert.equal(dict.total_amount, 10)
   assert.equal('unit_amount' in dict, false)
   assert.equal('account_id' in dict, false)
-  assert.equal('product_id' in dict, false)
+  assert.equal(dict.product_id, 55)
 })

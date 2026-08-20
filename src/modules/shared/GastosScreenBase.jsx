@@ -2,21 +2,28 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, getCompaniesForSucursal } from '../../tokens'
-import { createExpense, getTodayExpenses } from '../admin/api'
+import { getTodayExpenses } from '../admin/api'
+import { createExpense as createExpenseOrchestrated, BACKEND_CAPS } from '../admin/adminService'
+import { unwrapExpenseListEnvelope } from '../admin/expenseListEnvelope'
+import { isGerentePilotReadOnly } from '../admin/gerentePilotCaps'
 import { todayLocal } from '../../lib/api'
 
 export default function GastosScreenBase({
   title = 'Gastos',
   backRoute = '/admin',
   listLabel = 'GASTOS DE HOY',
+  readOnly: readOnlyProp,
 }) {
   const { session } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
+  const readOnly = readOnlyProp ?? isGerentePilotReadOnly(session, BACKEND_CAPS)
+
   const [expenses, setExpenses] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [listStatus, setListStatus] = useState('loading') // loading | ok | empty | error | unavailable
+  const [listMessage, setListMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -27,7 +34,6 @@ export default function GastosScreenBase({
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayLocal())
-  const [paymentMode, setPaymentMode] = useState('company')
   const [description, setDescription] = useState('')
 
   useEffect(() => {
@@ -39,29 +45,39 @@ export default function GastosScreenBase({
   useEffect(() => { loadExpenses() }, [])
 
   async function loadExpenses() {
-    setLoading(true)
+    setListStatus('loading')
+    setListMessage('')
     try {
       const data = await getTodayExpenses()
-      setExpenses(Array.isArray(data) ? data : [])
-    } catch {
-      // silent
-    } finally {
-      setLoading(false)
+      const envelope = unwrapExpenseListEnvelope(data)
+      setExpenses(envelope.items)
+      setListStatus(envelope.status === 'ok' || envelope.status === 'empty' ? envelope.status : envelope.status)
+      if (envelope.status === 'error' || envelope.status === 'unavailable') {
+        setListMessage(envelope.message || 'No se pudieron cargar los gastos')
+      }
+    } catch (e) {
+      setExpenses([])
+      setListStatus('error')
+      setListMessage(e?.message || 'Error al cargar gastos')
     }
   }
 
   async function handleSubmit() {
+    if (readOnly) {
+      setError('Solo lectura: el piloto Gerente no puede registrar gastos.')
+      return
+    }
     if (!name.trim()) { setError('Ingresa una descripcion'); return }
     if (!amount || Number(amount) <= 0) { setError('Ingresa un monto valido'); return }
     setSubmitting(true)
     setError('')
     setSuccess('')
     try {
-      await createExpense({
+      // Server derives payment mode; never send it from the client.
+      await createExpenseOrchestrated({
         name: name.trim(),
         total_amount: Number(amount),
         date,
-        payment_mode: paymentMode === 'company' ? 'company_account' : 'own_account',
         description: description.trim(),
         company_id: companyId,
         sucursal: session?.sucursal || '',
@@ -71,7 +87,6 @@ export default function GastosScreenBase({
       setName('')
       setAmount('')
       setDescription('')
-      setPaymentMode('company')
       await loadExpenses()
       setTimeout(() => setSuccess(''), 3000)
     } catch (e) {
@@ -81,7 +96,10 @@ export default function GastosScreenBase({
     }
   }
 
-  const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const fmt = (n) => {
+    if (n == null || !Number.isFinite(Number(n))) return '—'
+    return '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  }
 
   const inputStyle = {
     width: '100%',
@@ -124,6 +142,17 @@ export default function GastosScreenBase({
           <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>{title}</span>
         </div>
 
+        {readOnly && (
+          <div style={{
+            padding: '10px 14px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
+            background: 'rgba(43,143,224,0.12)', border: `1px solid ${TOKENS.colors.blue2}40`,
+          }}>
+            <span style={{ ...typo.caption, color: TOKENS.colors.blue3 }}>
+              Solo lectura — puedes consultar gastos; el registro está desactivado en el piloto Gerente.
+            </span>
+          </div>
+        )}
+
         {error && (
           <div style={{ padding: '10px 14px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`, marginBottom: 12 }}>
             <span style={{ ...typo.caption, color: TOKENS.colors.error }}>{error}</span>
@@ -135,78 +164,75 @@ export default function GastosScreenBase({
           </div>
         )}
 
-        <div style={{
-          padding: 18, borderRadius: TOKENS.radius.xl,
-          background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
-          marginBottom: 20,
-        }}>
-          <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 0, marginBottom: 14 }}>NUEVO GASTO</p>
-
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Empresa *</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-            {companies.map(co => (
-              <button key={co.id} onClick={() => setCompanyId(co.id)} style={{
-                padding: '8px 14px', borderRadius: TOKENS.radius.pill,
-                background: companyId === co.id ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
-                border: `1px solid ${companyId === co.id ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
-                color: companyId === co.id ? TOKENS.colors.blue3 : TOKENS.colors.textMuted,
-                fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              }}>
-                {co.name}
-              </button>
-            ))}
-          </div>
-
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Descripcion *</label>
-          <input type="text" placeholder="Ej: Compra de papeleria" value={name} onChange={e => setName(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
-
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Monto *</label>
-          <input type="number" placeholder="0.00" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
-
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Fecha</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, marginBottom: 12, colorScheme: 'dark' }} />
-
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>Modo de pago</label>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <button onClick={() => setPaymentMode('company')} style={{
-              flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
-              background: paymentMode === 'company' ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
-              border: `1px solid ${paymentMode === 'company' ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
-            }}>
-              <span style={{ ...typo.caption, color: paymentMode === 'company' ? TOKENS.colors.blue3 : TOKENS.colors.textMuted, fontWeight: 600 }}>Pagado por empresa</span>
-            </button>
-            <button onClick={() => setPaymentMode('employee')} style={{
-              flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
-              background: paymentMode === 'employee' ? `${TOKENS.colors.warning}22` : TOKENS.colors.surface,
-              border: `1px solid ${paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.border}`,
-            }}>
-              <span style={{ ...typo.caption, color: paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.textMuted, fontWeight: 600 }}>Pagado por empleado</span>
-            </button>
-          </div>
-
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Notas (opcional)</label>
-          <textarea placeholder="Detalles adicionales..." rows={3} value={description} onChange={e => setDescription(e.target.value)}
-            style={{ ...inputStyle, resize: 'vertical', marginBottom: 14 }}
-          />
-
-          <button onClick={handleSubmit} disabled={submitting} style={{
-            width: '100%', padding: '14px 0', borderRadius: TOKENS.radius.md,
-            background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
-            opacity: submitting ? 0.6 : 1,
+        {!readOnly && (
+          <div style={{
+            padding: 18, borderRadius: TOKENS.radius.xl,
+            background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+            marginBottom: 20,
           }}>
-            {submitting ? (
-              <div style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
-            ) : (
-              <span style={{ ...typo.body, color: 'white', fontWeight: 700 }}>Registrar Gasto</span>
-            )}
-          </button>
-        </div>
+            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 0, marginBottom: 14 }}>NUEVO GASTO</p>
+
+            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Empresa *</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {companies.map(co => (
+                <button key={co.id} onClick={() => setCompanyId(co.id)} style={{
+                  padding: '8px 14px', borderRadius: TOKENS.radius.pill,
+                  background: companyId === co.id ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
+                  border: `1px solid ${companyId === co.id ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                  color: companyId === co.id ? TOKENS.colors.blue3 : TOKENS.colors.textMuted,
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>
+                  {co.name}
+                </button>
+              ))}
+            </div>
+
+            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Descripcion *</label>
+            <input type="text" placeholder="Ej: Compra de papeleria" value={name} onChange={e => setName(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
+
+            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Monto *</label>
+            <input type="number" placeholder="0.00" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
+
+            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Fecha</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, marginBottom: 12, colorScheme: 'dark' }} />
+
+            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Notas (opcional)</label>
+            <textarea placeholder="Detalles adicionales..." rows={3} value={description} onChange={e => setDescription(e.target.value)}
+              style={{ ...inputStyle, resize: 'vertical', marginBottom: 14 }}
+            />
+
+            <button
+              type="button"
+              data-testid="expense-create-cta"
+              onClick={handleSubmit}
+              disabled={submitting}
+              style={{
+                width: '100%', padding: '14px 0', borderRadius: TOKENS.radius.md,
+                background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
+                opacity: submitting ? 0.6 : 1,
+              }}
+            >
+              {submitting ? (
+                <div style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
+              ) : (
+                <span style={{ ...typo.body, color: 'white', fontWeight: 700 }}>Registrar Gasto</span>
+              )}
+            </button>
+          </div>
+        )}
 
         <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>{listLabel}</p>
 
-        {loading ? (
+        {listStatus === 'loading' ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 30 }}>
             <div style={{ width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          </div>
+        ) : listStatus === 'error' || listStatus === 'unavailable' ? (
+          <div style={{
+            padding: '24px 20px', borderRadius: TOKENS.radius.lg, textAlign: 'center',
+            background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
+          }}>
+            <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0 }}>{listMessage || 'Gastos no disponibles'}</p>
           </div>
         ) : expenses.length === 0 ? (
           <div style={{
@@ -218,7 +244,7 @@ export default function GastosScreenBase({
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 30 }}>
             {expenses.map((exp, i) => (
-              <div key={exp.id || i} style={{
+              <div key={exp.id || exp.expense_id || i} style={{
                 padding: '12px 14px', borderRadius: TOKENS.radius.md,
                 background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -229,7 +255,7 @@ export default function GastosScreenBase({
                     {exp.create_date ? new Date(exp.create_date.replace(' ', 'T') + 'Z').toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' }) : exp.date ? new Date(exp.date + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : ''}
                   </p>
                 </div>
-                <span style={{ ...typo.title, color: TOKENS.colors.warning }}>{fmt(exp.total_amount || exp.amount)}</span>
+                <span style={{ ...typo.title, color: TOKENS.colors.warning }}>{fmt(exp.total_amount ?? exp.amount)}</span>
                 {exp.state && (
                   <div style={{
                     padding: '3px 8px', borderRadius: TOKENS.radius.pill,
