@@ -76,10 +76,11 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
 
 test('la navegación global conmuta por rol, no por import fijo', () => {
   const nav = readFileSync(path.join(SRC, 'components/AppNav.jsx'), 'utf8')
-  // La decisión sigue saliendo de `isBrandLightSession(session)`; lo que cambió
-  // es que ese booleano ahora se nombra (`light`) porque también decide el logo
-  // del rail. Se comprueba la CADENA, no una línea literal.
-  assert.match(nav, /const\s+light\s*=\s*isBrandLightSession\(session\)/)
+  // La decisión sale de `isGerenteBrandSurface(session)` (envuelve
+  // isBrandLightSession OR isGerenteSucursalPilotSession) desde que Gerente de
+  // sucursal también adoptó la identidad clara; ese booleano se nombra
+  // `light` porque también decide el logo del rail. Se comprueba la CADENA.
+  assert.match(nav, /const\s+light\s*=\s*isGerenteBrandSurface\(session\)/)
   assert.match(nav, /light\s*\?\s*BRAND_TOKENS\s*:\s*DARK_TOKENS/)
 })
 

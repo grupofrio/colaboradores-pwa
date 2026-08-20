@@ -13,10 +13,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS as DARK_TOKENS } from '../tokens'
 // La navegación es COMPARTIDA: el tema se elige por rol efectivo, no por
-// import. Solo supervision de ventas ve la version clara (rebranding PR2);
-// cualquier otro rol conserva exactamente la barra oscura de siempre.
+// import. Supervisión de ventas y Gerente de sucursal ven la versión clara
+// (rebranding PR2 + piloto Gerente); cualquier otro rol conserva exactamente
+// la barra oscura de siempre.
 import { BRAND_TOKENS } from '../theme/brandTokens'
-import { isBrandLightSession } from '../theme/useBrandPalette'
+import { isGerenteBrandSurface } from '../theme/gerenteBrandSurface.js'
 import { BRAND_LOGO_MARK } from '../theme/brandLight'
 import {
   buildMobileNav, buildDesktopNav, navLabel,
@@ -267,7 +268,7 @@ function DesktopRail({ nav, compact, onGo, t, light }) {
 /* ── AppNav ───────────────────────────────────────────────────────────────── */
 export default function AppNav() {
   const { session } = useSession()
-  const light = isBrandLightSession(session)
+  const light = isGerenteBrandSurface(session)
   const t = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const location = useLocation()

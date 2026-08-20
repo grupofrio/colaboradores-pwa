@@ -7,88 +7,96 @@ import ModuleRolePrompt from '../components/ModuleRolePrompt'
 import { upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
 import { isBrandLightSession } from '../theme/useBrandPalette'
+import { isGerenteBrandSurface } from '../theme/gerenteBrandSurface.js'
+import { BRAND_TOKENS } from '../theme/brandTokens'
 import SupervisorVentasHome from '../modules/supervisor-ventas/brand/SupervisorVentasHome'
 
 /* ============================================================================
-   ICONS
+   ICONS — dos sets con la MISMA forma (paths), solo cambia el trazo según el
+   tema: blanco sobre fondo oscuro, navy sobre fondo claro (Gerente).
 ============================================================================ */
-const ICONS = {
-  kpis: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 3v18h18" stroke="rgba(255,255,255,0.35)"/>
-      <path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
-    </svg>
-  ),
-  encuestas: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4" y="4" width="16" height="16" rx="3" stroke="rgba(255,255,255,0.35)"/>
-      <line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/>
-      <path d="M9 17l1.6 1.6L15 14.2" strokeWidth="2"/>
-    </svg>
-  ),
-  logros: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 21h8"/><path d="M12 17v4"/>
-      <path d="M8 4h8" stroke="rgba(255,255,255,0.35)"/>
-      <path d="M17 4v7a5 5 0 0 1-10 0V4" stroke="rgba(255,255,255,0.45)"/>
-    </svg>
-  ),
-  produccion: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="14" rx="2" stroke="rgba(255,255,255,0.35)"/>
-      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-      <line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>
-    </svg>
-  ),
-  supervision: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="rgba(255,255,255,0.35)"/>
-      <circle cx="12" cy="12" r="3"/>
-    </svg>
-  ),
-  almacen: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="rgba(255,255,255,0.35)"/>
-      <polyline points="9 22 9 12 15 12 15 22"/>
-    </svg>
-  ),
-  ruta: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.35)"/>
-      <polygon points="10 8 16 12 10 16 10 8"/>
-    </svg>
-  ),
-  entregas: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="1" y="3" width="15" height="13" rx="1" stroke="rgba(255,255,255,0.35)"/>
-      <path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
-    </svg>
-  ),
-  equipo: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="rgba(255,255,255,0.35)"/>
-      <circle cx="9" cy="7" r="4" stroke="rgba(255,255,255,0.45)"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-  ),
-  admin: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="5" width="20" height="14" rx="2" stroke="rgba(255,255,255,0.35)"/>
-      <line x1="2" y1="10" x2="22" y2="10"/>
-      <path d="M7 15h4"/><path d="M15 15h2" strokeWidth="2"/>
-    </svg>
-  ),
-  copiloto: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="rgba(255,255,255,0.45)"/>
-    </svg>
-  ),
-  torres: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="rgba(255,255,255,0.45)"/>
-    </svg>
-  ),
+function buildIcons(stroke, strokeSoft, strokeSofter) {
+  return {
+    kpis: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 3v18h18" stroke={strokeSoft}/>
+        <path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
+      </svg>
+    ),
+    encuestas: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="4" width="16" height="16" rx="3" stroke={strokeSoft}/>
+        <line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/>
+        <path d="M9 17l1.6 1.6L15 14.2" strokeWidth="2"/>
+      </svg>
+    ),
+    logros: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 21h8"/><path d="M12 17v4"/>
+        <path d="M8 4h8" stroke={strokeSoft}/>
+        <path d="M17 4v7a5 5 0 0 1-10 0V4" stroke={strokeSofter}/>
+      </svg>
+    ),
+    produccion: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="14" rx="2" stroke={strokeSoft}/>
+        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+        <line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>
+      </svg>
+    ),
+    supervision: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke={strokeSoft}/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    ),
+    almacen: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke={strokeSoft}/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+    ),
+    ruta: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" stroke={strokeSoft}/>
+        <polygon points="10 8 16 12 10 16 10 8"/>
+      </svg>
+    ),
+    entregas: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="3" width="15" height="13" rx="1" stroke={strokeSoft}/>
+        <path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+      </svg>
+    ),
+    equipo: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke={strokeSoft}/>
+        <circle cx="9" cy="7" r="4" stroke={strokeSofter}/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    ),
+    admin: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2" stroke={strokeSoft}/>
+        <line x1="2" y1="10" x2="22" y2="10"/>
+        <path d="M7 15h4"/><path d="M15 15h2" strokeWidth="2"/>
+      </svg>
+    ),
+    copiloto: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke={strokeSofter}/>
+      </svg>
+    ),
+    torres: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke={strokeSofter}/>
+      </svg>
+    ),
+  }
 }
+
+const ICONS_DARK = buildIcons('white', 'rgba(255,255,255,0.4)', 'rgba(255,255,255,0.45)')
+const ICONS_LIGHT = buildIcons('#0F2A3D', 'rgba(15,42,61,0.35)', 'rgba(15,42,61,0.45)')
 
 
 /* ============================================================================
@@ -143,10 +151,20 @@ function FadeIn({ children, delay = 0, y = 14 }) {
 /* ============================================================================
    MODULE CARD
 ============================================================================ */
-function ModuleCard({ module, typo, onClick }) {
+function ModuleCard({ module, typo, onClick, light }) {
   const [pressed, setPressed] = useState(false)
-  const tone = MODULE_TONES[module.tone] || MODULE_TONES.steel
+  const T = light ? BRAND_TOKENS : TOKENS
+  const ICON_SET = light ? ICONS_LIGHT : ICONS_DARK
+  const effectiveTone = light && module.id === 'logros' ? 'blueSoft' : module.tone
+  // `steel` es un lavado BLANCO translúcido pensado para fondo oscuro: sobre
+  // claro se vuelve invisible (tarjeta "en blanco"). En claro usa un lavado
+  // navy equivalente; los demás tonos ya tienen color propio y se ven bien.
+  const tone = (light && effectiveTone === 'steel')
+    ? { bg: 'linear-gradient(180deg, rgba(15,42,61,0.05), rgba(15,42,61,0.02))', border: 'rgba(15,42,61,0.14)', glow: 'rgba(15,42,61,0.05)' }
+    : (MODULE_TONES[effectiveTone] || MODULE_TONES.steel)
   const isPending = module.status === 'pending'
+  const insetHighlight = light ? 'rgba(15,42,61,0.06)' : 'rgba(255,255,255,0.08)'
+  const iconPlateBg = light ? 'rgba(15,42,61,0.05)' : 'rgba(255,255,255,0.06)'
 
   return (
     <button
@@ -158,8 +176,8 @@ function ModuleCard({ module, typo, onClick }) {
         position: 'relative',
         background: tone.bg,
         border: `1px solid ${tone.border}`,
-        borderRadius: TOKENS.radius.xl,
-        boxShadow: pressed ? 'none' : `${TOKENS.shadow.md}, inset 0 1px 0 rgba(255,255,255,0.08), 0 0 16px ${tone.glow}`,
+        borderRadius: T.radius.xl,
+        boxShadow: pressed ? 'none' : `${T.shadow.md}, inset 0 1px 0 ${insetHighlight}, 0 0 16px ${tone.glow}`,
         padding: '18px 14px 16px',
         display: 'flex',
         flexDirection: 'column',
@@ -194,8 +212,8 @@ function ModuleCard({ module, typo, onClick }) {
       {module.badge > 0 && !isPending && (
         <div style={{
           position: 'absolute', top: 10, right: 10,
-          background: TOKENS.colors.blue2,
-          borderRadius: TOKENS.radius.pill,
+          background: T.colors.blue2,
+          borderRadius: T.radius.pill,
           minWidth: 20, height: 20,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 11, fontWeight: 700, color: 'white',
@@ -208,19 +226,19 @@ function ModuleCard({ module, typo, onClick }) {
       {/* Icono */}
       <div style={{
         width: 42, height: 42,
-        borderRadius: TOKENS.radius.md,
-        background: 'rgba(255,255,255,0.06)',
+        borderRadius: T.radius.md,
+        background: iconPlateBg,
         border: `1px solid ${tone.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
       }}>
-        {ICONS[module.icon] || ICONS.kpis}
+        {ICON_SET[module.icon] || ICON_SET.kpis}
       </div>
 
       {/* Label */}
       <span style={{
         ...typo.caption,
-        color: TOKENS.colors.textSoft,
+        color: T.colors.textSoft,
         fontWeight: 600,
         lineHeight: 1.3,
         letterSpacing: '-0.01em',
@@ -259,6 +277,10 @@ export default function ScreenHome() {
   const companyLabel = COMPANY_LABELS[session?.company_id] ?? session?.company ?? ''
   const sucursal = session?.sucursal ?? ''
   const turnoLabel = TURNO_LABELS[session?.turno] ?? ''
+  // Identidad clara para Gerente de sucursal (piloto): misma pantalla y misma
+  // lógica de módulos, solo cambian los colores — ver ModuleCard/T más abajo.
+  const lightHome = isGerenteBrandSurface(session)
+  const T = lightHome ? BRAND_TOKENS : TOKENS
 
   function handleModule(mod) {
     const decision = getModuleEntryDecisionForSession(mod, session)
@@ -323,7 +345,7 @@ export default function ScreenHome() {
     <>
     <div style={{
       minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+      background: `linear-gradient(160deg, ${T.colors.bg0} 0%, ${T.colors.bg1} 50%, ${T.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'calc(env(safe-area-inset-bottom) + 72px)',
       position: 'relative',
@@ -409,13 +431,13 @@ export default function ScreenHome() {
               onClick={() => navigate('/profile')}
               style={{
                 width: 36, height: 36, borderRadius: '50%',
-                background: TOKENS.colors.surface,
-                border: `1px solid ${TOKENS.colors.border}`,
+                background: T.colors.surface,
+                border: `1px solid ${T.colors.border}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer',
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={lightHome ? 'rgba(15,42,61,0.6)' : 'rgba(255,255,255,0.6)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
               </svg>
             </button>
@@ -425,23 +447,23 @@ export default function ScreenHome() {
         {/* ── Saludo ──────────────────────────────────────────────────── */}
         <FadeIn delay={80}>
           <div style={{ paddingTop: 12, paddingBottom: 20 }}>
-            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginBottom: 4, letterSpacing: '0.04em' }}>
+            <p style={{ ...typo.caption, color: T.colors.textMuted, marginBottom: 4, letterSpacing: '0.04em' }}>
               Bienvenido
             </p>
-            <h1 style={{ ...typo.h1, color: TOKENS.colors.text, margin: 0 }}>
+            <h1 style={{ ...typo.h1, color: T.colors.text, margin: 0 }}>
               {firstName}
             </h1>
 
             {/* Chips de contexto */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
               {companyLabel && (
-                <Chip label={companyLabel} color={TOKENS.colors.blue2} />
+                <Chip label={companyLabel} color={T.colors.blue2} />
               )}
               {sucursal && (
-                <Chip label={sucursal} color={TOKENS.colors.blue3} />
+                <Chip label={sucursal} color={T.colors.blue3} />
               )}
               {turnoLabel && (
-                <Chip label={turnoLabel} color={TOKENS.colors.textMuted} />
+                <Chip label={turnoLabel} color={T.colors.textMuted} />
               )}
             </div>
           </div>
@@ -451,7 +473,7 @@ export default function ScreenHome() {
         <FadeIn delay={160}>
           <p style={{
             ...typo.overline,
-            color: TOKENS.colors.textLow,
+            color: T.colors.textLow,
             marginBottom: 14,
             letterSpacing: '0.18em',
           }}>
@@ -465,7 +487,7 @@ export default function ScreenHome() {
           }}>
             {modules.map((mod, i) => (
               <FadeIn key={mod.id} delay={180 + i * 40}>
-                <ModuleCard module={mod} typo={typo} onClick={handleModule} />
+                <ModuleCard module={mod} typo={typo} onClick={handleModule} light={lightHome} />
               </FadeIn>
             ))}
           </div>

@@ -162,7 +162,7 @@ export default function BriefEmbedScreen({ briefId }) {
       data-testid="brief-surface"
       style={{
         width: '100%',
-        ...(light ? { background: C.bg, minHeight: '100dvh' } : null),
+        ...(light ? { background: `linear-gradient(160deg, ${C.bg0} 0%, ${C.bg1} 55%, ${C.bg2} 100%)`, minHeight: '100dvh' } : null),
       }}
     >
     <div
@@ -207,8 +207,8 @@ export default function BriefEmbedScreen({ briefId }) {
             style={{
               cursor: 'pointer', fontSize: 12.5, fontWeight: 700, padding: '8px 16px',
               borderRadius: TOKENS.radius.pill, background: 'transparent',
-              color: light ? C.primary : C.blue3,
-              border: `1px solid ${light ? C.border : C.borderBlue}`,
+              color: light ? C.blue3 : C.blue3,
+              border: `1px solid ${light ? C.borderBlue : C.borderBlue}`,
             }}
           >
             Actualizar

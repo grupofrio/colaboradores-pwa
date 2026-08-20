@@ -4,7 +4,7 @@ import { useSession } from "../App";
 import { apiGet as _apiGet, apiPost as _apiPost, apiPatch as _apiPatch } from "../lib/api";
 import { runLogout } from "../lib/logout";
 import { BRAND_TOKENS } from "../theme/brandTokens";
-import { isBrandLightSession } from "../theme/useBrandPalette";
+import { isGerenteBrandSurface } from "../theme/gerenteBrandSurface.js";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -123,11 +123,15 @@ const SKINS = {
     leaveIconBg: "rgba(22,101,52,0.08)",
     leaveIconBorder: "rgba(22,101,52,0.16)",
     scrim: "15,42,61",
-    sheetBg: "#FFFFFF",
+    sheetBg: "linear-gradient(180deg, #FFFFFF 0%, #F7FCFF 100%)",
     sheetHandle: "#DBEFF9",
     sheetShadow: "0 -8px 32px rgba(15,42,61,0.16)",
     shimmer: "linear-gradient(90deg, #E8F4FB 25%, #F5FAFE 50%, #E8F4FB 75%)",
     cta: BRAND_TOKENS.colors.ctaGradient,
+    sheetItemBorder: "rgba(0,119,187,0.10)",
+    sheetItemText: "#0F2A3D",
+    sheetItemSubtext: "#5B7285",
+    sheetDangerBg: "rgba(185,28,28,0.08)",
   },
 };
 
@@ -576,11 +580,24 @@ function EditPhotoSheet({ onClose, sw, employee, onPhotoUpdated }) {
           </div>
         )}
         {options.filter(o => !o.hidden).map((opt, i, arr) => (
-          <div key={i} onClick={uploading ? undefined : opt.action} style={{ display:"flex", alignItems:"center", gap:14, padding:"13px 0", borderBottom: i < arr.length - 1 ? `1px solid ${TOKENS.colors.border}` : "none", cursor: uploading ? "wait" : "pointer", opacity: uploading ? 0.5 : 1 }}>
+          <div
+            key={i}
+            onClick={uploading ? undefined : opt.action}
+            style={{
+              display:"flex",
+              alignItems:"center",
+              gap:14,
+              padding:"13px 0",
+              borderBottom: i < arr.length - 1 ? `1px solid ${SKIN.sheetItemBorder || TOKENS.colors.border}` : "none",
+              cursor: uploading ? "wait" : "pointer",
+              opacity: uploading ? 0.5 : 1,
+              background: opt.destructive ? (SKIN.sheetDangerBg || TOKENS.colors.errorSoft) : "transparent",
+            }}
+          >
             <div style={{ fontSize:22, width:34, textAlign:"center" }}>{opt.icon}</div>
             <div>
-              <div style={{ fontSize:14, fontWeight:700, color: opt.destructive ? TOKENS.colors.error : TOKENS.colors.text }}>{opt.label}</div>
-              <div style={{ fontSize:11, color:TOKENS.colors.textLow, marginTop:2 }}>{opt.sub}</div>
+              <div style={{ fontSize:14, fontWeight:700, color: opt.destructive ? TOKENS.colors.error : (SKIN.sheetItemText || TOKENS.colors.text) }}>{opt.label}</div>
+              <div style={{ fontSize:11, color: SKIN.sheetItemSubtext || TOKENS.colors.textLow, marginTop:2 }}>{opt.sub}</div>
             </div>
           </div>
         ))}
@@ -654,11 +671,8 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
   const [winH, setWinH] = useState(window.innerHeight);
   const navigate = useNavigate();
   const { logout, session } = useSession();
-  // Único punto donde se decide el tema. `isBrandLightSession` es la MISMA
-  // función que ya conmuta la navegación global, así que "Yo" no puede quedar
-  // oscuro dentro de una app clara ni al revés: si un rol deja de ser claro
-  // allá, aquí cambia solo.
-  const light = isBrandLightSession(session);
+  // `Yo` comparte la misma superficie clara de gerente que Home y Brief.
+  const light = isGerenteBrandSurface(session);
   const theme = useMemo(
     () => ({ t: light ? BRAND_TOKENS : DARK_TOKENS, s: light ? SKINS.light : SKINS.dark, light }),
     [light],

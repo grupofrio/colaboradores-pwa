@@ -9,40 +9,40 @@ import PanelKpisSupervisor from "../modules/supervisor-ventas/kpis/PanelKpis";
 ============================================================================ */
 const TOKENS = {
   colors: {
-    bg0: "#030811",
-    bg1: "#04101f",
-    bg2: "#07162b",
-    surface: "rgba(255,255,255,0.05)",
-    surfaceSoft: "rgba(255,255,255,0.03)",
-    surfaceStrong: "rgba(255,255,255,0.07)",
-    border: "rgba(255,255,255,0.08)",
-    borderBlue: "rgba(97,178,255,0.18)",
+    bg0: "#f3f7fc",
+    bg1: "#eef4fb",
+    bg2: "#e6eef8",
+    surface: "rgba(255,255,255,0.95)",
+    surfaceSoft: "rgba(255,255,255,0.82)",
+    surfaceStrong: "rgba(232,240,250,0.95)",
+    border: "rgba(21,73,155,0.12)",
+    borderBlue: "rgba(43,143,224,0.2)",
     blue: "#15499B",
     blue2: "#2B8FE0",
     blue3: "#61b2ff",
-    blueGlow: "rgba(43,143,224,0.16)",
-    text: "#FFFFFF",
-    textSoft: "rgba(255,255,255,0.82)",
-    textMuted: "rgba(255,255,255,0.60)",  /* ↑ 0.52→0.60 legible bajo sol */
-    textLow: "rgba(255,255,255,0.55)",    /* ↑ 0.34→0.55 campo/exterior */
-    success: "#22c55e",
-    successSoft: "rgba(34,197,94,0.12)",
-    warning: "#f59e0b",
-    error: "#ef4444",
-    errorSoft: "rgba(239,68,68,0.12)",
+    blueGlow: "rgba(43,143,224,0.14)",
+    text: "#12263f",
+    textSoft: "#344b67",
+    textMuted: "#5f7490",
+    textLow: "#71859f",
+    success: "#228b5d",
+    successSoft: "rgba(34,139,93,0.10)",
+    warning: "#b7791f",
+    error: "#c75a63",
+    errorSoft: "rgba(199,90,99,0.10)",
   },
   radius: { sm: 14, md: 18, lg: 22, xl: 24, pill: 999 },
   shadow: {
-    soft: "0 8px 20px rgba(0,0,0,0.18)",
-    md: "0 14px 30px rgba(0,0,0,0.22)",
-    lg: "0 20px 44px rgba(0,0,0,0.28)",
+    soft: "0 8px 20px rgba(21,73,155,0.08)",
+    md: "0 14px 30px rgba(21,73,155,0.10)",
+    lg: "0 20px 44px rgba(21,73,155,0.14)",
     blue: "0 0 22px rgba(43,143,224,0.16)",
-    inset: "inset 0 1px 0 rgba(255,255,255,0.08)",
+    inset: "inset 0 1px 0 rgba(255,255,255,0.82)",
   },
   glass: {
-    panel: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
-    panelSoft: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025))",
-    hero: "linear-gradient(180deg, rgba(21,73,155,0.20), rgba(255,255,255,0.03))",
+    panel: "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,251,255,0.96))",
+    panelSoft: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(241,246,252,0.96))",
+    hero: "linear-gradient(180deg, rgba(43,143,224,0.10), rgba(255,255,255,0.98))",
   },
   motion: { fast: "180ms ease", normal: "280ms ease", spring: "380ms cubic-bezier(0.34,1.56,0.64,1)" },
 };
@@ -109,11 +109,11 @@ const PERIODS = [
 
 function PeriodSelector({ value, onChange, sw }) {
   return (
-    <div style={{ display:"flex", gap:6, padding:"4px", background:"rgba(255,255,255,0.04)", border:`1px solid ${TOKENS.colors.border}`, borderRadius:TOKENS.radius.pill, alignSelf:"flex-start" }}>
+    <div style={{ display:"flex", gap:6, padding:"4px", background:"rgba(255,255,255,0.92)", border:`1px solid ${TOKENS.colors.border}`, borderRadius:TOKENS.radius.pill, alignSelf:"flex-start" }}>
       {PERIODS.map(p => {
         const active = p.id === value;
         return (
-          <button key={p.id} onClick={() => onChange(p.id)} style={{ border:"none", cursor:"pointer", padding: sw < 340 ? "10px 12px" : "11px 18px", minHeight:44, /* Touch target ≥44px — estándar Apple HIG */ borderRadius:TOKENS.radius.pill, background:active?"linear-gradient(90deg,#15499B,#2B8FE0)":"transparent", color:active?"white":"rgba(255,255,255,0.60)", fontSize:sw<340?11:12, fontWeight:700, transition:`all ${TOKENS.motion.normal}`, boxShadow:active?TOKENS.shadow.blue:"none", letterSpacing:"0.02em", fontFamily:"inherit" }}>
+          <button key={p.id} onClick={() => onChange(p.id)} style={{ border:"none", cursor:"pointer", padding: sw < 340 ? "10px 12px" : "11px 18px", minHeight:44, /* Touch target ≥44px — estándar Apple HIG */ borderRadius:TOKENS.radius.pill, background:active?"linear-gradient(90deg,#15499B,#2B8FE0)":"transparent", color:active?"#ffffff":TOKENS.colors.textMuted, fontSize:sw<340?11:12, fontWeight:700, transition:`all ${TOKENS.motion.normal}`, boxShadow:active?TOKENS.shadow.blue:"none", letterSpacing:"0.02em", fontFamily:"inherit" }}>
             {p.label}
           </button>
         );
@@ -133,7 +133,7 @@ function EmbedSkeleton() {
   return (
     <div style={{ width:"100%", height:"100%", display:"flex", flexDirection:"column", gap:12, padding:"16px" }}>
       {[80, 120, 90, 150].map((h, i) => (
-        <div key={i} style={{ height:h, borderRadius:14, background:"linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%)", backgroundSize:"200% 100%", animation:`shimmer 1.6s ${i*0.2}s ease-in-out infinite` }}/>
+        <div key={i} style={{ height:h, borderRadius:14, background:"linear-gradient(90deg, rgba(43,143,224,0.04) 0%, rgba(43,143,224,0.10) 50%, rgba(43,143,224,0.04) 100%)", backgroundSize:"200% 100%", animation:`shimmer 1.6s ${i*0.2}s ease-in-out infinite` }}/>
       ))}
     </div>
   );
@@ -165,9 +165,9 @@ function MockMetabaseDashboard({ period, sw }) {
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
           <span style={{ fontSize:11, color:TOKENS.colors.textMuted }}>{label}</span>
-          <span style={{ fontSize:11, fontWeight:700, color:"white" }}>{pct}%</span>
+          <span style={{ fontSize:11, fontWeight:700, color:TOKENS.colors.text }}>{pct}%</span>
         </div>
-        <div style={{ height:7, borderRadius:4, background:"rgba(255,255,255,0.07)", overflow:"hidden" }}>
+        <div style={{ height:7, borderRadius:4, background:"rgba(21,73,155,0.08)", overflow:"hidden" }}>
           <div style={{ height:"100%", width:`${animVal * pct}%`, borderRadius:4, background:`linear-gradient(90deg, ${color}88, ${color})`, transition:"width 0.9s cubic-bezier(0.34,1.56,0.64,1)" }}/>
         </div>
         <div style={{ display:"flex", justifyContent:"space-between" }}>
@@ -185,7 +185,7 @@ function MockMetabaseDashboard({ period, sw }) {
       <div style={{ textAlign:"center", padding:"16px 0 8px" }}>
         <div style={{ position:"relative", width:120, height:60, margin:"0 auto 12px" }}>
           <svg width="120" height="60" viewBox="0 0 120 60">
-            <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" strokeLinecap="round"/>
+            <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="rgba(21,73,155,0.10)" strokeWidth="10" strokeLinecap="round"/>
             <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke={pctColor} strokeWidth="10" strokeLinecap="round"
               strokeDasharray={`${animVal * data.pct * 1.571} 200`}
               style={{ transition:"stroke-dasharray 0.9s cubic-bezier(0.34,1.56,0.64,1)" }}
@@ -198,7 +198,7 @@ function MockMetabaseDashboard({ period, sw }) {
         <div style={{ ...typo.caption, color:TOKENS.colors.textMuted }}>Cumplimiento · {data.label}</div>
       </div>
 
-      <div style={{ height:1, background:"rgba(255,255,255,0.06)" }}/>
+      <div style={{ height:1, background:"rgba(21,73,155,0.08)" }}/>
 
       {/* Barras KPI */}
       <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -206,17 +206,17 @@ function MockMetabaseDashboard({ period, sw }) {
         <Bar label="Cobranza" val={data.cobranza} max={data.metaCob} color={TOKENS.colors.warning}/>
       </div>
 
-      <div style={{ height:1, background:"rgba(255,255,255,0.06)" }}/>
+      <div style={{ height:1, background:"rgba(21,73,155,0.08)" }}/>
 
       {/* Mini stats grid */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
         {[
           { label:"Clientes nuevos",  value: period==="hoy"?"2": period==="semana"?"8":"31",   accent:TOKENS.colors.success },
           { label:"Devoluciones",     value: period==="hoy"?"1": period==="semana"?"3":"9",    accent:TOKENS.colors.error },
-          { label:"Ticket promedio",  value: period==="hoy"?"$586": period==="semana"?"$603":"$635", accent:"white" },
-          { label:"Tiempo en ruta",   value: period==="hoy"?"6.2h": period==="semana"?"38h":"154h",  accent:"white" },
+          { label:"Ticket promedio",  value: period==="hoy"?"$586": period==="semana"?"$603":"$635", accent:TOKENS.colors.text },
+          { label:"Tiempo en ruta",   value: period==="hoy"?"6.2h": period==="semana"?"38h":"154h",  accent:TOKENS.colors.text },
         ].map(s => (
-          <div key={s.label} style={{ borderRadius:14, padding:"10px 12px", background:"rgba(255,255,255,0.04)", border:`1px solid ${TOKENS.colors.border}` }}>
+          <div key={s.label} style={{ borderRadius:14, padding:"10px 12px", background:"rgba(255,255,255,0.92)", border:`1px solid ${TOKENS.colors.border}` }}>
             <div style={{ fontSize:10, color:TOKENS.colors.textMuted, marginBottom:4 }}>{s.label}</div>
             <div style={{ fontSize:16, fontWeight:700, color:s.accent }}>{s.value}</div>
           </div>
@@ -224,11 +224,11 @@ function MockMetabaseDashboard({ period, sw }) {
       </div>
 
       {/* Nota Metabase */}
-      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:12, background:"rgba(43,143,224,0.06)", border:"1px solid rgba(97,178,255,0.12)" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:12, background:"rgba(43,143,224,0.08)", border:"1px solid rgba(43,143,224,0.18)" }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.blue3} strokeWidth="2" strokeLinecap="round">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        <span style={{ fontSize:10, color:"rgba(97,178,255,0.7)", lineHeight:1.4 }}>
+        <span style={{ fontSize:10, color:TOKENS.colors.blue2, lineHeight:1.4 }}>
           Dashboard live en producción via Metabase embed con JWT firmado por n8n
         </span>
       </div>
@@ -297,14 +297,14 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
   };
 
   return (
-    <div style={{ width:"100%", height:embedHeight, borderRadius:20, overflow:"hidden", border:`1px solid ${TOKENS.colors.borderBlue}`, background:"rgba(4,10,24,0.85)", position:"relative", flexShrink:0 }}>
+    <div style={{ width:"100%", height:embedHeight, borderRadius:20, overflow:"hidden", border:`1px solid ${TOKENS.colors.borderBlue}`, background:"rgba(255,255,255,0.96)", position:"relative", flexShrink:0 }}>
       {/* Header del frame */}
-      <div style={{ position:"absolute", top:0, left:0, right:0, height:36, background:"rgba(4,10,24,0.96)", borderBottom:"1px solid rgba(255,255,255,0.06)", display:"flex", alignItems:"center", gap:8, padding:"0 14px", zIndex:2 }}>
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:36, background:"rgba(247,251,255,0.98)", borderBottom:"1px solid rgba(21,73,155,0.08)", display:"flex", alignItems:"center", gap:8, padding:"0 14px", zIndex:2 }}>
         <div style={{ display:"flex", gap:5 }}>
           {["#ef4444","#f59e0b","#22c55e"].map(c => <div key={c} style={{ width:8, height:8, borderRadius:"50%", background:c, opacity:0.6 }}/>)}
         </div>
-        <div style={{ flex:1, height:20, borderRadius:6, background:"rgba(255,255,255,0.05)", display:"flex", alignItems:"center", paddingLeft:8 }}>
-          <span style={{ fontSize:9, color:"rgba(255,255,255,0.25)", letterSpacing:"0.04em" }}>dashboard.grupofrio.mx · Mis KPIs</span>
+        <div style={{ flex:1, height:20, borderRadius:6, background:"rgba(43,143,224,0.06)", display:"flex", alignItems:"center", paddingLeft:8 }}>
+          <span style={{ fontSize:9, color:"rgba(95,116,144,0.85)", letterSpacing:"0.04em" }}>dashboard.grupofrio.mx · Mis KPIs</span>
         </div>
       </div>
 
@@ -313,7 +313,7 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
         {hasError ? (
           /* ── Error state: conductor sin señal ── */
           <div style={{ height:"100%", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16, padding:"24px 32px", textAlign:"center" }}>
-            <div style={{ width:56, height:56, borderRadius:18, background:"rgba(245,158,11,0.10)", border:"1px solid rgba(245,158,11,0.20)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>
+            <div style={{ width:56, height:56, borderRadius:18, background:"rgba(183,121,31,0.10)", border:"1px solid rgba(183,121,31,0.20)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>
               📡
             </div>
             <div>
@@ -326,7 +326,7 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
             </div>
             <button
               onClick={handleRetry}
-              style={{ border:"none", cursor:"pointer", padding:"12px 24px", minHeight:44, /* Touch target ≥44px */ borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, boxShadow:TOKENS.shadow.blue, fontFamily:"inherit" }}
+              style={{ border:"none", cursor:"pointer", padding:"12px 24px", minHeight:44, /* Touch target ≥44px */ borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:TOKENS.colors.text, fontSize:13, fontWeight:700, boxShadow:TOKENS.shadow.blue, fontFamily:"inherit" }}
             >
               ↩ Reintentar conexión
             </button>
@@ -403,7 +403,7 @@ function KPIScreenLegacy({ sw: propSw, sh: propSh }) {
   const embedHeight = Math.max(320, sh - scrollBottom - topPad - 156);
 
   return (
-    <div style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
+    <div style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(43,143,224,0.14) 0%, transparent 34%), linear-gradient(160deg, #f8fbff 0%, #eef4fb 45%, #e6eef8 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
       <IceParticles/>
       <div style={{ position:"absolute", inset:0, opacity:0.032, backgroundImage:"linear-gradient(rgba(43,143,224,.45) 1px,transparent 1px),linear-gradient(90deg,rgba(43,143,224,.45) 1px,transparent 1px)", backgroundSize:"48px 48px" }}/>
 
@@ -414,12 +414,12 @@ function KPIScreenLegacy({ sw: propSw, sh: propSh }) {
         <FadeIn delay={60}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div>
-              <div style={{ ...typo.overline, color:"rgba(97,178,255,0.6)", marginBottom:6 }}>MIS KPIS</div>
+              <div style={{ ...typo.overline, color:TOKENS.colors.blue2, marginBottom:6 }}>MIS KPIS</div>
               <div style={{ ...typo.h1, color:TOKENS.colors.text, lineHeight:1.05 }}>Dashboard</div>
-              <div style={{ ...typo.caption, color:"rgba(97,178,255,0.75)", marginTop:4, fontWeight:600 }}>{jobTitle}</div>
+              <div style={{ ...typo.caption, color:TOKENS.colors.blue2, marginTop:4, fontWeight:600 }}>{jobTitle}</div>
             </div>
             {/* Botón refresh */}
-            <button style={{ width:38, height:38, borderRadius:12, background:"rgba(255,255,255,0.05)", border:`1px solid ${TOKENS.colors.border}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}
+            <button style={{ width:38, height:38, borderRadius:12, background:"rgba(43,143,224,0.06)", border:`1px solid ${TOKENS.colors.border}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}
               onClick={handleRetry}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.blue3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
@@ -460,15 +460,15 @@ function PhoneFrame({ sw, sh, label, note, children }) {
   const notchW  = Math.min(120, sw * 0.33);
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}>
-      <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.6)", letterSpacing:"0.06em", textAlign:"center" }}>{label}</div>
-      <div style={{ position:"relative", borderRadius:borderR+4, border:"2px solid rgba(103,146,204,0.55)", boxShadow:"0 0 0 1px rgba(173,205,255,0.07), 0 28px 70px rgba(0,0,0,0.7), 0 0 30px rgba(43,143,224,0.12)", overflow:"hidden", background:"#071327", flexShrink:0 }}>
-        <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:notchW, height:22, background:"#0a1320", borderRadius:"0 0 14px 14px", zIndex:50 }}/>
-        <div style={{ position:"absolute", left:-3, top:80,  width:3, height:32, borderRadius:2, background:"rgba(103,146,204,0.55)" }}/>
-        <div style={{ position:"absolute", left:-3, top:120, width:3, height:52, borderRadius:2, background:"rgba(103,146,204,0.55)" }}/>
-        <div style={{ position:"absolute", right:-3, top:116, width:3, height:62, borderRadius:2, background:"rgba(103,146,204,0.55)" }}/>
+      <div style={{ fontSize:11, fontWeight:700, color:TOKENS.colors.textMuted, letterSpacing:"0.06em", textAlign:"center" }}>{label}</div>
+      <div style={{ position:"relative", borderRadius:borderR+4, border:"2px solid rgba(43,143,224,0.18)", boxShadow:"0 0 0 1px rgba(255,255,255,0.9), 0 28px 70px rgba(21,73,155,0.10), 0 0 30px rgba(43,143,224,0.08)", overflow:"hidden", background:"#f8fbff", flexShrink:0 }}>
+        <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:notchW, height:22, background:"#eff5fb", borderRadius:"0 0 14px 14px", zIndex:50 }}/>
+        <div style={{ position:"absolute", left:-3, top:80,  width:3, height:32, borderRadius:2, background:"rgba(43,143,224,0.18)" }}/>
+        <div style={{ position:"absolute", left:-3, top:120, width:3, height:52, borderRadius:2, background:"rgba(43,143,224,0.18)" }}/>
+        <div style={{ position:"absolute", right:-3, top:116, width:3, height:62, borderRadius:2, background:"rgba(43,143,224,0.18)" }}/>
         <KPIScreen sw={sw} sh={sh}/>
       </div>
-      <div style={{ fontSize:10, color:"rgba(255,255,255,0.28)", textAlign:"center", lineHeight:1.5 }}>{sw}×{sh}px · {note}</div>
+      <div style={{ fontSize:10, color:TOKENS.colors.textMuted, textAlign:"center", lineHeight:1.5 }}>{sw}×{sh}px · {note}</div>
     </div>
   );
 }
@@ -487,7 +487,7 @@ const DEVICES = [
 ============================================================================ */
 export function MultiDeviceKPIPreview() {
   return (
-    <div style={{ minHeight:"100vh", background:"radial-gradient(circle at center, #102a57 0%, #07183a 35%, #050d1a 75%, #030811 100%)", padding:"36px 20px 60px", fontFamily:"system-ui,sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"radial-gradient(circle at center, #f8fbff 0%, #eef4fb 35%, #e6eef8 75%, #dde8f4 100%)", padding:"36px 20px 60px", fontFamily:"system-ui,sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         @keyframes float { from{transform:translateY(0)scale(1)} to{transform:translateY(-16px)scale(1.3)} }
@@ -498,9 +498,9 @@ export function MultiDeviceKPIPreview() {
       `}</style>
 
       <div style={{ textAlign:"center", marginBottom:36 }}>
-        <div style={{ fontSize:10, fontWeight:700, color:"rgba(97,178,255,0.55)", letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:6 }}>PWA Trabajadores · Grupo Frío</div>
-        <div style={{ fontSize:20, fontWeight:700, color:"white", letterSpacing:"-0.02em" }}>Pantalla 3 — Mis KPIs</div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:8 }}>
+        <div style={{ fontSize:10, fontWeight:700, color:TOKENS.colors.blue2, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:6 }}>PWA Trabajadores · Grupo Frío</div>
+        <div style={{ fontSize:20, fontWeight:700, color:TOKENS.colors.text, letterSpacing:"-0.02em" }}>Pantalla 3 — Mis KPIs</div>
+        <div style={{ fontSize:12, color:TOKENS.colors.textMuted, marginTop:8 }}>
           Embed Metabase · Selector hoy/semana/mes · Nav activa en KPIs
         </div>
       </div>
