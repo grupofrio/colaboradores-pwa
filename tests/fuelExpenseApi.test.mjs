@@ -40,7 +40,7 @@ test('fuel expense create sends functional fields and no client scope ids', asyn
   }
   await createFuelExpense({
     name: 'Gasolina', total_amount: 250, quantity: 1, date: '2026-08-05',
-    payment_mode: 'company_account', route_plan_id: 91,
+    route_plan_id: 91,
     company_id: 9, warehouse_id: 8, employee_id: 7,
   })
   const payload = sent.params || sent
@@ -48,4 +48,5 @@ test('fuel expense create sends functional fields and no client scope ids', asyn
   assert.equal(payload.company_id, undefined)
   assert.equal(payload.warehouse_id, undefined)
   assert.equal(payload.employee_id, undefined)
+  assert.equal('payment_mode' in payload, false)
 })

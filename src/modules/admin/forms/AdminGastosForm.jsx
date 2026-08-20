@@ -8,6 +8,7 @@
 //     que ya vienen filtradas por company_id de la razón social activa.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
+import { useSession } from '../../../App'
 import { useAdmin } from '../AdminContext'
 import {
   getTodayExpenses,
@@ -22,6 +23,8 @@ import {
   getExpenseCatalog,
   uploadExpenseEvidence,
 } from '../expenseAccounting'
+import { unwrapExpenseListEnvelope } from '../expenseListEnvelope'
+import { isGerentePilotReadOnly } from '../gerentePilotCaps'
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024 // 8 MB
 
@@ -44,9 +47,12 @@ const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))
 
 export default function AdminGastosForm() {
   const { companyId, companyLabel, sucursal, warehouseId } = useAdmin()
+  const { session } = useSession()
+  const readOnly = isGerentePilotReadOnly(session, BACKEND_CAPS)
 
   const [expenses, setExpenses] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [listStatus, setListStatus] = useState('loading')
+  const [listMessage, setListMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -56,8 +62,7 @@ export default function AdminGastosForm() {
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayLocal())
   const [quantity, setQuantity] = useState('1')
-  // Combustible conserva su contrato actual; gasto general ya no usa controles contables del cliente.
-  const [paymentMode, setPaymentMode] = useState('company')
+  // Payment mode is server-authoritative — never collected or sent from FE.
   const [reference, setReference] = useState('')
   const [description, setDescription] = useState('')
   const [expenseMode, setExpenseMode] = useState('general')
@@ -168,19 +173,28 @@ export default function AdminGastosForm() {
   }, [expenseMode, date])
 
   async function loadExpenses() {
-    setLoading(true)
+    setListStatus('loading')
+    setListMessage('')
     try {
       const data = await getTodayExpenses({ companyId, warehouseId })
-      const list = data?.data ?? data
-      setExpenses(Array.isArray(list) ? list : [])
-    } catch {
-      // silent
-    } finally {
-      setLoading(false)
+      const envelope = unwrapExpenseListEnvelope(data)
+      setExpenses(envelope.items)
+      setListStatus(envelope.status)
+      if (envelope.status === 'error' || envelope.status === 'unavailable') {
+        setListMessage(envelope.message || 'No se pudieron cargar los gastos')
+      }
+    } catch (e) {
+      setExpenses([])
+      setListStatus('error')
+      setListMessage(e?.message || 'Error al cargar gastos')
     }
   }
 
   async function handleSubmit() {
+    if (readOnly) {
+      setError('Solo lectura: el piloto Gerente no puede registrar gastos.')
+      return
+    }
     if (!name.trim()) { setError('Ingresa una descripción'); return }
     if (!amount || Number(amount) <= 0) { setError('Ingresa un monto válido'); return }
     if (expenseMode === 'general' && !companyId) { setError('Selecciona una razón social'); return }
@@ -244,7 +258,6 @@ export default function AdminGastosForm() {
           total_amount: Number(amount),
           quantity: 1.0,
           date,
-          payment_mode: paymentMode === 'company' ? 'company_account' : 'own_account',
           reference: reference.trim() || undefined,
           description: description.trim() || undefined,
           company_id: companyId,
@@ -276,7 +289,6 @@ export default function AdminGastosForm() {
       setQuantity('1')
       setReference('')
       setDescription('')
-      setPaymentMode('company')
       setAnalyticDistribution(null)
       setArticleId('')
       setOperation('')
@@ -318,10 +330,19 @@ export default function AdminGastosForm() {
           fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em',
           color: TOKENS.colors.text, margin: '4px 0 0',
         }}>
-          Registrar gasto
+          {readOnly ? 'Gastos del día' : 'Registrar gasto'}
         </h1>
       </div>
 
+      {readOnly && (
+        <div style={{
+          padding: '10px 14px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
+          background: 'rgba(43,143,224,0.10)', border: `1px solid ${TOKENS.colors.blue2}40`,
+          fontSize: 12, fontWeight: 600, color: TOKENS.colors.blue3,
+        }}>
+          Solo lectura — consulta habilitada; registro, aprobación y edición desactivados en el piloto Gerente.
+        </div>
+      )}
       {error && (
         <div style={{
           padding: '10px 14px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
@@ -347,7 +368,7 @@ export default function AdminGastosForm() {
         gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
         gap: 20,
       }}>
-        {/* Formulario */}
+        {!readOnly && (
         <div style={{
           padding: 22, borderRadius: TOKENS.radius.xl,
           background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
@@ -532,17 +553,6 @@ export default function AdminGastosForm() {
 
           {expenseMode === 'fuel' && (
             <>
-              <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
-                Modo de pago
-              </label>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                <button type="button" onClick={() => setPaymentMode('company')} style={{ flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md, background: paymentMode === 'company' ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface, border: `1px solid ${paymentMode === 'company' ? TOKENS.colors.blue2 : TOKENS.colors.border}`, fontSize: 12, fontWeight: 600, color: paymentMode === 'company' ? TOKENS.colors.blue3 : TOKENS.colors.textMuted }}>
-                  Pagado por empresa
-                </button>
-                <button type="button" onClick={() => setPaymentMode('employee')} style={{ flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md, background: paymentMode === 'employee' ? `${TOKENS.colors.warning}22` : TOKENS.colors.surface, border: `1px solid ${paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.border}`, fontSize: 12, fontWeight: 600, color: paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.textMuted }}>
-                  Pagado por empleado
-                </button>
-              </div>
               <div style={{ padding: 14, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, marginBottom: 14 }}>
                 <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', color: TOKENS.colors.textLow, margin: '0 0 10px' }}>
                   CLASIFICACIÓN ANALÍTICA · {companyLabel.toUpperCase()}
@@ -664,6 +674,7 @@ export default function AdminGastosForm() {
 
           <button
             type="button"
+            data-testid="expense-create-cta"
             onClick={handleSubmit}
             disabled={submitting}
             style={{
@@ -677,9 +688,10 @@ export default function AdminGastosForm() {
             {submitting ? 'Registrando…' : 'Registrar gasto'}
           </button>
         </div>
+        )}
 
         {/* Lista del día */}
-        <div>
+        <div style={{ gridColumn: readOnly ? '1 / -1' : undefined }}>
           <p style={{
             fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
             color: TOKENS.colors.textLow, margin: '0 0 12px',
@@ -687,13 +699,22 @@ export default function AdminGastosForm() {
             GASTOS DE HOY · {companyLabel.toUpperCase()}
           </p>
 
-          {loading ? (
+          {listStatus === 'loading' ? (
             <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 30 }}>
               <div style={{
                 width: 24, height: 24, border: '2px solid rgba(15,42,61,0.12)',
                 borderTop: '2px solid #2B8FE0', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
+            </div>
+          ) : listStatus === 'error' || listStatus === 'unavailable' ? (
+            <div style={{
+              padding: '24px 20px', borderRadius: TOKENS.radius.lg, textAlign: 'center',
+              background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
+            }}>
+              <p style={{ fontSize: 13, color: TOKENS.colors.error, margin: 0 }}>
+                {listMessage || 'Gastos no disponibles'}
+              </p>
             </div>
           ) : filtered.length === 0 ? (
             <div style={{
