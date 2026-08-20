@@ -8049,12 +8049,80 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
-  if (cleanPath === '/pwa-supv/customers' && method === 'GET') {
-    return listSupervisorCustomersFromModels({
-      companyId,
-      q: query.get('q') || '',
-      limit: 250,
+  if (cleanPath === '/pwa-supv/customers/list' && method === 'POST') {
+    return odooJson('/gf/salesops/supervisor/v2/customers', {
+      meta: supervisorMeta(),
+      data: {
+        q: String(body?.q || ''),
+        limit: Number(body?.limit || 50) || 50,
+      },
     })
+  }
+
+  if (cleanPath === '/pwa-supv/customers' && method === 'GET') {
+    // Listado dedicado token-scoped (deja de usar generic ORM readModelSorted).
+    const listed = await odooJson('/gf/salesops/supervisor/v2/customers', {
+      meta: supervisorMeta(),
+      data: { q: query.get('q') || '', limit: 250 },
+    })
+    if (!listed?.ok) return listed
+    const customers = Array.isArray(listed?.data?.customers) ? listed.data.customers : []
+    return {
+      ok: true,
+      status: 'ok',
+      message: listed.message || 'Customers',
+      data: customers.map((row) => shapeSupervisorCustomer(row)),
+      meta: listed.meta || supervisorMeta(),
+    }
+  }
+
+  if (cleanPath === '/pwa-supv/customers/create' && method === 'POST') {
+    const rawValues = body?.values && typeof body.values === 'object' ? body.values : body
+    const allowedFields = ['name', 'phone', 'email', 'latitude', 'longitude']
+    const values = {}
+    for (const field of Object.keys(rawValues || {})) {
+      if (!allowedFields.includes(field)) {
+        return {
+          ok: false,
+          status: 'error',
+          code: 'VALIDATION_ERROR',
+          message: 'Campo no permitido en alta.',
+          data: { field, unsupported_field: true },
+        }
+      }
+      values[field] = rawValues[field]
+    }
+    if (!String(values.name || '').trim()) {
+      return { ok: false, status: 'error', code: 'VALIDATION_ERROR', message: 'El nombre del cliente es obligatorio.', data: { field: 'name' } }
+    }
+    let createRes
+    try {
+      createRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/customers/create', {
+        meta: supervisorMeta(),
+        data: { values },
+      }), null)
+    } catch (createErr) {
+      createRes = normalizeWriteResponse(null, createErr)
+    }
+    if (!createRes.ok) {
+      return {
+        ok: false,
+        status: 'error',
+        phase: createRes.phase,
+        code: createRes.code,
+        message: createRes.message || 'No se pudo crear el cliente.',
+        retryable: createRes.retryable,
+        data: createRes.data || {},
+      }
+    }
+    return {
+      ok: true,
+      status: 'ok',
+      phase: createRes.phase,
+      message: createRes.message || 'Cliente creado.',
+      data: createRes.data || {},
+      meta: supervisorMeta(),
+    }
   }
 
   if (cleanPath === '/pwa-supv/customers/update' && method === 'POST') {
@@ -8063,28 +8131,22 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, status: 'error', code: 'customer_id_required', message: 'customer_id requerido.' }
     }
 
-    const analyticUnitIds = await resolvePosCustomerAnalyticUnitIds()
-    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitIds), ['id', '=', customerId]]
-    const customer = (await readSupervisorCustomerRows(customerDomain, 1))[0] || null
-    if (!customer?.id) {
-      return { ok: false, status: 'error', code: 'customer_not_found', message: 'Cliente fuera de tu sucursal o no encontrado.' }
-    }
-
     const rawValues = body?.values && typeof body.values === 'object' ? body.values : {}
-    const allowedFields = ['name', 'phone', 'email', 'latitude', 'longitude']
+    // name excluido: contrato V2 (unsupported_field en backend).
+    const allowedFields = ['phone', 'email', 'latitude', 'longitude']
     const updates = {}
 
-    for (const field of allowedFields) {
-      if (!Object.prototype.hasOwnProperty.call(rawValues, field)) continue
-      const value = rawValues[field]
-      if (field === 'name') {
-        const cleanValue = String(value ?? '').trim()
-        if (!cleanValue) {
-          return { ok: false, status: 'error', code: 'name_required', message: 'El nombre del cliente es obligatorio.' }
+    for (const field of Object.keys(rawValues)) {
+      if (!allowedFields.includes(field)) {
+        return {
+          ok: false,
+          status: 'error',
+          code: 'VALIDATION_ERROR',
+          message: 'Campo no editable.',
+          data: { field, unsupported_field: true },
         }
-        updates.name = cleanValue
-        continue
       }
+      const value = rawValues[field]
       if (field === 'phone' || field === 'email') {
         const cleanValue = String(value ?? '').trim()
         updates[field] = cleanValue || false
@@ -8107,16 +8169,9 @@ async function directSupervisorVentas(method, path, body) {
     }
 
     if (!Object.keys(updates).length) {
-      return { ok: true, status: 'ok', message: 'Sin cambios', data: shapeSupervisorCustomer(customer) }
+      return { ok: true, status: 'ok', message: 'Sin cambios', data: { customer_id: customerId } }
     }
 
-    // SEGURIDAD (B8): el write va por controller DEDICADO con guard #220
-    // (rol supervisor_ventas + scope de sucursal server-side), NO por ORM
-    // genérico con sudo del cliente. Los pre-checks de arriba quedan como
-    // fail-fast de UX; la AUTORIDAD es server-side. Requiere el controller
-    // /gf/salesops/supervisor/v2/customers/update desplegado (gate externo).
-    // Codex §7: el envelope MANDA — status:error/busy/malformed NUNCA es éxito
-    // (antes se ignoraba la respuesta y se devolvía ok:true optimista).
     let writeRes
     try {
       writeRes = normalizeWriteResponse(await odooJson('/gf/salesops/supervisor/v2/customers/update', {
@@ -8134,16 +8189,16 @@ async function directSupervisorVentas(method, path, body) {
         code: writeRes.code,
         message: writeRes.message || 'No se pudo actualizar el cliente.',
         retryable: writeRes.retryable,
+        data: writeRes.data || {},
       }
     }
 
-    const refreshedRows = await readSupervisorCustomerRows([['id', '=', customerId]], 1)
     return {
       ok: true,
       status: 'ok',
       phase: writeRes.phase,
       message: 'Cliente actualizado.',
-      data: shapeSupervisorCustomer(refreshedRows[0] || { ...customer, ...updates, id: customerId }),
+      data: writeRes.data || { customer_id: customerId },
     }
   }
 

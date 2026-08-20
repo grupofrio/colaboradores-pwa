@@ -1,15 +1,13 @@
 // ─── Supervisor V2 · Clientes (vista PURA — superficie segmentada) ────────────
 // Fusiona en UNA sola superficie lo que hoy vive disperso (sin-visitar,
 // recuperación, edición, planeados) usando la segmentación de route-stops del
-// día (gf.route.stop) que produce segmentCustomers(). En V1 la fuente ÚNICA de
-// segmentación es route-stops agregado de las rutas del día.
+// día (gf.route.stop) que produce segmentCustomers().
 //
-// Reglas duras (heredadas del contrato #220/#80):
-//   · SOLO lectura — sin edición de cliente inline (la edición irá por un
-//     controller protegido en otra fase; aquí solo "abrir");
-//   · saldo / finanzas NO se muestran (V1 sin permiso ni fuente para ello);
-//   · ausencia se NOMBRA (Sin resultado / Sin check-in), jamás se pinta como 0;
-//   · segmento vacío ⇒ vacío honesto, no una lista fantasma.
+// Reglas duras:
+//   · Alta/edición por paneles dedicados (CTAs), no edición inline de name;
+//   · NUNCA "Eliminar cliente" / res.partner.unlink;
+//   · saldo / finanzas NO se muestran;
+//   · ausencia se NOMBRA; segmento vacío ⇒ vacío honesto.
 // Sin window/fetch/hooks ⇒ SSR-testeable con props directas.
 // Tema CLARO (rebranding PR2): misma forma que TOKENS, paleta institucional.
 // Estas vistas solo se montan bajo rutas moduleId="supervisor_ventas"; el
@@ -189,7 +187,7 @@ function CustomerRow({ stop, onOpenCustomer }) {
 
 export default function ClientesView({
   segments = {}, activeSegment = 'pendientes', onSelectSegment, source = 'live',
-  onOpenCustomer, counts = null, testid = 'supervisor-v2-clientes',
+  onOpenCustomer, onCreateCustomer, onEditCustomer, counts = null, testid = 'supervisor-v2-clientes',
 }) {
   const isDemo = source === 'demo'
   const seg = segments && typeof segments === 'object' ? segments : {}
@@ -210,10 +208,25 @@ export default function ClientesView({
       )}
 
       <header style={{ marginBottom: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: 0 }}>Clientes</h1>
-        <p style={{ fontSize: 12.5, color: C.textMuted, marginTop: 5, lineHeight: 1.5 }}>
-          Segmentación de las paradas de hoy (gf.route.stop). Vista de solo lectura del resultado de cada visita.
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: 0 }}>Clientes</h1>
+            <p style={{ fontSize: 12.5, color: C.textMuted, marginTop: 5, lineHeight: 1.5 }}>
+              Paradas de hoy por segmento. Alta y edición por controllers dedicados (nunca quita al partner del maestro).
+            </p>
+          </div>
+          {onCreateCustomer ? (
+            <button
+              type="button"
+              data-testid="clientes-cta-nuevo"
+              onClick={onCreateCustomer}
+              style={{
+                flex: '0 0 auto', minHeight: 44, padding: '0 14px', borderRadius: TOKENS.radius.md,
+                border: 'none', background: C.blue3 || '#1d4ed8', color: '#fff', fontWeight: 800, cursor: 'pointer',
+              }}
+            >+ Nuevo cliente</button>
+          ) : null}
+        </div>
       </header>
 
       <SegmentChips activeSegment={active} onSelectSegment={onSelectSegment} countFor={countFor} />
@@ -240,11 +253,26 @@ export default function ClientesView({
           </div>
         ) : (
           list.map((stop, i) => (
-            <CustomerRow
-              key={stop?.stop_id ?? stop?.customer_id ?? i}
-              stop={stop}
-              onOpenCustomer={onOpenCustomer}
-            />
+            <div key={stop?.stop_id ?? stop?.customer_id ?? i}>
+              <CustomerRow
+                stop={stop}
+                onOpenCustomer={onOpenCustomer}
+              />
+              {onEditCustomer && stop?.customer_id && !isStopWithoutCustomer(stop) ? (
+                <div style={{ marginTop: -4, marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    data-testid="clientes-cta-editar"
+                    onClick={() => onEditCustomer(stop.customer_id, stop)}
+                    style={{
+                      minHeight: 40, padding: '0 12px', borderRadius: TOKENS.radius.md,
+                      border: `1px solid ${C.border}`, background: C.surfaceSoft, color: C.textSoft,
+                      fontWeight: 700, cursor: 'pointer', fontSize: 12,
+                    }}
+                  >Editar</button>
+                </div>
+              ) : null}
+            </div>
           ))
         )}
       </section>

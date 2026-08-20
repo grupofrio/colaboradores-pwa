@@ -119,14 +119,30 @@ test('vacío honesto: fuera_secuencia (0) declara el vacío, sin lista fantasma'
   assert.doesNotMatch(html, /data-testid="clientes-row"/)  // sin filas
 })
 
-// ── BLINDAJE: sin saldo/finanzas ni edición inline ───────────────────────────
-test('BLINDAJE: ningún segmento filtra saldo/finanzas ni ofrece edición inline', () => {
+// ── BLINDAJE: sin saldo/finanzas ni borrado de cliente ────────────────────────
+test('BLINDAJE: sin léxico financiero ni CTA Eliminar cliente', () => {
   for (const seg of Object.keys(EXPECTED)) {
-    const html = renderView({ activeSegment: seg })
+    const html = renderView({
+      activeSegment: seg,
+      onCreateCustomer: () => {},
+      onEditCustomer: () => {},
+    })
     assert.doesNotMatch(html, /saldo|adeudo|cobranza|deuda|balance|financ/i, `${seg}: sin léxico financiero`)
     assert.doesNotMatch(html, /MXN|USD|\$\s?\d/, `${seg}: sin montos monetarios`)
-    assert.doesNotMatch(html, /Editar|Guardar|Modificar cliente/i, `${seg}: sin edición inline`)
+    assert.doesNotMatch(html, /Eliminar cliente|Borrar cliente|delete customer/i, `${seg}: sin borrado`)
   }
+})
+
+test('CTAs operativos: Nuevo cliente y Editar presentes cuando se cablean', () => {
+  const html = renderView({
+    activeSegment: 'pendientes',
+    onCreateCustomer: () => {},
+    onEditCustomer: () => {},
+  })
+  assert.match(html, /data-testid="clientes-cta-nuevo"/)
+  assert.match(html, /\+ Nuevo cliente/)
+  assert.match(html, /data-testid="clientes-cta-editar"/)
+  assert.match(html, />Editar</)
 })
 
 // ── Robustez (props ausentes / segments vacío) ───────────────────────────────

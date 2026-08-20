@@ -189,10 +189,25 @@ export function searchPlanningCustomers(query) {
   return api('GET', `/pwa-supv/customers/search${qs}`)
 }
 
+/** Listado dedicado de cartera (scope server-side; no generic ORM). */
+export function listSupervisorCustomersCatalog({ q = '', limit = 50 } = {}) {
+  return api('POST', '/pwa-supv/customers/list', {
+    q: String(q || ''),
+    limit: Number(limit) || 50,
+  })
+}
+
 /** Clientes del CEDIS del supervisor para consulta/edicion */
 export function getSupervisorCustomers(query) {
   const qs = query ? `?q=${encodeURIComponent(query)}` : ''
   return api('GET', `/pwa-supv/customers${qs}`)
+}
+
+/** Alta dedicada de cliente (flag create OFF por default en backend). */
+export function createSupervisorCustomer(values) {
+  return api('POST', '/pwa-supv/customers/create', {
+    values: values && typeof values === 'object' ? values : {},
+  })
 }
 
 /** Actualizar datos editables de un cliente del scope del supervisor */
