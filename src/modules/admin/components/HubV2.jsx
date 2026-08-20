@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { getDashboardData } from '../adminService'
-import { isAngelicaJaimesSession } from '../angyPosSalesBreakdown'
+import { isPosBreakdownSession } from '../angyPosSalesBreakdown'
 import ActivityFeed from './ActivityFeed'
 import AngyPosProductBreakdown from './AngyPosProductBreakdown'
 
@@ -15,11 +15,12 @@ const POLL_MS = 60_000
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
 export default function HubV2() {
-  const { warehouseId, companyId, companyLabel, employeeName } = useAdmin()
+  const { warehouseId, companyId, companyLabel, employeeId } = useAdmin()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
-  const showAngyBreakdown = isAngelicaJaimesSession({ name: employeeName })
+  // Gate por employee_id (server-issued), no por nombre. Ver identityGates.js.
+  const showPosBreakdown = isPosBreakdownSession({ employee_id: employeeId })
 
   useEffect(() => {
     let alive = true
@@ -45,10 +46,24 @@ export default function HubV2() {
 
   const kpis = useMemo(() => {
     const k = data?.kpis || {}
+    const fmtOrDash = (metric) => {
+      if (!metric || metric.available === false) return '—'
+      if (metric.total == null || !Number.isFinite(Number(metric.total))) return '—'
+      return fmt(metric.total)
+    }
+    const subOrDash = (metric, suffix) => {
+      if (!metric || metric.available === false) {
+        return metric?.reason === 'cash_shift_hub_source_unavailable'
+          ? 'sin fuente de caja'
+          : 'no disponible'
+      }
+      if (metric.count == null) return '—'
+      return `${metric.count} ${suffix}`
+    }
     return [
-      { id: 'caja',      label: 'Caja del día',     value: fmt(k.caja?.total),          sub: `${k.caja?.count || 0} ventas`,    tone: TOKENS.colors.success },
-      { id: 'ventas',    label: 'Venta mostrador',  value: fmt(k.ventasHoy?.total),     sub: `${k.ventasHoy?.count || 0} tickets`, tone: TOKENS.colors.blue3 },
-      { id: 'gastos',    label: 'Gastos',           value: fmt(k.gastosHoy?.total),     sub: `${k.gastosHoy?.count || 0} registros`, tone: TOKENS.colors.warning },
+      { id: 'caja',      label: 'Caja del día',     value: fmtOrDash(k.caja),          sub: subOrDash(k.caja, 'movimientos'), tone: TOKENS.colors.success, unavailable: k.caja?.available === false },
+      { id: 'ventas',    label: 'Venta mostrador',  value: fmtOrDash(k.ventasHoy),     sub: subOrDash(k.ventasHoy, 'tickets'), tone: TOKENS.colors.blue3 },
+      { id: 'gastos',    label: 'Gastos',           value: fmtOrDash(k.gastosHoy),     sub: subOrDash(k.gastosHoy, 'registros'), tone: TOKENS.colors.warning, unavailable: k.gastosHoy?.available === false },
       { id: 'liquid',    label: 'Liquidaciones',    value: k.liquidaciones?.pendingBackend ? '—' : fmt(k.liquidaciones?.total), sub: k.liquidaciones?.pendingBackend ? 'pendiente backend' : `${k.liquidaciones?.count || 0}`, tone: TOKENS.colors.textMuted, pending: k.liquidaciones?.pendingBackend },
       { id: 'req',       label: 'Requisiciones',    value: `${k.requisiciones?.count || 0}`, sub: 'activas',                    tone: TOKENS.colors.blue2 },
       { id: 'alertas',   label: 'Alertas',          value: `${k.alertas?.count || 0}`,  sub: 'sin resolver',                    tone: TOKENS.colors.error },
@@ -95,7 +110,7 @@ export default function HubV2() {
             padding: '16px 18px', borderRadius: TOKENS.radius.lg,
             background: TOKENS.glass.panel,
             border: `1px solid ${TOKENS.colors.border}`,
-            opacity: k.pending ? 0.6 : 1,
+            opacity: k.pending || k.unavailable ? 0.6 : 1,
             position: 'relative', overflow: 'hidden',
           }}>
             <div style={{
@@ -123,7 +138,7 @@ export default function HubV2() {
         ))}
       </div>
 
-      {showAngyBreakdown && (
+      {showPosBreakdown && (
         <AngyPosProductBreakdown warehouseId={warehouseId} companyId={companyId} />
       )}
 

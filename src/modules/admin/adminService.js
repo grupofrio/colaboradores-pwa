@@ -20,6 +20,10 @@ import {
   readSessionRaw,
 } from '../supervisor-ventas/v2/sessionScope.js'
 import { clampGerentePilotWriteCapabilities } from './gerentePilotCaps.js'
+import {
+  stripExpenseCreateReservedFields,
+  unwrapExpenseListEnvelope,
+} from './expenseListEnvelope.js'
 
 // ── Feature caps del backend ────────────────────────────────────────────────
 // Los defaults están en true porque `gf_pwa_admin` ya expone todos estos
@@ -263,19 +267,41 @@ export async function getDashboardData({ warehouseId, companyId }) {
   // toList extrae el array real: today-sales devuelve { data: { items/orders } }
   // (objeto, no array), por lo que unwrap por sí solo dejaba las tarjetas en $0.
   const sales = filterByCompany(toList(salesRaw), companyId)
-  const expenses = filterByCompany(toList(expensesRaw), companyId)
+  const expenseEnvelope = unwrapExpenseListEnvelope(expensesRaw)
+  const expenses = expenseEnvelope.status === 'error' || expenseEnvelope.status === 'unavailable'
+    ? []
+    : filterByCompany(expenseEnvelope.items, companyId)
+  const expensesAvailable = expenseEnvelope.status === 'ok' || expenseEnvelope.status === 'empty'
+  const ventasTotal = sumAmount(sales, 'amount_total')
+  const gastosTotal = sumAmount(expenses, 'total_amount')
 
   const kpis = {
-    ventasHoy: { count: sales.length, total: sumAmount(sales, 'amount_total') },
-    gastosHoy: { count: expenses.length, total: sumAmount(expenses, 'total_amount') },
-    caja:      { count: sales.length, total: sumAmount(sales, 'amount_total') },
-    liquidaciones:  { count: 0, total: 0, pendingBackend: !BACKEND_CAPS.liquidaciones },
-    requisiciones:  { count: 0, total: 0, pendingBackend: false },
-    materiaPrima:   { count: 0, total: 0, pendingBackend: !BACKEND_CAPS.materiaPrima },
-    alertas:        { count: 0 },
+    ventasHoy: {
+      count: sales.length,
+      total: ventasTotal,
+      available: true,
+    },
+    gastosHoy: {
+      count: expensesAvailable ? expenses.length : null,
+      total: expensesAvailable ? gastosTotal : null,
+      available: expensesAvailable,
+      reason: expensesAvailable ? null : (expenseEnvelope.reason || 'expenses_unavailable'),
+    },
+    // MGR-RES-005: "Caja del día" must NOT alias mostrador sales. No canonical
+    // cash-shift total is wired into this hub yet → honesty: available:false.
+    caja: {
+      count: null,
+      total: null,
+      available: false,
+      reason: 'cash_shift_hub_source_unavailable',
+    },
+    liquidaciones:  { count: 0, total: 0, pendingBackend: !BACKEND_CAPS.liquidaciones, available: !BACKEND_CAPS.liquidaciones ? false : true },
+    requisiciones:  { count: 0, total: 0, pendingBackend: false, available: true },
+    materiaPrima:   { count: 0, total: 0, pendingBackend: !BACKEND_CAPS.materiaPrima, available: !BACKEND_CAPS.materiaPrima ? false : true },
+    alertas:        { count: 0, available: true },
   }
 
-  return { sales, expenses, kpis }
+  return { sales, expenses, kpis, expenseEnvelope }
 }
 
 /** Construye un feed cronológico unificado (ventas + gastos). */
@@ -338,36 +364,29 @@ function normalizeAnalyticDistribution(input) {
 }
 
 /** Crea un gasto. Respeta BACKEND_CAPS para mantener compatibilidad con
- *  ambientes donde `gf_pwa_admin` aún no esté instalado. */
+ *  ambientes donde `gf_pwa_admin` aún no esté instalado.
+ *  payment_mode y demás campos contables son server-authoritative. */
 export async function createExpense(payload) {
-  const clean = { ...payload }
+  // Preserve total_amount when callers still send legacy unit_amount only.
+  const incoming = { ...(payload || {}) }
+  if (incoming.unit_amount != null && incoming.total_amount == null) {
+    incoming.total_amount = Number(incoming.unit_amount)
+  }
 
-  // La identidad del empleado se deriva del token autenticado en backend.
-  // Nunca se permite que un payload de UI seleccione a otro empleado.
-  delete clean.employee_id
+  let clean = stripExpenseCreateReservedFields(incoming)
 
-  // Analítica — Opción A (analytic_distribution dict Odoo 18)
-  const dist = normalizeAnalyticDistribution(clean.analytic_distribution)
+  // Analítica — Opción A (analytic_distribution dict Odoo 18). Reserved strip
+  // removes it; re-attach only when the backend capability allows it.
+  const dist = normalizeAnalyticDistribution(payload?.analytic_distribution)
   if (BACKEND_CAPS.expenseAnalytics && dist) {
     clean.analytic_distribution = dist
-  } else {
-    delete clean.analytic_distribution
   }
-  // Limpieza de legacy — ya no se usan
-  delete clean.analytic_account_id
-  delete clean.analytic_tag_ids
 
   // Metadata estructurada de sucursal (la identidad no forma parte del payload).
   if (!BACKEND_CAPS.expenseStructuredMeta) {
     delete clean.warehouse_id
     delete clean.sucursal_code
   }
-
-  // Esta instancia de Odoo acepta `total_amount`; nunca reenviar `unit_amount`.
-  if (clean.unit_amount != null && clean.total_amount == null) {
-    clean.total_amount = Number(clean.unit_amount)
-  }
-  delete clean.unit_amount
 
   return apiCreateExpense(clean)
 }

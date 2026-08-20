@@ -331,7 +331,7 @@ export function getFuelRoutes(date) {
   return api('GET', `/pwa-admin/fuel-routes?date=${encodeURIComponent(date)}`)
 }
 
-/** Gasto de gasolina. El backend deriva empleado, compañía y sucursal. */
+/** Gasto de gasolina. El backend deriva empleado, compañía, sucursal y payment_mode. */
 export function createFuelExpense(data) {
   const {
     company_id,
@@ -344,6 +344,12 @@ export function createFuelExpense(data) {
     attachmentId,
     sucursal_code,
     sucursalCode,
+    payment_mode,
+    paymentMode,
+    payment_method,
+    paymentMethod,
+    payment_reference,
+    paymentReference,
     ...functionalFields
   } = data || {}
   return api('POST', '/pwa-admin/fuel-expense-create', functionalFields)

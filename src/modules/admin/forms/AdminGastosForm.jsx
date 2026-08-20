@@ -62,8 +62,7 @@ export default function AdminGastosForm() {
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayLocal())
   const [quantity, setQuantity] = useState('1')
-  // Combustible conserva su contrato actual; gasto general ya no usa controles contables del cliente.
-  const [paymentMode, setPaymentMode] = useState('company')
+  // Payment mode is server-authoritative — never collected or sent from FE.
   const [reference, setReference] = useState('')
   const [description, setDescription] = useState('')
   const [expenseMode, setExpenseMode] = useState('general')
@@ -259,7 +258,6 @@ export default function AdminGastosForm() {
           total_amount: Number(amount),
           quantity: 1.0,
           date,
-          payment_mode: paymentMode === 'company' ? 'company_account' : 'own_account',
           reference: reference.trim() || undefined,
           description: description.trim() || undefined,
           company_id: companyId,
@@ -291,7 +289,6 @@ export default function AdminGastosForm() {
       setQuantity('1')
       setReference('')
       setDescription('')
-      setPaymentMode('company')
       setAnalyticDistribution(null)
       setArticleId('')
       setOperation('')
@@ -346,7 +343,6 @@ export default function AdminGastosForm() {
           Solo lectura — consulta habilitada; registro, aprobación y edición desactivados en el piloto Gerente.
         </div>
       )}
-
       {error && (
         <div style={{
           padding: '10px 14px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
@@ -557,17 +553,6 @@ export default function AdminGastosForm() {
 
           {expenseMode === 'fuel' && (
             <>
-              <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
-                Modo de pago
-              </label>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                <button type="button" onClick={() => setPaymentMode('company')} style={{ flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md, background: paymentMode === 'company' ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface, border: `1px solid ${paymentMode === 'company' ? TOKENS.colors.blue2 : TOKENS.colors.border}`, fontSize: 12, fontWeight: 600, color: paymentMode === 'company' ? TOKENS.colors.blue3 : TOKENS.colors.textMuted }}>
-                  Pagado por empresa
-                </button>
-                <button type="button" onClick={() => setPaymentMode('employee')} style={{ flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md, background: paymentMode === 'employee' ? `${TOKENS.colors.warning}22` : TOKENS.colors.surface, border: `1px solid ${paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.border}`, fontSize: 12, fontWeight: 600, color: paymentMode === 'employee' ? TOKENS.colors.warning : TOKENS.colors.textMuted }}>
-                  Pagado por empleado
-                </button>
-              </div>
               <div style={{ padding: 14, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, marginBottom: 14 }}>
                 <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', color: TOKENS.colors.textLow, margin: '0 0 10px' }}>
                   CLASIFICACIÓN ANALÍTICA · {companyLabel.toUpperCase()}
