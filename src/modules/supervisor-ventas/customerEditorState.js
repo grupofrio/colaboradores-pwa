@@ -75,10 +75,11 @@ export function hasCustomerEditorChanges(original = {}, draft = {}) {
   return Object.keys(getCustomerEditorChanges(original, draft)).length > 0
 }
 
-export function getCustomerEditorValidationError(draft = {}) {
-  if (!cleanText(draft.name)) return 'El nombre del cliente es obligatorio.'
+export function getCustomerEditorValidationError(draft = {}, { requireName = false } = {}) {
+  if (requireName && !cleanText(draft.name)) return 'El nombre del cliente es obligatorio.'
   const lat = cleanText(draft.latitude)
   const lng = cleanText(draft.longitude)
+  if ((lat && !lng) || (!lat && lng)) return 'Latitude y longitude deben enviarse juntos.'
   if (lat && !Number.isFinite(Number(lat))) return 'La latitud debe ser numerica.'
   if (lng && !Number.isFinite(Number(lng))) return 'La longitud debe ser numerica.'
   return ''
@@ -88,7 +89,7 @@ export function buildSupervisorCustomerUpdatePayload(customerId, original = {}, 
   const changes = getCustomerEditorChanges(original, draft)
   const payload = {}
 
-  if (Object.prototype.hasOwnProperty.call(changes, 'name')) payload.name = changes.name
+  // name NUNCA se envía en update (contrato backend unsupported_field).
   if (Object.prototype.hasOwnProperty.call(changes, 'phone')) payload.phone = changes.phone || false
   if (Object.prototype.hasOwnProperty.call(changes, 'email')) payload.email = changes.email || false
   if (Object.prototype.hasOwnProperty.call(changes, 'latitude')) {

@@ -59,7 +59,7 @@ test('hasCustomerEditorChanges ignores equivalent numeric formats and detects re
   }), true)
 })
 
-test('buildSupervisorCustomerUpdatePayload only sends changed editable fields', () => {
+test('buildSupervisorCustomerUpdatePayload never sends name (even if draft changed)', () => {
   const original = normalizeSupervisorCustomer({
     id: 77,
     name: 'Cliente Dos',
@@ -79,25 +79,31 @@ test('buildSupervisorCustomerUpdatePayload only sends changed editable fields', 
   assert.deepEqual(payload, {
     customer_id: 77,
     values: {
-      name: 'Cliente Dos Renovado',
       email: false,
       longitude: -103.4,
     },
   })
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.values, 'name'), false)
 })
 
-test('getCustomerEditorValidationError requires name and numeric geo fields', () => {
+test('getCustomerEditorValidationError: name optional on edit; geo pair rules', () => {
   assert.equal(getCustomerEditorValidationError({
     name: '',
     latitude: '',
     longitude: '',
-  }), 'El nombre del cliente es obligatorio.')
+  }), '')
+
+  assert.equal(getCustomerEditorValidationError({
+    name: '',
+    latitude: '',
+    longitude: '',
+  }, { requireName: true }), 'El nombre del cliente es obligatorio.')
 
   assert.equal(getCustomerEditorValidationError({
     name: 'Cliente',
     latitude: 'abc',
     longitude: '',
-  }), 'La latitud debe ser numerica.')
+  }), 'Latitude y longitude deben enviarse juntos.')
 
   assert.equal(getCustomerEditorValidationError({
     name: 'Cliente',
