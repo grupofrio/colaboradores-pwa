@@ -182,7 +182,7 @@ test('el brief pinta el fondo claro de extremo a extremo, sin franjas', () => {
   // a ser el mismo, en escritorio reaparecen las franjas oscuras a los lados.
   const surface = code.slice(code.indexOf('data-testid="brief-surface"'), code.indexOf('data-testid="brief-content"'))
   assert.ok(surface.includes("width: '100%'"), 'la capa de color ocupa todo el ancho')
-  assert.ok(surface.includes('background: C.bg'), 'y es la que lleva el fondo claro')
+  assert.ok(surface.includes("background: `linear-gradient(160deg, ${C.bg0} 0%, ${C.bg1} 55%, ${C.bg2} 100%)`"), 'y es la que lleva el fondo claro')
   assert.ok(!surface.includes('maxWidth'), 'la capa de color NO limita el ancho')
 
   const content = code.slice(code.indexOf('data-testid="brief-content"'))

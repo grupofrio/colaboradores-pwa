@@ -37,11 +37,17 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
   assert.ok(LIGHT_FILES.length > 0, 'hay archivos con tema claro')
 
   for (const f of LIGHT_FILES) {
-    // modules/gerente/v2/**: shell "Mi Sucursal" (MGR-05), montado SOLO bajo
-    // ModuleRoleRoute moduleId="gerente" (gerente_sucursal/direccion_general)
-    // y detrás del flag gerente_v2 (fail-closed, default OFF). Mismo patrón
-    // que supervisor-ventas/v2: un árbol de rutas exclusivo del rol puede
-    // adoptar el tema claro sin conmutar por sesión.
+    // modules/gerente/v2/**, modules/gerente/ScreenCopilotoGerencial.jsx y
+    // modules/ventas-iguala/ScreenVentasIguala.jsx: superficies exclusivas de
+    // un árbol de rutas protegido. El shell "Mi Sucursal" (MGR-05) se monta
+    // SOLO bajo ModuleRoleRoute moduleId="gerente"
+    // (gerente_sucursal/direccion_general) y detrás del flag gerente_v2
+    // (fail-closed, default OFF). El Copiloto Gerencial histórico se monta
+    // SOLO bajo ModuleRoleRoute moduleId="copiloto_gerencial". Ventas Iguala
+    // se monta SOLO bajo VentasIgualaRoute, que revalida sesión y visibilidad
+    // del módulo `ventas_iguala`. Mismo patrón que supervisor-ventas/v2: un
+    // árbol de rutas exclusivo del rol puede adoptar el tema claro sin
+    // conmutar por sesión.
     //
     // modules/admin/**: Admin Sucursal (ModuleRoleRoute moduleId="admin_sucursal",
     // roles auxiliar_admin/gerente_sucursal/direccion_general) — mismo patrón:
@@ -51,6 +57,8 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
     if (
       f.startsWith('modules/supervisor-ventas/')
       || f.startsWith('modules/gerente/v2/')
+      || f === 'modules/gerente/ScreenCopilotoGerencial.jsx'
+      || f === 'modules/ventas-iguala/ScreenVentasIguala.jsx'
       || f.startsWith('modules/admin/')
       || f.startsWith('theme/')
     ) continue

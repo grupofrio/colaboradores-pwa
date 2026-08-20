@@ -91,6 +91,10 @@ const SKINS = {
     sheetShadow: "0 -20px 60px rgba(0,0,0,0.6)",
     shimmer: "linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.05) 75%)",
     cta: "linear-gradient(90deg,#15499B,#2B8FE0)",
+    sheetItemBorder: "rgba(255,255,255,0.08)",
+    sheetItemText: "#FFFFFF",
+    sheetItemSubtext: "rgba(255,255,255,0.55)",
+    sheetDangerBg: "rgba(239,68,68,0.12)",
   },
   light: {
     page: BRAND_TOKENS.colors.bg0,
