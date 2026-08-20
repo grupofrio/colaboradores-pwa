@@ -9212,6 +9212,20 @@ async function directKoldcup(method, path, body) {
   return odooJson(cleanPath, body || {})
 }
 
+async function directFavy(method, path, body) {
+  const cleanPath = path.split('?')[0]
+  if (!cleanPath.startsWith('/api/favy/')) return NO_DIRECT
+
+  const queryStr = path.includes('?') ? path.split('?')[1] : ''
+  const queryObj = {}
+  if (queryStr) {
+    for (const [key, value] of new URLSearchParams(queryStr)) queryObj[key] = value
+  }
+
+  if (method === 'GET') return odooHttp('GET', cleanPath, queryObj)
+  return odooJson(cleanPath, body || {})
+}
+
 // ── KOLD Tower M1 (gf_tower_m1) ── Odoo directo; PROHIBIDO fallback n8n ────
 async function directTower(method, path) {
   const query = new URLSearchParams(path.split('?')[1] || '')
@@ -9369,6 +9383,7 @@ async function routeDirect(method, path, body) {
     directSupervisorDayControl,
     directSupervisorVentas,
     directKoldcup,
+    directFavy,
   ]
 
   for (const handler of directHandlers) {

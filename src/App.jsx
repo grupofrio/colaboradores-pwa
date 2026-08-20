@@ -146,6 +146,7 @@ const ScreenMermaEntregas   = lazy(() => import('./modules/entregas/ScreenMerma'
 const ScreenCierreTurno     = lazy(() => import('./modules/entregas/ScreenCierreTurno'))
 const ScreenTransformacionEntregas = lazy(() => import('./modules/entregas/ScreenTransformacionEntregas'))
 const ScreenInventarioEntregas     = lazy(() => import('./modules/entregas/ScreenInventarioEntregas'))
+const ScreenFavyCedis             = lazy(() => import('./modules/favy/ScreenFavyCedis'))
 // Ruta V2 — V1 eliminado 2026-04-17
 const ScreenMiRutaV2        = lazy(() => import('./modules/ruta/ScreenMiRutaV2'))
 const ScreenChecklistUnidad = lazy(() => import('./modules/ruta/ScreenChecklistUnidad'))
@@ -858,6 +859,9 @@ export default function App() {
             <Route path="/almacen-pt/declaracion-bolsas" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenDeclaracionBolsasPT /></ModuleRoleRoute>} />
             <Route path="/almacen-pt/materiales/report/:issueId" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenMaterialesReport /></ModuleRoleRoute>} />
             <Route path="/almacen-pt/materiales/reconciliar" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenMaterialesReconcile /></ModuleRoleRoute>} />
+
+            {/* ── FAVY — CEDIS CDMX (Producción + Almacén) ───────────── */}
+            <Route path="/favy" element={<ModuleRoleRoute moduleId="favy_cedis"><ScreenFavyCedis /></ModuleRoleRoute>} />
 
             {/* ── KOLDCUP ─────────────────────────────────────────────── */}
             <Route path="/koldcup" element={<ModuleRoleRoute moduleId="koldcup"><ScreenKoldcupHub /></ModuleRoleRoute>} />
