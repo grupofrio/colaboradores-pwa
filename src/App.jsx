@@ -10,9 +10,10 @@ import { isBrandLightSession } from './theme/useBrandPalette'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById } from './modules/registry'
-import { resolveModuleContextRole } from './lib/roleContext'
+import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
 import { isValidAuthenticatedSession } from './lib/session'
 import { isModuleVisibleForSession, getModuleRouteDecisionForSession } from './lib/navModel'
+import { adminRouteAllows } from './modules/admin/adminRouteAccess'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
@@ -254,6 +255,16 @@ function getStoredSession() {
 function PrivateRoute({ children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  return children
+}
+
+// Revalidación por SUBRUTA de /admin. El gate del padre autoriza el MÓDULO;
+// este autoriza la PANTALLA. Fail-closed: una subruta sin política declarada en
+// adminRouteAccess no se abre.
+function AdminSubRoute({ path, children }) {
+  const { session } = useSession()
+  if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  if (!adminRouteAllows(path, getEffectiveJobKeys(session))) return <Navigate to="/admin" replace />
   return children
 }
 
@@ -859,21 +870,26 @@ export default function App() {
 
             {/* ── Admin Sucursal (POS + Gastos + Requisiciones) ────────── */}
             <Route path="/admin" element={<ModuleRoleRoute moduleId="admin_sucursal"><AdminThemeScope /></ModuleRoleRoute>}>
-              <Route index element={<ScreenAdminPanel />} />
-              <Route path="pos" element={<ScreenPOS />} />
-              <Route path="ticket/:orderId" element={<ScreenTicket />} />
-              <Route path="gastos" element={<ScreenGastos />} />
-              <Route path="gastos-historial" element={<ScreenGastosHistorial />} />
-              <Route path="gastos/aprobar" element={<ScreenGastosAprobar />} />
-              <Route path="requisiciones" element={<ScreenRequisiciones />} />
-              <Route path="liquidaciones" element={<ScreenLiquidaciones />} />
-              <Route path="materia-prima" element={<ScreenMateriaPrima />} />
-              <Route path="traspaso-materia-prima" element={<ScreenTraspasoMateriaPrima />} />
-              <Route path="historial-cargas" element={<ScreenHistorialCargas />} />
-              <Route path="bolsas/validar" element={<ScreenValidacionBolsas />} />
-              <Route path="cierre" element={<ScreenCierreCaja />} />
-              <Route path="materiales/validar" element={<ScreenMaterialesValidate />} />
-              <Route path="materiales/resolver-rechazo" element={<ScreenMaterialesResolverRejected />} />
+              {/* Cada subruta revalida su propio rol contra NAV_ITEMS. El gate del
+                  padre solo comprueba "eres del módulo admin_sucursal", que
+                  incluye a auxiliar_admin: sin AdminSubRoute, un auxiliar entraba
+                  a Liquidaciones / Materia prima / Aprobar gastos escribiendo la
+                  URL, porque el filtro por rol vivía únicamente en el menú. */}
+              <Route index element={<AdminSubRoute path="/admin"><ScreenAdminPanel /></AdminSubRoute>} />
+              <Route path="pos" element={<AdminSubRoute path="/admin/pos"><ScreenPOS /></AdminSubRoute>} />
+              <Route path="ticket/:orderId" element={<AdminSubRoute path="/admin/ticket"><ScreenTicket /></AdminSubRoute>} />
+              <Route path="gastos" element={<AdminSubRoute path="/admin/gastos"><ScreenGastos /></AdminSubRoute>} />
+              <Route path="gastos-historial" element={<AdminSubRoute path="/admin/gastos-historial"><ScreenGastosHistorial /></AdminSubRoute>} />
+              <Route path="gastos/aprobar" element={<AdminSubRoute path="/admin/gastos/aprobar"><ScreenGastosAprobar /></AdminSubRoute>} />
+              <Route path="requisiciones" element={<AdminSubRoute path="/admin/requisiciones"><ScreenRequisiciones /></AdminSubRoute>} />
+              <Route path="liquidaciones" element={<AdminSubRoute path="/admin/liquidaciones"><ScreenLiquidaciones /></AdminSubRoute>} />
+              <Route path="materia-prima" element={<AdminSubRoute path="/admin/materia-prima"><ScreenMateriaPrima /></AdminSubRoute>} />
+              <Route path="traspaso-materia-prima" element={<AdminSubRoute path="/admin/traspaso-materia-prima"><ScreenTraspasoMateriaPrima /></AdminSubRoute>} />
+              <Route path="historial-cargas" element={<AdminSubRoute path="/admin/historial-cargas"><ScreenHistorialCargas /></AdminSubRoute>} />
+              <Route path="bolsas/validar" element={<AdminSubRoute path="/admin/bolsas/validar"><ScreenValidacionBolsas /></AdminSubRoute>} />
+              <Route path="cierre" element={<AdminSubRoute path="/admin/cierre"><ScreenCierreCaja /></AdminSubRoute>} />
+              <Route path="materiales/validar" element={<AdminSubRoute path="/admin/materiales/validar"><ScreenMaterialesValidate /></AdminSubRoute>} />
+              <Route path="materiales/resolver-rechazo" element={<AdminSubRoute path="/admin/materiales/resolver-rechazo"><ScreenMaterialesResolverRejected /></AdminSubRoute>} />
             </Route>
 
             {/* ── Almacenista Entregas ─────────────────────────────────── */}
