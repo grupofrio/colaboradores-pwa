@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getMyShift, getShiftSummary, getCycles, getPackingEntries } from './api'
+
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
 export default function ScreenCorte() {
   const navigate = useNavigate()
+  const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  // Invariante de tests/brandTokensScope: superficie compartida por operador_rolito/operador_barra/auxiliar_produccion (ruta exclusiva de esos roles), adopta el tema claro incondicionalmente.
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role) || isBrandLightSession(session)
   const [loading, setLoading] = useState(true)
   const [shift, setShift] = useState(null)
   const [cycles, setCycles] = useState([])
@@ -58,7 +66,7 @@ export default function ScreenCorte() {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+      background: `linear-gradient(160deg, ${TOKENS_LIGHT.colors.bg0} 0%, ${TOKENS_LIGHT.colors.bg1} 50%, ${TOKENS_LIGHT.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
@@ -75,25 +83,25 @@ export default function ScreenCorte() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
           <button onClick={() => navigate('/produccion')} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Corte del Día</span>
+          <span style={{ ...typo.title, color: TOKENS_LIGHT.colors.textSoft }}>Corte del Día</span>
         </div>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS_LIGHT.colors.border}`, borderTop: `2px solid ${TOKENS_LIGHT.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : error ? (
           <div style={{
             marginTop: 20, padding: 16, borderRadius: TOKENS.radius.lg,
-            background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
-            color: TOKENS.colors.error, ...typo.body, textAlign: 'center',
+            background: TOKENS_LIGHT.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
+            color: TOKENS_LIGHT.colors.error, ...typo.body, textAlign: 'center',
           }}>{error}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -101,27 +109,27 @@ export default function ScreenCorte() {
             {/* Info turno */}
             <div style={{
               padding: 16, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+              background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             }}>
-              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 6 }}>TURNO</p>
-              <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0 }}>{shift?.name || 'Turno activo'}</p>
-              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 4 }}>
+              <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 6 }}>TURNO</p>
+              <p style={{ ...typo.h2, color: TOKENS_LIGHT.colors.text, margin: 0 }}>{shift?.name || 'Turno activo'}</p>
+              <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, marginTop: 4 }}>
                 {shift?.date} &middot; {TURNO_LABELS[shift?.shift_code] || `Turno ${shift?.shift_code}`}
               </p>
             </div>
 
             {/* KPIs principales */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <KpiCard label="Kg Producidos" value={totalKgProduced.toFixed(0)} unit="kg" color={TOKENS.colors.blue2} typo={typo} />
-              <KpiCard label="Kg Empacados" value={totalKgPacked.toFixed(0)} unit="kg" color={TOKENS.colors.success} typo={typo} />
-              <KpiCard label="Ciclos" value={`${completedCycles}/${totalCycles}`} unit="" color={TOKENS.colors.blue3} typo={typo} />
-              <KpiCard label="Merma" value={mermaPct} unit="%" color={parseFloat(mermaPct) > 5 ? TOKENS.colors.error : TOKENS.colors.success} typo={typo} />
+              <KpiCard label="Kg Producidos" value={totalKgProduced.toFixed(0)} unit="kg" color={TOKENS_LIGHT.colors.blue} typo={typo} />
+              <KpiCard label="Kg Empacados" value={totalKgPacked.toFixed(0)} unit="kg" color={TOKENS_LIGHT.colors.success} typo={typo} />
+              <KpiCard label="Ciclos" value={`${completedCycles}/${totalCycles}`} unit="" color={TOKENS_LIGHT.colors.blue3} typo={typo} />
+              <KpiCard label="Merma" value={mermaPct} unit="%" color={parseFloat(mermaPct) > 5 ? TOKENS_LIGHT.colors.error : TOKENS_LIGHT.colors.success} typo={typo} />
             </div>
 
             {/* Métricas secundarias */}
             <div style={{
               padding: 14, borderRadius: TOKENS.radius.lg,
-              background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+              background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
               display: 'flex', flexDirection: 'column', gap: 10,
             }}>
               <MetricRow label="Productividad" value={`${productivity} kg/h`} typo={typo} />
@@ -133,23 +141,23 @@ export default function ScreenCorte() {
             {/* Desglose por producto */}
             {Object.keys(packingByProduct).length > 0 && (
               <>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 4 }}>DESGLOSE POR PRODUCTO</p>
+                <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginTop: 4 }}>DESGLOSE POR PRODUCTO</p>
                 <div style={{
                   borderRadius: TOKENS.radius.lg, overflow: 'hidden',
-                  border: `1px solid ${TOKENS.colors.border}`,
+                  border: `1px solid ${TOKENS_LIGHT.colors.border}`,
                 }}>
                   {Object.entries(packingByProduct).map(([name, data], i) => (
                     <div key={name} style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '12px 14px',
-                      background: i % 2 === 0 ? TOKENS.colors.surfaceSoft : 'transparent',
-                      borderBottom: i < Object.keys(packingByProduct).length - 1 ? `1px solid ${TOKENS.colors.border}` : 'none',
+                      background: i % 2 === 0 ? TOKENS_LIGHT.colors.surfaceSoft : 'transparent',
+                      borderBottom: i < Object.keys(packingByProduct).length - 1 ? `1px solid ${TOKENS_LIGHT.colors.border}` : 'none',
                     }}>
                       <div>
-                        <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600 }}>{name}</p>
-                        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{data.qty} bolsas</p>
+                        <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textSoft, margin: 0, fontWeight: 600 }}>{name}</p>
+                        <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginTop: 2 }}>{data.qty} bolsas</p>
                       </div>
-                      <span style={{ ...typo.body, color: TOKENS.colors.success, fontWeight: 700 }}>{data.kg.toFixed(0)} kg</span>
+                      <span style={{ ...typo.body, color: TOKENS_LIGHT.colors.success, fontWeight: 700 }}>{data.kg.toFixed(0)} kg</span>
                     </div>
                   ))}
                 </div>
@@ -162,8 +170,8 @@ export default function ScreenCorte() {
               style={{
                 width: '100%', padding: '14px', marginTop: 8,
                 borderRadius: TOKENS.radius.lg,
-                background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                color: TOKENS.colors.textSoft, fontSize: 15, fontWeight: 600,
+                background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+                color: TOKENS_LIGHT.colors.textSoft, fontSize: 15, fontWeight: 600,
               }}
             >
               Volver al turno
@@ -181,13 +189,13 @@ function KpiCard({ label, value, unit, color, typo }) {
   return (
     <div style={{
       padding: 14, borderRadius: TOKENS.radius.lg,
-      background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+      background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
       boxShadow: TOKENS.shadow.soft,
     }}>
-      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginBottom: 6 }}>{label}</p>
+      <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginBottom: 6 }}>{label}</p>
       <p style={{ margin: 0, fontSize: 26, fontWeight: 700, color, letterSpacing: '-0.03em', lineHeight: 1 }}>
         {value}
-        {unit && <span style={{ fontSize: 14, fontWeight: 500, color: TOKENS.colors.textMuted, marginLeft: 4 }}>{unit}</span>}
+        {unit && <span style={{ fontSize: 14, fontWeight: 500, color: TOKENS_LIGHT.colors.textMuted, marginLeft: 4 }}>{unit}</span>}
       </p>
     </div>
   )
@@ -196,8 +204,8 @@ function KpiCard({ label, value, unit, color, typo }) {
 function MetricRow({ label, value, typo }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>{label}</span>
-      <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>{value}</span>
+      <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted }}>{label}</span>
+      <span style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 600 }}>{value}</span>
     </div>
   )
 }

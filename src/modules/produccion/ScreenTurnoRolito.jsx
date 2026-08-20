@@ -9,6 +9,8 @@ import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import {
   getShiftOverview,
   getActiveCycle,
@@ -28,16 +30,20 @@ import {
 } from '../shared/operatorTurnCloseStore'
 import ScreenTurnoEntregado from './ScreenTurnoEntregado'
 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
+
 const SHIFT_STATES = {
-  draft:       { label: 'Pendiente',   color: TOKENS.colors.textMuted },
-  in_progress: { label: 'En curso',    color: TOKENS.colors.blue2 },
-  closed:      { label: 'Cerrado',     color: TOKENS.colors.success },
-  audited:     { label: 'Auditado',    color: TOKENS.colors.success },
+  draft:       { label: 'Pendiente',   color: TOKENS_LIGHT.colors.textMuted },
+  in_progress: { label: 'En curso',    color: TOKENS_LIGHT.colors.blue },
+  closed:      { label: 'Cerrado',     color: TOKENS_LIGHT.colors.success },
+  audited:     { label: 'Auditado',    color: TOKENS_LIGHT.colors.success },
 }
 
 export default function ScreenTurnoRolito() {
   const { session } = useSession()
   const navigate = useNavigate()
+  // Invariante de tests/brandTokensScope: superficie compartida por operador_rolito/operador_barra/auxiliar_produccion (ruta exclusiva de esos roles), adopta el tema claro incondicionalmente.
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role) || isBrandLightSession(session)
   const activeOperatorRole = normalizeOperatorCloseRole(session?.role) || 'operador_rolito'
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -109,7 +115,7 @@ export default function ScreenTurnoRolito() {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+      background: `linear-gradient(160deg, ${TOKENS_LIGHT.colors.bg0} 0%, ${TOKENS_LIGHT.colors.bg1} 50%, ${TOKENS_LIGHT.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
@@ -126,20 +132,20 @@ export default function ScreenTurnoRolito() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
           <button onClick={() => navigate('/')} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Mi Turno — Rolito</span>
+          <span style={{ ...typo.title, color: TOKENS_LIGHT.colors.textSoft }}>Mi Turno — Rolito</span>
           <button onClick={loadData} style={{
             marginLeft: 'auto', width: 34, height: 34, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/>
               <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
             </svg>
@@ -149,7 +155,7 @@ export default function ScreenTurnoRolito() {
         {/* Loading */}
         {loading && (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS_LIGHT.colors.border}`, borderTop: `2px solid ${TOKENS_LIGHT.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         )}
 
@@ -157,11 +163,11 @@ export default function ScreenTurnoRolito() {
         {!loading && error && (
           <div style={{
             marginTop: 20, padding: 16, borderRadius: TOKENS.radius.lg,
-            background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
-            color: TOKENS.colors.error, ...typo.body, textAlign: 'center',
+            background: TOKENS_LIGHT.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
+            color: TOKENS_LIGHT.colors.error, ...typo.body, textAlign: 'center',
           }}>
             {error}
-            <button onClick={loadData} style={{ display: 'block', margin: '10px auto 0', color: TOKENS.colors.blue2, ...typo.caption, textDecoration: 'underline' }}>
+            <button onClick={loadData} style={{ display: 'block', margin: '10px auto 0', color: TOKENS_LIGHT.colors.blue, ...typo.caption, textDecoration: 'underline' }}>
               Reintentar
             </button>
           </div>
@@ -171,12 +177,12 @@ export default function ScreenTurnoRolito() {
         {!loading && !error && !shift && (
           <div style={{
             marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl,
-            background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+            background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             textAlign: 'center',
           }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>&#x1F3ED;</div>
-            <p style={{ ...typo.title, color: TOKENS.colors.text, marginBottom: 6 }}>Sin turno activo</p>
-            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>No hay turno asignado. Contacta a tu supervisor.</p>
+            <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.text, marginBottom: 6 }}>Sin turno activo</p>
+            <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted }}>No hay turno asignado. Contacta a tu supervisor.</p>
           </div>
         )}
 
@@ -186,16 +192,16 @@ export default function ScreenTurnoRolito() {
             {/* Shift header card */}
             <div style={{
               marginTop: 4, padding: 14, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
-              boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
+              background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.borderBlue}`,
+              boxShadow: `${TOKENS_LIGHT.shadow.md}, ${TOKENS_LIGHT.shadow.inset}`,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 4 }}>TURNO ACTIVO</p>
-                  <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0 }}>
+                  <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 4 }}>TURNO ACTIVO</p>
+                  <p style={{ ...typo.h2, color: TOKENS_LIGHT.colors.text, margin: 0 }}>
                     Evaporador 1
                   </p>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 2 }}>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, marginTop: 2 }}>
                     {shift.date} &middot; {TURNO_LABELS[shift.shift_code] || `Turno ${shift.shift_code}`}
                   </p>
                 </div>
@@ -215,12 +221,12 @@ export default function ScreenTurnoRolito() {
             {diagnostics && diagnostics.map((d, i) => (
               <div key={i} style={{
                 marginTop: 10, padding: 12, borderRadius: TOKENS.radius.lg,
-                background: d.level === 'critical' ? TOKENS.colors.errorSoft : TOKENS.colors.warningSoft,
+                background: d.level === 'critical' ? TOKENS_LIGHT.colors.errorSoft : TOKENS_LIGHT.colors.warningSoft,
                 border: `1px solid ${d.level === 'critical' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}`,
                 display: 'flex', alignItems: 'center', gap: 10,
               }}>
                 <span style={{ fontSize: 18 }}>{d.level === 'critical' ? '\u26A0\uFE0F' : '\u26A0'}</span>
-                <p style={{ ...typo.caption, color: d.level === 'critical' ? TOKENS.colors.error : TOKENS.colors.warning, margin: 0, fontWeight: 600 }}>
+                <p style={{ ...typo.caption, color: d.level === 'critical' ? TOKENS_LIGHT.colors.error : TOKENS_LIGHT.colors.warning, margin: 0, fontWeight: 600 }}>
                   {d.message}
                 </p>
               </div>
@@ -231,49 +237,49 @@ export default function ScreenTurnoRolito() {
               marginTop: 12, padding: 16, borderRadius: TOKENS.radius.xl,
               background: activeCycle
                 ? `linear-gradient(180deg, ${(CYCLE_STATES[activeCycle.state]?.color || '#2B8FE0')}18, rgba(255,255,255,0.02))`
-                : TOKENS.glass.panel,
-              border: `1px solid ${activeCycle ? (CYCLE_STATES[activeCycle.state]?.color || '#2B8FE0') + '30' : TOKENS.colors.border}`,
+                : TOKENS_LIGHT.glass.panel,
+              border: `1px solid ${activeCycle ? (CYCLE_STATES[activeCycle.state]?.color || '#2B8FE0') + '30' : TOKENS_LIGHT.colors.border}`,
             }}>
               {activeCycle && progress ? (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div>
-                      <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 4 }}>
+                      <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 4 }}>
                         PRODUCCIÓN #{activeCycle.cycle_number || '?'}
                       </p>
-                      <p style={{ ...typo.h2, color: CYCLE_STATES[activeCycle.state]?.color || TOKENS.colors.text, margin: 0 }}>
+                      <p style={{ ...typo.h2, color: CYCLE_STATES[activeCycle.state]?.color || TOKENS_LIGHT.colors.text, margin: 0 }}>
                         {progress.phaseLabel}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <p style={{
                         fontSize: 28, fontWeight: 700, margin: 0, letterSpacing: '-0.03em',
-                        color: progress.isOverdue ? TOKENS.colors.error : TOKENS.colors.text,
+                        color: progress.isOverdue ? TOKENS_LIGHT.colors.error : TOKENS_LIGHT.colors.text,
                         animation: progress.isOverdue ? 'pulse 1.5s ease infinite' : 'none',
                       }}>
                         {progress.isOverdue ? '+' : ''}{progress.remainingMin}:{String(progress.remainingSec).padStart(2, '0')}
                       </p>
-                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
+                      <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0 }}>
                         {progress.isOverdue ? 'pasado' : 'restante'}
                       </p>
                     </div>
                   </div>
                   {/* Progress bar */}
                   <div style={{
-                    height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden',
+                    height: 8, borderRadius: 4, background: TOKENS_LIGHT.colors.border, overflow: 'hidden',
                   }}>
                     <div style={{
                       height: '100%', borderRadius: 4,
                       width: `${progress.progressPct}%`,
                       background: progress.isOverdue
-                        ? TOKENS.colors.error
+                        ? TOKENS_LIGHT.colors.error
                         : progress.progressPct >= 80
-                          ? TOKENS.colors.warning
-                          : CYCLE_STATES[activeCycle.state]?.color || TOKENS.colors.blue2,
+                          ? TOKENS_LIGHT.colors.warning
+                          : CYCLE_STATES[activeCycle.state]?.color || TOKENS_LIGHT.colors.blue2,
                       transition: 'width 1s linear',
                     }} />
                   </div>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6, textAlign: 'center' }}>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, marginTop: 6, textAlign: 'center' }}>
                     {progress.clockSkew
                       ? 'Inicio de congelación registrado (esperando hora del equipo)'
                       : `${progress.elapsedMin} min de ${progress.expectedMin} min esperados`}
@@ -281,10 +287,10 @@ export default function ScreenTurnoRolito() {
                   {progress.clockSkew && (
                     <div style={{
                       marginTop: 8, padding: '8px 10px', borderRadius: TOKENS.radius.md,
-                      background: TOKENS.colors.warning + '22',
-                      border: `1px solid ${TOKENS.colors.warning}55`,
+                      background: TOKENS_LIGHT.colors.warning + '22',
+                      border: `1px solid ${TOKENS_LIGHT.colors.warning}55`,
                     }}>
-                      <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0, textAlign: 'center' }}>
+                      <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.warning, margin: 0, textAlign: 'center' }}>
                         ⚠️ La hora de este dispositivo está desfasada. Ajusta la fecha y hora del equipo (activa la sincronización automática) para ver el tiempo correcto.
                       </p>
                     </div>
@@ -292,11 +298,11 @@ export default function ScreenTurnoRolito() {
                 </>
               ) : (
                 <div style={{ textAlign: 'center', padding: '8px 0' }}>
-                  <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 6 }}>PRODUCCIÓN</p>
-                  <p style={{ ...typo.h2, color: TOKENS.colors.textMuted, margin: 0 }}>
+                  <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 6 }}>PRODUCCIÓN</p>
+                  <p style={{ ...typo.h2, color: TOKENS_LIGHT.colors.textMuted, margin: 0 }}>
                     Listo para producir
                   </p>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textLow, marginTop: 4 }}>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textLow, marginTop: 4 }}>
                     Presiona abajo para iniciar
                   </p>
                 </div>
@@ -314,7 +320,7 @@ export default function ScreenTurnoRolito() {
                     ? 'linear-gradient(90deg, #dc2626, #ef4444)'
                     : nextAction.urgency === 'required'
                       ? 'linear-gradient(90deg, #f59e0b, #eab308)'
-                      : 'linear-gradient(90deg, #15499B, #2B8FE0)',
+                      : TOKENS_LIGHT.colors.ctaGradient,
                   color: 'white',
                   boxShadow: '0 10px 24px rgba(0,0,0,0.25)',
                   display: 'flex', alignItems: 'center', gap: 14,
@@ -349,62 +355,62 @@ export default function ScreenTurnoRolito() {
             {/* ── KPIs ─────────────────────────────────────────── */}
             {kpis && (
               <>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 10 }}>HOY</p>
+                <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginTop: 20, marginBottom: 10 }}>HOY</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <KpiCard
                     label="Ciclos"
                     value={kpis.expectedCycles ? `${kpis.completedCycles}/${kpis.expectedCycles}` : `${kpis.completedCycles}`}
-                    accent={kpis.completedCycles > 0 ? TOKENS.colors.blue2 : TOKENS.colors.textMuted} typo={typo} />
+                    accent={kpis.completedCycles > 0 ? TOKENS_LIGHT.colors.blue : TOKENS_LIGHT.colors.textMuted} typo={typo} />
                   <KpiCard
                     label="Producido"
                     value={kpis.totalKgProduced !== null
                       ? `${kpis.totalKgProduced} kg`
                       : (kpis.estimated?.producedKg ? `~${Math.round(kpis.estimated.producedKg)} kg` : '—')}
                     hint={kpis.totalKgProduced === null && kpis.estimated?.producedKg ? 'estimado' : null}
-                    accent={TOKENS.colors.blue2} typo={typo} />
+                    accent={TOKENS_LIGHT.colors.blue} typo={typo} />
                   <KpiCard
                     label="Empacado"
                     value={kpis.totalKgPacked !== null
                       ? `${kpis.totalKgPacked} kg`
                       : (kpis.estimated?.packedKg ? `~${Math.round(kpis.estimated.packedKg)} kg` : '—')}
                     hint={kpis.totalKgPacked === null && kpis.estimated?.packedKg ? 'estimado' : null}
-                    accent={TOKENS.colors.success} typo={typo} />
+                    accent={TOKENS_LIGHT.colors.success} typo={typo} />
                   <KpiCard
                     label="Merma"
                     value={kpis.mermaKg !== null && kpis.mermaPct !== null
                       ? `${kpis.mermaKg} kg (${kpis.mermaPct}%)`
                       : '—'}
                     hint={kpis.mermaKg === null ? 'sin dato backend' : null}
-                    accent={kpis.mermaExceeded ? TOKENS.colors.error : TOKENS.colors.success} typo={typo} />
+                    accent={kpis.mermaExceeded ? TOKENS_LIGHT.colors.error : TOKENS_LIGHT.colors.success} typo={typo} />
                 </div>
               </>
             )}
 
             {/* ── ACTIONS GRID ─────────────────────────────────── */}
-            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 10 }}>ACCIONES</p>
+            <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginTop: 20, marginBottom: 10 }}>ACCIONES</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <ActionButton label="Producir" icon={'\u23F1'} color={TOKENS.colors.blue2}
+              <ActionButton label="Producir" icon={'\u23F1'} color={TOKENS_LIGHT.colors.blue2}
                 onClick={() => navigate('/produccion/ciclo')} typo={typo}
                 disabled={!!activeCycle || totalBagsAvailable <= 0}
                 disabledMsg={activeCycle ? 'Hay producción activa' : 'No hay bolsa disponible'} />
-              <ActionButton label="Materiales" icon={'\uD83D\uDCE6'} color={TOKENS.colors.warning}
+              <ActionButton label="Materiales" icon={'\uD83D\uDCE6'} color={TOKENS_LIGHT.colors.warning}
                 onClick={() => navigate('/almacen-pt/materiales', { state: { backTo: '/produccion' } })} typo={typo} />
-              <ActionButton label="Empaque" icon={'\uD83D\uDCE6'} color={TOKENS.colors.success}
+              <ActionButton label="Empaque" icon={'\uD83D\uDCE6'} color={TOKENS_LIGHT.colors.success}
                 onClick={() => navigate('/produccion/empaque')} typo={typo} />
-              <ActionButton label="Reportar problema" icon={'\u26A0'} color={TOKENS.colors.warning}
+              <ActionButton label="Reportar problema" icon={'\u26A0'} color={TOKENS_LIGHT.colors.warning}
                 onClick={() => navigate('/produccion/incidencia')} typo={typo} />
               <ActionButton label="Checklist" icon={'\u2611'} color="#a78bfa"
                 onClick={() => navigate('/produccion/checklist')} typo={typo} />
-              <ActionButton label="Resumen" icon={'\uD83D\uDCCA'} color={TOKENS.colors.blue3}
+              <ActionButton label="Resumen" icon={'\uD83D\uDCCA'} color={TOKENS_LIGHT.colors.blue3}
                 onClick={() => navigate('/produccion/corte')} typo={typo} />
-              <ActionButton label="Cerrar Turno" icon={'\uD83D\uDD12'} color={TOKENS.colors.textMuted}
+              <ActionButton label="Cerrar Turno" icon={'\uD83D\uDD12'} color={TOKENS_LIGHT.colors.textMuted}
                 onClick={() => navigate('/produccion/cierre')} typo={typo} />
             </div>
 
             {/* ── RECENT CYCLES ─────────────────────────────────── */}
             {cycles.length > 0 && (
               <>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 10 }}>ÚLTIMAS PRODUCCIONES</p>
+                <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginTop: 20, marginBottom: 10 }}>ÚLTIMAS PRODUCCIONES</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {cycles.slice(-5).reverse().map((c, i) => {
                     const st = CYCLE_STATES[c.state] || CYCLE_STATES.freezing
@@ -414,7 +420,7 @@ export default function ScreenTurnoRolito() {
                       <div key={c.id || i} style={{
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '10px 12px', borderRadius: TOKENS.radius.md,
-                        background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                        background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
                       }}>
                         <div style={{
                           width: 30, height: 30, borderRadius: '50%',
@@ -425,10 +431,10 @@ export default function ScreenTurnoRolito() {
                           {c.cycle_number || '#'}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600 }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textSoft, margin: 0, fontWeight: 600 }}>
                             Prod. {c.cycle_number} &middot; {timeStr}
                           </p>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 1 }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginTop: 1 }}>
                             {c.state === 'dumped' ? `${c.kg_dumped || 0} kg` : st.label}
                             {cycleDiag ? ` \u26A0` : ''}
                           </p>
@@ -458,14 +464,14 @@ function KpiCard({ label, value, accent, typo, hint }) {
   return (
     <div style={{
       padding: '12px', borderRadius: TOKENS.radius.md,
-      background: TOKENS.glass.panelSoft, border: `1px solid ${TOKENS.colors.border}`,
+      background: TOKENS_LIGHT.glass.panelSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
     }}>
-      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginBottom: 4 }}>{label}</p>
-      <p style={{ fontSize: 16, fontWeight: 700, color: accent || TOKENS.colors.text, margin: 0, letterSpacing: '-0.02em' }}>
+      <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginBottom: 4 }}>{label}</p>
+      <p style={{ fontSize: 16, fontWeight: 700, color: accent || TOKENS_LIGHT.colors.text, margin: 0, letterSpacing: '-0.02em' }}>
         {value}
       </p>
       {hint && (
-        <p style={{ fontSize: 10, color: TOKENS.colors.textLow, margin: 0, marginTop: 2, fontStyle: 'italic' }}>
+        <p style={{ fontSize: 10, color: TOKENS_LIGHT.colors.textLow, margin: 0, marginTop: 2, fontStyle: 'italic' }}>
           {hint}
         </p>
       )}
@@ -483,7 +489,7 @@ function ActionButton({ label, icon, color, onClick, typo, disabled, disabledMsg
       onClick={disabled ? undefined : onClick}
       style={{
         padding: '14px 10px', borderRadius: TOKENS.radius.lg,
-        background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+        background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
         transform: pressed ? 'scale(0.96)' : 'scale(1)',
         transition: `transform ${TOKENS.motion.fast}`,
         opacity: disabled ? 0.4 : 1,
@@ -491,8 +497,8 @@ function ActionButton({ label, icon, color, onClick, typo, disabled, disabledMsg
       }}
       title={disabledMsg || ''}
     >
-      <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
-      <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600 }}>{label}</p>
+      <div style={{ fontSize: 22, marginBottom: 6, color: color || TOKENS_LIGHT.colors.text }}>{icon}</div>
+      <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textSoft, margin: 0, fontWeight: 600 }}>{label}</p>
     </button>
   )
 }

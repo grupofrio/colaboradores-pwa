@@ -15,7 +15,14 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { TOKENS } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
 import { getOpeningState } from './api'
+
+// Componente compartido, pero SOLO lo montan ScreenMiTurno.jsx y
+// ScreenTurnoRolito.jsx, ambos exclusivos de las rutas registro_produccion
+// (operador_rolito/operador_barra/auxiliar_produccion). Mismo patrón que la
+// superficie de supervisión: tema claro incondicional, sin conmutar por sesión.
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
 const DISMISS_KEY = (shiftId) => `gf_opening_ack_${shiftId}`
 
@@ -108,7 +115,7 @@ export default function OpeningStateBanner({ shiftId, typo }) {
   if (loading) {
     return (
       <div style={{ ...cardBase, padding: 14, textAlign: 'center' }}>
-        <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Cargando estado de apertura...</span>
+        <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted }}>Cargando estado de apertura...</span>
       </div>
     )
   }
@@ -117,8 +124,8 @@ export default function OpeningStateBanner({ shiftId, typo }) {
   if (error) {
     return (
       <div style={{ ...cardBase, padding: 12, borderColor: 'rgba(239,68,68,0.25)' }}>
-        <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>{error}</span>
-        <button onClick={() => { setError(''); load() }} style={{ ...typo.caption, color: TOKENS.colors.blue2, marginLeft: 8, textDecoration: 'underline' }}>
+        <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted }}>{error}</span>
+        <button onClick={() => { setError(''); load() }} style={{ ...typo.caption, color: TOKENS_LIGHT.colors.blue, marginLeft: 8, textDecoration: 'underline' }}>
           Reintentar
         </button>
       </div>
@@ -189,10 +196,10 @@ export default function OpeningStateBanner({ shiftId, typo }) {
       >
         <div style={{
           width: 36, height: 36, borderRadius: TOKENS.radius.md,
-          background: 'rgba(43,143,224,0.12)', border: '1px solid rgba(43,143,224,0.25)',
+          background: TOKENS_LIGHT.colors.chipInfoBg, border: `1px solid ${TOKENS_LIGHT.colors.borderBlue}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2B8FE0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
             <line x1="16" y1="13" x2="8" y2="13"/>
@@ -200,17 +207,17 @@ export default function OpeningStateBanner({ shiftId, typo }) {
           </svg>
         </div>
         <div style={{ flex: 1, textAlign: 'left' }}>
-          <p style={{ ...typo.body, color: TOKENS.colors.text, margin: 0, fontWeight: 700, fontSize: 14 }}>
+          <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.text, margin: 0, fontWeight: 700, fontSize: 14 }}>
             Recibes del turno anterior
           </p>
-          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
+          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginTop: 2 }}>
             {buildSubtitle()}
             {sourceShift ? ` \u00b7 Turno #${sourceShift}` : ''}
           </p>
         </div>
         <svg
           width="16" height="16" viewBox="0 0 24 24" fill="none"
-          stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          stroke={TOKENS_LIGHT.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
           style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform ${TOKENS.motion.fast}` }}
         >
           <polyline points="6 9 12 15 18 9"/>
@@ -233,7 +240,7 @@ export default function OpeningStateBanner({ shiftId, typo }) {
                   <KpiChip label="Empacado" value={`${fmtNum(kpis.packed_kg)} kg`} typo={typo} />
                 )}
                 {kpis.scrap_kg != null && kpis.scrap_kg > 0 && (
-                  <KpiChip label="Merma" value={`${fmtNum(kpis.scrap_kg)} kg`} color={TOKENS.colors.warning} typo={typo} />
+                  <KpiChip label="Merma" value={`${fmtNum(kpis.scrap_kg)} kg`} color={TOKENS_LIGHT.colors.warning} typo={typo} />
                 )}
               </div>
             </div>
@@ -248,10 +255,10 @@ export default function OpeningStateBanner({ shiftId, typo }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {pt.map((item, i) => (
                     <div key={item.product_id || i} style={itemRow}>
-                      <span style={{ ...typo.caption, color: TOKENS.colors.textSoft, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {item.product_name || item.name || `Producto ${item.product_id}`}
                       </span>
-                      <span style={{ ...typo.caption, color: TOKENS.colors.blue2, fontWeight: 700, flexShrink: 0 }}>
+                      <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.blue, fontWeight: 700, flexShrink: 0 }}>
                         {fmtNum(item.qty || item.quantity || 0)} {item.uom || 'uds'}
                       </span>
                     </div>
@@ -267,10 +274,10 @@ export default function OpeningStateBanner({ shiftId, typo }) {
                     <KpiChip label="Kg por recibir" value={`${fmtNum(pt.pending_receipt_kg)} kg`} typo={typo} />
                   )}
                   {pt.received_kg > 0 && (
-                    <KpiChip label="Ya recibido" value={`${fmtNum(pt.received_kg)} kg`} color={TOKENS.colors.success} typo={typo} />
+                    <KpiChip label="Ya recibido" value={`${fmtNum(pt.received_kg)} kg`} color={TOKENS_LIGHT.colors.success} typo={typo} />
                   )}
                   {pt.pending_reconcile_count > 0 && (
-                    <KpiChip label="Por conciliar" value={pt.pending_reconcile_count} color={TOKENS.colors.warning} typo={typo} />
+                    <KpiChip label="Por conciliar" value={pt.pending_reconcile_count} color={TOKENS_LIGHT.colors.warning} typo={typo} />
                   )}
                 </div>
               )}
@@ -286,11 +293,11 @@ export default function OpeningStateBanner({ shiftId, typo }) {
                   {materials.map((mat, i) => (
                     <div key={mat.material_id || i} style={itemRow}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ ...typo.caption, color: TOKENS.colors.textSoft, fontWeight: 600, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 600, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {mat.material_name || mat.name || `Material ${mat.material_id}`}
                         </span>
                       </div>
-                      <span style={{ ...typo.caption, color: TOKENS.colors.textMuted, fontWeight: 700, flexShrink: 0 }}>
+                      <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, fontWeight: 700, flexShrink: 0 }}>
                         {fmtNum(mat.qty_remaining || mat.qty_pending || 0)} {mat.uom || ''}
                       </span>
                     </div>
@@ -305,7 +312,7 @@ export default function OpeningStateBanner({ shiftId, typo }) {
                     <KpiChip label="Liquidaciones abiertas" value={materials.open_settlement_count} typo={typo} />
                   )}
                   {materials.disputed_count > 0 && (
-                    <KpiChip label="En disputa" value={materials.disputed_count} color={TOKENS.colors.warning} typo={typo} />
+                    <KpiChip label="En disputa" value={materials.disputed_count} color={TOKENS_LIGHT.colors.warning} typo={typo} />
                   )}
                 </div>
               )}
@@ -322,7 +329,7 @@ export default function OpeningStateBanner({ shiftId, typo }) {
                     const isAlert = op.severity === 'high' || op.type === 'open_cycle' || op.type === 'maintenance'
                     return (
                       <div key={op.id || i} style={{ ...itemRow, borderColor: isAlert ? 'rgba(245,158,11,0.25)' : itemRow.borderColor }}>
-                        <span style={{ ...typo.caption, color: isAlert ? TOKENS.colors.warning : TOKENS.colors.textSoft, fontWeight: 600, flex: 1 }}>
+                        <span style={{ ...typo.caption, color: isAlert ? TOKENS_LIGHT.colors.warning : TOKENS_LIGHT.colors.textSoft, fontWeight: 600, flex: 1 }}>
                           {op.description || op.label || op.type}
                         </span>
                       </div>
@@ -334,13 +341,13 @@ export default function OpeningStateBanner({ shiftId, typo }) {
                   {/* Chips de conteo */}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {operations.open_cycle_count > 0 && (
-                      <KpiChip label="Ciclos abiertos" value={operations.open_cycle_count} color={TOKENS.colors.warning} typo={typo} />
+                      <KpiChip label="Ciclos abiertos" value={operations.open_cycle_count} color={TOKENS_LIGHT.colors.warning} typo={typo} />
                     )}
                     {operations.ready_slot_count > 0 && (
-                      <KpiChip label="Slots listos" value={operations.ready_slot_count} color={TOKENS.colors.success} typo={typo} />
+                      <KpiChip label="Slots listos" value={operations.ready_slot_count} color={TOKENS_LIGHT.colors.success} typo={typo} />
                     )}
                     {operations.open_downtime_count > 0 && (
-                      <KpiChip label="Paros activos" value={operations.open_downtime_count} color={TOKENS.colors.error} typo={typo} />
+                      <KpiChip label="Paros activos" value={operations.open_downtime_count} color={TOKENS_LIGHT.colors.error} typo={typo} />
                     )}
                   </div>
                   {/* Blockers activos */}
@@ -349,7 +356,7 @@ export default function OpeningStateBanner({ shiftId, typo }) {
                       {operations.active_blockers.map((b, i) => (
                         <div key={b} style={{ ...itemRow, borderColor: 'rgba(245,158,11,0.25)' }}>
                           <span style={{ fontSize: 14, flexShrink: 0 }}>{'\u26A0'}</span>
-                          <span style={{ ...typo.caption, color: TOKENS.colors.warning, fontWeight: 600, flex: 1 }}>
+                          <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.warning, fontWeight: 600, flex: 1 }}>
                             {BLOCKER_LABELS[b] || b}
                           </span>
                         </div>
@@ -366,9 +373,9 @@ export default function OpeningStateBanner({ shiftId, typo }) {
             onClick={handleAck}
             style={{
               width: '100%', padding: '12px', borderRadius: TOKENS.radius.lg, marginTop: 4,
-              background: 'linear-gradient(90deg, rgba(43,143,224,0.15), rgba(43,143,224,0.06))',
-              border: '1px solid rgba(43,143,224,0.30)',
-              color: TOKENS.colors.blue2, fontSize: 13, fontWeight: 700,
+              background: TOKENS_LIGHT.colors.chipInfoBg,
+              border: `1px solid ${TOKENS_LIGHT.colors.borderBlue}`,
+              color: TOKENS_LIGHT.colors.blue, fontSize: 13, fontWeight: 700,
               cursor: 'pointer',
             }}
           >
@@ -393,27 +400,27 @@ function KpiChip({ label, value, color, typo }) {
   return (
     <div style={{
       flex: 1, minWidth: 80, padding: '8px 10px', borderRadius: TOKENS.radius.sm,
-      background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+      background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
       textAlign: 'center',
     }}>
-      <div style={{ ...typo.caption, color: TOKENS.colors.textMuted, fontSize: 10, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: color || TOKENS.colors.textSoft, letterSpacing: '-0.02em' }}>{value}</div>
+      <div style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, fontSize: 10, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: color || TOKENS_LIGHT.colors.textSoft, letterSpacing: '-0.02em' }}>{value}</div>
     </div>
   )
 }
 
 function sectionLabel(typo) {
-  return { ...typo.overline, color: TOKENS.colors.textLow, margin: 0, marginBottom: 6, fontSize: 10 }
+  return { ...typo.overline, color: TOKENS_LIGHT.colors.textLow, margin: 0, marginBottom: 6, fontSize: 10 }
 }
 
 const cardBase = {
   padding: 14, borderRadius: TOKENS.radius.xl, marginTop: 10,
-  background: 'linear-gradient(180deg, rgba(43,143,224,0.08), rgba(43,143,224,0.02))',
-  border: '1px solid rgba(43,143,224,0.18)',
+  background: TOKENS_LIGHT.colors.chipInfoBg,
+  border: `1px solid ${TOKENS_LIGHT.colors.borderBlue}`,
 }
 
 const itemRow = {
   display: 'flex', alignItems: 'center', gap: 8,
   padding: '8px 10px', borderRadius: TOKENS.radius.sm,
-  background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+  background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
 }
