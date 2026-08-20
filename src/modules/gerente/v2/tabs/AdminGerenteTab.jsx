@@ -4,28 +4,22 @@
 // admin dentro del shell de gerente porque eso anidaría dos shells (AdminProvider
 // + AdminShell es una sub-app completa). Al tocar una acción se entra a la
 // experiencia admin existente; el botón de volver de esa pantalla regresa aquí.
+//
+// CLEAN-02: el contrato de acceso es el MISMO que AdminShell — `NAV_ITEMS` +
+// `filterAdminNavForGerentePilot`. No hay lista paralela de `access` que pueda
+// divergir del deep-link guard (`adminRouteAllows`).
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 import { useSession } from '../../../../App'
 import {
-  ADMIN_NAV_ACCESS,
-  filterAdminNavForGerentePilot,
   isGerentePilotReadOnly,
   resolveGerentePilotCapabilities,
 } from '../../../admin/gerentePilotCaps.js'
 import { BACKEND_CAPS, bootCapabilities } from '../../../admin/adminService.js'
+import { buildGerenteAdminLauncherItems } from '../adminGerenteLauncher.js'
 
 const C = TOKENS.colors
-
-const ACTIONS = [
-  { id: 'hub', label: 'Panorama del día', desc: 'Ventas, gastos y caja de la sucursal', route: '/admin', glyph: '▤', access: ADMIN_NAV_ACCESS.READ },
-  { id: 'gastos', label: 'Gastos', desc: 'Consultar gastos de la sucursal', route: '/admin/gastos', glyph: '$', access: ADMIN_NAV_ACCESS.MIXED },
-  { id: 'requisiciones', label: 'Requisiciones', desc: 'Consultar solicitudes de compra', route: '/admin/requisiciones', glyph: '⊞', access: ADMIN_NAV_ACCESS.MIXED },
-  { id: 'cierre', label: 'Cortes de caja', desc: 'Consultar turnos y cortes', route: '/admin/cierre', glyph: '▣', access: ADMIN_NAV_ACCESS.MIXED },
-  { id: 'liquidaciones', label: 'Liquidaciones', desc: 'Consultar liquidación de rutas', route: '/admin/liquidaciones', glyph: '≣', access: ADMIN_NAV_ACCESS.MIXED },
-  { id: 'mp', label: 'Materia prima', desc: 'Existencias de MP', route: '/admin/materia-prima', glyph: '◨', access: ADMIN_NAV_ACCESS.READ },
-]
 
 export default function AdminGerenteTab() {
   const navigate = useNavigate()
@@ -46,7 +40,7 @@ export default function AdminGerenteTab() {
   const readOnly = isGerentePilotReadOnly(session, effectiveCaps)
 
   const actions = useMemo(
-    () => filterAdminNavForGerentePilot(ACTIONS, session, effectiveCaps),
+    () => buildGerenteAdminLauncherItems(session, effectiveCaps),
     [effectiveCaps, session],
   )
 

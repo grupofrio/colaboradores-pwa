@@ -1,60 +1,79 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { canAccessHectorNightPos } from '../src/modules/admin/nightPosAccess.js'
+import {
+  canAccessNightPos,
+  canAccessHectorNightPos,
+} from '../src/modules/admin/nightPosAccess.js'
+import { IDENTITY_GATE_IDS } from '../src/modules/admin/identityGates.js'
 import {
   getHomeModulesForSession,
   getModuleEntryDecisionForSession,
 } from '../src/lib/navModel.js'
 import { getModuleById } from '../src/modules/registry.js'
 
+// 728 = "Hector Tapia Avino" en producción (hr.employee, compañía 34), medido
+// 2026-08-07. El gate anterior comparaba el NOMBRE de la sesión; ahora compara
+// `employee_id`, que emite el servidor al iniciar sesión.
+const NIGHT_POS_EMPLOYEE_ID = IDENTITY_GATE_IDS.nightPos[0]
+
 const BASE_SESSION = {
-  employee_id: 730,
+  employee_id: NIGHT_POS_EMPLOYEE_ID,
   session_token: 'h.p.s',
   role: 'almacenista_entregas',
 }
 const ids = (modules) => modules.map((module) => module.id)
 
-test('reconoce la identidad nominal de Héctor Tapia en los candidatos admitidos', () => {
-  for (const session of [
-    { ...BASE_SESSION, name: 'Héctor Tapia' },
-    { ...BASE_SESSION, display_name: 'HECTOR TAPIA' },
-    { ...BASE_SESSION, name: 'Héctor Manuel Tapia Gómez' },
-    { ...BASE_SESSION, employee: { name: 'Hector Tapia' } },
-  ]) {
-    assert.equal(canAccessHectorNightPos(session), true)
+test('el acceso se decide por employee_id, no por el nombre de la sesión', () => {
+  assert.equal(canAccessNightPos(BASE_SESSION), true)
+  // El id manda aunque el nombre no diga nada.
+  assert.equal(canAccessNightPos({ ...BASE_SESSION, name: '' }), true)
+  assert.equal(canAccessNightPos({ ...BASE_SESSION, employee: { id: NIGHT_POS_EMPLOYEE_ID } }), true)
+  // El alias viejo sigue resolviendo al mismo gate.
+  assert.equal(canAccessHectorNightPos(BASE_SESSION), true)
+})
+
+test('un nombre que coincide YA NO abre la puerta', () => {
+  // Este era el agujero: cualquier empleado llamado así entraba. Ahora el
+  // nombre es irrelevante y sin el id correcto se falla cerrado.
+  for (const name of ['Héctor Tapia', 'HECTOR TAPIA', 'Héctor Manuel Tapia Gómez']) {
+    assert.equal(
+      canAccessNightPos({ ...BASE_SESSION, employee_id: 99999, name }),
+      false,
+      name,
+    )
   }
 })
 
-test('falla cerrado ante nombres parciales, distintos o sesión sin credenciales', () => {
-  for (const name of ['Héctor', 'Héctor Pérez', 'Juan Tapia', 'Héctor Tapiazo']) {
-    assert.equal(canAccessHectorNightPos({ ...BASE_SESSION, name }), false, name)
-  }
-
-  assert.equal(canAccessHectorNightPos({ name: 'Héctor Tapia' }), false)
+test('falla cerrado sin employee_id o sin credenciales de sesión', () => {
+  assert.equal(canAccessNightPos({ ...BASE_SESSION, employee_id: 0 }), false)
+  assert.equal(canAccessNightPos({ ...BASE_SESSION, employee_id: undefined }), false)
+  assert.equal(canAccessNightPos({ ...BASE_SESSION, employee_id: '728abc' }), false)
+  // Sesión sin token: la validación de sesión sigue siendo el primer candado.
+  assert.equal(canAccessNightPos({ employee_id: NIGHT_POS_EMPLOYEE_ID }), false)
 })
 
-test('pos_nocturno existe, solo aparece a Héctor y su entrada usa la política nominal', () => {
+test('pos_nocturno existe y solo aparece para el employee_id autorizado', () => {
   const module = getModuleById('pos_nocturno')
-  const hectorSession = { ...BASE_SESSION, name: 'Héctor Tapia' }
-  const otherSession = { ...BASE_SESSION, name: 'Juan Tapia' }
+  const allowed = { ...BASE_SESSION }
+  const other = { ...BASE_SESSION, employee_id: 99999 }
 
   assert.ok(module)
   assert.equal(module.route, '/pos-nocturno')
-  assert.ok(ids(getHomeModulesForSession(hectorSession)).includes('pos_nocturno'))
-  assert.ok(!ids(getHomeModulesForSession(otherSession)).includes('pos_nocturno'))
+  assert.ok(ids(getHomeModulesForSession(allowed)).includes('pos_nocturno'))
+  assert.ok(!ids(getHomeModulesForSession(other)).includes('pos_nocturno'))
   assert.deepEqual(
-    getModuleEntryDecisionForSession(module, hectorSession),
+    getModuleEntryDecisionForSession(module, allowed),
     { type: 'direct', compatibleRoles: [], selectedRole: '' },
   )
   assert.deepEqual(
-    getModuleEntryDecisionForSession(module, otherSession),
+    getModuleEntryDecisionForSession(module, other),
     { type: 'denied', compatibleRoles: [], selectedRole: '' },
   )
 })
 
-test('Héctor ve POS nocturno pero no Admin Sucursal', () => {
-  const homeIds = ids(getHomeModulesForSession({ ...BASE_SESSION, name: 'Héctor Tapia' }))
+test('el POS nocturno no arrastra Admin Sucursal', () => {
+  const homeIds = ids(getHomeModulesForSession(BASE_SESSION))
 
   assert.ok(homeIds.includes('pos_nocturno'))
   assert.ok(!homeIds.includes('admin_sucursal'))

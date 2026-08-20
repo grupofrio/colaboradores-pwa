@@ -65,7 +65,7 @@ Ver `GERENTE_UNIDAD_WRITES_REPORT.md`. Recomendación técnica: **OPTION B limit
 | PR | Clase | Acción piloto |
 |---|---|---|
 | FE#157 | STILL_MISSING (parcial) | Honesty KPI + kill unlock ORM → **cubierto selectivo MGR-FINAL-02** |
-| FE#159 | STILL_MISSING (parcial) | Token-only alerts/KPI/forecasts → **cubierto selectivo MGR-FINAL-02**; AdminSubRoute/Metabase/identity gates → DEFERRED |
+| FE#159 | FIXED (CLEAN-02) | Token-only alerts/KPI/forecasts → MGR-FINAL-02; AdminSubRoute/Metabase/identity gates → CLEAN-02 |
 | FE#160 | SUPERSEDED | No portar (#194) |
 | FE#161 | STILL_MISSING | Fuera de piloto RO |
 
@@ -106,6 +106,6 @@ Marcado en el reporte de entrega de esta tarea. Facturación Copiloto: **NO**.
 | MGR-GAP-019 invoicing | DEFERRED / fuera |
 | MGR-GAP-021 view_location dashboard | FIXED (MGR-FINAL-01) |
 | MGR-GAP-022 legacy ORM alerts/KPI/forecast | FIXED (MGR-FINAL-02) |
-| MGR-GAP-023 AdminSubRoute / Metabase / identity gates | DEFERRED |
+| MGR-GAP-023 AdminSubRoute / Metabase / identity gates | FIXED (CLEAN-02) |
 | MGR-GAP-024 POS IVA server totals (FE#161) | DEFERRED |
 | MGR-GAP-025 mobile gastos unify residual | DEFERRED / OBSOLETE vs #194 |
