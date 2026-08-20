@@ -676,7 +676,7 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
   const navigate = useNavigate();
   const { logout, session } = useSession();
   // `Yo` comparte la misma superficie clara de gerente que Home y Brief.
-  const light = isGerenteBrandSurface(session);
+  const light = isGerenteBrandSurface(session) || session?.role === 'supervisor_produccion';
   const theme = useMemo(
     () => ({ t: light ? BRAND_TOKENS : DARK_TOKENS, s: light ? SKINS.light : SKINS.dark, light }),
     [light],

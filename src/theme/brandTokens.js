@@ -78,6 +78,8 @@ export const BRAND_TOKENS = {
     warningSoft: 'rgba(180,83,9,0.10)',
     error:       '#b91c1c',
     errorSoft:   'rgba(185,28,28,0.10)',
+    // Texto sobre relleno sólido (botones CTA, pills de estado con color de fondo)
+    onPrimary:   '#FFFFFF',
   },
 
   // Geometría y movimiento son idénticos al tema oscuro: el rebranding es de

@@ -268,7 +268,7 @@ function DesktopRail({ nav, compact, onGo, t, light }) {
 /* ── AppNav ───────────────────────────────────────────────────────────────── */
 export default function AppNav() {
   const { session } = useSession()
-  const light = isGerenteBrandSurface(session)
+  const light = isGerenteBrandSurface(session) || session?.role === 'supervisor_produccion'
   const t = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const location = useLocation()
