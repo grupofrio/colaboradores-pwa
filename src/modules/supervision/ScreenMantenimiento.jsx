@@ -26,7 +26,7 @@ export default function ScreenMantenimiento() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
-  // eslint-disable-next-line no-unused-vars -- invariante de tests/brandTokensScope: la superficie de supervision_produccion adopta el tema claro incondicionalmente (ruta exclusiva del rol); esta constante documenta esa decisión por rol.
+  // Invariante de tests/brandTokensScope: la superficie de supervision_produccion adopta el tema claro incondicionalmente (ruta exclusiva del rol); esta constante documenta esa decisión por rol.
   const isLightSurface = session?.role === 'supervisor_produccion' || isBrandLightSession(session)
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
