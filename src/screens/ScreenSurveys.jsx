@@ -7,40 +7,40 @@ import { apiGet as _apiGet, apiPost as _apiPost } from "../lib/api";
 ============================================================================ */
 const TOKENS = {
   colors: {
-    bg0: "#030811",
-    bg1: "#04101f",
-    bg2: "#07162b",
-    surface: "rgba(255,255,255,0.05)",
-    surfaceSoft: "rgba(255,255,255,0.03)",
-    surfaceStrong: "rgba(255,255,255,0.07)",
-    border: "rgba(255,255,255,0.08)",
-    borderBlue: "rgba(97,178,255,0.18)",
+    bg0: "#f3f7fc",
+    bg1: "#eef4fb",
+    bg2: "#e6eef8",
+    surface: "rgba(255,255,255,0.95)",
+    surfaceSoft: "rgba(255,255,255,0.82)",
+    surfaceStrong: "rgba(232,240,250,0.95)",
+    border: "rgba(21,73,155,0.12)",
+    borderBlue: "rgba(43,143,224,0.20)",
     blue: "#15499B",
     blue2: "#2B8FE0",
     blue3: "#61b2ff",
-    blueGlow: "rgba(43,143,224,0.16)",
-    text: "#FFFFFF",
-    textSoft: "rgba(255,255,255,0.82)",
-    textMuted: "rgba(255,255,255,0.60)",
-    textLow: "rgba(255,255,255,0.55)",
-    success: "#22c55e",
-    successSoft: "rgba(34,197,94,0.12)",
-    warning: "#f59e0b",
-    error: "#ef4444",
-    errorSoft: "rgba(239,68,68,0.12)",
+    blueGlow: "rgba(43,143,224,0.14)",
+    text: "#12263f",
+    textSoft: "#344b67",
+    textMuted: "#5f7490",
+    textLow: "#71859f",
+    success: "#228b5d",
+    successSoft: "rgba(34,139,93,0.10)",
+    warning: "#b7791f",
+    error: "#c75a63",
+    errorSoft: "rgba(199,90,99,0.10)",
   },
   radius: { sm: 14, md: 18, lg: 22, xl: 24, pill: 999 },
   shadow: {
-    soft: "0 8px 20px rgba(0,0,0,0.18)",
-    md: "0 14px 30px rgba(0,0,0,0.22)",
-    lg: "0 20px 44px rgba(0,0,0,0.28)",
+    soft: "0 8px 20px rgba(21,73,155,0.08)",
+    md: "0 14px 30px rgba(21,73,155,0.10)",
+    lg: "0 20px 44px rgba(21,73,155,0.14)",
     blue: "0 0 22px rgba(43,143,224,0.16)",
-    inset: "inset 0 1px 0 rgba(255,255,255,0.08)",
+    inset: "inset 0 1px 0 rgba(255,255,255,0.82)",
   },
   glass: {
-    panel: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
-    panelSoft: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025))",
-    hero: "linear-gradient(180deg, rgba(21,73,155,0.20), rgba(255,255,255,0.03))",
+    panel: "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,251,255,0.96))",
+    panelSoft: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(241,246,252,0.96))",
+    hero: "linear-gradient(180deg, rgba(43,143,224,0.10), rgba(255,255,255,0.98))",
   },
   motion: {
     fast: "180ms ease",
@@ -130,7 +130,7 @@ function IceParticles() {
             width:p.size,
             height:p.size,
             borderRadius:"50%",
-            background:"rgba(71,161,255,0.7)",
+            background:"rgba(43,143,224,0.22)",
             opacity:p.opacity,
             animation:`float ${p.duration}s ${p.delay}s ease-in-out infinite alternate`,
           }}
@@ -202,15 +202,15 @@ function SurveyCard({ survey, onStart, sw, delay }) {
           }}
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:5, background:isPending?TOKENS.colors.blueGlow:TOKENS.colors.successSoft, border:`1px solid ${isPending?"rgba(97,178,255,0.22)":"rgba(34,197,94,0.22)"}`, borderRadius:999, padding:"4px 8px" }}>
-              <div style={{ width:6, height:6, borderRadius:"50%", background:isPending?TOKENS.colors.blue3:TOKENS.colors.success, boxShadow:isPending?"0 0 6px #61b2ff":"0 0 6px #22c55e" }} />
+            <div style={{ display:"flex", alignItems:"center", gap:5, background:isPending?TOKENS.colors.blueGlow:TOKENS.colors.successSoft, border:`1px solid ${isPending?"rgba(43,143,224,0.22)":"rgba(34,139,93,0.22)"}`, borderRadius:999, padding:"4px 8px" }}>
+              <div style={{ width:6, height:6, borderRadius:"50%", background:isPending?TOKENS.colors.blue3:TOKENS.colors.success, boxShadow:isPending?"0 0 6px #2B8FE0":"0 0 6px #228b5d" }} />
               <span style={{ fontSize:9, fontWeight:700, color:isPending?TOKENS.colors.blue3:"#4ade80" }}>
                 {isPending ? "Pendiente" : "Completada"}
               </span>
             </div>
 
             {survey.points != null && (
-              <div style={{ display:"flex", alignItems:"center", gap:4, background:"rgba(255,255,255,0.05)", borderRadius:999, padding:"4px 8px", border:`1px solid ${TOKENS.colors.border}` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:4, background:"rgba(43,143,224,0.08)", borderRadius:999, padding:"4px 8px", border:`1px solid ${TOKENS.colors.border}` }}>
                 <span style={{ fontSize:10 }}>⭐</span>
                 <span style={{ fontSize:10, fontWeight:700, color:TOKENS.colors.textSoft }}>+{survey.points} pts</span>
               </div>
@@ -244,7 +244,7 @@ function SurveyCard({ survey, onStart, sw, delay }) {
 
           {isPending && (
             <div style={{ marginTop:12, height:40, borderRadius:TOKENS.radius.md, background:"linear-gradient(90deg,#15499B,#2B8FE0)", display:"flex", alignItems:"center", justifyContent:"center", gap:6, boxShadow:TOKENS.shadow.blue }}>
-              <span style={{ fontSize:12, fontWeight:700, color:"white" }}>Responder encuesta</span>
+              <span style={{ fontSize:12, fontWeight:700, color:"#ffffff" }}>Responder encuesta</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </div>
           )}
@@ -277,8 +277,8 @@ function RatingQuestion({ value, onChange, sw }) {
               width={sw < 340 ? 34 : 40}
               height={sw < 340 ? 34 : 40}
               viewBox="0 0 24 24"
-              fill={display >= star ? "#f59e0b" : "none"}
-              stroke={display >= star ? "#f59e0b" : "rgba(255,255,255,0.25)"}
+              fill={display >= star ? "#b7791f" : "none"}
+              stroke={display >= star ? "#b7791f" : "rgba(21,73,155,0.18)"}
               strokeWidth="1.5"
             >
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -312,7 +312,7 @@ function SingleChoiceQuestion({ options, value, onChange, sw }) {
               cursor:"pointer",
               borderRadius:TOKENS.radius.md,
               background:selected ? "rgba(43,143,224,0.12)" : TOKENS.colors.surfaceSoft,
-              border:`1px solid ${selected ? "rgba(97,178,255,0.32)" : TOKENS.colors.border}`,
+              border:`1px solid ${selected ? "rgba(43,143,224,0.28)" : TOKENS.colors.border}`,
               transition:`all ${TOKENS.motion.normal}`,
               boxShadow:selected ? TOKENS.shadow.blue : "none",
             }}
@@ -323,7 +323,7 @@ function SingleChoiceQuestion({ options, value, onChange, sw }) {
                 height:20,
                 borderRadius:"50%",
                 flexShrink:0,
-                border:`2px solid ${selected ? TOKENS.colors.blue2 : "rgba(255,255,255,0.25)"}`,
+                border:`2px solid ${selected ? TOKENS.colors.blue2 : "rgba(21,73,155,0.20)"}`,
                 background:selected ? TOKENS.colors.blue2 : "transparent",
                 display:"flex",
                 alignItems:"center",
@@ -374,11 +374,11 @@ function NPSQuestion({ value, onChange, sw }) {
               display:"flex",
               alignItems:"center",
               justifyContent:"center",
-              background: value === i ? getColor(i) : (display === i ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)"),
-              border:`1px solid ${value === i ? getColor(i) : "rgba(255,255,255,0.10)"}`,
+              background: value === i ? getColor(i) : (display === i ? "rgba(43,143,224,0.10)" : "rgba(43,143,224,0.05)"),
+              border:`1px solid ${value === i ? getColor(i) : "rgba(21,73,155,0.14)"}`,
               fontSize: sw < 340 ? 10 : 11,
               fontWeight:700,
-              color: value === i ? "white" : TOKENS.colors.textMuted,
+              color: value === i ? "#ffffff" : TOKENS.colors.textMuted,
               transition:`all ${TOKENS.motion.normal}`,
               transform: value === i ? "scale(1.08)" : "scale(1)",
             }}
@@ -411,7 +411,7 @@ function TextQuestion({ value, onChange, placeholder, sw }) {
         fontSize: sw < 340 ? 12 : 13,
         fontWeight:500,
         color:TOKENS.colors.textSoft,
-        background:"rgba(255,255,255,0.04)",
+        background:"rgba(255,255,255,0.92)",
         border:`1px solid ${TOKENS.colors.border}`,
         borderRadius:TOKENS.radius.md,
         padding:"12px 14px",
@@ -421,7 +421,7 @@ function TextQuestion({ value, onChange, placeholder, sw }) {
         boxSizing:"border-box",
       }}
       onFocus={(e) => {
-        e.target.style.borderColor = "rgba(97,178,255,0.32)";
+        e.target.style.borderColor = "rgba(43,143,224,0.32)";
         e.target.style.boxShadow = TOKENS.shadow.blue;
       }}
       onBlur={(e) => {
@@ -445,17 +445,17 @@ function SurveyFlow({ survey, onClose, onComplete, sw }) {
   const surveyUrl = survey.survey_url;
 
   return (
-    <div style={{ position:"absolute", inset:0, zIndex:10, background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.22) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", display:"flex", flexDirection:"column" }}>
+    <div style={{ position:"absolute", inset:0, zIndex:10, background:"radial-gradient(circle at 50% 0%, rgba(43,143,224,0.14) 0%, transparent 34%), linear-gradient(160deg, #f8fbff 0%, #eef4fb 45%, #e6eef8 100%)", display:"flex", flexDirection:"column" }}>
       {/* Header */}
       <div style={{ padding:`${topPad}px ${sidePad}px 14px`, flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div onClick={onClose} style={{ width:36, height:36, borderRadius:12, background:"rgba(255,255,255,0.05)", border:`1px solid ${TOKENS.colors.border}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
+          <div onClick={onClose} style={{ width:36, height:36, borderRadius:12, background:"rgba(43,143,224,0.08)", border:`1px solid ${TOKENS.colors.border}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>
             </svg>
           </div>
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:9, fontWeight:700, color:"rgba(97,178,255,0.6)", letterSpacing:"0.18em", marginBottom:2 }}>ENCUESTA</div>
+            <div style={{ fontSize:9, fontWeight:700, color:TOKENS.colors.blue2, letterSpacing:"0.18em", marginBottom:2 }}>ENCUESTA</div>
             <div style={{ fontSize:12, fontWeight:500, color:TOKENS.colors.textMuted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{survey.title}</div>
           </div>
           {/* Este botón NO puede saber si la persona contestó: la encuesta vive
@@ -475,7 +475,7 @@ function SurveyFlow({ survey, onClose, onComplete, sw }) {
       <div style={{ flex:1, position:"relative", margin:`0 ${sidePad}px 14px`, borderRadius:TOKENS.radius.lg, overflow:"hidden", border:`1px solid ${TOKENS.colors.borderBlue}` }}>
         {iframeLoading && (
           <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:12, background:"rgba(4,10,24,0.9)" }}>
-            <div style={{ width:28, height:28, borderRadius:"50%", border:`3px solid rgba(97,178,255,0.2)`, borderTop:`3px solid ${TOKENS.colors.blue2}`, animation:"spin 0.9s linear infinite" }}/>
+            <div style={{ width:28, height:28, borderRadius:"50%", border:`3px solid rgba(43,143,224,0.20)`, borderTop:`3px solid ${TOKENS.colors.blue2}`, animation:"spin 0.9s linear infinite" }}/>
             <span style={{ fontSize:12, color:TOKENS.colors.textMuted }}>Cargando encuesta...</span>
           </div>
         )}
@@ -484,7 +484,7 @@ function SurveyFlow({ survey, onClose, onComplete, sw }) {
             <div style={{ fontSize:28 }}>📡</div>
             <div style={{ fontSize:13, color:TOKENS.colors.textMuted }}>No se pudo cargar la encuesta.</div>
             <div style={{ fontSize:11, color:TOKENS.colors.textLow, lineHeight:1.5 }}>Verifica tu conexión o intenta desde el navegador.</div>
-            <a href={surveyUrl} target="_blank" rel="noreferrer" style={{ padding:"10px 22px", borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:12, fontWeight:700, textDecoration:"none" }}>
+            <a href={surveyUrl} target="_blank" rel="noreferrer" style={{ padding:"10px 22px", borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:TOKENS.colors.text, fontSize:12, fontWeight:700, textDecoration:"none" }}>
               Abrir en navegador ↗
             </a>
           </div>
@@ -517,7 +517,7 @@ function DoneState({ survey, onBack, sw }) {
   }, []);
 
   return (
-    <div style={{ position:"absolute", inset:0, zIndex:10, background:"radial-gradient(circle at 50% 30%, rgba(34,197,94,0.10) 0%, transparent 50%), radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+    <div style={{ position:"absolute", inset:0, zIndex:10, background:"radial-gradient(circle at 50% 30%, rgba(34,139,93,0.10) 0%, transparent 50%), radial-gradient(circle at 50% 0%, rgba(43,143,224,0.14) 0%, transparent 34%), linear-gradient(160deg, #f8fbff 0%, #eef4fb 45%, #e6eef8 100%)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
       <IceParticles />
 
       {[...Array(8)].map((_, i) => (
@@ -573,7 +573,7 @@ function DoneState({ survey, onBack, sw }) {
           <Card style={{ padding:"16px 20px", border:`1px solid ${TOKENS.colors.borderBlue}`, background:TOKENS.glass.hero, width:"100%", textAlign:"center", boxShadow:`${TOKENS.shadow.md}, ${TOKENS.shadow.inset}, ${TOKENS.shadow.blue}` }}>
             <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, marginBottom:4 }}>Gracias</div>
             <div style={{ fontSize:22, fontWeight:700, color:TOKENS.colors.blue3, letterSpacing:"-0.02em" }}>Listo</div>
-            <div style={{ ...typo.caption, color:"rgba(255,255,255,0.40)", marginTop:2 }}>
+            <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, marginTop:2 }}>
               Si contestaste, tu respuesta ya quedó en el sistema. Revisa la lista: ahí verás su estado real.
             </div>
           </Card>
@@ -582,7 +582,7 @@ function DoneState({ survey, onBack, sw }) {
         <FadeIn delay={420}>
           <button
             onClick={onBack}
-            style={{ width:"100%", height:48, borderRadius:TOKENS.radius.md, background:"linear-gradient(90deg,#15499B,#2B8FE0)", border:"none", color:"white", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit", boxShadow:TOKENS.shadow.blue }}
+            style={{ width:"100%", height:48, borderRadius:TOKENS.radius.md, background:"linear-gradient(90deg,#15499B,#2B8FE0)", border:"none", color:"#ffffff", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit", boxShadow:TOKENS.shadow.blue }}
           >
             Volver a Encuestas
           </button>
@@ -702,7 +702,7 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
   };
 
   return (
-    <div style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
+    <div style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(43,143,224,0.14) 0%, transparent 34%), linear-gradient(160deg, #f8fbff 0%, #eef4fb 45%, #e6eef8 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
       <IceParticles />
 
       <div style={{ position:"absolute", inset:0, opacity:0.032, backgroundImage:"linear-gradient(rgba(43,143,224,.45) 1px,transparent 1px),linear-gradient(90deg,rgba(43,143,224,.45) 1px,transparent 1px)", backgroundSize:"48px 48px" }} />
@@ -711,15 +711,15 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
         <FadeIn delay={60}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
             <div>
-              <div style={{ ...typo.overline, color:"rgba(97,178,255,0.6)", marginBottom:6 }}>MIS ENCUESTAS</div>
+              <div style={{ ...typo.overline, color:TOKENS.colors.blue2, marginBottom:6 }}>MIS ENCUESTAS</div>
               <div style={{ ...typo.h1, color:TOKENS.colors.text, lineHeight:1.05 }}>Encuestas</div>
-              <div style={{ ...typo.caption, color:"rgba(97,178,255,0.75)", marginTop:4, fontWeight:600 }}>
+              <div style={{ ...typo.caption, color:TOKENS.colors.blue2, marginTop:4, fontWeight:600 }}>
                 {loadState === "loading" ? "Cargando..." : loadState === "error" ? "Error al cargar" : pendingCount > 0 ? `${pendingCount} pendiente${pendingCount > 1 ? "s" : ""}` : "Todo al día ✓"}
               </div>
             </div>
 
             {pendingCount > 0 && (
-              <div style={{ width:38, height:38, borderRadius:12, background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.22)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <div style={{ width:38, height:38, borderRadius:12, background:"rgba(199,90,99,0.10)", border:"1px solid rgba(239,68,68,0.22)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                 <span style={{ fontSize:16, fontWeight:800, color:TOKENS.colors.error }}>{pendingCount}</span>
               </div>
             )}
@@ -729,8 +729,8 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
         {loadState === "loading" && (
           <FadeIn delay={100}>
             {[1,2].map(i => (
-              <div key={i} style={{ height:110, borderRadius:TOKENS.radius.xl, background:"rgba(255,255,255,0.04)", border:`1px solid ${TOKENS.colors.border}`, overflow:"hidden", position:"relative" }}>
-                <div style={{ position:"absolute", inset:0, background:"linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent)", animation:"shimmerMove 1.6s infinite" }}/>
+              <div key={i} style={{ height:110, borderRadius:TOKENS.radius.xl, background:"rgba(255,255,255,0.92)", border:`1px solid ${TOKENS.colors.border}`, overflow:"hidden", position:"relative" }}>
+                <div style={{ position:"absolute", inset:0, background:"linear-gradient(90deg, transparent, rgba(43,143,224,0.06), transparent)", animation:"shimmerMove 1.6s infinite" }}/>
               </div>
             ))}
           </FadeIn>
@@ -741,13 +741,13 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
             <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
               <div style={{ fontSize:28 }}>📡</div>
               <div style={{ ...typo.body, color:TOKENS.colors.textMuted }}>No se pudieron cargar las encuestas</div>
-              <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-surveys").then(r=>{ if(!r.success){setLoadState("error");return;} if(Array.isArray(r.data)){const m=r.data.map(mapOdooSurvey);setSurveys(m);setLoadState(m.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
+              <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-surveys").then(r=>{ if(!r.success){setLoadState("error");return;} if(Array.isArray(r.data)){const m=r.data.map(mapOdooSurvey);setSurveys(m);setLoadState(m.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:TOKENS.colors.text, fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
             </div>
           </FadeIn>
         )}
 
         {startError && (
-          <div role="alert" style={{ margin:"0 0 12px", padding:"10px 12px", borderRadius:TOKENS.radius.md, background:"rgba(220,38,38,0.10)", border:"1px solid rgba(220,38,38,0.35)", color:"#fca5a5", fontSize:12, fontWeight:600 }}>
+          <div role="alert" style={{ margin:"0 0 12px", padding:"10px 12px", borderRadius:TOKENS.radius.md, background:"rgba(220,38,38,0.10)", border:"1px solid rgba(220,38,38,0.35)", color:"#9f3944", fontSize:12, fontWeight:600 }}>
             {startError}
           </div>
         )}
@@ -769,9 +769,9 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
                 solo lo verificable: identidad ligada, para qué sirve, y que la
                 consulta el equipo de administración interna en Odoo. Sin plazos de
                 borrado que no existen. */}
-            <Card style={{ padding:"12px 14px", background:"rgba(43,143,224,0.07)", border:"1px solid rgba(97,178,255,0.16)", display:"flex", alignItems:"flex-start", gap:10 }}>
+            <Card style={{ padding:"12px 14px", background:"rgba(43,143,224,0.08)", border:"1px solid rgba(43,143,224,0.16)", display:"flex", alignItems:"flex-start", gap:10 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.blue3} strokeWidth="2" strokeLinecap="round" style={{ flexShrink:0, marginTop:1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span style={{ fontSize:11, color:"rgba(97,178,255,0.85)", lineHeight:1.5 }}>
+              <span style={{ fontSize:11, color:TOKENS.colors.blue2, lineHeight:1.5 }}>
                 Tu respuesta queda <b>ligada a tu nombre</b> — no es anónima. Sirve para mejorar tus
                 herramientas de trabajo y la consulta el equipo de administración interna en Odoo.
                 Contesta con confianza y con honestidad.
@@ -784,7 +784,7 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
           <FadeIn delay={140}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <div style={{ flex:1, height:1, background:"linear-gradient(90deg, rgba(87,175,255,0.26), transparent)" }} />
-              <span style={{ ...typo.overline, color:"rgba(97,178,255,0.72)" }}>PENDIENTES</span>
+              <span style={{ ...typo.overline, color:TOKENS.colors.blue2 }}>PENDIENTES</span>
               <div style={{ flex:1, height:1, background:"linear-gradient(90deg, transparent, rgba(87,175,255,0.26))" }} />
             </div>
           </FadeIn>
@@ -798,7 +798,7 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
           <FadeIn delay={320}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:4 }}>
               <div style={{ flex:1, height:1, background:"linear-gradient(90deg, rgba(87,175,255,0.14), transparent)" }} />
-              <span style={{ ...typo.overline, color:"rgba(255,255,255,0.28)" }}>COMPLETADAS</span>
+              <span style={{ ...typo.overline, color:TOKENS.colors.textMuted }}>COMPLETADAS</span>
               <div style={{ flex:1, height:1, background:"linear-gradient(90deg, transparent, rgba(87,175,255,0.14))" }} />
             </div>
           </FadeIn>
@@ -816,8 +816,8 @@ function SurveysScreen({ sw: propSw, sh: propSh }) {
       )}
 
       {view === "verifying" && (
-        <div style={{ position:"absolute", inset:0, zIndex:11, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.22) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)" }}>
-          <div style={{ width:30, height:30, borderRadius:"50%", border:`3px solid rgba(97,178,255,0.2)`, borderTop:`3px solid ${TOKENS.colors.blue2}`, animation:"spin 0.9s linear infinite" }}/>
+        <div style={{ position:"absolute", inset:0, zIndex:11, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, background:"radial-gradient(circle at 50% 0%, rgba(43,143,224,0.14) 0%, transparent 34%), linear-gradient(160deg, #f8fbff 0%, #eef4fb 45%, #e6eef8 100%)" }}>
+          <div style={{ width:30, height:30, borderRadius:"50%", border:`3px solid rgba(43,143,224,0.20)`, borderTop:`3px solid ${TOKENS.colors.blue2}`, animation:"spin 0.9s linear infinite" }}/>
           <span style={{ fontSize:13, color:TOKENS.colors.textMuted }}>Verificando tu respuesta…</span>
         </div>
       )}
@@ -847,7 +847,7 @@ function PhoneFrame({ sw, sh, label, note }) {
         <div style={{ position:"absolute", right:-3, top:116, width:3, height:62, borderRadius:2, background:"rgba(103,146,204,0.55)" }} />
         <SurveysScreen sw={sw} sh={sh} />
       </div>
-      <div style={{ fontSize:10, color:"rgba(255,255,255,0.28)", textAlign:"center", lineHeight:1.5 }}>{sw}×{sh}px · {note}</div>
+      <div style={{ fontSize:10, color:TOKENS.colors.textMuted, textAlign:"center", lineHeight:1.5 }}>{sw}×{sh}px · {note}</div>
     </div>
   );
 }
@@ -863,7 +863,7 @@ const DEVICES = [
 ============================================================================ */
 export function MultiDeviceSurveysPreview() {
   return (
-    <div style={{ minHeight:"100vh", background:"radial-gradient(circle at center, #102a57 0%, #07183a 35%, #050d1a 75%, #030811 100%)", padding:"36px 20px 60px", fontFamily:"system-ui,sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"radial-gradient(circle at center, #f8fbff 0%, #eef4fb 35%, #e6eef8 75%, #dde8f4 100%)", padding:"36px 20px 60px", fontFamily:"system-ui,sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         @keyframes float { from{transform:translateY(0)scale(1)} to{transform:translateY(-16px)scale(1.3)} }
@@ -871,17 +871,17 @@ export function MultiDeviceSurveysPreview() {
         ::-webkit-scrollbar { width:0 }
         button { font-family:inherit }
         textarea { font-family:'DM Sans',system-ui,sans-serif }
-        textarea::placeholder { color:rgba(255,255,255,0.28) }
+        textarea::placeholder { color:rgba(95,116,144,0.75) }
       `}</style>
 
       <div style={{ textAlign:"center", marginBottom:36 }}>
-        <div style={{ fontSize:10, fontWeight:700, color:"rgba(97,178,255,0.55)", letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:6 }}>
+        <div style={{ fontSize:10, fontWeight:700, color:TOKENS.colors.blue2, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:6 }}>
           PWA Trabajadores · Grupo Frío
         </div>
-        <div style={{ fontSize:20, fontWeight:700, color:"white", letterSpacing:"-0.02em" }}>
+        <div style={{ fontSize:20, fontWeight:700, color:TOKENS.colors.text, letterSpacing:"-0.02em" }}>
           Pantalla 4 — Encuestas
         </div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:8 }}>
+        <div style={{ fontSize:12, color:TOKENS.colors.textMuted, marginTop:8 }}>
           Lista → Preguntas interactivas → Done · Rating / Single choice / NPS / Texto · Sync Odoo
         </div>
       </div>

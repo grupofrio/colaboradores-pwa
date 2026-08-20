@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import {
   confirmCopilotInvoice,
   downloadBase64File,
@@ -226,10 +227,10 @@ export default function ScreenCopilotoGerencial() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(15,42,61,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
           <div style={{ minWidth: 0 }}>
-            <p style={{ ...typo.title, color: TOKENS.colors.textSoft, margin: 0 }}>Copiloto Gerencial</p>
+            <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Copiloto Gerencial</p>
             {branchName ? (
               <p style={{ ...typo.caption, color: TOKENS.colors.blue3, margin: 0, marginTop: 2 }}>{branchName}</p>
             ) : null}
@@ -263,7 +264,7 @@ export default function ScreenCopilotoGerencial() {
                   style={{
                     flexShrink: 0, minHeight: 44, padding: '8px 14px', borderRadius: TOKENS.radius.pill,
                     background: TOKENS.colors.blueGlow, border: `1px solid ${TOKENS.colors.borderBlue}`,
-                    color: TOKENS.colors.blue3, fontSize: 12, fontWeight: 600,
+                    color: TOKENS.colors.blue3, fontSize: 12, fontWeight: 700,
                     opacity: sending ? 0.5 : 1,
                   }}
                 >
@@ -283,7 +284,7 @@ export default function ScreenCopilotoGerencial() {
                   alignSelf: msg.role === 'user' ? 'flex-end' : 'stretch',
                   maxWidth: msg.role === 'user' ? '85%' : '100%',
                   padding: 12, borderRadius: TOKENS.radius.lg,
-                  background: msg.role === 'user' ? TOKENS.colors.blueGlow : TOKENS.glass.panel,
+                  background: msg.role === 'user' ? TOKENS.colors.surfaceStrong : TOKENS.glass.panel,
                   border: `1px solid ${msg.role === 'user' ? TOKENS.colors.borderBlue : TOKENS.colors.border}`,
                 }}>
                   <p style={{ ...typo.body, color: TOKENS.colors.text, margin: 0, whiteSpace: 'pre-wrap' }}>{msg.body}</p>

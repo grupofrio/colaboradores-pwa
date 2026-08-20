@@ -7,40 +7,40 @@ import { apiGet as _apiGet, todayLocal } from "../lib/api";
 ============================================================================ */
 const TOKENS = {
   colors: {
-    bg0: "#030811",
-    bg1: "#04101f",
-    bg2: "#07162b",
-    surface: "rgba(255,255,255,0.05)",
-    surfaceSoft: "rgba(255,255,255,0.03)",
-    surfaceStrong: "rgba(255,255,255,0.07)",
-    border: "rgba(255,255,255,0.08)",
-    borderBlue: "rgba(97,178,255,0.18)",
+    bg0: "#f3f7fc",
+    bg1: "#eef4fb",
+    bg2: "#e6eef8",
+    surface: "rgba(255,255,255,0.95)",
+    surfaceSoft: "rgba(255,255,255,0.82)",
+    surfaceStrong: "rgba(232,240,250,0.95)",
+    border: "rgba(21,73,155,0.12)",
+    borderBlue: "rgba(43,143,224,0.2)",
     blue: "#15499B",
     blue2: "#2B8FE0",
     blue3: "#61b2ff",
-    blueGlow: "rgba(43,143,224,0.16)",
-    text: "#FFFFFF",
-    textSoft: "rgba(255,255,255,0.82)",
-    textMuted: "rgba(255,255,255,0.60)",
-    textLow: "rgba(255,255,255,0.55)",
-    success: "#22c55e",
-    successSoft: "rgba(34,197,94,0.12)",
-    warning: "#f59e0b",
-    error: "#ef4444",
-    errorSoft: "rgba(239,68,68,0.12)",
+    blueGlow: "rgba(43,143,224,0.14)",
+    text: "#12263f",
+    textSoft: "#344b67",
+    textMuted: "#5f7490",
+    textLow: "#71859f",
+    success: "#228b5d",
+    successSoft: "rgba(34,139,93,0.10)",
+    warning: "#b7791f",
+    error: "#c75a63",
+    errorSoft: "rgba(199,90,99,0.10)",
   },
   radius: { sm: 14, md: 18, lg: 22, xl: 24, pill: 999 },
   shadow: {
-    soft: "0 8px 20px rgba(0,0,0,0.18)",
-    md: "0 14px 30px rgba(0,0,0,0.22)",
-    lg: "0 20px 44px rgba(0,0,0,0.28)",
+    soft: "0 8px 20px rgba(21,73,155,0.08)",
+    md: "0 14px 30px rgba(21,73,155,0.10)",
+    lg: "0 20px 44px rgba(21,73,155,0.14)",
     blue: "0 0 22px rgba(43,143,224,0.16)",
-    inset: "inset 0 1px 0 rgba(255,255,255,0.08)",
+    inset: "inset 0 1px 0 rgba(255,255,255,0.82)",
   },
   glass: {
-    panel: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
-    panelSoft: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025))",
-    hero: "linear-gradient(180deg, rgba(21,73,155,0.20), rgba(255,255,255,0.03))",
+    panel: "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,251,255,0.96))",
+    panelSoft: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(241,246,252,0.96))",
+    hero: "linear-gradient(180deg, rgba(43,143,224,0.10), rgba(255,255,255,0.98))",
   },
   motion: {
     fast: "180ms ease",
@@ -69,7 +69,7 @@ const LEVELS = [
   { id: "bronze", label: "Bronce",  min: 0,   max: 299,  color: "#cd7f32", glow: "rgba(205,127,50,0.25)", bg: "rgba(205,127,50,0.10)", border: "rgba(205,127,50,0.28)", emoji: "🥉" },
   { id: "silver", label: "Plata",   min: 300, max: 699,  color: "#b8c4cc", glow: "rgba(184,196,204,0.25)", bg: "rgba(184,196,204,0.10)", border: "rgba(184,196,204,0.28)", emoji: "🥈" },
   { id: "gold",   label: "Oro",     min: 700, max: 1299, color: "#f59e0b", glow: "rgba(245,158,11,0.30)", bg: "rgba(245,158,11,0.10)", border: "rgba(245,158,11,0.30)", emoji: "🥇" },
-  { id: "plat",   label: "Platino", min: 1300,max: 9999, color: "#61b2ff", glow: "rgba(97,178,255,0.30)", bg: "rgba(97,178,255,0.10)", border: "rgba(97,178,255,0.30)", emoji: "💎" },
+  { id: "plat",   label: "Platino", min: 1300,max: 9999, color: "#61b2ff", glow: "rgba(97,178,255,0.18)", bg: "rgba(97,178,255,0.08)", border: "rgba(97,178,255,0.20)", emoji: "💎" },
 ];
 
 function getLevelForPoints(pts) {
@@ -147,7 +147,7 @@ function IceParticles() {
             width:p.size,
             height:p.size,
             borderRadius:"50%",
-            background:"rgba(71,161,255,0.7)",
+            background:"rgba(43,143,224,0.22)",
             opacity:p.opacity,
             animation:`float ${p.duration}s ${p.delay}s ease-in-out infinite alternate`,
           }}
@@ -217,7 +217,7 @@ function HeroPoints({ points, sw, delay = 80 }) {
           </div>
 
           <div style={{ textAlign:"right" }}>
-            <div style={{ ...typo.overline, color:"rgba(97,178,255,0.6)", marginBottom:2 }}>PUNTOS TOTALES</div>
+            <div style={{ ...typo.overline, color:TOKENS.colors.blue2, marginBottom:2 }}>PUNTOS TOTALES</div>
             <div style={{ fontSize: sw < 340 ? 30 : 36, fontWeight:800, color:TOKENS.colors.text, letterSpacing:"-0.05em", lineHeight:1 }}>
               {points.toLocaleString()}
             </div>
@@ -231,7 +231,7 @@ function HeroPoints({ points, sw, delay = 80 }) {
               <span style={{ fontSize:9, color:level.color, fontWeight:700 }}>{points} / {nextLvl.min} pts</span>
             </div>
 
-            <div style={{ height:6, borderRadius:3, background:"rgba(255,255,255,0.06)", overflow:"hidden" }}>
+            <div style={{ height:6, borderRadius:3, background:"rgba(21,73,155,0.08)", overflow:"hidden" }}>
               <div
                 style={{
                   height:"100%",
@@ -288,7 +288,7 @@ function BadgeSheet({ badge, onClose, sw }) {
         position:"absolute",
         inset:0,
         zIndex:20,
-        background:`rgba(3,8,17,${visible ? 0.72 : 0})`,
+        background:`rgba(15,23,42,${visible ? 0.18 : 0})`,
         transition:"background 220ms ease",
         display:"flex",
         flexDirection:"column",
@@ -298,17 +298,17 @@ function BadgeSheet({ badge, onClose, sw }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background:"linear-gradient(180deg, #07162b, #04101f)",
+          background:"linear-gradient(180deg, #ffffff, #f7fbff)",
           borderRadius:"24px 24px 0 0",
           border:`1px solid ${TOKENS.colors.borderBlue}`,
           borderBottom:"none",
           padding:`22px ${sw < 340 ? 16 : 22}px 36px`,
-          boxShadow:`0 -20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(43,143,224,0.10)`,
+          boxShadow:`0 -20px 60px rgba(21,73,155,0.14), 0 0 40px rgba(43,143,224,0.10)`,
           transform:visible ? "translateY(0)" : "translateY(100%)",
           transition:`transform 280ms cubic-bezier(0.34,1.56,0.64,1)`,
         }}
       >
-        <div style={{ width:36, height:4, borderRadius:2, background:"rgba(255,255,255,0.14)", margin:"0 auto 20px" }} />
+        <div style={{ width:36, height:4, borderRadius:2, background:"rgba(43,143,224,0.18)", margin:"0 auto 20px" }} />
 
         <div style={{ textAlign:"center", marginBottom:18 }}>
           <div style={{ fontSize:58, lineHeight:1, marginBottom:10 }}>{badge.icon}</div>
@@ -319,12 +319,12 @@ function BadgeSheet({ badge, onClose, sw }) {
         <Card style={{ padding:"12px 16px", marginBottom:14 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ textAlign:"center", flex:1 }}>
-              <div style={{ ...typo.overline, color:"rgba(97,178,255,0.55)", marginBottom:4 }}>PUNTOS</div>
+              <div style={{ ...typo.overline, color:TOKENS.colors.blue2, marginBottom:4 }}>PUNTOS</div>
               <div style={{ fontSize:22, fontWeight:800, color:TOKENS.colors.blue3, letterSpacing:"-0.03em" }}>+{badge.x_points}</div>
             </div>
             <div style={{ width:1, height:36, background:TOKENS.colors.border }} />
             <div style={{ textAlign:"center", flex:1 }}>
-              <div style={{ ...typo.overline, color:"rgba(97,178,255,0.55)", marginBottom:4 }}>OBTENIDO</div>
+              <div style={{ ...typo.overline, color:TOKENS.colors.blue2, marginBottom:4 }}>OBTENIDO</div>
               <div style={{ fontSize:11, fontWeight:700, color:TOKENS.colors.textSoft }}>{formattedDate}</div>
             </div>
           </div>
@@ -332,7 +332,7 @@ function BadgeSheet({ badge, onClose, sw }) {
 
         <button
           onClick={handleClose}
-          style={{ width:"100%", height:46, borderRadius:TOKENS.radius.md, background:"rgba(255,255,255,0.06)", border:`1px solid ${TOKENS.colors.border}`, color:TOKENS.colors.textMuted, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}
+          style={{ width:"100%", height:46, borderRadius:TOKENS.radius.md, background:"rgba(43,143,224,0.08)", border:`1px solid ${TOKENS.colors.border}`, color:TOKENS.colors.text, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}
         >
           Cerrar
         </button>
@@ -378,7 +378,7 @@ function BadgeTile({ badge, sw, delay, onPress }) {
             height:tileSize,
             borderRadius:TOKENS.radius.lg,
             background: shimmer
-              ? "linear-gradient(135deg, rgba(245,158,11,0.20), rgba(97,178,255,0.12))"
+              ? "linear-gradient(135deg, rgba(245,158,11,0.14), rgba(97,178,255,0.08))"
               : TOKENS.glass.hero,
             border: shimmer
               ? "1px solid rgba(245,158,11,0.40)"
@@ -401,7 +401,7 @@ function BadgeTile({ badge, sw, delay, onPress }) {
               style={{
                 position:"absolute",
                 inset:0,
-                background:"linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.14) 50%, transparent 70%)",
+                background:"linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%)",
                 animation:"shimmerSweep 1.8s ease 0.3s 2",
                 borderRadius:"inherit",
               }}
@@ -412,7 +412,7 @@ function BadgeTile({ badge, sw, delay, onPress }) {
 
           {badge.isNew && (
             <div style={{ position:"absolute", top:6, right:6, background:"rgba(245,158,11,0.85)", borderRadius:999, padding:"2px 5px" }}>
-              <span style={{ fontSize:7, fontWeight:800, color:"#030811", letterSpacing:"0.08em" }}>NUEVO</span>
+              <span style={{ fontSize:7, fontWeight:800, color:"#ffffff", letterSpacing:"0.08em" }}>NUEVO</span>
             </div>
           )}
 
@@ -422,7 +422,7 @@ function BadgeTile({ badge, sw, delay, onPress }) {
         </div>
 
         <div style={{ textAlign:"center", marginTop:5 }}>
-          <span style={{ fontSize:9, color:"rgba(97,178,255,0.70)", fontWeight:700 }}>+{badge.x_points} pts</span>
+          <span style={{ fontSize:9, color:TOKENS.colors.blue2, fontWeight:700 }}>+{badge.x_points} pts</span>
         </div>
       </div>
     </FadeIn>
@@ -434,20 +434,20 @@ function LockedBadgeTile({ badge, sw }) {
 
   return (
     <div style={{ width:tileSize, opacity:0.52 }}>
-      <div style={{ width:tileSize, height:tileSize, borderRadius:TOKENS.radius.lg, background:"rgba(255,255,255,0.02)", border:`1px solid ${TOKENS.colors.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, position:"relative" }}>
+      <div style={{ width:tileSize, height:tileSize, borderRadius:TOKENS.radius.lg, background:"rgba(255,255,255,0.92)", border:`1px solid ${TOKENS.colors.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, position:"relative", boxShadow:TOKENS.shadow.soft }}>
         <span style={{ fontSize: tileSize < 100 ? 28 : 32, lineHeight:1, filter:"grayscale(100%) opacity(0.4)" }}>{badge.icon}</span>
         <div style={{ position:"absolute", bottom:7, right:7 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.30)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(95,116,144,0.55)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
         </div>
-        <div style={{ fontSize: tileSize < 100 ? 8 : 9, fontWeight:700, color:"rgba(255,255,255,0.35)", textAlign:"center", paddingInline:5, lineHeight:1.2 }}>
+        <div style={{ fontSize: tileSize < 100 ? 8 : 9, fontWeight:700, color:TOKENS.colors.textMuted, textAlign:"center", paddingInline:5, lineHeight:1.2 }}>
           {badge.badge_name}
         </div>
       </div>
       <div style={{ textAlign:"center", marginTop:5 }}>
-        <span style={{ fontSize:8, color:"rgba(255,255,255,0.28)" }}>{badge.hint}</span>
+        <span style={{ fontSize:8, color:TOKENS.colors.textLow }}>{badge.hint}</span>
       </div>
     </div>
   );
@@ -559,7 +559,7 @@ function BadgesScreen({ sw: propSw, sh: propSh }) {
   const cols = Math.max(1, Math.floor((availW + gapSz) / (tileSz + gapSz)));
 
   return (
-    <div style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
+    <div style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(43,143,224,0.14) 0%, transparent 34%), linear-gradient(160deg, #f8fbff 0%, #eef4fb 45%, #e6eef8 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
       <IceParticles />
 
       <div style={{ position:"absolute", inset:0, opacity:0.032, backgroundImage:"linear-gradient(rgba(43,143,224,.45) 1px,transparent 1px),linear-gradient(90deg,rgba(43,143,224,.45) 1px,transparent 1px)", backgroundSize:"48px 48px" }} />
@@ -568,14 +568,14 @@ function BadgesScreen({ sw: propSw, sh: propSh }) {
         <FadeIn delay={40}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
             <div>
-              <div style={{ ...typo.overline, color:"rgba(97,178,255,0.6)", marginBottom:6 }}>MIS LOGROS</div>
+              <div style={{ ...typo.overline, color:TOKENS.colors.blue2, marginBottom:6 }}>MIS LOGROS</div>
               <div style={{ ...typo.h1, color:TOKENS.colors.text, lineHeight:1.05 }}>Reconocimientos</div>
-              <div style={{ ...typo.caption, color:"rgba(97,178,255,0.75)", marginTop:4, fontWeight:600 }}>
+              <div style={{ ...typo.caption, color:TOKENS.colors.blue2, marginTop:4, fontWeight:600 }}>
                 {loadState === "loading" ? "Cargando..." : loadState === "error" ? "Error al cargar" : `${sortedBadges.length} insignias · ${totalPoints} pts acumulados`}
               </div>
             </div>
 
-            <div style={{ width:40, height:40, borderRadius:13, background:"rgba(245,158,11,0.10)", border:"1px solid rgba(245,158,11,0.22)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:20 }}>
+            <div style={{ width:40, height:40, borderRadius:13, background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.20)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:20 }}>
               🏆
             </div>
           </div>
@@ -586,17 +586,17 @@ function BadgesScreen({ sw: propSw, sh: propSh }) {
 
         <FadeIn delay={180}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ flex:1, height:1, background:"linear-gradient(90deg, rgba(87,175,255,0.26), transparent)" }} />
-            <span style={{ ...typo.overline, color:"rgba(97,178,255,0.72)" }}>OBTENIDAS</span>
-            <div style={{ flex:1, height:1, background:"linear-gradient(90deg, transparent, rgba(87,175,255,0.26))" }} />
+            <div style={{ flex:1, height:1, background:"linear-gradient(90deg, rgba(43,143,224,0.18), transparent)" }} />
+            <span style={{ ...typo.overline, color:TOKENS.colors.blue2 }}>OBTENIDAS</span>
+            <div style={{ flex:1, height:1, background:"linear-gradient(90deg, transparent, rgba(43,143,224,0.18))" }} />
           </div>
         </FadeIn>
 
         {loadState === "loading" && (
           <div style={{ display:"grid", gridTemplateColumns:`repeat(${cols}, ${tileSz}px)`, gap:gapSz, justifyContent:"start" }}>
             {[1,2,3,4].map(i => (
-              <div key={i} style={{ width:tileSz, height:tileSz + 30, borderRadius:16, background:"rgba(255,255,255,0.04)", border:`1px solid ${TOKENS.colors.border}`, position:"relative", overflow:"hidden" }}>
-                <div style={{ position:"absolute", inset:0, background:"linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent)", animation:"shimmerMove 1.6s infinite" }}/>
+              <div key={i} style={{ width:tileSz, height:tileSz + 30, borderRadius:16, background:"rgba(255,255,255,0.92)", border:`1px solid ${TOKENS.colors.border}`, position:"relative", overflow:"hidden" }}>
+                <div style={{ position:"absolute", inset:0, background:"linear-gradient(90deg, transparent, rgba(43,143,224,0.08), transparent)", animation:"shimmerMove 1.6s infinite" }}/>
               </div>
             ))}
           </div>
@@ -606,7 +606,7 @@ function BadgesScreen({ sw: propSw, sh: propSh }) {
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
             <div style={{ fontSize:28 }}>📡</div>
             <div style={{ ...typo.body, color:TOKENS.colors.textMuted }}>Error al cargar logros</div>
-            <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-badges").then(r=>{if(!r.success){setLoadState("error");return;} if(r.data){const e=(r.data.earned||[]).map(mapOdooBadge);setBadgesData(e);setLockedBadges((r.data.locked||[]).map(b=>({id:b.id,badge_name:b.badge_name||"Logro",icon:getBadgeIcon(b.badge_name),x_points:b.x_points||0,hint:b.hint||""})));setTotalPoints(r.data.total_points||0);setLoadState(e.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
+            <button onClick={()=>{ setLoadState("loading"); apiGet("/pwa-badges").then(r=>{if(!r.success){setLoadState("error");return;} if(r.data){const e=(r.data.earned||[]).map(mapOdooBadge);setBadgesData(e);setLockedBadges((r.data.locked||[]).map(b=>({id:b.id,badge_name:b.badge_name||"Logro",icon:getBadgeIcon(b.badge_name),x_points:b.x_points||0,hint:b.hint||""})));setTotalPoints(r.data.total_points||0);setLoadState(e.length>0?"ready":"empty");}else{setLoadState("empty");}}).catch(()=>setLoadState("error")); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"#ffffff", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
           </div>
         )}
 
@@ -631,7 +631,7 @@ function BadgesScreen({ sw: propSw, sh: propSh }) {
             <FadeIn delay={520}>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <div style={{ flex:1, height:1, background:"linear-gradient(90deg, rgba(87,175,255,0.12), transparent)" }} />
-                <span style={{ ...typo.overline, color:"rgba(255,255,255,0.28)" }}>POR DESBLOQUEAR</span>
+                <span style={{ ...typo.overline, color:TOKENS.colors.textMuted }}>POR DESBLOQUEAR</span>
                 <div style={{ flex:1, height:1, background:"linear-gradient(90deg, transparent, rgba(87,175,255,0.12))" }} />
               </div>
             </FadeIn>
@@ -668,17 +668,17 @@ function PhoneFrame({ sw, sh, label, note }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}>
-      <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.6)", letterSpacing:"0.06em", textAlign:"center" }}>{label}</div>
+      <div style={{ fontSize:11, fontWeight:700, color:TOKENS.colors.textMuted, letterSpacing:"0.06em", textAlign:"center" }}>{label}</div>
 
-      <div style={{ position:"relative", borderRadius:borderR+4, border:"2px solid rgba(103,146,204,0.55)", boxShadow:"0 0 0 1px rgba(173,205,255,0.07), 0 28px 70px rgba(0,0,0,0.7), 0 0 30px rgba(43,143,224,0.12)", overflow:"hidden", background:"#071327", flexShrink:0 }}>
-        <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:notchW, height:22, background:"#0a1320", borderRadius:"0 0 14px 14px", zIndex:50 }} />
-        <div style={{ position:"absolute", left:-3, top:80, width:3, height:32, borderRadius:2, background:"rgba(103,146,204,0.55)" }} />
-        <div style={{ position:"absolute", left:-3, top:120, width:3, height:52, borderRadius:2, background:"rgba(103,146,204,0.55)" }} />
-        <div style={{ position:"absolute", right:-3, top:116, width:3, height:62, borderRadius:2, background:"rgba(103,146,204,0.55)" }} />
+      <div style={{ position:"relative", borderRadius:borderR+4, border:"2px solid rgba(43,143,224,0.18)", boxShadow:"0 0 0 1px rgba(255,255,255,0.9), 0 28px 70px rgba(21,73,155,0.10), 0 0 30px rgba(43,143,224,0.08)", overflow:"hidden", background:"#f8fbff", flexShrink:0 }}>
+        <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:notchW, height:22, background:"#eff5fb", borderRadius:"0 0 14px 14px", zIndex:50 }} />
+        <div style={{ position:"absolute", left:-3, top:80, width:3, height:32, borderRadius:2, background:"rgba(43,143,224,0.18)" }} />
+        <div style={{ position:"absolute", left:-3, top:120, width:3, height:52, borderRadius:2, background:"rgba(43,143,224,0.18)" }} />
+        <div style={{ position:"absolute", right:-3, top:116, width:3, height:62, borderRadius:2, background:"rgba(43,143,224,0.18)" }} />
         <BadgesScreen sw={sw} sh={sh} />
       </div>
 
-      <div style={{ fontSize:10, color:"rgba(255,255,255,0.28)", textAlign:"center", lineHeight:1.5 }}>
+      <div style={{ fontSize:10, color:TOKENS.colors.textMuted, textAlign:"center", lineHeight:1.5 }}>
         {sw}×{sh}px · {note}
       </div>
     </div>
@@ -696,7 +696,7 @@ const DEVICES = [
 ============================================================================ */
 export function MultiDeviceBadgesPreview() {
   return (
-    <div style={{ minHeight:"100vh", background:"radial-gradient(circle at center, #102a57 0%, #07183a 35%, #050d1a 75%, #030811 100%)", padding:"36px 20px 60px", fontFamily:"system-ui,sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"radial-gradient(circle at center, #f8fbff 0%, #eef4fb 35%, #e6eef8 75%, #dde8f4 100%)", padding:"36px 20px 60px", fontFamily:"system-ui,sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         @keyframes float { from{transform:translateY(0)scale(1)} to{transform:translateY(-16px)scale(1.3)} }
@@ -707,13 +707,13 @@ export function MultiDeviceBadgesPreview() {
       `}</style>
 
       <div style={{ textAlign:"center", marginBottom:36 }}>
-        <div style={{ fontSize:10, fontWeight:700, color:"rgba(97,178,255,0.55)", letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:6 }}>
+        <div style={{ fontSize:10, fontWeight:700, color:TOKENS.colors.blue2, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:6 }}>
           PWA Trabajadores · Grupo Frío
         </div>
-        <div style={{ fontSize:20, fontWeight:700, color:"white", letterSpacing:"-0.02em" }}>
+        <div style={{ fontSize:20, fontWeight:700, color:TOKENS.colors.text, letterSpacing:"-0.02em" }}>
           Pantalla 5 — Reconocimientos
         </div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:8 }}>
+        <div style={{ fontSize:12, color:TOKENS.colors.textMuted, marginTop:8 }}>
           Nivel Bronce/Plata/Oro/Platino · Grid badges · Detalle sheet · Badges bloqueados · gamification.badge.user
         </div>
       </div>

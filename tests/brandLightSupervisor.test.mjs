@@ -82,9 +82,14 @@ test('ScreenHome hace early-return SOLO tras isBrandLightSession', () => {
   const src = readFileSync(new URL('../src/screens/ScreenHome.jsx', import.meta.url), 'utf8')
 
   assert.match(src, /if \(isBrandLightSession\(session\)\) \{[\s\S]*?<SupervisorVentasHome/,
-    'la portada clara vive detrás del gate de rol')
-  // El render oscuro sigue existiendo tal cual para los demás roles.
-  assert.ok(src.includes('linear-gradient(160deg, ${TOKENS.colors.bg0}'), 'la portada oscura se conserva')
+    'la portada clara de supervisión vive detrás de SU gate de rol exclusivo')
+  // El render genérico (compartido por el resto de roles) sigue existiendo
+  // tal cual, y TOKENS (oscuro) sigue siendo una de sus dos ramas posibles —
+  // Gerente de sucursal (piloto) es la única que conmuta a BRAND_TOKENS ahí,
+  // vía `lightHome = isGerenteBrandSurface(session)`.
+  assert.ok(src.includes('linear-gradient(160deg, ${T.colors.bg0}'), 'la portada genérica sigue pintándose')
+  assert.match(src, /const\s+lightHome\s*=\s*isGerenteBrandSurface\(session\)/, 'Gerente conmuta por rol, no por import fijo')
+  assert.match(src, /const\s+T\s*=\s*lightHome\s*\?\s*BRAND_TOKENS\s*:\s*TOKENS/, 'el resto de roles conserva TOKENS oscuro')
 })
 
 test('la portada clara usa el logo oficial y el gradiente institucional', () => {
@@ -177,7 +182,7 @@ test('el brief pinta el fondo claro de extremo a extremo, sin franjas', () => {
   // a ser el mismo, en escritorio reaparecen las franjas oscuras a los lados.
   const surface = code.slice(code.indexOf('data-testid="brief-surface"'), code.indexOf('data-testid="brief-content"'))
   assert.ok(surface.includes("width: '100%'"), 'la capa de color ocupa todo el ancho')
-  assert.ok(surface.includes('background: C.bg'), 'y es la que lleva el fondo claro')
+  assert.ok(surface.includes("background: `linear-gradient(160deg, ${C.bg0} 0%, ${C.bg1} 55%, ${C.bg2} 100%)`"), 'y es la que lleva el fondo claro')
   assert.ok(!surface.includes('maxWidth'), 'la capa de color NO limita el ancho')
 
   const content = code.slice(code.indexOf('data-testid="brief-content"'))

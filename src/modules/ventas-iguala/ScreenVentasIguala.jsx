@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import TicketDocument from './TicketDocument'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
 import {
   getIgualaSalesHistory,
   getIgualaSalesTickets,
@@ -83,6 +84,8 @@ function getErrorState(error, fallback) {
 }
 
 export default function ScreenVentasIguala() {
+  const C = BRAND_TOKENS.colors
+  const S = BRAND_TOKENS.shadow
   const today = useMemo(() => cdmxDateKey(), [])
   const [dateFrom, setDateFrom] = useState(today)
   const [dateTo, setDateTo] = useState(today)
@@ -150,6 +153,16 @@ export default function ScreenVentasIguala() {
   const selectionAtLimit = isSelectionAtLimit(selectedOrders)
   const canPrint = selectedOrders.length > 0 && !printing && !filtersUpdating
 
+  useEffect(() => {
+    const root = document.documentElement
+    const previous = root.getAttribute('data-brand-light')
+    root.setAttribute('data-brand-light', '1')
+    return () => {
+      if (previous === null) root.removeAttribute('data-brand-light')
+      else root.setAttribute('data-brand-light', previous)
+    }
+  }, [])
+
   function changeDate(setter, nextValue, currentValue) {
     if (nextValue === currentValue) return
     setSelectedOrders([])
@@ -185,37 +198,37 @@ export default function ScreenVentasIguala() {
     <>
       <section className="ventas-iguala-screen" aria-labelledby="ventas-iguala-title">
         <style>{`
-          .ventas-iguala-screen { max-width: 1320px; margin: 0 auto; padding: 24px 16px 110px; color: #172033; }
+          .ventas-iguala-screen { max-width: 1320px; min-height: 100dvh; margin: 0 auto; padding: 24px 16px 110px; color: ${C.text}; background: linear-gradient(160deg, ${C.bg0} 0%, ${C.bg1} 55%, ${C.bg2} 100%); }
           .vi-header, .vi-toolbar, .vi-selection, .vi-page { display: flex; gap: 12px; align-items: center; }
           .vi-header { justify-content: space-between; flex-wrap: wrap; margin-bottom: 20px; }
           .vi-header h1 { margin: 0; font-size: clamp(1.5rem, 3vw, 2.1rem); }
-          .vi-label { border-radius: 999px; padding: 6px 10px; background: #eaf4ff; color: #075ea9; font-weight: 700; font-size: .86rem; }
-          .vi-toolbar { align-items: end; flex-wrap: wrap; padding: 16px; border: 1px solid #dce3ec; border-radius: 16px; background: #fff; }
-          .vi-field { display: grid; gap: 5px; font-size: .86rem; font-weight: 600; color: #46546a; }
-          .vi-field input { min-height: 40px; border: 1px solid #bfcbd9; border-radius: 9px; padding: 0 10px; font: inherit; color: #172033; background: #fff; }
+          .vi-label { border-radius: 999px; padding: 6px 10px; background: ${C.chipInfoBg}; color: ${C.chipInfoFg}; font-weight: 700; font-size: .86rem; border: 1px solid rgba(0,119,187,0.16); }
+          .vi-toolbar { align-items: end; flex-wrap: wrap; padding: 16px; border: 1px solid ${C.border}; border-radius: 16px; background: ${C.surface}; box-shadow: ${S.md}; }
+          .vi-field { display: grid; gap: 5px; font-size: .86rem; font-weight: 600; color: ${C.textMuted}; }
+          .vi-field input { min-height: 40px; border: 1px solid ${C.border}; border-radius: 9px; padding: 0 10px; font: inherit; color: ${C.text}; background: ${C.surfaceSoft}; color-scheme: light; }
           .vi-search { min-width: min(100%, 280px); flex: 1; }
-          .vi-selection { position: fixed; right: 0; bottom: 0; left: 0; z-index: 10; justify-content: space-between; flex-wrap: wrap; margin: 0; padding: 12px max(16px, calc((100vw - 1288px) / 2)); background: #172f50; color: #fff; box-shadow: 0 -3px 16px rgba(23, 47, 80, .22); }
+          .vi-selection { position: fixed; right: 0; bottom: 0; left: 0; z-index: 10; justify-content: space-between; flex-wrap: wrap; margin: 0; padding: 12px max(16px, calc((100vw - 1288px) / 2)); background: rgba(255,255,255,0.96); color: ${C.text}; box-shadow: 0 -3px 16px rgba(15,42,61,.10); border-top: 1px solid ${C.border}; backdrop-filter: blur(12px); }
           .vi-selection p { margin: 0; }
           .vi-total { font-weight: 800; }
-          .vi-button { min-height: 40px; border: 0; border-radius: 9px; padding: 0 14px; background: #0877c9; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+          .vi-button { min-height: 40px; border: 0; border-radius: 9px; padding: 0 14px; background: ${C.ctaGradient}; color: #fff; font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 6px 18px rgba(0,119,187,0.18); }
           .vi-button:disabled { cursor: not-allowed; opacity: .55; }
-          .vi-button-secondary { background: #e8eef4; color: #172033; }
-          .vi-table-wrap { overflow-x: auto; border: 1px solid #dce3ec; border-radius: 14px; background: #fff; }
+          .vi-button-secondary { background: ${C.surfaceSoft}; color: ${C.text}; border: 1px solid ${C.border}; box-shadow: none; }
+          .vi-table-wrap { overflow-x: auto; border: 1px solid ${C.border}; border-radius: 14px; background: ${C.surface}; box-shadow: ${S.md}; }
           .vi-table { width: 100%; border-collapse: collapse; min-width: 960px; }
-          .vi-table th, .vi-table td { padding: 12px; border-bottom: 1px solid #edf0f4; vertical-align: top; text-align: left; font-size: .9rem; }
-          .vi-table th { background: #f7f9fb; color: #4b5a70; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+          .vi-table th, .vi-table td { padding: 12px; border-bottom: 1px solid ${C.border}; vertical-align: top; text-align: left; font-size: .9rem; }
+          .vi-table th { background: ${C.surfaceSoft}; color: ${C.textMuted}; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
           .vi-table tr:last-child td { border-bottom: 0; }
-          .vi-lines { max-width: 280px; color: #4b5a70; font-size: .8rem; }
-          .vi-order-lines summary { cursor: pointer; color: #075ea9; }
+          .vi-lines { max-width: 280px; color: ${C.textMuted}; font-size: .8rem; }
+          .vi-order-lines summary { cursor: pointer; color: ${C.blue}; }
           .vi-order-lines ul { display: grid; gap: 5px; margin: 8px 0 0; padding: 0; list-style: none; }
           .vi-order-lines li { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
           .vi-cards { display: none; gap: 10px; }
-          .vi-card { padding: 14px; border: 1px solid #dce3ec; border-radius: 12px; background: #fff; }
+          .vi-card { padding: 14px; border: 1px solid ${C.border}; border-radius: 12px; background: ${C.surface}; box-shadow: ${S.soft}; }
           .vi-card-head, .vi-card-row { display: flex; justify-content: space-between; gap: 12px; }
-          .vi-card-row { margin-top: 8px; color: #4b5a70; font-size: .86rem; }
-          .vi-card-row strong { color: #172033; text-align: right; }
-          .vi-state { padding: 32px 16px; text-align: center; border: 1px dashed #bfcbd9; border-radius: 14px; background: #fff; color: #4b5a70; }
-          .vi-error { margin-top: 14px; color: #a31919; }
+          .vi-card-row { margin-top: 8px; color: ${C.textMuted}; font-size: .86rem; }
+          .vi-card-row strong { color: ${C.text}; text-align: right; }
+          .vi-state { padding: 32px 16px; text-align: center; border: 1px dashed ${C.border}; border-radius: 14px; background: ${C.surface}; color: ${C.textMuted}; box-shadow: ${S.soft}; }
+          .vi-error { margin-top: 14px; color: ${C.error}; }
           .vi-page { justify-content: flex-end; margin-top: 16px; }
           @media (max-width: 720px) { .vi-table-wrap { display: none; } .vi-cards { display: grid; } .vi-toolbar { align-items: stretch; } .vi-field, .vi-search { width: 100%; } .vi-page { justify-content: space-between; } }
         `}</style>
