@@ -15,6 +15,7 @@ import {
   filterKoldOsM2Params,
 } from './koldOsM2Route.js'
 import { toPositiveSafeIntegerId } from '../modules/admin/posCustomers.js'
+import { isPosBreakdownEmployee } from '../modules/admin/identityGates.js'
 import {
   isKoldOsM3Path,
   filterKoldOsM3Params,
@@ -756,7 +757,6 @@ const POS_CUSTOMER_ANALYTIC_CODES = ['IGU34', POS_CUSTOMER_ANALYTIC_CODE]
 const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
 const POS_CUSTOMER_ANALYTIC_NAME_CANDIDATES = ['IGU34', POS_CUSTOMER_ANALYTIC_NAME]
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
-const ANGELICA_JAIMES_NAME_PARTS = ['angelica', 'jaimes']
 
 function shapeSupervisorCustomer(row = {}) {
   return {
@@ -786,13 +786,9 @@ function normalizeScopeText(value) {
 }
 
 function isAngelicaJaimesSession() {
-  const session = getSession()
-  const normalizedName = normalizeScopeText([
-    session?.name,
-    session?.employee?.name,
-    session?.display_name,
-  ].filter(Boolean).join(' '))
-  return ANGELICA_JAIMES_NAME_PARTS.every((part) => normalizedName.includes(part))
+  // CLEAN-02: employee_id allowlist (no name/string matching). Fail-closed
+  // when session lacks employee_id — see identityGates.js.
+  return isPosBreakdownEmployee(getSession())
 }
 
 function sessionAnalyticAccountId() {

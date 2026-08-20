@@ -5,14 +5,18 @@
 // rol de "Aprobar gastos", "Liquidaciones" y "Materia prima" existía SOLO en el
 // menú: un auxiliar_admin que escribiera la URL a mano entraba igual.
 //
-// La lista de roles por ruta no se duplica: se deriva de `NAV_ITEMS`, que ya es
-// la fuente que pinta el menú. Así el menú y la URL no pueden discrepar — que es
-// exactamente como se abrió este hueco.
+// CLEAN-02: la política NO se duplica. Sale de `NAV_ITEMS` (misma fuente que
+// AdminShell / AdminGerenteTab) y aplica el mismo clamp de piloto Gerente RO
+// (`access` WRITE + capabilities) que el menú. Deep-link ≡ menú.
 //
 // Esto sigue siendo autorización de CLIENTE: no reemplaza la validación del
-// backend, la complementa. Las rutas restringidas apuntan a endpoints que ya
-// validan rol server-side; lo que se cierra aquí es que la pantalla se pinte.
+// backend, la complementa.
 import { NAV_ITEMS } from './adminNavItems.js'
+import {
+  ADMIN_NAV_ACCESS,
+  isGerentePilotReadOnly,
+} from './gerentePilotCaps.js'
+import { isCashShiftNavigationVisible } from '../../lib/navModel.js'
 
 /** Ruta absoluta → roles autorizados, derivado de NAV_ITEMS. */
 export const ADMIN_ROUTE_ROLES = Object.freeze(
@@ -23,34 +27,87 @@ export const ADMIN_ROUTE_ROLES = Object.freeze(
 )
 
 /**
- * Rutas montadas bajo /admin que NO aparecen en NAV_ITEMS (pantallas de detalle
- * o flujos internos). Se declaran explícitamente para que ninguna quede sin
- * política por olvido: el default de `adminRouteAllows` es fail-closed, así que
- * una ruta nueva sin entrada aquí se bloquea hasta que alguien decida sus roles.
+ * Rutas montadas bajo /admin que NO aparecen en NAV_ITEMS (detalle / flujos
+ * internos). Declaradas explícitamente: fail-closed si falta política.
  */
-const EXTRA_ROUTE_ROLES = Object.freeze({
-  '/admin/ticket': ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'],
-  '/admin/bolsas/validar': ['gerente_sucursal', 'direccion_general'],
-  '/admin/materiales/validar': ['gerente_sucursal', 'direccion_general'],
-  '/admin/materiales/resolver-rechazo': ['gerente_sucursal', 'direccion_general'],
+const EXTRA_ROUTE_POLICY = Object.freeze({
+  '/admin/ticket': Object.freeze({
+    roles: Object.freeze(['auxiliar_admin', 'gerente_sucursal', 'direccion_general']),
+    access: ADMIN_NAV_ACCESS.MIXED,
+  }),
+  '/admin/bolsas/validar': Object.freeze({
+    roles: Object.freeze(['gerente_sucursal', 'direccion_general']),
+    access: ADMIN_NAV_ACCESS.WRITE,
+  }),
+  '/admin/materiales/validar': Object.freeze({
+    roles: Object.freeze(['gerente_sucursal', 'direccion_general']),
+    access: ADMIN_NAV_ACCESS.WRITE,
+  }),
+  '/admin/materiales/resolver-rechazo': Object.freeze({
+    roles: Object.freeze(['gerente_sucursal', 'direccion_general']),
+    access: ADMIN_NAV_ACCESS.WRITE,
+  }),
 })
 
-function rolesForRoute(route) {
-  if (ADMIN_ROUTE_ROLES[route]) return ADMIN_ROUTE_ROLES[route]
-  if (EXTRA_ROUTE_ROLES[route]) return EXTRA_ROUTE_ROLES[route]
+/** @deprecated prefer policyForRoute — kept for tests that assert role maps. */
+export const EXTRA_ROUTE_ROLES = Object.freeze(
+  Object.fromEntries(
+    Object.entries(EXTRA_ROUTE_POLICY).map(([route, policy]) => [route, policy.roles]),
+  ),
+)
+
+function policyForRoute(route) {
+  const nav = NAV_ITEMS.find((item) => item.route === route)
+  if (nav) {
+    return {
+      roles: nav.roles,
+      access: nav.access || ADMIN_NAV_ACCESS.READ,
+      navId: nav.id,
+    }
+  }
+  const extra = EXTRA_ROUTE_POLICY[route]
+  if (extra) {
+    return {
+      roles: extra.roles,
+      access: extra.access,
+      navId: null,
+    }
+  }
   return null
 }
 
 /**
- * ¿Los roles efectivos de la sesión pueden abrir esta subruta de /admin?
- * Fail-closed: sin roles, o sin política declarada para la ruta, no entra.
+ * ¿La sesión puede abrir esta subruta de /admin?
+ * Fail-closed: sin roles, sin política, WRITE bajo piloto RO, o capability
+ * denegada (p.ej. cortes de caja) → false.
  *
  * @param {string} route  ruta absoluta, p.ej. '/admin/liquidaciones'
  * @param {string[]} effectiveRoles  job keys efectivas de la sesión
+ * @param {{ session?: object, capabilities?: object }} [ctx]
  */
-export function adminRouteAllows(route, effectiveRoles = []) {
-  const allowed = rolesForRoute(String(route || ''))
-  if (!allowed) return false
+export function adminRouteAllows(route, effectiveRoles = [], ctx = {}) {
+  const policy = policyForRoute(String(route || ''))
+  if (!policy) return false
   if (!Array.isArray(effectiveRoles) || effectiveRoles.length === 0) return false
-  return effectiveRoles.some((role) => allowed.includes(role))
+  if (!effectiveRoles.some((role) => policy.roles.includes(role))) return false
+
+  const session = ctx.session || null
+  const capabilities = ctx.capabilities || {}
+
+  // Paridad con AdminShell.navItemsForRoles: cierre solo si cash-shift visible.
+  if (policy.navId === 'cierre' && !isCashShiftNavigationVisible(capabilities)) {
+    return false
+  }
+
+  // Paridad con filterAdminNavForGerentePilot: WRITE oculto bajo piloto RO.
+  if (session && isGerentePilotReadOnly(session, capabilities)) {
+    if (policy.access === ADMIN_NAV_ACCESS.WRITE) return false
+  }
+
+  return true
+}
+
+/** Export for tests — inspect policy (roles + access) for a route. */
+export function adminRoutePolicy(route) {
+  return policyForRoute(String(route || ''))
 }

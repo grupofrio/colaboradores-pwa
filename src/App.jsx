@@ -14,6 +14,8 @@ import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext
 import { isValidAuthenticatedSession } from './lib/session'
 import { isModuleVisibleForSession, getModuleRouteDecisionForSession } from './lib/navModel'
 import { adminRouteAllows } from './modules/admin/adminRouteAccess'
+import { BACKEND_CAPS } from './modules/admin/adminService'
+import { resolveGerentePilotCapabilities } from './modules/admin/gerentePilotCaps'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
@@ -259,12 +261,20 @@ function PrivateRoute({ children }) {
 }
 
 // Revalidación por SUBRUTA de /admin. El gate del padre autoriza el MÓDULO;
-// este autoriza la PANTALLA. Fail-closed: una subruta sin política declarada en
-// adminRouteAccess no se abre.
+// este autoriza la PANTALLA (rol + access CLEAN-01 + capabilities). Fail-closed:
+// sin política, WRITE bajo piloto RO, o capability denegada → /admin.
 function AdminSubRoute({ path, children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
-  if (!adminRouteAllows(path, getEffectiveJobKeys(session))) return <Navigate to="/admin" replace />
+  // Fail-closed para writes: si caps aún no bootearon, gerenteWritesEnabled≠true
+  // ⇒ RO ⇒ rutas WRITE denegadas (misma regla que el menú).
+  const effectiveCaps = resolveGerentePilotCapabilities(session, BACKEND_CAPS, true)
+  if (!adminRouteAllows(path, getEffectiveJobKeys(session), {
+    session,
+    capabilities: effectiveCaps,
+  })) {
+    return <Navigate to="/admin" replace />
+  }
   return children
 }
 

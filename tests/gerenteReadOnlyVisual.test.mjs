@@ -17,7 +17,10 @@ import { isGerenteBrandSurface } from '../src/theme/gerenteBrandSurface.js'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const adminServiceSrc = readFileSync(join(root, 'src/modules/admin/adminService.js'), 'utf8')
 const shellSrc = readFileSync(join(root, 'src/modules/admin/components/AdminShell.jsx'), 'utf8')
+const navItemsSrc = readFileSync(join(root, 'src/modules/admin/adminNavItems.js'), 'utf8')
 const tabSrc = readFileSync(join(root, 'src/modules/gerente/v2/tabs/AdminGerenteTab.jsx'), 'utf8')
+const launcherSrc = readFileSync(join(root, 'src/modules/gerente/v2/adminGerenteLauncher.js'), 'utf8')
+const routeAccessSrc = readFileSync(join(root, 'src/modules/admin/adminRouteAccess.js'), 'utf8')
 
 /** Minimal NAV_ITEMS mirror for unit tests (keeps JSX out of node:test). */
 const NAV_FIXTURE = [
@@ -54,12 +57,14 @@ test('applyCapabilities persists gerenteWritesEnabled from backend', () => {
 })
 
 test('AdminShell NAV_ITEMS declare access mode for every entry', () => {
-  const ids = [...shellSrc.matchAll(/id:\s*'([^']+)'/g)].map((m) => m[1])
+  // CLEAN-02: NAV_ITEMS lives in adminNavItems.js (shared with AdminSubRoute).
+  assert.match(shellSrc, /from '\.\.\/adminNavItems/)
+  const ids = [...navItemsSrc.matchAll(/id:\s*'([^']+)'/g)].map((m) => m[1])
   assert.ok(ids.includes('gastos-aprobar'))
   assert.ok(ids.includes('hub'))
   for (const id of ids) {
-    const blockStart = shellSrc.indexOf(`id: '${id}'`)
-    const slice = shellSrc.slice(blockStart, blockStart + 280)
+    const blockStart = navItemsSrc.indexOf(`id: '${id}'`)
+    const slice = navItemsSrc.slice(blockStart, blockStart + 280)
     assert.match(slice, /access:\s*ADMIN_NAV_ACCESS\.(READ|WRITE|MIXED)/, `${id} missing access`)
   }
 })
@@ -129,8 +134,12 @@ test('AdminShell and AdminGerenteTab share resolveGerentePilotCapabilities + fil
   assert.match(shellSrc, /resolveGerentePilotCapabilities/)
   assert.match(shellSrc, /filterAdminNavForGerentePilot/)
   assert.match(tabSrc, /resolveGerentePilotCapabilities/)
-  assert.match(tabSrc, /filterAdminNavForGerentePilot/)
+  assert.match(tabSrc, /buildGerenteAdminLauncherItems/)
   assert.match(tabSrc, /bootCapabilities/)
+  assert.match(launcherSrc, /NAV_ITEMS/)
+  assert.match(launcherSrc, /filterAdminNavForGerentePilot/)
+  assert.match(routeAccessSrc, /isGerentePilotReadOnly/)
+  assert.match(routeAccessSrc, /ADMIN_NAV_ACCESS\.WRITE/)
 })
 
 test('Gerente brand surface covers gerente_sucursal without flipping other roles', () => {

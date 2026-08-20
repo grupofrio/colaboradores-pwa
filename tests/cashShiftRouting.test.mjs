@@ -11,6 +11,10 @@ const shellSource = readFileSync(
   new URL('../src/modules/admin/components/AdminShell.jsx', import.meta.url),
   'utf8',
 )
+const navItemsSource = readFileSync(
+  new URL('../src/modules/admin/adminNavItems.js', import.meta.url),
+  'utf8',
+)
 const hubSource = readFileSync(
   new URL('../src/modules/admin/ScreenAdminPanel.jsx', import.meta.url),
   'utf8',
@@ -39,7 +43,8 @@ test('manage takes precedence and authorizer-only never becomes general manageme
 })
 
 test('admin desktop and mobile navigation use the same server capability gate and label', () => {
-  assert.match(shellSource, /label:\s*['"]Cortes de caja['"]/)
+  // CLEAN-02: label lives in shared adminNavItems.js; shell still gates by capability.
+  assert.match(navItemsSource, /label:\s*['"]Cortes de caja['"]/)
   assert.match(shellSource, /isCashShiftNavigationVisible/)
   assert.match(hubSource, /label:\s*['"]Cortes de caja['"]/)
   assert.match(hubSource, /isCashShiftNavigationVisible/)
@@ -48,7 +53,10 @@ test('admin desktop and mobile navigation use the same server capability gate an
 })
 
 test('the existing /admin/cierre route remains wired to a screen-level safe gate', () => {
-  assert.match(appSource, /<Route path="cierre" element=\{<ScreenCierreCaja \/>\}/)
+  assert.match(
+    appSource,
+    /<Route path="cierre" element=\{<AdminSubRoute path="\/admin\/cierre"><ScreenCierreCaja \/><\/AdminSubRoute>\}/,
+  )
   assert.match(screenSource, /cashShiftAccessMode/)
   assert.match(screenSource, /capabilitiesReady|capsReady/)
   assert.doesNotMatch(screenSource, /AdminCierreForm|getTodaySales|getTodayExpenses|getCashClosing/)
