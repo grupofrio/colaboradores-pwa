@@ -82,7 +82,7 @@ export default function BriefEmbedScreen({ briefId }) {
   const withDate = briefSupportsDate(brief)
   // Contenedor brand-light para supervisor_ventas y gerente_sucursal (Mi Sucursal).
   // El documento del brief va dentro del iframe con su propio estilo y NO se toca.
-  const brandLight = isGerenteBrandSurface(session)
+  const brandLight = isGerenteBrandSurface(session) || session?.role === 'supervisor_produccion'
   const light = brandLight
   const C = light ? BRAND_TOKENS.colors : TOKENS.colors
   // `StateScreen` ya acepta tokens y su default es el tema oscuro. Sin pasarlos,

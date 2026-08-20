@@ -49,6 +49,8 @@ export const TOKENS = {
     warningSoft: 'rgba(245,158,11,0.12)',
     error:       '#ef4444',
     errorSoft:   'rgba(239,68,68,0.12)',
+    // Texto sobre relleno sólido (botones CTA, pills de estado con color de fondo)
+    onPrimary:   '#FFFFFF',
   },
 
   radius: {
