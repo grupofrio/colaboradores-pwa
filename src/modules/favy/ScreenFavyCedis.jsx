@@ -370,32 +370,15 @@ export default function ScreenFavyCedis() {
     }
   }
 
-  function getAttendancePosition() {
-    if (!window.navigator?.geolocation) {
-      return Promise.reject(new Error('Este dispositivo no permite obtener la ubicacion.'))
-    }
-    return new Promise((resolve, reject) => {
-      window.navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 0,
-      })
-    })
-  }
-
   async function saveAttendance() {
     setAttendanceBusy(true)
     setAttendanceError('')
     setAttendanceSuccess('')
 
     try {
-      const position = await getAttendancePosition()
       const validation = validateAttendancePreflight({
         selfie: attendanceSelfie,
         facade: attendanceFacade,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
       })
       if (!validation.ok) {
         setAttendanceError(validation.message)
@@ -405,13 +388,10 @@ export default function ScreenFavyCedis() {
       const result = await checkInFavyAttendance({
         selfie: attendanceSelfie,
         facade: attendanceFacade,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
       })
       const data = result?.data || result || {}
       setTodayAttendance(data?.attendance || data)
-      setAttendanceSuccess('Asistencia registrada y validada en Odoo')
+      setAttendanceSuccess('Asistencia registrada en Odoo')
       setTimeout(() => setAttendanceSuccess(''), 2200)
     } catch (e) {
       setAttendanceError(e?.message || 'No se pudo registrar la asistencia')
@@ -639,7 +619,7 @@ export default function ScreenFavyCedis() {
           <section style={{ borderRadius: TOKENS.radius.xl, background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`, padding: 16 }}>
             <h2 style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0, marginBottom: 6 }}>Checklist de inicio · Asistencia diaria</h2>
             <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 0, marginBottom: 12 }}>
-              Foto personal, fachada del CEDIS y GPS a 50 m o menos. La precision debe ser de 25 m o menor.
+              Requiere foto del colaborador y foto de la fachada del CEDIS.
             </p>
 
             {attendanceError && <p style={{ ...typo.caption, color: TOKENS.colors.error }}>{attendanceError}</p>}
@@ -676,12 +656,12 @@ export default function ScreenFavyCedis() {
                 marginBottom: 10,
               }}
             >
-              {attendanceSelfie ? 'Cambiar foto de Faviola' : 'Tomar foto de Faviola'}
+              {attendanceSelfie ? 'Cambiar foto de colaborador' : 'Tomar foto de colaborador'}
             </button>
 
             {attendanceSelfie && (
               <div style={{ borderRadius: TOKENS.radius.md, overflow: 'hidden', border: `1px solid ${TOKENS.colors.border}`, marginBottom: 10 }}>
-                <img src={attendanceSelfie} alt="Foto de Faviola" style={{ width: '100%', maxHeight: 220, objectFit: 'cover' }} />
+                <img src={attendanceSelfie} alt="Foto de colaborador" style={{ width: '100%', maxHeight: 220, objectFit: 'cover' }} />
               </div>
             )}
 
@@ -720,7 +700,7 @@ export default function ScreenFavyCedis() {
                 fontWeight: 700,
               }}
             >
-              {attendanceBusy ? 'Validando ubicacion...' : 'Iniciar labores'}
+              {attendanceBusy ? 'Registrando asistencia...' : 'Iniciar labores'}
             </button>
 
             {todayAttendance && (
