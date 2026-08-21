@@ -24,8 +24,10 @@
 // Invariante verificable: "cero montaje de rama V2 · cero efectos V2-only · cero
 // writes V2 · cero navegación a rutas V2-only" — NO "cero fetch a URLs /v2/*".
 import { Navigate } from 'react-router-dom'
+import { useSessionContext } from '../../../lib/sessionContext.js'
 import { isV2Active } from './gateAccess.js'
 import SupervisorV2Shell from './SupervisorV2Shell.jsx'
+import { readPulseFlagFrom } from './pulso/pulseFlag.js'
 
 /**
  * Decide UNA sola experiencia; NUNCA monta ambas (los `return` son excluyentes).
@@ -47,11 +49,17 @@ export default function SupervisorV2Gate({
   shell = true,
   pulseEnabled,
 }) {
+  const sessionContext = useSessionContext()
+  const session = sessionContext?.session
+  const effectivePulseEnabled = pulseEnabled === undefined
+    ? readPulseFlagFrom(session, session?.capabilities).enabled
+    : pulseEnabled === true
+
   if (!isV2Active()) {
     if (legacy) return legacy
     if (v2Only) return <Navigate to="/equipo" replace />
     return <Navigate to="/equipo" replace />
   }
   if (!shell) return children
-  return <SupervisorV2Shell active={active} pulseEnabled={pulseEnabled}>{children}</SupervisorV2Shell>
+  return <SupervisorV2Shell active={active} pulseEnabled={effectivePulseEnabled}>{children}</SupervisorV2Shell>
 }

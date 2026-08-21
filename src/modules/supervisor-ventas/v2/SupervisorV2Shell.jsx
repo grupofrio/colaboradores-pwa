@@ -15,10 +15,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTypo } from '../../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
-import { getSession } from '../../../lib/api.js'
 import { getSupervisorCopilotCapabilities } from './copilot/copilotSupervisorApi.js'
 import { resolveSupervisorCopilotTabVisible } from './copilot/copilotSupervisorModel.js'
-import { readPulseFlagFrom } from './pulso/pulseFlag.js'
 
 const C = TOKENS.colors
 
@@ -70,11 +68,7 @@ export default function SupervisorV2Shell({ active = 'hoy', children, pulseEnabl
   const [copilotOk, setCopilotOk] = useState(false)
   const typo = useMemo(() => getTypo(sw), [sw])
   const wide = sw >= 900
-  const pulseOn = useMemo(() => {
-    if (pulseEnabled !== undefined) return pulseEnabled === true
-    const session = getSession()
-    return readPulseFlagFrom(session, session?.capabilities).enabled
-  }, [pulseEnabled])
+  const pulseOn = pulseEnabled === true
   const tabs = useMemo(
     () => {
       const available = buildSupervisorV2Tabs(pulseOn)

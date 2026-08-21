@@ -1,9 +1,10 @@
 import { lazy, Suspense, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect } from 'react'
 import { ToastProvider } from './components/Toast'
 import AppShell from './components/AppShell'
 import { normalizeSessionRoleContext } from './lib/roleContext'
+import { SessionContext, useSessionContext } from './lib/sessionContext'
 import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervisor-ventas/v2/sessionScope'
 import { readPulseFlagFrom } from './modules/supervisor-ventas/v2/pulso/pulseFlag'
 import { api } from './lib/api'
@@ -223,13 +224,12 @@ const MasGerenteTab          = lazy(() => import('./modules/gerente/v2/tabs/MasG
 const BriefEmbedScreen       = lazy(() => import('./modules/brief/BriefEmbedScreen'))
 
 // ─── Contexto de sesión ──────────────────────────────────────────────────────
-// NOTA: Mover SessionContext + useSession a un archivo aparte para satisfacer
-// `react-refresh/only-export-components` requeriria refactorizar imports en
-// decenas de pantallas. Queda como deuda tecnica documentada (gap).
+// Compatibilidad: el contexto vive en lib/sessionContext; estas re-exportaciones
+// conservan los imports históricos de las pantallas sin crear otra autoridad.
 // eslint-disable-next-line react-refresh/only-export-components
-export const SessionContext = createContext(null)
+export { SessionContext }
 // eslint-disable-next-line react-refresh/only-export-components
-export function useSession() { return useContext(SessionContext) }
+export function useSession() { return useSessionContext() }
 
 function EquipoHome() {
   const { session } = useSession()

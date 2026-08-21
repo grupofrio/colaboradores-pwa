@@ -13,10 +13,13 @@ const entry = readFileSync(
 
 test('App cablea una sola raíz /equipo al nuevo coordinador', () => {
   assert.match(app, /ScreenSupervisorOperationsEntry/)
+  assert.match(app, /function EquipoHome\(\)/)
   assert.match(
     app,
-    /path="\/equipo"[\s\S]*?<ScreenSupervisorOperationsEntry\s*\/>/,
+    /path="\/equipo"[^]*?<EquipoHome\s*\/>/,
   )
+  const equipoHome = app.slice(app.indexOf('function EquipoHome()'), app.indexOf('function getStoredSession()'))
+  assert.match(equipoHome, /legacy=\{<ScreenSupervisorOperationsEntry\s*\/>\}/)
   assert.equal((app.match(/path="\/equipo"/g) || []).length, 1)
   assert.ok(!app.includes('const ScreenControlComercial'))
 })
