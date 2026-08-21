@@ -7699,10 +7699,14 @@ async function directEntregas(method, path, body) {
 
 const SUPERVISOR_DAY_CONTROL_PATH =
   '/gf/salesops/supervisor/v2/day-control'
+const SUPERVISOR_PULSE_PATH =
+  '/gf/salesops/supervisor/v2/pulse'
 
 async function directSupervisorDayControl(method, path, body) {
   const cleanPath = path.split('?')[0]
-  if (cleanPath !== SUPERVISOR_DAY_CONTROL_PATH) return NO_DIRECT
+  if (cleanPath !== SUPERVISOR_DAY_CONTROL_PATH && cleanPath !== SUPERVISOR_PULSE_PATH) {
+    return NO_DIRECT
+  }
   if (method !== 'POST') {
     throw new ApiError('method_not_allowed', {
       status: 405,

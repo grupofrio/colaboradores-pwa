@@ -33,10 +33,12 @@ export function buildSupervisorV2SessionProjection(result = {}) {
     capabilities: {
       supervisorV2: hasOwnTrue(capabilities, 'supervisorV2'),
       supervisorCopilot: hasOwnTrue(capabilities, 'supervisorCopilot'),
+      supervisorPulse: hasOwnTrue(capabilities, 'supervisorPulse'),
       gerenteV2: hasOwnTrue(capabilities, 'gerenteV2'),
     },
     branch: {
       supervisor_v2_enabled: hasOwnTrue(branch, 'supervisor_v2_enabled'),
+      supervisor_pulse_enabled: hasOwnTrue(branch, 'supervisor_pulse_enabled'),
       gerente_v2_enabled: hasOwnTrue(branch, 'gerente_v2_enabled'),
     },
   }

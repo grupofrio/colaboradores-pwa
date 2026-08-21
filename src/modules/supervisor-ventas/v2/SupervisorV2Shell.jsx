@@ -31,6 +31,12 @@ export const V2_TABS = Object.freeze([
   { key: 'mas', label: 'Más', route: '/equipo/mas', glyph: '⋯' },
 ])
 
+const PULSE_TAB = Object.freeze({ key: 'pulso', label: 'Pulso', route: '/equipo', glyph: '◈' })
+
+function buildSupervisorV2Tabs(pulseEnabled = false) {
+  return pulseEnabled === true ? [PULSE_TAB, ...V2_TABS.slice(1)] : [...V2_TABS]
+}
+
 // Pastilla horizontal (icono + texto). Una sola forma; el rail hace scroll si no
 // caben. minHeight 44 para touch. Activa = fondo + texto fuerte + palabra, no
 // solo color.
@@ -56,15 +62,19 @@ function TabButton({ tab, active, onClick }) {
   )
 }
 
-export default function SupervisorV2Shell({ active = 'hoy', children }) {
+export default function SupervisorV2Shell({ active = 'hoy', children, pulseEnabled }) {
   const navigate = useNavigate()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
   const [copilotOk, setCopilotOk] = useState(false)
   const typo = useMemo(() => getTypo(sw), [sw])
   const wide = sw >= 900
+  const pulseOn = pulseEnabled === true
   const tabs = useMemo(
-    () => (copilotOk ? V2_TABS : V2_TABS.filter((t) => t.key !== 'copiloto')),
-    [copilotOk],
+    () => {
+      const available = buildSupervisorV2Tabs(pulseOn)
+      return copilotOk ? available : available.filter((t) => t.key !== 'copiloto')
+    },
+    [copilotOk, pulseOn],
   )
 
   useEffect(() => {

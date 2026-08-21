@@ -1,10 +1,12 @@
 import { lazy, Suspense, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect } from 'react'
 import { ToastProvider } from './components/Toast'
 import AppShell from './components/AppShell'
 import { normalizeSessionRoleContext } from './lib/roleContext'
+import { SessionContext, useSessionContext } from './lib/sessionContext'
 import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervisor-ventas/v2/sessionScope'
+import { readPulseFlagFrom } from './modules/supervisor-ventas/v2/pulso/pulseFlag'
 import { api } from './lib/api'
 import { isBrandLightSession } from './theme/useBrandPalette'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
@@ -184,6 +186,7 @@ const ScreenNotaRapida         = lazy(() => import('./modules/supervisor-ventas/
 const ScreenOperacionesHoy     = lazy(() => import('./modules/supervisor-ventas/ScreenOperacionesHoy'))
 // Supervisor V2 — shell de 6 superficies (gated por flag fail-closed).
 const HoyTab        = lazy(() => import('./modules/supervisor-ventas/v2/tabs/HoyTab'))
+const PulsoTab      = lazy(() => import('./modules/supervisor-ventas/v2/pulso/PulsoTab'))
 const RadarTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RadarTab'))
 const RutasTab      = lazy(() => import('./modules/supervisor-ventas/v2/tabs/RutasTab'))
 const MisRutasManana = lazy(() => import('./modules/supervisor-ventas/v2/planear/MisRutasManana'))
@@ -221,13 +224,25 @@ const MasGerenteTab          = lazy(() => import('./modules/gerente/v2/tabs/MasG
 const BriefEmbedScreen       = lazy(() => import('./modules/brief/BriefEmbedScreen'))
 
 // ─── Contexto de sesión ──────────────────────────────────────────────────────
-// NOTA: Mover SessionContext + useSession a un archivo aparte para satisfacer
-// `react-refresh/only-export-components` requeriria refactorizar imports en
-// decenas de pantallas. Queda como deuda tecnica documentada (gap).
+// Compatibilidad: el contexto vive en lib/sessionContext; estas re-exportaciones
+// conservan los imports históricos de las pantallas sin crear otra autoridad.
+export { SessionContext }
 // eslint-disable-next-line react-refresh/only-export-components
-export const SessionContext = createContext(null)
-// eslint-disable-next-line react-refresh/only-export-components
-export function useSession() { return useContext(SessionContext) }
+export function useSession() { return useSessionContext() }
+
+function EquipoHome() {
+  const { session } = useSession()
+  const pulseEnabled = readPulseFlagFrom(session, session?.capabilities).enabled
+  return (
+    <SupervisorV2Gate
+      active={pulseEnabled ? 'pulso' : 'hoy'}
+      legacy={<ScreenSupervisorOperationsEntry />}
+      pulseEnabled={pulseEnabled}
+    >
+      {pulseEnabled ? <PulsoTab /> : <HoyTab />}
+    </SupervisorV2Gate>
+  )
+}
 
 function getStoredSession() {
   try {
@@ -941,7 +956,8 @@ export default function App() {
             {/* Supervisor Ventas V2 — Centro de Control Comercial */}
             {/* CONTRATO DE `/equipo` (decisión autorizada):
                 SupervisorV2Gate GOBIERNA el entry y decide UNA sola experiencia.
-                  · V2 ON  ⇒ experiencia nueva (SupervisorV2Shell + HoyTab).
+                  · V2 ON  ⇒ EquipoHome elige Pulso o Hoy con los dos flags de
+                    sign-in; Pulso reemplaza Hoy sin crear una ruta paralela.
                   · V2 OFF / flag ausente / estado desconocido ⇒ fail-closed al
                     entry LEGACY de main, `ScreenSupervisorOperationsEntry` (que a
                     su vez alterna ScreenControlComercial ↔ ScreenSupervisorToday).
@@ -949,7 +965,7 @@ export default function App() {
                 Nunca se montan ambas. El gate decide EXPERIENCIA, no autorización:
                 el rol lo impone ModuleRoleRoute y la autoridad de seguridad sigue
                 siendo el guard + rol + flags del backend. */}
-            <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="hoy" legacy={<ScreenSupervisorOperationsEntry />}><HoyTab /></SupervisorV2Gate></ModuleRoleRoute>} />
+            <Route path="/equipo" element={<ModuleRoleRoute moduleId="supervisor_ventas"><EquipoHome /></ModuleRoleRoute>} />
             <Route path="/equipo/radar" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="radar" v2Only><RadarTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/rutas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="rutas" v2Only><RutasTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             {/* "Planear mañana" (re-hogar del flujo de ScreenPronostico a V2 claro,
