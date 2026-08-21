@@ -1,8 +1,13 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSessionContext } from '../../../../lib/sessionContext.js'
 import AhoraView from './AhoraView.jsx'
 import AyerView from './AyerView.jsx'
-import { PULSE_HORIZONS, pulseFocusTarget } from './pulseModel.js'
+import {
+  clearPulseSessionProjection,
+  PULSE_HORIZONS,
+  pulseFocusTarget,
+} from './pulseModel.js'
 import { PULSE_STATUS, usePulse } from './usePulse.js'
 import './pulso.css'
 
@@ -51,9 +56,21 @@ function PulseState({ status, error, onRetry }) {
 
 export default function PulsoTab() {
   const navigate = useNavigate()
+  const { session, updateSession } = useSessionContext()
   const [horizon, setHorizon] = useState('ahora')
   const [focusTarget, setFocusTarget] = useState(null)
+  const [rollbackDone, setRollbackDone] = useState(false)
   const pulse = usePulse(horizon)
+
+  // Dark-launch rollback: server FEATURE_DISABLED with a stale sign-in projection
+  // must clear Pulse capability and fall back to Hoy without logout.
+  useEffect(() => {
+    if (rollbackDone) return
+    if (pulse.status !== PULSE_STATUS.FEATURE_DISABLED) return
+    updateSession(clearPulseSessionProjection(session))
+    setRollbackDone(true)
+    navigate('/equipo', { replace: true })
+  }, [pulse.status, rollbackDone, session, updateSession, navigate])
 
   const handleCta = useCallback((cta) => {
     const target = pulseFocusTarget(cta)
@@ -68,6 +85,14 @@ export default function PulsoTab() {
   }, [navigate])
 
   const usable = pulse.status === PULSE_STATUS.READY || pulse.status === PULSE_STATUS.PARTIAL
+
+  if (pulse.status === PULSE_STATUS.FEATURE_DISABLED) {
+    return (
+      <div className="pulse-page">
+        <PulseState status={pulse.status} error={pulse.error} onRetry={pulse.reload} />
+      </div>
+    )
+  }
 
   return (
     <div className="pulse-page">

@@ -21,10 +21,11 @@ function displayValue(value, suffix = '') {
 
 function moneyValue(amount, currency) {
   if (amount === null || amount === undefined || amount === '') return '—'
+  if (!currency) return '—'
   const number = Number(amount)
   if (!Number.isFinite(number)) return '—'
   const formatted = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(number)
-  return currency ? `${formatted} ${currency}` : formatted
+  return `${formatted} ${currency}`
 }
 
 function funnelEntries(funnel) {
@@ -33,6 +34,100 @@ function funnelEntries(funnel) {
     { key: 'visitados', label: 'Visitados', value: funnel.visitados ?? funnel.visited },
     { key: 'compraron', label: 'Compraron', value: funnel.compraron ?? funnel.bought },
   ]
+}
+
+function MoneyResultSection({ money, creditLabel }) {
+  const status = money?.currency_status || 'not_applicable'
+  const breakdown = Array.isArray(money?.breakdown) ? money.breakdown : []
+
+  if (!money || money.available === false) {
+    return (
+      <section className="pulse-section" aria-labelledby="pulse-result">
+        <p className="pulse-eyebrow">Resultado</p>
+        <h2 id="pulse-result">Venta del día</h2>
+        <p>Venta no disponible.</p>
+      </section>
+    )
+  }
+
+  if (status === 'known_multiple') {
+    return (
+      <section className="pulse-section" aria-labelledby="pulse-result">
+        <p className="pulse-eyebrow">Resultado</p>
+        <h2 id="pulse-result">
+          Venta en {Math.max(breakdown.length, 2)} monedas
+        </h2>
+        <div className="pulse-metric-grid">
+          {breakdown.map((row) => (
+            <div className="pulse-metric" key={row.currency || 'row'}>
+              <span>{row.currency || 'Moneda'}</span>
+              <strong>{moneyValue(row.sales_total, row.currency)}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  if (status === 'unknown') {
+    return (
+      <section className="pulse-section" aria-labelledby="pulse-result">
+        <p className="pulse-eyebrow">Resultado</p>
+        <h2 id="pulse-result">Venta · moneda por confirmar</h2>
+        {breakdown.length ? (
+          <div className="pulse-metric-grid">
+            {breakdown.map((row) => (
+              <div className="pulse-metric" key={row.currency || 'row'}>
+                <span>{row.currency || 'Moneda'}</span>
+                <strong>{moneyValue(row.sales_total, row.currency)}</strong>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>Hay montos, pero la moneda aún no está confirmada.</p>
+        )}
+      </section>
+    )
+  }
+
+  if (status === 'not_applicable' || !money.consolidated) {
+    return (
+      <section className="pulse-section" aria-labelledby="pulse-result">
+        <p className="pulse-eyebrow">Resultado</p>
+        <h2 id="pulse-result">Venta del día</h2>
+        <p>—</p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="pulse-section" aria-labelledby="pulse-result">
+      <p className="pulse-eyebrow">Resultado</p>
+      <h2 id="pulse-result">Venta del día</h2>
+      <div className="pulse-metric-grid">
+        <div className="pulse-metric">
+          <span>Venta</span>
+          <strong>{moneyValue(money.sales_total, money.currency)}</strong>
+        </div>
+        <div className="pulse-metric">
+          <span>Pedidos</span>
+          <strong>{displayValue(money.orders)}</strong>
+        </div>
+        <div className="pulse-metric">
+          <span>Ticket</span>
+          <strong>{moneyValue(money.avg_ticket, money.currency)}</strong>
+        </div>
+        <div className="pulse-metric">
+          <span>Contado</span>
+          <strong>{moneyValue(money.cash, money.currency)}</strong>
+        </div>
+        <div className="pulse-metric">
+          <span>{creditLabel || 'Crédito otorgado'}</span>
+          <strong>{moneyValue(money.credit, money.currency)}</strong>
+        </div>
+      </div>
+    </section>
+  )
 }
 
 export default function AyerView({ data = {}, onCta, focusTarget }) {
@@ -49,6 +144,7 @@ export default function AyerView({ data = {}, onCta, focusTarget }) {
     ? presented.diagnosis
     : buildDiagnosis(coverage, conversion)
   const result = presented.resultado || {}
+  const money = result.money || {}
   const quality = presented.quality
   const recovery = presented.recovery
 
@@ -114,32 +210,7 @@ export default function AyerView({ data = {}, onCta, focusTarget }) {
         </div>
       </section>
 
-      <section className="pulse-section" aria-labelledby="pulse-result">
-        <p className="pulse-eyebrow">Resultado</p>
-        <h2 id="pulse-result">Venta del día</h2>
-        <div className="pulse-metric-grid">
-          <div className="pulse-metric">
-            <span>Venta</span>
-            <strong>{moneyValue(result.sales_amount, result.currency)}</strong>
-          </div>
-          <div className="pulse-metric">
-            <span>Pedidos</span>
-            <strong>{displayValue(result.orders)}</strong>
-          </div>
-          <div className="pulse-metric">
-            <span>Ticket</span>
-            <strong>{moneyValue(result.avg_ticket, result.currency)}</strong>
-          </div>
-          <div className="pulse-metric">
-            <span>Contado</span>
-            <strong>{moneyValue(result.cash, result.currency)}</strong>
-          </div>
-          <div className="pulse-metric">
-            <span>Crédito otorgado</span>
-            <strong>{moneyValue(result.credit, result.currency)}</strong>
-          </div>
-        </div>
-      </section>
+      <MoneyResultSection money={money} creditLabel={result.credit_label} />
 
       {quality && quality.available !== false ? (
         <section className="pulse-section" aria-labelledby="pulse-quality">

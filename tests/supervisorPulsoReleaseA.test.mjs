@@ -12,9 +12,12 @@ import {
 } from '../src/modules/supervisor-ventas/v2/pulso/pulseFlag.js'
 import {
   ATTENTION_TYPES,
+  clearPulseSessionProjection,
   conversionState,
   diagnosis,
   formatCashCopy,
+  presentMoney,
+  presentPulsePayload,
   pulseFocusTarget,
   sliceAttention,
 } from '../src/modules/supervisor-ventas/v2/pulso/pulseModel.js'
@@ -123,7 +126,7 @@ test('Ayer presenta Crédito otorgado, diagnóstico y calidad fuera de attention
 
   const ayer = src('modules/supervisor-ventas/v2/pulso/AyerView.jsx')
   const model = src('modules/supervisor-ventas/v2/pulso/pulseModel.js')
-  assert.match(ayer, />Crédito otorgado</)
+  assert.match(ayer, /Crédito otorgado/)
   assert.match(ayer, />Métrica de calidad</)
   assert.match(ayer, /presentPulsePayload/)
   assert.match(model, /raw\.attention \|\| raw\.attention_items/)
@@ -257,4 +260,101 @@ test('pulse API envía POST directo con horizon y request_id, sin scope forjable
     globalThis.fetch = originalFetch
     globalThis.window = originalWindow
   }
+})
+
+test('Ayer money: single / multi / unknown nunca muestran total cross-currency', () => {
+  const single = presentMoney({
+    available: true,
+    consolidated: true,
+    currency_status: 'known_single',
+    currency: 'MXN',
+    sales_total: 18450,
+    cash: 10000,
+    credit: 8450,
+    orders: 10,
+    avg_ticket: 1845,
+    breakdown: [],
+  })
+  assert.equal(single.consolidated, true)
+  assert.equal(single.sales_total, 18450)
+  assert.equal(single.currency, 'MXN')
+
+  const multi = presentMoney({
+    available: true,
+    consolidated: false,
+    currency_status: 'known_multiple',
+    currency: null,
+    sales_total: 120,
+    cash: 120,
+    credit: 0,
+    orders: 2,
+    avg_ticket: 60,
+    breakdown: [
+      { currency: 'MXN', sales_total: 100 },
+      { currency: 'USD', sales_total: 20 },
+    ],
+  })
+  assert.equal(multi.consolidated, false)
+  assert.equal(multi.sales_total, null)
+  assert.equal(multi.cash, null)
+  assert.equal(multi.avg_ticket, null)
+
+  const unknown = presentMoney({
+    available: true,
+    consolidated: false,
+    currency_status: 'unknown',
+    sales_total: 99,
+    currency: null,
+    breakdown: [],
+  })
+  assert.equal(unknown.sales_total, null)
+
+  const legacyCross = presentPulsePayload({
+    blocks: {
+      resultado: {
+        sales: { total: 120, orders: 2, avg_ticket: 60, currency: null },
+        collection: { cash: 100, credit: 20, currency: null },
+      },
+    },
+  })
+  assert.equal(legacyCross.resultado.sales_amount, null)
+  assert.equal(legacyCross.resultado.currency, null)
+
+  const ayer = src('modules/supervisor-ventas/v2/pulso/AyerView.jsx')
+  assert.match(ayer, /moneyValue\(amount, currency\)/)
+  assert.match(ayer, /if \(!currency\) return '—'/)
+  assert.match(ayer, /Venta en .* monedas|Venta en \{/)
+  assert.match(ayer, /Venta · moneda por confirmar/)
+  assert.match(ayer, /Crédito otorgado/)
+})
+
+test('FEATURE_DISABLED limpia proyección Pulse; network/unavailable no', () => {
+  const session = {
+    capabilities: { supervisorPulse: true, supervisorV2: true },
+    branch: { supervisor_pulse_enabled: true, supervisor_v2_enabled: true },
+  }
+  const cleared = clearPulseSessionProjection(session)
+  assert.equal(cleared.capabilities.supervisorPulse, false)
+  assert.equal(cleared.branch.supervisor_pulse_enabled, false)
+  assert.equal(cleared.capabilities.supervisorV2, true)
+
+  assert.equal(
+    readPulseFlagFrom(cleared, cleared.capabilities).enabled,
+    false,
+  )
+
+  const tab = src('modules/supervisor-ventas/v2/pulso/PulsoTab.jsx')
+  assert.match(tab, /clearPulseSessionProjection/)
+  assert.match(tab, /PULSE_STATUS\.FEATURE_DISABLED/)
+  assert.match(tab, /navigate\('\/equipo'/)
+  assert.doesNotMatch(tab, /SERVICE_UNAVAILABLE[\s\S]{0,80}clearPulseSessionProjection/)
+
+  assert.equal(
+    normalizePulseResponse({ status: 'error', code: 'SERVICE_UNAVAILABLE' }).status,
+    PULSE_STATUS.UNAVAILABLE,
+  )
+  assert.equal(
+    normalizePulseResponse({ status: 'error', code: 'FEATURE_DISABLED' }).status,
+    PULSE_STATUS.FEATURE_DISABLED,
+  )
 })
