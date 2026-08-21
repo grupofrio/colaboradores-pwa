@@ -2,12 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getActiveShift, getScraps, getScrapReasons, getScrapProducts, createScrap } from './api'
 import { resolveSupervisionWarehouseId } from './shiftContext'
 import { getCycles } from '../produccion/api'
 import { validateMermaVsProduction, MERMA_MAX_PCT } from '../produccion/productionRules'
 import { loadLines } from '../shared/lineService'
 import { logScreenError } from '../shared/logScreenError'
+import { formatOdooDateTime } from '../shared/odooDate'
+
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
+const OPT_STYLE = { color: '#111827', background: '#ffffff' }
 
 const FALLBACK_LINES = [
   { id: 1, name: 'Iguala - Barras' },
@@ -37,6 +43,8 @@ export default function ScreenMerma() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  // Invariante de tests/brandTokensScope: la superficie de supervision_produccion adopta el tema claro incondicionalmente (ruta exclusiva del rol); esta constante documenta esa decisión por rol.
+  const isLightSurface = session?.role === 'supervisor_produccion' || isBrandLightSession(session)
   const backTo = location.state?.backTo || '/supervision'
   const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
@@ -170,7 +178,7 @@ export default function ScreenMerma() {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+      background: `linear-gradient(160deg, ${TOKENS_LIGHT.colors.bg0} 0%, ${TOKENS_LIGHT.colors.bg1} 50%, ${TOKENS_LIGHT.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
       <style>{`
@@ -178,6 +186,21 @@ export default function ScreenMerma() {
         * { font-family: 'DM Sans', sans-serif; box-sizing: border-box; }
         button { border: none; background: none; cursor: pointer; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .gf-file-input::file-selector-button {
+          padding: 7px 14px;
+          margin-right: 10px;
+          border-radius: ${TOKENS.radius.pill}px;
+          border: 1px solid ${TOKENS_LIGHT.colors.borderBlue};
+          background: ${TOKENS_LIGHT.colors.chipInfoBg};
+          color: ${TOKENS_LIGHT.colors.chipInfoFg};
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .gf-file-input::file-selector-button:hover {
+          background: ${TOKENS_LIGHT.colors.surfaceStrong};
+        }
       `}</style>
 
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
@@ -185,17 +208,17 @@ export default function ScreenMerma() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
           <button onClick={() => navigate(backTo)} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
           <div style={{ flex: 1 }}>
-            <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Merma</span>
+            <span style={{ ...typo.title, color: TOKENS_LIGHT.colors.textSoft }}>Merma</span>
           </div>
-          <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>{totalKg.toFixed(1)} kg total</span>
+          <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted }}>{totalKg.toFixed(1)} kg total</span>
         </div>
 
         {/* Msg */}
@@ -205,23 +228,23 @@ export default function ScreenMerma() {
             background: msg.type === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
             border: `1px solid ${msg.type === 'success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
           }}>
-            <span style={{ ...typo.caption, color: msg.type === 'success' ? TOKENS.colors.success : TOKENS.colors.error }}>{msg.text}</span>
+            <span style={{ ...typo.caption, color: msg.type === 'success' ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.error }}>{msg.text}</span>
           </div>
         )}
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS_LIGHT.colors.border}`, borderTop: `2px solid ${TOKENS_LIGHT.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : !shift ? (
-          <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
+          <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.border}`, textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>&#x26A0;&#xFE0F;</div>
-            <p style={{ ...typo.title, color: TOKENS.colors.warning }}>Sin turno activo</p>
-            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6 }}>Abre un turno para poder registrar merma.</p>
+            <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.warning }}>Sin turno activo</p>
+            <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, marginTop: 6 }}>Abre un turno para poder registrar merma.</p>
             <button onClick={() => navigate('/supervision/turno')} style={{
               marginTop: 14, padding: '10px 20px', borderRadius: TOKENS.radius.sm,
-              background: 'linear-gradient(135deg, #15499B 0%, #2B8FE0 100%)',
-              color: 'white', fontSize: 13, fontWeight: 600,
+              background: TOKENS_LIGHT.colors.ctaGradient,
+              color: TOKENS_LIGHT.colors.onPrimary, fontSize: 13, fontWeight: 600,
             }}>Ir a Control de Turno</button>
           </div>
         ) : (
@@ -243,8 +266,8 @@ export default function ScreenMerma() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>MERMA / PRODUCIDO</p>
-                    <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, marginTop: 2 }}>
+                    <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, margin: 0 }}>MERMA / PRODUCIDO</p>
+                    <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.text, margin: 0, marginTop: 2 }}>
                       {totalKg.toFixed(1)} kg / {totalProducedKg.toFixed(0)} kg
                     </p>
                   </div>
@@ -256,9 +279,9 @@ export default function ScreenMerma() {
                   }}>
                     <span style={{
                       fontSize: 16, fontWeight: 700,
-                      color: mermaCheck.level === 'error' ? TOKENS.colors.error
-                        : mermaCheck.level === 'warning' ? TOKENS.colors.warning
-                        : TOKENS.colors.success,
+                      color: mermaCheck.level === 'error' ? TOKENS_LIGHT.colors.error
+                        : mermaCheck.level === 'warning' ? TOKENS_LIGHT.colors.warning
+                        : TOKENS_LIGHT.colors.success,
                     }}>
                       {mermaCheck.pct.toFixed(2)}%
                     </span>
@@ -267,15 +290,15 @@ export default function ScreenMerma() {
                 {mermaCheck.message && (
                   <p style={{
                     ...typo.caption, margin: '8px 0 0',
-                    color: mermaCheck.level === 'error' ? TOKENS.colors.error
-                      : mermaCheck.level === 'warning' ? TOKENS.colors.warning
-                      : TOKENS.colors.textMuted,
+                    color: mermaCheck.level === 'error' ? TOKENS_LIGHT.colors.error
+                      : mermaCheck.level === 'warning' ? TOKENS_LIGHT.colors.warning
+                      : TOKENS_LIGHT.colors.textMuted,
                     fontWeight: 600,
                   }}>
                     {mermaCheck.message}
                   </p>
                 )}
-                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: '4px 0 0' }}>
                   Limite operativo: {MERMA_MAX_PCT}%
                 </p>
               </div>
@@ -285,26 +308,26 @@ export default function ScreenMerma() {
             {!showForm ? (
               <button onClick={() => setShowForm(true)} style={{
                 width: '100%', padding: '12px', borderRadius: TOKENS.radius.md, marginBottom: 16,
-                background: 'linear-gradient(135deg, #15499B 0%, #2B8FE0 100%)',
-                color: 'white', fontSize: 14, fontWeight: 600,
+                background: TOKENS_LIGHT.colors.ctaGradient,
+                color: TOKENS_LIGHT.colors.onPrimary, fontSize: 14, fontWeight: 600,
               }}>
                 + Registrar Merma
               </button>
             ) : (
               <form onSubmit={handleCreate} style={{
                 padding: 16, borderRadius: TOKENS.radius.xl, marginBottom: 16,
-                background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.borderBlue}`,
+                background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.borderBlue}`,
               }}>
-                <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '0 0 12px' }}>Registrar Merma</p>
+                <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.text, margin: '0 0 12px' }}>Registrar Merma</p>
 
                 {/* Fase (origen) de la merma - segmented */}
-                <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
-                  Donde ocurrio <span style={{ color: TOKENS.colors.error }}>*</span>
+                <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 6 }}>
+                  Donde ocurrio <span style={{ color: TOKENS_LIGHT.colors.error }}>*</span>
                 </label>
                 <div style={{
                   display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12,
                   padding: 4, borderRadius: TOKENS.radius.sm,
-                  background: 'rgba(255,255,255,0.04)', border: `1px solid ${TOKENS.colors.border}`,
+                  background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
                 }}>
                   {SCRAP_PHASES.map(opt => {
                     const active = formData.scrap_phase === opt.value
@@ -313,8 +336,8 @@ export default function ScreenMerma() {
                         onClick={() => setFormData(p => ({ ...p, scrap_phase: opt.value }))}
                         style={{
                           padding: '8px 6px', borderRadius: 10,
-                          background: active ? 'linear-gradient(135deg, #15499B 0%, #2B8FE0 100%)' : 'transparent',
-                          color: active ? 'white' : TOKENS.colors.textMuted,
+                          background: active ? TOKENS_LIGHT.colors.ctaGradient : 'transparent',
+                          color: active ? TOKENS_LIGHT.colors.onPrimary : TOKENS_LIGHT.colors.textMuted,
                           fontSize: 12, fontWeight: 600,
                         }}>
                         {opt.label}
@@ -324,11 +347,11 @@ export default function ScreenMerma() {
                 </div>
 
                 {/* Tipo de merma - segmented */}
-                <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>Tipo de merma</label>
+                <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 6 }}>Tipo de merma</label>
                 <div style={{
                   display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 12,
                   padding: 4, borderRadius: TOKENS.radius.sm,
-                  background: 'rgba(255,255,255,0.04)', border: `1px solid ${TOKENS.colors.border}`,
+                  background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
                 }}>
                   {[
                     { value: 'unit', label: 'Producto (pzas)' },
@@ -340,8 +363,8 @@ export default function ScreenMerma() {
                         onClick={() => setFormData(p => ({ ...p, scrap_type: opt.value, kg: '', product_id: '', qty_units: '' }))}
                         style={{
                           padding: '8px 10px', borderRadius: 10,
-                          background: active ? 'linear-gradient(135deg, #15499B 0%, #2B8FE0 100%)' : 'transparent',
-                          color: active ? 'white' : TOKENS.colors.textMuted,
+                          background: active ? TOKENS_LIGHT.colors.ctaGradient : 'transparent',
+                          color: active ? TOKENS_LIGHT.colors.onPrimary : TOKENS_LIGHT.colors.textMuted,
                           fontSize: 12, fontWeight: 600,
                         }}>
                         {opt.label}
@@ -353,22 +376,22 @@ export default function ScreenMerma() {
                 {/* Campos especificos por tipo */}
                 {formData.scrap_type === 'unit' ? (
                   <>
-                    <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Producto</label>
+                    <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 4 }}>Producto</label>
                     <select value={formData.product_id} onChange={e => setFormData(p => ({ ...p, product_id: e.target.value, kg: '' }))}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }}>
-                      <option value="">Seleccionar producto...</option>
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }}>
+                      <option value="" style={OPT_STYLE}>Seleccionar producto...</option>
                       {products.map(p => (
-                        <option key={p.id} value={p.id}>
+                        <option key={p.id} value={p.id} style={OPT_STYLE}>
                           {p.name}{p.weight > 0 ? ` (${p.weight} kg/pza)` : ''}
                         </option>
                       ))}
                     </select>
 
-                    <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Cantidad de piezas</label>
+                    <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 4 }}>Cantidad de piezas</label>
                     <input type="number" step="1" min="0" value={formData.qty_units}
                       onChange={e => setFormData(p => ({ ...p, qty_units: e.target.value }))}
                       placeholder="0"
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }} />
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }} />
 
                     {/* Kg computado (read-only) o fallback manual si producto sin peso */}
                     {selectedProduct && selectedProduct.weight > 0 ? (
@@ -377,69 +400,71 @@ export default function ScreenMerma() {
                         background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.25)',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       }}>
-                        <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Kg calculado</span>
-                        <span style={{ ...typo.title, color: TOKENS.colors.blue2, fontWeight: 700 }}>
+                        <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted }}>Kg calculado</span>
+                        <span style={{ ...typo.title, color: TOKENS_LIGHT.colors.blue2, fontWeight: 700 }}>
                           {computedKg !== null ? `${computedKg.toFixed(2)} kg` : '—'}
                         </span>
                       </div>
                     ) : selectedProduct ? (
                       <>
-                        <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: '0 0 4px' }}>
+                        <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.warning, margin: '0 0 4px' }}>
                           Producto sin peso unitario &mdash; captura kg manualmente.
                         </p>
-                        <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Kg (manual)</label>
+                        <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 4 }}>Kg (manual)</label>
                         <input type="number" step="0.1" min="0" value={formData.kg}
                           onChange={e => setFormData(p => ({ ...p, kg: e.target.value }))}
                           placeholder="0.0"
-                          style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }} />
+                          style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }} />
                       </>
                     ) : null}
                   </>
                 ) : (
                   <>
-                    <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Kg</label>
+                    <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 4 }}>Kg</label>
                     <input type="number" step="0.1" min="0" value={formData.kg}
                       onChange={e => setFormData(p => ({ ...p, kg: e.target.value }))}
                       placeholder="0.0"
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }} />
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }} />
                   </>
                 )}
 
                 {/* Campos comunes */}
-                <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Motivo</label>
+                <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 4 }}>Motivo</label>
                 <select value={formData.reason_id} onChange={e => setFormData(p => ({ ...p, reason_id: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }}>
-                  <option value="">Seleccionar...</option>
-                  {reasons.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }}>
+                  <option value="" style={OPT_STYLE}>Seleccionar...</option>
+                  {reasons.map(r => <option key={r.id} value={r.id} style={OPT_STYLE}>{r.name}</option>)}
                 </select>
 
-                <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Linea</label>
+                <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 4 }}>Linea</label>
                 <select value={formData.line_id} onChange={e => setFormData(p => ({ ...p, line_id: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }}>
-                  <option value="">Seleccionar...</option>
-                  {lines.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }}>
+                  <option value="" style={OPT_STYLE}>Seleccionar...</option>
+                  {lines.map(l => <option key={l.id} value={l.id} style={OPT_STYLE}>{l.name}</option>)}
                 </select>
 
-                <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Notas</label>
+                <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 4 }}>Notas</label>
                 <textarea value={formData.notes} onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))} rows={2}
                   placeholder="Notas adicionales..."
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', marginBottom: 10 }} />
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit', resize: 'vertical', marginBottom: 10 }} />
 
-                <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Foto</label>
+                <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 4 }}>Foto</label>
                 <input type="file" accept="image/*" capture="environment" onChange={e => setPhoto(e.target.files?.[0] || null)}
-                  style={{ width: '100%', padding: '8px 0', color: TOKENS.colors.textMuted, fontSize: 13, marginBottom: 12 }} />
-                {photo && <p style={{ ...typo.caption, color: TOKENS.colors.blue2, marginTop: -6, marginBottom: 10 }}>{photo.name}</p>}
+                  className="gf-file-input"
+                  style={{ width: '100%', padding: '8px 0', color: TOKENS_LIGHT.colors.textMuted, fontSize: 13, marginBottom: 12 }} />
+                {photo && <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.blue2, marginTop: -6, marginBottom: 10 }}>{photo.name}</p>}
 
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button type="button" onClick={() => { setShowForm(false); setFormData(INITIAL_FORM); setPhoto(null) }}
-                    style={{ flex: 1, padding: '10px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, color: TOKENS.colors.textMuted, fontSize: 13, fontWeight: 600 }}>
+                    style={{ flex: 1, padding: '10px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.textMuted, fontSize: 13, fontWeight: 600 }}>
                     Cancelar
                   </button>
                   <button type="submit" disabled={submitting || !canSubmit}
                     style={{
-                      flex: 2, padding: '10px', borderRadius: TOKENS.radius.sm, fontSize: 13, fontWeight: 600, color: 'white',
-                      background: !canSubmit ? TOKENS.colors.surface : 'linear-gradient(135deg, #15499B 0%, #2B8FE0 100%)',
-                      border: `1px solid ${!canSubmit ? TOKENS.colors.border : 'transparent'}`,
+                      flex: 2, padding: '10px', borderRadius: TOKENS.radius.sm, fontSize: 13, fontWeight: 600,
+                      color: !canSubmit ? TOKENS_LIGHT.colors.textSoft : TOKENS_LIGHT.colors.onPrimary,
+                      background: !canSubmit ? TOKENS_LIGHT.colors.surface : TOKENS_LIGHT.colors.ctaGradient,
+                      border: `1px solid ${!canSubmit ? TOKENS_LIGHT.colors.border : 'transparent'}`,
                       opacity: submitting ? 0.6 : 1,
                     }}>
                     {submitting ? 'Registrando...' : 'Registrar Merma'}
@@ -462,7 +487,7 @@ export default function ScreenMerma() {
                   return (
                     <div key={sc.id} style={{
                       padding: 14, borderRadius: TOKENS.radius.xl,
-                      background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+                      background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
                       boxShadow: TOKENS.shadow.soft,
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -472,23 +497,23 @@ export default function ScreenMerma() {
                               fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
                               padding: '2px 6px', borderRadius: 4,
                               background: isUnit ? 'rgba(43,143,224,0.15)' : 'rgba(245,158,11,0.15)',
-                              color: isUnit ? TOKENS.colors.blue2 : TOKENS.colors.warning,
+                              color: isUnit ? TOKENS_LIGHT.colors.blue2 : TOKENS_LIGHT.colors.warning,
                               border: `1px solid ${isUnit ? 'rgba(43,143,224,0.3)' : 'rgba(245,158,11,0.3)'}`,
                             }}>
                               {isUnit ? 'PZAS' : 'PESO'}
                             </span>
-                            <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</p>
+                            <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</p>
                           </div>
-                          {subtitle && <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 4 }}>{subtitle}</p>}
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 4 }}>
-                            {sc.line_name || ''} {sc.created_at ? `\u00B7 ${sc.created_at}` : ''}
+                          {subtitle && <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginTop: 4 }}>{subtitle}</p>}
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginTop: 4 }}>
+                            {sc.line_name || ''} {sc.created_at ? `\u00B7 ${formatOdooDateTime(sc.created_at)}` : ''}
                           </p>
                         </div>
                         <div style={{ padding: '4px 10px', borderRadius: TOKENS.radius.pill, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', flexShrink: 0, marginLeft: 8 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: TOKENS.colors.warning }}>{Number(sc.kg || 0).toFixed(1)} kg</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: TOKENS_LIGHT.colors.warning }}>{Number(sc.kg || 0).toFixed(1)} kg</span>
                         </div>
                       </div>
-                      {sc.notes && <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '8px 0 0' }}>{sc.notes}</p>}
+                      {sc.notes && <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: '8px 0 0' }}>{sc.notes}</p>}
                     </div>
                   )
                 })}
@@ -496,8 +521,8 @@ export default function ScreenMerma() {
             ) : (
               <div style={{ marginTop: 20, padding: 24, borderRadius: TOKENS.radius.xl, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', textAlign: 'center' }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>&#x2705;</div>
-                <p style={{ ...typo.title, color: TOKENS.colors.success }}>Sin merma</p>
-                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6 }}>No se ha registrado merma en este turno.</p>
+                <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.success }}>Sin merma</p>
+                <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, marginTop: 6 }}>No se ha registrado merma en este turno.</p>
               </div>
             )}
           </>

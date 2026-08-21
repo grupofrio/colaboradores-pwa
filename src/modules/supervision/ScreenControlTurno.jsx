@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { listTanks } from '../produccion/barraService'
 import { getActiveShift, createShift, startShift, getEnergyReadings, createBrineReading } from './api'
 import { resolveSupervisionWarehouseId } from './shiftContext'
@@ -26,12 +28,15 @@ import {
   validateBrineReadingInput,
 } from './brineReadings'
 import { getShiftStartReadiness } from './shiftStartReadiness'
+import { formatOdooDateTime, formatOdooTime } from '../shared/odooDate'
 import {
   clearPersistedTurnControlShift,
   loadPersistedTurnControlShift,
   resolveTurnControlShift,
   savePersistedTurnControlShift,
 } from './turnControlShift'
+
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
 const SHIFT_CODES = [
   { value: 1, label: 'Dia' },
@@ -40,25 +45,25 @@ const SHIFT_CODES = [
 
 const START_STATUS_META = {
   missing: {
-    color: TOKENS.colors.textMuted,
+    color: TOKENS_LIGHT.colors.textMuted,
     bg: 'rgba(148,163,184,0.08)',
     border: 'rgba(148,163,184,0.22)',
     label: 'Sin lectura',
   },
   stale: {
-    color: TOKENS.colors.warning,
+    color: TOKENS_LIGHT.colors.warning,
     bg: 'rgba(245,158,11,0.08)',
     border: 'rgba(245,158,11,0.24)',
     label: 'Lectura vencida',
   },
   low: {
-    color: TOKENS.colors.error,
+    color: TOKENS_LIGHT.colors.error,
     bg: 'rgba(239,68,68,0.08)',
     border: 'rgba(239,68,68,0.24)',
     label: 'Sal baja',
   },
   ok: {
-    color: TOKENS.colors.success,
+    color: TOKENS_LIGHT.colors.success,
     bg: 'rgba(34,197,94,0.08)',
     border: 'rgba(34,197,94,0.24)',
     label: 'Al dia',
@@ -127,6 +132,7 @@ export default function ScreenControlTurno() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const isLightSurface = session?.role === 'supervisor_produccion' || isBrandLightSession(session)
   const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -512,7 +518,7 @@ export default function ScreenControlTurno() {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+      background: `linear-gradient(160deg, ${TOKENS_LIGHT.colors.bg0} 0%, ${TOKENS_LIGHT.colors.bg1} 50%, ${TOKENS_LIGHT.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
       <style>{`
@@ -527,15 +533,15 @@ export default function ScreenControlTurno() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
           <button onClick={() => navigate('/supervision')} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
           <div style={{ flex: 1 }}>
-            <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Control de Turno</span>
+          <span style={{ ...typo.title, color: TOKENS_LIGHT.colors.textSoft }}>Control de Turno</span>
           </div>
         </div>
 
@@ -546,32 +552,32 @@ export default function ScreenControlTurno() {
             background: msg.type === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
             border: `1px solid ${msg.type === 'success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
           }}>
-            <span style={{ ...typo.caption, color: msg.type === 'success' ? TOKENS.colors.success : TOKENS.colors.error }}>{msg.text}</span>
+            <span style={{ ...typo.caption, color: msg.type === 'success' ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.error }}>{msg.text}</span>
           </div>
         )}
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS_LIGHT.colors.border}`, borderTop: `2px solid ${TOKENS_LIGHT.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : shift ? (
           /* Turno activo */
           <div>
             <div style={{
               padding: 20, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
-              boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
+              background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.borderBlue}`,
+              boxShadow: `${TOKENS_LIGHT.shadow.md}, ${TOKENS_LIGHT.shadow.inset}`,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                 <div>
-                  <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 4 }}>TURNO ACTIVO</p>
-                  <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0 }}>{shift.name || `Turno ${shift.shift_code}`}</p>
+                  <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 4 }}>TURNO ACTIVO</p>
+                  <p style={{ ...typo.h2, color: TOKENS_LIGHT.colors.text, margin: 0 }}>{shift.name || `Turno ${shift.shift_code}`}</p>
                 </div>
                 {(() => {
                   const isInProgress = shift.state === 'in_progress'
                   const isDraft = shift.state === 'draft'
                   const label = isInProgress ? 'EN CURSO' : isDraft ? 'BORRADOR' : (shift.state || '').toUpperCase() || 'CERRADO'
-                  const color = isInProgress ? TOKENS.colors.success : isDraft ? TOKENS.colors.warning : TOKENS.colors.textMuted
+                  const color = isInProgress ? TOKENS_LIGHT.colors.success : isDraft ? TOKENS_LIGHT.colors.warning : TOKENS_LIGHT.colors.textMuted
                   const bg = isInProgress ? 'rgba(34,197,94,0.12)' : isDraft ? 'rgba(245,158,11,0.12)' : 'rgba(148,163,184,0.12)'
                   const br = isInProgress ? 'rgba(34,197,94,0.25)' : isDraft ? 'rgba(245,158,11,0.3)' : 'rgba(148,163,184,0.3)'
                   return (
@@ -585,23 +591,23 @@ export default function ScreenControlTurno() {
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16,
                 padding: 12, borderRadius: TOKENS.radius.md,
-                background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
               }}>
                 <div>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Codigo</p>
-                  <p style={{ ...typo.body, color: TOKENS.colors.blue2, fontWeight: 700, margin: 0 }}>{shift.shift_code === 1 ? 'Dia' : shift.shift_code === 2 ? 'Noche' : shift.shift_code}</p>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0 }}>Codigo</p>
+                  <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.blue2, fontWeight: 700, margin: 0 }}>{shift.shift_code === 1 ? 'Dia' : shift.shift_code === 2 ? 'Noche' : shift.shift_code}</p>
                 </div>
                 <div>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Fecha</p>
-                  <p style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 700, margin: 0 }}>{shift.date || '—'}</p>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0 }}>Fecha</p>
+                  <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 700, margin: 0 }}>{shift.date || '—'}</p>
                 </div>
                 <div>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Almacen</p>
-                  <p style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 700, margin: 0 }}>{shift.warehouse_name || `ID ${shift.warehouse_id || 76}`}</p>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0 }}>Almacen</p>
+                  <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 700, margin: 0 }}>{shift.warehouse_name || `ID ${shift.warehouse_id || 76}`}</p>
                 </div>
                 <div>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Estado</p>
-                  <p style={{ ...typo.body, color: TOKENS.colors.success, fontWeight: 700, margin: 0 }}>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0 }}>Estado</p>
+                  <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.success, fontWeight: 700, margin: 0 }}>
                     {{ draft: 'Borrador', in_progress: 'En curso', closed: 'Cerrado', cancelled: 'Cancelado' }[shift.state] || shift.state || '—'}
                   </p>
                 </div>
@@ -616,10 +622,10 @@ export default function ScreenControlTurno() {
                   border: '1px solid rgba(43,143,224,0.22)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-                    <p style={{ ...typo.overline, color: TOKENS.colors.blue2, margin: 0 }}>
+                    <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.blue2, margin: 0 }}>
                       ESTADO DE OPERADORES
                     </p>
-                    <span style={{ ...typo.caption, color: operatorSummary.every((item) => item.closed) ? TOKENS.colors.success : TOKENS.colors.warning, fontWeight: 700 }}>
+                    <span style={{ ...typo.caption, color: operatorSummary.every((item) => item.closed) ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.warning, fontWeight: 700 }}>
                       {operatorSummary.filter((item) => item.closed).length}/{operatorSummary.length} entregados
                     </span>
                   </div>
@@ -639,18 +645,18 @@ export default function ScreenControlTurno() {
                         }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ ...typo.body, color: TOKENS.colors.text, fontWeight: 700, margin: 0 }}>
+                          <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.text, fontWeight: 700, margin: 0 }}>
                             {item.label}
                           </p>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: '4px 0 0' }}>
                             {item.closed
-                              ? `${item.employee_name || 'Operador'} entregó${item.closed_at ? ` · ${new Date(item.closed_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}` : ''}`
+                              ? `${item.employee_name || 'Operador'} entregó${item.closed_at ? ` · ${formatOdooTime(item.closed_at)}` : ''}`
                               : 'Pendiente de entregar turno'}
                           </p>
                         </div>
                         <span style={{
                           ...typo.caption,
-                          color: item.closed ? TOKENS.colors.success : TOKENS.colors.warning,
+                          color: item.closed ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.warning,
                           fontWeight: 700,
                           whiteSpace: 'nowrap',
                         }}>
@@ -668,14 +674,14 @@ export default function ScreenControlTurno() {
                     padding: 14, borderRadius: TOKENS.radius.md,
                     background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.22)',
                   }}>
-                    <p style={{ ...typo.overline, color: TOKENS.colors.blue3, margin: 0 }}>REQUISITOS PARA INICIAR</p>
-                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
+                    <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.blue3, margin: 0 }}>REQUISITOS PARA INICIAR</p>
+                    <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: '6px 0 0' }}>
                       Registra la lectura inicial de energia y la salmuera de todos los tanques activos antes de activar el turno.
                     </p>
                   </div>
 
                   {loadingStartReadiness ? (
-                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, textAlign: 'center' }}>
+                    <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, textAlign: 'center' }}>
                       Verificando requisitos de inicio...
                     </p>
                   ) : (
@@ -687,12 +693,12 @@ export default function ScreenControlTurno() {
                         display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'center',
                       }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Energia inicial</p>
-                          <p style={{ ...typo.body, color: TOKENS.colors.text, fontWeight: 700, margin: '4px 0 0' }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0 }}>Energia inicial</p>
+                          <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.text, fontWeight: 700, margin: '4px 0 0' }}>
                             {startEnergyReading ? `${startEnergyReading.kwh_value} kWh` : 'Pendiente'}
                           </p>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '4px 0 0' }}>
-                            {startEnergyReading?.created_at || 'Lectura global del medidor requerida'}
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textLow, margin: '4px 0 0' }}>
+                            {startEnergyReading?.created_at ? formatOdooDateTime(startEnergyReading.created_at) : 'Lectura global del medidor requerida'}
                           </p>
                         </div>
                         <button
@@ -702,7 +708,7 @@ export default function ScreenControlTurno() {
                             borderRadius: TOKENS.radius.sm,
                             background: startReadiness?.energyReady ? 'rgba(34,197,94,0.12)' : 'rgba(43,143,224,0.12)',
                             border: `1px solid ${startReadiness?.energyReady ? 'rgba(34,197,94,0.3)' : 'rgba(43,143,224,0.3)'}`,
-                            color: startReadiness?.energyReady ? TOKENS.colors.success : TOKENS.colors.blue2,
+                            color: startReadiness?.energyReady ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.blue2,
                             fontSize: 12,
                             fontWeight: 700,
                             flexShrink: 0,
@@ -713,7 +719,7 @@ export default function ScreenControlTurno() {
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>SALMUERA POR TANQUE</p>
+                        <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, margin: 0 }}>SALMUERA POR TANQUE</p>
                         {tanks.map((tank) => {
                           const tankStatus = startReadiness?.tankReadiness?.find((item) => item.tankId === tank.id)
                           const meta = getStartStatusMeta(tankStatus?.status)
@@ -733,7 +739,7 @@ export default function ScreenControlTurno() {
                             >
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                  <p style={{ ...typo.body, color: TOKENS.colors.text, fontWeight: 700, margin: 0 }}>
+                                  <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.text, fontWeight: 700, margin: 0 }}>
                                     {tank.display_name || tank.name}
                                   </p>
                                   <span style={{
@@ -748,13 +754,13 @@ export default function ScreenControlTurno() {
                                     {tankStatus?.status === 'ok' ? 'AL DIA' : meta.label.toUpperCase()}
                                   </span>
                                 </div>
-                                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                                <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: '4px 0 0' }}>
                                   {tank.salt_level
                                     ? `${tank.salt_level} ${tank.salt_level_unit || 'ppm'}${tank.brine_temp ? ` · ${tank.brine_temp}°C` : ''}`
                                     : 'Sin lectura registrada'}
                                 </p>
-                                <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '4px 0 0' }}>
-                                  {tank.salt_level_updated_at || 'Actualiza este tanque para habilitar el inicio'}
+                                <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textLow, margin: '4px 0 0' }}>
+                                  {tank.salt_level_updated_at ? formatOdooDateTime(tank.salt_level_updated_at) : 'Actualiza este tanque para habilitar el inicio'}
                                 </p>
                               </div>
                               <button
@@ -764,7 +770,7 @@ export default function ScreenControlTurno() {
                                   borderRadius: TOKENS.radius.sm,
                                   background: 'rgba(15,118,110,0.12)',
                                   border: '1px solid rgba(20,184,166,0.3)',
-                                  color: '#5eead4',
+                                  color: '#0f766e',
                                   fontSize: 12,
                                   fontWeight: 700,
                                   flexShrink: 0,
@@ -782,12 +788,12 @@ export default function ScreenControlTurno() {
                           padding: 10, borderRadius: TOKENS.radius.md,
                           background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
                         }}>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0, marginBottom: 6, fontWeight: 700 }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.error, margin: 0, marginBottom: 6, fontWeight: 700 }}>
                             BLOQUEOS PARA INICIAR ({startReadiness.blockers.length})
                           </p>
                           <ul style={{ margin: 0, paddingLeft: 18 }}>
                             {startReadiness.blockers.map((blocker, index) => (
-                              <li key={index} style={{ ...typo.caption, color: TOKENS.colors.error, marginBottom: 2 }}>
+                              <li key={index} style={{ ...typo.caption, color: TOKENS_LIGHT.colors.error, marginBottom: 2 }}>
                                 {blocker}
                               </li>
                             ))}
@@ -796,7 +802,7 @@ export default function ScreenControlTurno() {
                       )}
 
                       {startReadiness?.canStart && (
-                        <p style={{ ...typo.caption, color: TOKENS.colors.success, margin: 0, textAlign: 'center', fontWeight: 700 }}>
+                        <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.success, margin: 0, textAlign: 'center', fontWeight: 700 }}>
                           ✓ Requisitos completos — puede iniciar el turno
                         </p>
                       )}
@@ -810,9 +816,9 @@ export default function ScreenControlTurno() {
                           borderRadius: TOKENS.radius.sm,
                           background: startReadiness?.canStart
                             ? 'linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)'
-                            : TOKENS.colors.surface,
-                          border: `1px solid ${startReadiness?.canStart ? 'transparent' : TOKENS.colors.border}`,
-                          color: 'white',
+                            : TOKENS_LIGHT.colors.surface,
+                          border: `1px solid ${startReadiness?.canStart ? 'transparent' : TOKENS_LIGHT.colors.border}`,
+                          color: TOKENS_LIGHT.colors.onPrimary,
                           fontSize: 14,
                           fontWeight: 700,
                           opacity: submitting ? 0.6 : 1,
@@ -827,7 +833,7 @@ export default function ScreenControlTurno() {
                 <button onClick={handleRequestClose} style={{
                   width: '100%', padding: '12px', borderRadius: TOKENS.radius.sm,
                   background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
-                  color: TOKENS.colors.error, fontSize: 14, fontWeight: 600,
+                  color: TOKENS_LIGHT.colors.error, fontSize: 14, fontWeight: 600,
                 }}>
                   Cerrar Turno
                 </button>
@@ -835,7 +841,7 @@ export default function ScreenControlTurno() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {/* Estado de readiness */}
                   {loadingReadiness ? (
-                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, textAlign: 'center' }}>
+                    <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, textAlign: 'center' }}>
                       Verificando condiciones de cierre...
                     </p>
                   ) : closeReadiness ? (
@@ -845,18 +851,18 @@ export default function ScreenControlTurno() {
                           padding: 10, borderRadius: TOKENS.radius.md,
                           background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.22)',
                         }}>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: 0, marginBottom: 6, fontWeight: 700 }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.blue2, margin: 0, marginBottom: 6, fontWeight: 700 }}>
                             CIERRE DE OPERADORES
                           </p>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {closeReadiness.operatorSummary.map((item) => (
                               <div key={item.role} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                <span style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>
+                                <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textSoft }}>
                                   {item.label}
                                 </span>
                                 <span style={{
                                   ...typo.caption,
-                                  color: item.closed ? TOKENS.colors.success : TOKENS.colors.warning,
+                                  color: item.closed ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.warning,
                                   fontWeight: 700,
                                 }}>
                                   {item.closed
@@ -875,12 +881,12 @@ export default function ScreenControlTurno() {
                           padding: 10, borderRadius: TOKENS.radius.md,
                           background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
                         }}>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0, marginBottom: 6, fontWeight: 700 }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.error, margin: 0, marginBottom: 6, fontWeight: 700 }}>
                             BLOQUEOS ({closeReadiness.blockers.length})
                           </p>
                           <ul style={{ margin: 0, paddingLeft: 18 }}>
                             {closeReadiness.blockers.map((b, i) => (
-                              <li key={i} style={{ ...typo.caption, color: TOKENS.colors.error, marginBottom: 2 }}>{b}</li>
+                              <li key={i} style={{ ...typo.caption, color: TOKENS_LIGHT.colors.error, marginBottom: 2 }}>{b}</li>
                             ))}
                           </ul>
                         </div>
@@ -891,19 +897,19 @@ export default function ScreenControlTurno() {
                           padding: 10, borderRadius: TOKENS.radius.md,
                           background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
                         }}>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0, marginBottom: 6, fontWeight: 700 }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.warning, margin: 0, marginBottom: 6, fontWeight: 700 }}>
                             ADVERTENCIAS ({closeReadiness.warnings.length})
                           </p>
                           <ul style={{ margin: 0, paddingLeft: 18 }}>
                             {closeReadiness.warnings.map((w, i) => (
-                              <li key={i} style={{ ...typo.caption, color: TOKENS.colors.warning, marginBottom: 2 }}>{w}</li>
+                              <li key={i} style={{ ...typo.caption, color: TOKENS_LIGHT.colors.warning, marginBottom: 2 }}>{w}</li>
                             ))}
                           </ul>
                         </div>
                       )}
 
                       {closeReadiness.canClose && (
-                        <p style={{ ...typo.caption, color: TOKENS.colors.success, margin: 0, textAlign: 'center', fontWeight: 700 }}>
+                        <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.success, margin: 0, textAlign: 'center', fontWeight: 700 }}>
                           ✓ Todas las condiciones cumplidas — puede cerrar
                         </p>
                       )}
@@ -912,7 +918,7 @@ export default function ScreenControlTurno() {
 
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => { setConfirmClose(false); setCloseReadiness(null) }}
-                      style={{ flex: 1, padding: '10px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, color: TOKENS.colors.textMuted, fontSize: 13, fontWeight: 600 }}>
+                      style={{ flex: 1, padding: '10px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.textMuted, fontSize: 13, fontWeight: 600 }}>
                       Cancelar
                     </button>
                     <button
@@ -921,9 +927,9 @@ export default function ScreenControlTurno() {
                       style={{
                         flex: 1, padding: '10px', borderRadius: TOKENS.radius.sm,
                         background: (closeReadiness && closeReadiness.canClose)
-                          ? 'rgba(239,68,68,0.15)' : TOKENS.colors.surface,
-                        border: `1px solid ${(closeReadiness && closeReadiness.canClose) ? 'rgba(239,68,68,0.3)' : TOKENS.colors.border}`,
-                        color: (closeReadiness && closeReadiness.canClose) ? TOKENS.colors.error : TOKENS.colors.textLow,
+                          ? 'rgba(239,68,68,0.15)' : TOKENS_LIGHT.colors.surface,
+                        border: `1px solid ${(closeReadiness && closeReadiness.canClose) ? 'rgba(239,68,68,0.3)' : TOKENS_LIGHT.colors.border}`,
+                        color: (closeReadiness && closeReadiness.canClose) ? TOKENS_LIGHT.colors.error : TOKENS_LIGHT.colors.textLow,
                         fontSize: 13, fontWeight: 600,
                         opacity: submitting ? 0.6 : 1,
                       }}>
@@ -937,13 +943,13 @@ export default function ScreenControlTurno() {
             {/* ── Incidentes del turno ─────────────────────────────────── */}
             <div style={{
               marginTop: 12, padding: 16, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+              background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>
+                <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, margin: 0 }}>
                   INCIDENCIAS DEL TURNO
                   {openIncidents.length > 0 && (
-                    <span style={{ marginLeft: 6, color: TOKENS.colors.error, fontWeight: 700 }}>
+                    <span style={{ marginLeft: 6, color: TOKENS_LIGHT.colors.error, fontWeight: 700 }}>
                       ({openIncidents.length} abierta{openIncidents.length > 1 ? 's' : ''})
                     </span>
                   )}
@@ -952,7 +958,7 @@ export default function ScreenControlTurno() {
                   padding: '4px 10px', borderRadius: TOKENS.radius.pill, fontSize: 11, fontWeight: 600,
                   background: showIncidentForm ? 'rgba(148,163,184,0.12)' : 'rgba(43,143,224,0.12)',
                   border: `1px solid ${showIncidentForm ? 'rgba(148,163,184,0.3)' : 'rgba(43,143,224,0.3)'}`,
-                  color: showIncidentForm ? TOKENS.colors.textMuted : TOKENS.colors.blue2,
+                  color: showIncidentForm ? TOKENS_LIGHT.colors.textMuted : TOKENS_LIGHT.colors.blue2,
                 }}>
                   {showIncidentForm ? 'Cancelar' : '+ Registrar'}
                 </button>
@@ -969,24 +975,24 @@ export default function ScreenControlTurno() {
                     onChange={e => setIncidentForm(p => ({ ...p, name: e.target.value }))}
                     style={{
                       width: '100%', padding: '8px 10px', borderRadius: TOKENS.radius.sm, marginBottom: 8,
-                      background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                      color: 'white', fontSize: 13, fontFamily: 'inherit',
+                      background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+                      color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit',
                     }} />
                   <textarea placeholder="Descripcion (opcional)"
                     value={incidentForm.description} rows={2}
                     onChange={e => setIncidentForm(p => ({ ...p, description: e.target.value }))}
                     style={{
                       width: '100%', padding: '8px 10px', borderRadius: TOKENS.radius.sm, marginBottom: 8,
-                      background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                      color: 'white', fontSize: 13, fontFamily: 'inherit', resize: 'vertical',
+                      background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+                      color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit', resize: 'vertical',
                     }} />
                   <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                     <select value={incidentForm.incident_type}
                       onChange={e => setIncidentForm(p => ({ ...p, incident_type: e.target.value }))}
                       style={{
                         flex: 1, padding: '8px 10px', borderRadius: TOKENS.radius.sm,
-                        background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                        color: 'white', fontSize: 12, fontFamily: 'inherit',
+                        background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+                        color: TOKENS_LIGHT.colors.text, fontSize: 12, fontFamily: 'inherit',
                       }}>
                       {INCIDENT_TYPES.map(t => (
                         <option key={t.value} value={t.value} style={{ color: '#111827', background: '#ffffff' }}>
@@ -998,8 +1004,8 @@ export default function ScreenControlTurno() {
                       onChange={e => setIncidentForm(p => ({ ...p, severity: e.target.value }))}
                       style={{
                         flex: 1, padding: '8px 10px', borderRadius: TOKENS.radius.sm,
-                        background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                        color: 'white', fontSize: 12, fontFamily: 'inherit',
+                        background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+                        color: TOKENS_LIGHT.colors.text, fontSize: 12, fontFamily: 'inherit',
                       }}>
                       {INCIDENT_SEVERITIES.map(s => (
                         <option key={s.value} value={s.value} style={{ color: '#111827', background: '#ffffff' }}>
@@ -1012,9 +1018,9 @@ export default function ScreenControlTurno() {
                     disabled={incidentSubmitting || !incidentForm.name.trim()}
                     style={{
                       width: '100%', padding: '8px', borderRadius: TOKENS.radius.sm, fontSize: 13, fontWeight: 600,
-                      background: !incidentForm.name.trim() ? TOKENS.colors.surface : 'linear-gradient(135deg, #15499B 0%, #2B8FE0 100%)',
-                      border: `1px solid ${!incidentForm.name.trim() ? TOKENS.colors.border : 'transparent'}`,
-                      color: 'white', opacity: incidentSubmitting ? 0.6 : 1,
+                      background: !incidentForm.name.trim() ? TOKENS_LIGHT.colors.surface : TOKENS_LIGHT.colors.ctaGradient,
+                      border: `1px solid ${!incidentForm.name.trim() ? TOKENS_LIGHT.colors.border : 'transparent'}`,
+                      color: !incidentForm.name.trim() ? TOKENS_LIGHT.colors.textSoft : TOKENS_LIGHT.colors.onPrimary, opacity: incidentSubmitting ? 0.6 : 1,
                     }}>
                     {incidentSubmitting ? 'Registrando...' : 'Registrar incidencia'}
                   </button>
@@ -1023,7 +1029,7 @@ export default function ScreenControlTurno() {
 
               {/* Lista de incidencias */}
               {incidents.length === 0 ? (
-                <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: 0, textAlign: 'center', padding: '8px 0' }}>
+                <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textLow, margin: 0, textAlign: 'center', padding: '8px 0' }}>
                   Sin incidencias registradas
                 </p>
               ) : (
@@ -1042,10 +1048,10 @@ export default function ScreenControlTurno() {
                           background: sevInfo.color,
                         }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.text, margin: 0, fontWeight: 600 }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.text, margin: 0, fontWeight: 600 }}>
                             {inc.name}
                           </p>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 11 }}>
+                          <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, fontSize: 11 }}>
                             {getIncidentTypeLabel(inc.incident_type)} &middot; {stateInfo.label}
                           </p>
                         </div>
@@ -1055,7 +1061,7 @@ export default function ScreenControlTurno() {
                             style={{
                               padding: '4px 8px', borderRadius: TOKENS.radius.sm, fontSize: 11, fontWeight: 600,
                               background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)',
-                              color: TOKENS.colors.success, flexShrink: 0,
+                              color: TOKENS_LIGHT.colors.success, flexShrink: 0,
                             }}>
                             Resolver
                           </button>
@@ -1071,18 +1077,18 @@ export default function ScreenControlTurno() {
           /* Sin turno - formulario abrir */
           <div style={{
             padding: 20, borderRadius: TOKENS.radius.xl,
-            background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+            background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
           }}>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>&#x1F3ED;</div>
-              <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Sin turno activo</p>
-              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6 }}>Abre un nuevo turno para comenzar a registrar.</p>
+              <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.text, margin: 0 }}>Sin turno activo</p>
+              <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, marginTop: 6 }}>Abre un nuevo turno para comenzar a registrar.</p>
             </div>
 
             <form onSubmit={handleCreate}>
-              <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Turno</label>
+              <label style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, display: 'block', marginBottom: 4 }}>Turno</label>
               <select value={formData.shift_code} onChange={e => setFormData(p => ({ ...p, shift_code: e.target.value }))}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }}>
+                style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`, color: TOKENS_LIGHT.colors.text, fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }}>
                 <option value="">Seleccionar...</option>
                 {SHIFT_CODES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
@@ -1090,18 +1096,18 @@ export default function ScreenControlTurno() {
               {/* Planta auto-asignada (solo Iguala) */}
               <div style={{
                 padding: '10px 12px', borderRadius: TOKENS.radius.sm, marginBottom: 16,
-                background: 'rgba(255,255,255,0.03)', border: `1px solid ${TOKENS.colors.border}`,
+                background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}>
-                <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Planta</span>
-                <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>{session?.warehouse_name || `Almacén #${supervisionWarehouseId}`}</span>
+                <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted }}>Planta</span>
+                <span style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 600 }}>{session?.warehouse_name || `Almacén #${supervisionWarehouseId}`}</span>
               </div>
 
               <button type="submit" disabled={submitting || !formData.shift_code}
                 style={{
-                  width: '100%', padding: '12px', borderRadius: TOKENS.radius.sm, fontSize: 14, fontWeight: 600, color: 'white',
-                  background: !formData.shift_code ? TOKENS.colors.surface : 'linear-gradient(135deg, #15499B 0%, #2B8FE0 100%)',
-                  border: `1px solid ${!formData.shift_code ? TOKENS.colors.border : 'transparent'}`,
+                  width: '100%', padding: '12px', borderRadius: TOKENS.radius.sm, fontSize: 14, fontWeight: 600, color: !formData.shift_code ? TOKENS_LIGHT.colors.textSoft : TOKENS_LIGHT.colors.onPrimary,
+                  background: !formData.shift_code ? TOKENS_LIGHT.colors.surface : TOKENS_LIGHT.colors.ctaGradient,
+                  border: `1px solid ${!formData.shift_code ? TOKENS_LIGHT.colors.border : 'transparent'}`,
                   opacity: submitting ? 0.6 : 1,
                 }}>
                 {submitting ? 'Abriendo...' : 'Abrir Turno'}
