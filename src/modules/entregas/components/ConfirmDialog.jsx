@@ -1,9 +1,12 @@
-import { TOKENS } from '../../../tokens'
+import { TOKENS as DARK_TOKENS } from '../../../tokens'
 
 /* ============================================================================
    ConfirmDialog — Modal overlay for double-confirmation of critical actions
 ============================================================================ */
 
+// `tokens` OPCIONAL con default OSCURO: este componente lo usan varios roles
+// (Merma, OperacionDia, CierreTurno, HandoverPT, MermaPT) que todavía no
+// tienen tema claro — solo quien lo pasa explícitamente lo recibe.
 export default function ConfirmDialog({
   open,
   title = 'Confirmar',
@@ -15,11 +18,13 @@ export default function ConfirmDialog({
   variant = 'default',
   loading = false,
   children,
+  tokens = DARK_TOKENS,
 }) {
   if (!open) return null
 
+  const TOKENS = tokens
   const isDanger = variant === 'danger'
-  const confirmBg = isDanger ? TOKENS.colors.error : TOKENS.colors.blue2
+  const confirmBg = isDanger ? TOKENS.colors.error : TOKENS.colors.blue
   const confirmBgHover = isDanger ? '#dc2626' : '#1a7fd4'
 
   return (

@@ -508,7 +508,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
             </div>
 
             {/* Product Grid */}
-            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>PRODUCTOS</p>
+            <p style={{ ...typo.overline, color: TOKENS.colors.textSoft, marginBottom: 10 }}>PRODUCTOS</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
               {filtered.map(p => {
                 const stock = getDisplayStock(p)
@@ -545,7 +545,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
             )}
 
             {/* Cart Section */}
-            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>CARRITO</p>
+            <p style={{ ...typo.overline, color: TOKENS.colors.textSoft, marginBottom: 10 }}>CARRITO</p>
 
             {/* Customer chip */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>

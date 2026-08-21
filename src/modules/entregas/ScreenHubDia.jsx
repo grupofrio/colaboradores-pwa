@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { getDaySummary, getEntregasShiftStatus, computeStepStatuses, STEP_STATUS } from './entregasService'
 import { getEntregasDestination } from '../almacen-pt/ptService'
-import { ScreenShell, StepTimeline } from './components'
+import { ScreenShell } from './components'
 import SessionErrorState from '../../components/SessionErrorState'
+ 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
 const STEPS = [
   { id: 'aceptarTurno', label: 'Aceptar turno', icon: '\u{1F504}', route: '/entregas/aceptar-turno' },
@@ -40,14 +44,14 @@ function getBadgeText(stepId, summary) {
   }
 }
 
-function getStatusColor(status) {
+function getStatusColor(status, tokens) {
   switch (status) {
-    case STEP_STATUS.COMPLETED: return TOKENS.colors.success
-    case STEP_STATUS.IN_PROGRESS: return TOKENS.colors.blue2
-    case STEP_STATUS.PENDING: return TOKENS.colors.warning
-    case STEP_STATUS.ALERT: return TOKENS.colors.error
+    case STEP_STATUS.COMPLETED: return tokens.colors.success
+    case STEP_STATUS.IN_PROGRESS: return tokens.colors.blue2
+    case STEP_STATUS.PENDING: return tokens.colors.warning
+    case STEP_STATUS.ALERT: return tokens.colors.error
     case STEP_STATUS.LOCKED:
-    default: return TOKENS.colors.textMuted
+    default: return tokens.colors.textMuted
   }
 }
 
@@ -72,6 +76,9 @@ export default function ScreenHubDia() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [fixedDestination, setFixedDestination] = useState(null)
+
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas'].includes(session?.role) || isBrandLightSession(session)
+  const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
 
   const sessionWarehouseId = softWarehouse(session)
   const warehouseId = fixedDestination?.id || sessionWarehouseId
@@ -162,7 +169,7 @@ export default function ScreenHubDia() {
   }))
 
   return (
-    <ScreenShell title="Almacen de Entregas" backTo="/">
+    <ScreenShell title="Almacén de Entregas" backTo="/" tokens={TOKENS}>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pulse-border { 0%, 100% { border-color: rgba(43,143,224,0.30); } 50% { border-color: rgba(43,143,224,0.60); } }
@@ -203,9 +210,9 @@ export default function ScreenHubDia() {
           marginBottom: 12,
           padding: '14px 16px',
           borderRadius: TOKENS.radius.lg,
-          background: 'linear-gradient(180deg, rgba(43,143,224,0.14), rgba(43,143,224,0.04))',
-          border: `1px solid rgba(43,143,224,0.35)`,
-          boxShadow: TOKENS.shadow.blue,
+          background: TOKENS.colors.surface,
+          border: `1px solid ${TOKENS.colors.borderBlue}`,
+          boxShadow: TOKENS.shadow.md,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -216,7 +223,7 @@ export default function ScreenHubDia() {
           <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Transformacion</p>
           <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>Medias barras para entregas</p>
         </div>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 18l6-6-6-6" />
         </svg>
       </button>
@@ -240,7 +247,7 @@ export default function ScreenHubDia() {
           <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Historial de cargas</p>
           <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>Por dia y camioneta</p>
         </div>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 18l6-6-6-6" />
         </svg>
       </button>
@@ -259,18 +266,18 @@ export default function ScreenHubDia() {
       {loading && !summary ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
           <div style={{
-            width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
-            borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+            width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`,
+            borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }} />
         </div>
       ) : shiftStatus?.view === 'blocked' ? (
-        <EntregasBlockedView shiftStatus={shiftStatus} typo={typo} onReload={loadData} />
+        <EntregasBlockedView shiftStatus={shiftStatus} typo={typo} onReload={loadData} tokens={TOKENS} />
       ) : shiftStatus?.view === 'receive_turn' ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
           <div style={{
-            width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
-            borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+            width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`,
+            borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }} />
         </div>
@@ -283,8 +290,8 @@ export default function ScreenHubDia() {
 
           {/* Step cards */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {stepsWithData.map((step, idx) => {
-              const color = getStatusColor(step.status)
+            {stepsWithData.map((step) => {
+              const color = getStatusColor(step.status, TOKENS)
               const isLocked = step.status === STEP_STATUS.LOCKED
               return (
                 <button
@@ -295,12 +302,12 @@ export default function ScreenHubDia() {
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '14px 14px', borderRadius: TOKENS.radius.lg,
                     background: step.isSuggested
-                      ? 'linear-gradient(180deg, rgba(43,143,224,0.14), rgba(43,143,224,0.04))'
+                      ? TOKENS.colors.surface
                       : TOKENS.glass.panel,
                     border: step.isSuggested
-                      ? `1.5px solid rgba(43,143,224,0.40)`
+                      ? `1.5px solid ${TOKENS.colors.borderBlue}`
                       : `1px solid ${TOKENS.colors.border}`,
-                    boxShadow: step.isSuggested ? TOKENS.shadow.blue : TOKENS.shadow.soft,
+                    boxShadow: step.isSuggested ? TOKENS.shadow.md : TOKENS.shadow.soft,
                     width: '100%', textAlign: 'left',
                     opacity: isLocked ? 0.45 : 1,
                     cursor: isLocked ? 'default' : 'pointer',
@@ -332,7 +339,7 @@ export default function ScreenHubDia() {
                       {step.isSuggested && (
                         <span style={{
                           padding: '1px 7px', borderRadius: TOKENS.radius.pill,
-                          background: `${TOKENS.colors.blue2}20`, border: `1px solid ${TOKENS.colors.blue2}40`,
+                          background: `${TOKENS.colors.blue}18`, border: `1px solid ${TOKENS.colors.blue}30`,
                           fontSize: 10, fontWeight: 700, color: TOKENS.colors.blue3,
                         }}>
                           Siguiente
@@ -351,7 +358,7 @@ export default function ScreenHubDia() {
                       {getStatusLabel(step.status)}
                     </span>
                     {!isLocked && (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M9 18l6-6-6-6" />
                       </svg>
                     )}
@@ -368,15 +375,16 @@ export default function ScreenHubDia() {
   )
 }
 
-function EntregasBlockedView({ shiftStatus, typo, onReload }) {
+function EntregasBlockedView({ shiftStatus, typo, onReload, tokens = DARK_TOKENS }) {
   const ownerName = shiftStatus?.owner_employee_name || 'otro almacenista'
+  const TOKENS = tokens
   return (
     <div style={{ marginTop: 24 }}>
       <div style={{
         padding: 24, borderRadius: TOKENS.radius.xl,
-        background: 'linear-gradient(160deg, rgba(239,68,68,0.18), rgba(239,68,68,0.06))',
-        border: `1px solid ${TOKENS.colors.error}50`,
-        boxShadow: '0 12px 28px rgba(239,68,68,0.20)',
+        background: TOKENS.colors.errorSoft,
+        border: `1px solid ${TOKENS.colors.error}40`,
+        boxShadow: TOKENS.shadow.md,
         textAlign: 'center',
       }}>
         <div style={{

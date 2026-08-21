@@ -1,23 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo, getCompaniesForSucursal } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo, getCompaniesForSucursal } from '../../tokens'
 import { getTodayExpenses } from '../admin/api'
 import { createExpense as createExpenseOrchestrated, BACKEND_CAPS } from '../admin/adminService'
 import { unwrapExpenseListEnvelope } from '../admin/expenseListEnvelope'
 import { isGerentePilotReadOnly } from '../admin/gerentePilotCaps'
 import { todayLocal } from '../../lib/api'
 
+// `tokens` OPCIONAL con default OSCURO: este componente lo comparten
+// /admin/gastos (auxiliar_admin/gerente_sucursal/direccion_general — tema
+// claro incondicional del módulo admin_sucursal) y /gerente/gastos (que
+// sigue oscuro salvo piloto). Cada caller decide qué tokens pasar.
 export default function GastosScreenBase({
   title = 'Gastos',
   backRoute = '/admin',
   listLabel = 'GASTOS DE HOY',
   readOnly: readOnlyProp,
+  tokens = DARK_TOKENS,
 }) {
   const { session } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const TOKENS = tokens
+  const isLightSurface = tokens !== DARK_TOKENS
+  // Etiquetas más oscuras SOLO en claro (textMuted ahí se lee pálido); en
+  // oscuro se conserva el tono original para no alterar /gerente/gastos.
+  const labelColor = isLightSurface ? TOKENS.colors.textSoft : TOKENS.colors.textMuted
 
   const readOnly = readOnlyProp ?? isGerentePilotReadOnly(session, BACKEND_CAPS)
 
@@ -135,7 +145,7 @@ export default function GastosScreenBase({
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -145,7 +155,7 @@ export default function GastosScreenBase({
         {readOnly && (
           <div style={{
             padding: '10px 14px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
-            background: 'rgba(43,143,224,0.12)', border: `1px solid ${TOKENS.colors.blue2}40`,
+            background: `${TOKENS.colors.blue}1f`, border: `1px solid ${TOKENS.colors.blue}40`,
           }}>
             <span style={{ ...typo.caption, color: TOKENS.colors.blue3 }}>
               Solo lectura — puedes consultar gastos; el registro está desactivado en el piloto Gerente.
@@ -170,15 +180,15 @@ export default function GastosScreenBase({
             background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
             marginBottom: 20,
           }}>
-            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 0, marginBottom: 14 }}>NUEVO GASTO</p>
+            <p style={{ ...typo.overline, color: labelColor, marginTop: 0, marginBottom: 14 }}>NUEVO GASTO</p>
 
-            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Empresa *</label>
+            <label style={{ ...typo.caption, color: labelColor, display: 'block', marginBottom: 4 }}>Empresa *</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
               {companies.map(co => (
                 <button key={co.id} onClick={() => setCompanyId(co.id)} style={{
                   padding: '8px 14px', borderRadius: TOKENS.radius.pill,
-                  background: companyId === co.id ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
-                  border: `1px solid ${companyId === co.id ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                  background: companyId === co.id ? `${TOKENS.colors.blue}22` : TOKENS.colors.surface,
+                  border: `1px solid ${companyId === co.id ? TOKENS.colors.blue : TOKENS.colors.border}`,
                   color: companyId === co.id ? TOKENS.colors.blue3 : TOKENS.colors.textMuted,
                   fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 }}>
@@ -187,16 +197,16 @@ export default function GastosScreenBase({
               ))}
             </div>
 
-            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Descripcion *</label>
+            <label style={{ ...typo.caption, color: labelColor, display: 'block', marginBottom: 4 }}>Descripcion *</label>
             <input type="text" placeholder="Ej: Compra de papeleria" value={name} onChange={e => setName(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
 
-            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Monto *</label>
+            <label style={{ ...typo.caption, color: labelColor, display: 'block', marginBottom: 4 }}>Monto *</label>
             <input type="number" placeholder="0.00" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
 
-            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Fecha</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, marginBottom: 12, colorScheme: 'dark' }} />
+            <label style={{ ...typo.caption, color: labelColor, display: 'block', marginBottom: 4 }}>Fecha</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, marginBottom: 12, colorScheme: isLightSurface ? 'light' : 'dark' }} />
 
-            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Notas (opcional)</label>
+            <label style={{ ...typo.caption, color: labelColor, display: 'block', marginBottom: 4 }}>Notas (opcional)</label>
             <textarea placeholder="Detalles adicionales..." rows={3} value={description} onChange={e => setDescription(e.target.value)}
               style={{ ...inputStyle, resize: 'vertical', marginBottom: 14 }}
             />
@@ -208,24 +218,24 @@ export default function GastosScreenBase({
               disabled={submitting}
               style={{
                 width: '100%', padding: '14px 0', borderRadius: TOKENS.radius.md,
-                background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
+                background: TOKENS.colors.ctaGradient,
                 opacity: submitting ? 0.6 : 1,
               }}
             >
               {submitting ? (
                 <div style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
               ) : (
-                <span style={{ ...typo.body, color: 'white', fontWeight: 700 }}>Registrar Gasto</span>
+                <span style={{ ...typo.body, color: TOKENS.colors.onPrimary, fontWeight: 700 }}>Registrar Gasto</span>
               )}
             </button>
           </div>
         )}
 
-        <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>{listLabel}</p>
+        <p style={{ ...typo.overline, color: labelColor, marginBottom: 10 }}>{listLabel}</p>
 
         {listStatus === 'loading' ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 30 }}>
-            <div style={{ width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 24, height: 24, border: `2px solid ${TOKENS.colors.border}`, borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : listStatus === 'error' || listStatus === 'unavailable' ? (
           <div style={{
@@ -259,7 +269,7 @@ export default function GastosScreenBase({
                 {exp.state && (
                   <div style={{
                     padding: '3px 8px', borderRadius: TOKENS.radius.pill,
-                    background: exp.state === 'posted' ? TOKENS.colors.successSoft : 'rgba(245,158,11,0.12)',
+                    background: exp.state === 'posted' ? TOKENS.colors.successSoft : TOKENS.colors.warningSoft,
                   }}>
                     <span style={{ fontSize: 10, fontWeight: 600, color: exp.state === 'posted' ? TOKENS.colors.success : TOKENS.colors.warning }}>
                       {exp.state === 'posted' ? 'Confirmado' : exp.state === 'draft' ? 'Borrador' : exp.state}

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { safeNumber } from '../../lib/safeNumber'
 import { getReturns, acceptReturn } from './entregasService'
 import { ScreenShell, StatusBadge } from './components'
@@ -11,10 +13,14 @@ import { ScreenShell, StatusBadge } from './components'
    received_by_id, received_at, received_qty, reception_state, reception_notes
 ============================================================================ */
 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
+
 export default function ScreenDevolucionesV2() {
   const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const isLightSurface = session?.role === 'almacenista_entregas' || isBrandLightSession(session)
+  const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
 
   const warehouseId = Number(session?.warehouse_id || 0) || null
   const employeeId = Number(session?.employee_id || 0) || null
@@ -139,16 +145,16 @@ export default function ScreenDevolucionesV2() {
   const doneCount = returns.filter(r => r.state === 'done').length
 
   return (
-    <ScreenShell title="Devoluciones" backTo="/entregas">
+    <ScreenShell title="Devoluciones" backTo="/entregas" tokens={TOKENS}>
       <style>{`@keyframes entregasDevSpin { to { transform: rotate(360deg); } }`}</style>
 
       {/* Summary */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-        <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: TOKENS.colors.warningSoft, border: '1px solid rgba(245,158,11,0.18)', textAlign: 'center' }}>
+        <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: TOKENS.colors.warningSoft, border: `1px solid ${TOKENS.colors.warning}30`, textAlign: 'center' }}>
           <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0, fontWeight: 700 }}>{pendingCount}</p>
           <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Pendientes</p>
         </div>
-        <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: '1px solid rgba(34,197,94,0.18)', textAlign: 'center' }}>
+        <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}30`, textAlign: 'center' }}>
           <p style={{ ...typo.caption, color: TOKENS.colors.success, margin: 0, fontWeight: 700 }}>{doneCount}</p>
           <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Procesadas</p>
         </div>
@@ -156,13 +162,13 @@ export default function ScreenDevolucionesV2() {
 
       {/* Error */}
       {error && (
-        <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)', color: TOKENS.colors.error, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+        <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}4D`, color: TOKENS.colors.error, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
           {error}
         </div>
       )}
       {/* Success */}
       {success && (
-        <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: '1px solid rgba(34,197,94,0.25)', color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+        <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}40`, color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
           {success}
         </div>
       )}
@@ -171,13 +177,13 @@ export default function ScreenDevolucionesV2() {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
           <div style={{
-            width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
-            borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+            width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`,
+            borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%',
             animation: 'entregasDevSpin 0.8s linear infinite',
           }} />
         </div>
       ) : returns.length === 0 ? (
-        <div style={{ marginTop: 20, padding: 24, borderRadius: TOKENS.radius.xl, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', textAlign: 'center' }}>
+        <div style={{ marginTop: 20, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}33`, textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>&#x2705;</div>
           <p style={{ ...typo.title, color: TOKENS.colors.success }}>Sin devoluciones pendientes</p>
         </div>
@@ -203,11 +209,11 @@ export default function ScreenDevolucionesV2() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     <span style={{
                       padding: '3px 10px', borderRadius: TOKENS.radius.pill,
-                      background: 'rgba(43,143,224,0.12)', fontSize: 11, fontWeight: 700, color: TOKENS.colors.blue2,
+                      background: `${TOKENS.colors.blue}20`, fontSize: 11, fontWeight: 700, color: TOKENS.colors.blue3,
                     }}>
                       {group.items.length}
                     </span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform ${TOKENS.motion.fast}` }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform ${TOKENS.motion.fast}` }}>
                       <polyline points="6 9 12 15 18 9" />
                     </svg>
                   </div>
@@ -227,8 +233,8 @@ export default function ScreenDevolucionesV2() {
                       return (
                         <div key={ret.id || i} style={{
                           padding: '12px 14px', borderRadius: TOKENS.radius.md,
-                          background: isDone ? 'rgba(34,197,94,0.04)' : TOKENS.colors.surfaceSoft,
-                          border: `1px solid ${isDone ? 'rgba(34,197,94,0.15)' : TOKENS.colors.border}`,
+                          background: isDone ? TOKENS.colors.successSoft : TOKENS.colors.surfaceSoft,
+                          border: `1px solid ${isDone ? TOKENS.colors.success + '26' : TOKENS.colors.border}`,
                         }}>
                           {/* Product header */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -241,19 +247,19 @@ export default function ScreenDevolucionesV2() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                               <span style={{
                                 padding: '3px 8px', borderRadius: TOKENS.radius.pill,
-                                background: isScrap ? TOKENS.colors.warningSoft : 'rgba(43,143,224,0.12)',
+                                background: isScrap ? TOKENS.colors.warningSoft : `${TOKENS.colors.blue}20`,
                                 fontSize: 10, fontWeight: 700,
-                                color: isScrap ? TOKENS.colors.warning : TOKENS.colors.blue2,
+                                color: isScrap ? TOKENS.colors.warning : TOKENS.colors.blue3,
                               }}>
                                 {isScrap ? 'MERMA' : 'DEVOLUCION'}
                               </span>
-                              <StatusBadge status={isDone ? 'done' : 'pending'} />
+                              <StatusBadge status={isDone ? 'done' : 'pending'} tokens={TOKENS} />
                             </div>
                           </div>
 
                           {/* Already processed: show reception info */}
                           {isDone && (
-                            <div style={{ padding: '8px 10px', borderRadius: TOKENS.radius.sm, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.12)' }}>
+                            <div style={{ padding: '8px 10px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}20` }}>
                               <p style={{ ...typo.caption, color: TOKENS.colors.success, margin: 0, fontWeight: 600 }}>
                                 Recibido: {ret.received_qty ?? ret.quantity}
                                 {ret.received_by ? ` por ${ret.received_by}` : ''}
@@ -278,8 +284,9 @@ export default function ScreenDevolucionesV2() {
                                     onChange={e => updateLineEdit(ret.id, 'received_qty', safeNumber(e.target.value, { min: 0 }))}
                                     style={{
                                       width: '100%', padding: '8px 10px', borderRadius: TOKENS.radius.sm,
-                                      background: 'rgba(43,143,224,0.08)', border: `1px solid ${hasDiff ? TOKENS.colors.warning : 'rgba(43,143,224,0.15)'}`,
-                                      color: 'white', fontSize: 15, fontWeight: 700, outline: 'none', textAlign: 'center',
+                                      background: TOKENS.colors.surfaceSoft, border: `1px solid ${hasDiff ? TOKENS.colors.warning : TOKENS.colors.borderBlue}`,
+                                      color: TOKENS.colors.text, fontSize: 15, fontWeight: 700, outline: 'none', textAlign: 'center',
+                                      colorScheme: isLightSurface ? 'light' : 'dark',
                                     }}
                                   />
                                 </div>
@@ -303,9 +310,10 @@ export default function ScreenDevolucionesV2() {
                                   style={{
                                     width: '100%', padding: '8px 10px', marginBottom: 8,
                                     borderRadius: TOKENS.radius.sm,
-                                    background: 'rgba(255,255,255,0.05)',
+                                    background: TOKENS.colors.surfaceSoft,
                                     border: `1px solid ${!edit.notes.trim() ? TOKENS.colors.error : TOKENS.colors.border}`,
-                                    color: 'white', fontSize: 13, outline: 'none',
+                                    color: TOKENS.colors.text, fontSize: 13, outline: 'none',
+                                    colorScheme: isLightSurface ? 'light' : 'dark',
                                   }}
                                 />
                               )}
@@ -316,8 +324,8 @@ export default function ScreenDevolucionesV2() {
                                 disabled={isSubmittingThis}
                                 style={{
                                   width: '100%', padding: '10px 0', borderRadius: TOKENS.radius.md,
-                                  background: isSubmittingThis ? TOKENS.colors.surface : 'linear-gradient(90deg, #15499B, #2B8FE0)',
-                                  color: 'white', fontSize: 13, fontWeight: 600,
+                                  background: isSubmittingThis ? TOKENS.colors.surface : TOKENS.colors.ctaGradient,
+                                  color: TOKENS.colors.onPrimary, fontSize: 13, fontWeight: 600,
                                   opacity: isSubmittingThis ? 0.6 : 1,
                                 }}
                               >

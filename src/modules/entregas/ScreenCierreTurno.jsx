@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { safeNumber } from '../../lib/safeNumber'
 import {
   getCedisInventory, getPendingHandover,
@@ -13,12 +15,15 @@ import { ScreenShell, ConfirmDialog } from './components'
    ScreenCierreTurno — Entregar turno (outgoing) + Aceptar turno (incoming)
 ============================================================================ */
 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 const MODES = { ACEPTAR: 'aceptar', ENTREGAR: 'entregar' }
 
 export default function ScreenCierreTurno() {
   const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const isLightSurface = session?.role === 'almacenista_entregas' || isBrandLightSession(session)
+  const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
 
   const warehouseId = Number(session?.warehouse_id || 0) || null
   const employeeId = Number(session?.employee_id || 0) || null
@@ -283,14 +288,14 @@ export default function ScreenCierreTurno() {
 
   if (!loadingInit && shiftStatus?.view === 'blocked') {
     return (
-      <ScreenShell title="Turno" backTo="/entregas">
-        <EntregasBlockedView shiftStatus={shiftStatus} typo={typo} onReload={loadData} />
+      <ScreenShell title="Turno" backTo="/entregas" tokens={TOKENS}>
+        <EntregasBlockedView shiftStatus={shiftStatus} typo={typo} onReload={loadData} tokens={TOKENS} />
       </ScreenShell>
     )
   }
 
   return (
-    <ScreenShell title="Turno" backTo="/entregas">
+    <ScreenShell title="Turno" backTo="/entregas" tokens={TOKENS}>
       <style>{`
         @keyframes entregasTurnoSpin { to { transform: rotate(360deg); } }
         input, textarea { font-family: 'DM Sans', sans-serif; }
@@ -310,8 +315,8 @@ export default function ScreenCierreTurno() {
               style={{
                 flex: 1, padding: '12px 0', fontSize: 13, fontWeight: 600,
                 color: active ? TOKENS.colors.text : TOKENS.colors.textMuted,
-                background: active ? 'rgba(43,143,224,0.12)' : TOKENS.colors.surfaceSoft,
-                borderBottom: active ? `2px solid ${TOKENS.colors.blue2}` : '2px solid transparent',
+                background: active ? TOKENS.colors.surfaceStrong : TOKENS.colors.surfaceSoft,
+                borderBottom: active ? `2px solid ${TOKENS.colors.blue}` : '2px solid transparent',
                 transition: `all ${TOKENS.motion.fast}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
@@ -320,7 +325,7 @@ export default function ScreenCierreTurno() {
               {tab.badge > 0 && (
                 <span style={{
                   width: 18, height: 18, borderRadius: '50%',
-                  background: TOKENS.colors.error, color: 'white',
+                  background: TOKENS.colors.error, color: TOKENS.colors.onPrimary,
                   fontSize: 10, fontWeight: 700,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 }}>
@@ -334,20 +339,20 @@ export default function ScreenCierreTurno() {
 
       {/* Messages */}
       {error && (
-        <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)', color: TOKENS.colors.error, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+        <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}4D`, color: TOKENS.colors.error, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
           {error}
         </div>
       )}
       {success && (
-        <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: '1px solid rgba(34,197,94,0.25)', color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+        <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}40`, color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
           {success}
         </div>
       )}
       {loadingInit ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
           <div style={{
-            width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
-            borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+            width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`,
+            borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%',
             animation: 'entregasTurnoSpin 0.8s linear infinite',
           }} />
         </div>
@@ -368,7 +373,7 @@ export default function ScreenCierreTurno() {
               ) : (
                 <>
                   {/* Handover header */}
-                  <div style={{ padding: 14, borderRadius: TOKENS.radius.lg, background: 'rgba(43,143,224,0.08)', border: `1px solid ${TOKENS.colors.borderBlue}`, marginBottom: 14 }}>
+                  <div style={{ padding: 14, borderRadius: TOKENS.radius.lg, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.borderBlue}`, marginBottom: 14 }}>
                     <p style={{ ...typo.body, color: TOKENS.colors.text, margin: 0, fontWeight: 600 }}>
                       Entrega de {handover.shift_out_employee || handover.employee_name || 'Empleado'}
                     </p>
@@ -410,8 +415,9 @@ export default function ScreenCierreTurno() {
                                 onChange={e => updateAcceptLine(i, 'qty_accepted', safeNumber(e.target.value, { min: 0 }))}
                                 style={{
                                   width: '100%', padding: '6px 8px', borderRadius: TOKENS.radius.sm,
-                                  background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.15)',
-                                  color: 'white', fontSize: 16, fontWeight: 700, outline: 'none', textAlign: 'center',
+                                  background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.borderBlue}`,
+                                  color: TOKENS.colors.text, fontSize: 16, fontWeight: 700, outline: 'none', textAlign: 'center',
+                                  colorScheme: isLightSurface ? 'light' : 'dark',
                                 }}
                               />
                             </div>
@@ -433,8 +439,9 @@ export default function ScreenCierreTurno() {
                               style={{
                                 width: '100%', padding: '8px 10px', marginTop: 8,
                                 borderRadius: TOKENS.radius.sm,
-                                background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                                color: 'white', fontSize: 13, outline: 'none',
+                                background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                                color: TOKENS.colors.text, fontSize: 13, outline: 'none',
+                                colorScheme: isLightSurface ? 'light' : 'dark',
                               }}
                             />
                           )}
@@ -453,8 +460,9 @@ export default function ScreenCierreTurno() {
                       rows={3}
                       style={{
                         width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                        background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                        color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+                        background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                        color: TOKENS.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
+                        colorScheme: isLightSurface ? 'light' : 'dark',
                       }}
                     />
                   </div>
@@ -463,9 +471,9 @@ export default function ScreenCierreTurno() {
                   <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
                     <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Productos</p>
-                      <p style={{ fontSize: 18, fontWeight: 700, color: TOKENS.colors.blue2, margin: 0 }}>{acceptLines.length}</p>
+                      <p style={{ fontSize: 18, fontWeight: 700, color: TOKENS.colors.blue, margin: 0 }}>{acceptLines.length}</p>
                     </div>
-                    <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: acceptDiffCount > 0 ? TOKENS.colors.warningSoft : TOKENS.colors.successSoft, border: `1px solid ${acceptDiffCount > 0 ? 'rgba(245,158,11,0.18)' : 'rgba(34,197,94,0.18)'}`, textAlign: 'center' }}>
+                    <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: acceptDiffCount > 0 ? TOKENS.colors.warningSoft : TOKENS.colors.successSoft, border: `1px solid ${acceptDiffCount > 0 ? TOKENS.colors.warning + '30' : TOKENS.colors.success + '30'}`, textAlign: 'center' }}>
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Con diferencia</p>
                       <p style={{ fontSize: 18, fontWeight: 700, color: acceptDiffCount > 0 ? TOKENS.colors.warning : TOKENS.colors.success, margin: 0 }}>{acceptDiffCount}</p>
                     </div>
@@ -478,10 +486,10 @@ export default function ScreenCierreTurno() {
                       disabled={!canSubmitAcceptar || submitting}
                       style={{
                         width: '100%', padding: 14, borderRadius: TOKENS.radius.lg,
-                        background: canSubmitAcceptar ? 'linear-gradient(90deg, #22c55e, #16a34a)' : TOKENS.colors.surface,
-                        color: canSubmitAcceptar ? 'white' : TOKENS.colors.textMuted,
+                        background: canSubmitAcceptar ? TOKENS.colors.success : TOKENS.colors.surface,
+                        color: canSubmitAcceptar ? TOKENS.colors.onPrimary : TOKENS.colors.textMuted,
                         fontSize: 15, fontWeight: 600, opacity: submitting ? 0.6 : 1,
-                        boxShadow: canSubmitAcceptar ? '0 10px 24px rgba(34,197,94,0.25)' : 'none',
+                        boxShadow: canSubmitAcceptar ? `0 10px 24px ${TOKENS.colors.success}40` : 'none',
                       }}
                     >
                       {acceptDiffCount > 0 ? 'Acepto con diferencias' : 'Acepto conforme'}
@@ -492,7 +500,7 @@ export default function ScreenCierreTurno() {
                       style={{
                         width: '100%', padding: 14, borderRadius: TOKENS.radius.lg,
                         background: canSubmitAcceptar ? TOKENS.colors.errorSoft : TOKENS.colors.surface,
-                        border: `1px solid ${canSubmitAcceptar ? 'rgba(239,68,68,0.3)' : TOKENS.colors.border}`,
+                        border: `1px solid ${canSubmitAcceptar ? TOKENS.colors.error + '4D' : TOKENS.colors.border}`,
                         color: canSubmitAcceptar ? TOKENS.colors.error : TOKENS.colors.textMuted,
                         fontSize: 14, fontWeight: 600,
                       }}
@@ -529,7 +537,7 @@ export default function ScreenCierreTurno() {
                     Cargando compañeros disponibles...
                   </div>
                 ) : eligibleReceivers.length === 0 ? (
-                  <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.warningSoft, border: '1px solid rgba(245,158,11,0.25)', color: TOKENS.colors.warning, fontSize: 13 }}>
+                  <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.warningSoft, border: `1px solid ${TOKENS.colors.warning}40`, color: TOKENS.colors.warning, fontSize: 13 }}>
                     No hay otros almacenistas de entregas en este CEDIS para
                     recibir el turno. Contacta a tu supervisor.
                   </div>
@@ -539,14 +547,15 @@ export default function ScreenCierreTurno() {
                     onChange={(e) => setShiftInEmployeeId(Number(e.target.value) || 0)}
                     style={{
                       width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                      background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                      color: 'white', fontSize: 14, outline: 'none',
+                      background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                      color: TOKENS.colors.text, fontSize: 14, outline: 'none',
                       fontFamily: 'DM Sans, sans-serif',
+                      colorScheme: isLightSurface ? 'light' : 'dark',
                     }}
                   >
-                    <option value="">— Selecciona compañero —</option>
+                    <option value="" style={isLightSurface ? { color: '#111827', background: '#ffffff' } : undefined}>— Selecciona compañero —</option>
                     {eligibleReceivers.map((r) => (
-                      <option key={r.id} value={r.id}>
+                      <option key={r.id} value={r.id} style={isLightSurface ? { color: '#111827', background: '#ffffff' } : undefined}>
                         {r.name}{r.barcode ? ` (${r.barcode})` : ''}
                       </option>
                     ))}
@@ -590,8 +599,9 @@ export default function ScreenCierreTurno() {
                                 onChange={e => updateEntregarLine(i, 'qty_declared', safeNumber(e.target.value, { min: 0 }))}
                                 style={{
                                   width: '100%', padding: '6px 8px', borderRadius: TOKENS.radius.sm,
-                                  background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.15)',
-                                  color: 'white', fontSize: 16, fontWeight: 700, outline: 'none', textAlign: 'center',
+                                  background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.borderBlue}`,
+                                  color: TOKENS.colors.text, fontSize: 16, fontWeight: 700, outline: 'none', textAlign: 'center',
+                                  colorScheme: isLightSurface ? 'light' : 'dark',
                                 }}
                               />
                             </div>
@@ -613,9 +623,10 @@ export default function ScreenCierreTurno() {
                               style={{
                                 width: '100%', padding: '8px 10px', marginTop: 8,
                                 borderRadius: TOKENS.radius.sm,
-                                background: 'rgba(255,255,255,0.05)',
+                                background: TOKENS.colors.surfaceSoft,
                                 border: `1px solid ${needsNote && !line.note.trim() ? TOKENS.colors.error : TOKENS.colors.border}`,
-                                color: 'white', fontSize: 13, outline: 'none',
+                                color: TOKENS.colors.text, fontSize: 13, outline: 'none',
+                                colorScheme: isLightSurface ? 'light' : 'dark',
                               }}
                             />
                           )}
@@ -634,8 +645,9 @@ export default function ScreenCierreTurno() {
                       rows={3}
                       style={{
                         width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                        background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                        color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+                        background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                        color: TOKENS.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
+                        colorScheme: isLightSurface ? 'light' : 'dark',
                       }}
                     />
                   </div>
@@ -644,9 +656,9 @@ export default function ScreenCierreTurno() {
                   <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
                     <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Productos</p>
-                      <p style={{ fontSize: 18, fontWeight: 700, color: TOKENS.colors.blue2, margin: 0 }}>{entregarLines.length}</p>
+                      <p style={{ fontSize: 18, fontWeight: 700, color: TOKENS.colors.blue, margin: 0 }}>{entregarLines.length}</p>
                     </div>
-                    <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: entregarDiffCount > 0 ? TOKENS.colors.warningSoft : TOKENS.colors.successSoft, border: `1px solid ${entregarDiffCount > 0 ? 'rgba(245,158,11,0.18)' : 'rgba(34,197,94,0.18)'}`, textAlign: 'center' }}>
+                    <div style={{ flex: 1, padding: 10, borderRadius: TOKENS.radius.md, background: entregarDiffCount > 0 ? TOKENS.colors.warningSoft : TOKENS.colors.successSoft, border: `1px solid ${entregarDiffCount > 0 ? TOKENS.colors.warning + '30' : TOKENS.colors.success + '30'}`, textAlign: 'center' }}>
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Con diferencia</p>
                       <p style={{ fontSize: 18, fontWeight: 700, color: entregarDiffCount > 0 ? TOKENS.colors.warning : TOKENS.colors.success, margin: 0 }}>{entregarDiffCount}</p>
                     </div>
@@ -658,10 +670,10 @@ export default function ScreenCierreTurno() {
                     disabled={!canSubmitEntregar || submitting}
                     style={{
                       width: '100%', padding: 14, borderRadius: TOKENS.radius.lg,
-                      background: canSubmitEntregar ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-                      color: canSubmitEntregar ? 'white' : TOKENS.colors.textMuted,
+                      background: canSubmitEntregar ? TOKENS.colors.ctaGradient : TOKENS.colors.surface,
+                      color: canSubmitEntregar ? TOKENS.colors.onPrimary : TOKENS.colors.textMuted,
                       fontSize: 15, fontWeight: 600, opacity: submitting ? 0.6 : 1,
-                      boxShadow: canSubmitEntregar ? '0 10px 24px rgba(43,143,224,0.25)' : 'none',
+                      boxShadow: canSubmitEntregar ? `0 10px 24px ${TOKENS.colors.blue}40` : 'none',
                     }}
                   >
                     {submitting ? 'Procesando...' : 'Entregar Turno'}
@@ -687,20 +699,22 @@ export default function ScreenCierreTurno() {
         onConfirm={handleSubmit}
         onCancel={() => setConfirmOpen(false)}
         loading={submitting}
+        tokens={TOKENS}
       />
     </ScreenShell>
   )
 }
 
-function EntregasBlockedView({ shiftStatus, typo, onReload }) {
+function EntregasBlockedView({ shiftStatus, typo, onReload, tokens = DARK_TOKENS }) {
+  const TOKENS = tokens
   const ownerName = shiftStatus?.owner_employee_name || 'otro almacenista'
   return (
     <div style={{ marginTop: 24 }}>
       <div style={{
         padding: 24, borderRadius: TOKENS.radius.xl,
-        background: 'linear-gradient(160deg, rgba(239,68,68,0.18), rgba(239,68,68,0.06))',
+        background: TOKENS.colors.errorSoft,
         border: `1px solid ${TOKENS.colors.error}50`,
-        boxShadow: '0 12px 28px rgba(239,68,68,0.20)',
+        boxShadow: TOKENS.shadow.md,
         textAlign: 'center',
       }}>
         <div style={{
