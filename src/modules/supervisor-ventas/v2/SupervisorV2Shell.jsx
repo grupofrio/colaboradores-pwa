@@ -35,7 +35,7 @@ export const V2_TABS = Object.freeze([
 
 const PULSE_TAB = Object.freeze({ key: 'pulso', label: 'Pulso', route: '/equipo', glyph: '◈' })
 
-export function buildSupervisorV2Tabs(pulseEnabled = false) {
+function buildSupervisorV2Tabs(pulseEnabled = false) {
   return pulseEnabled === true ? [PULSE_TAB, ...V2_TABS.slice(1)] : [...V2_TABS]
 }
 
