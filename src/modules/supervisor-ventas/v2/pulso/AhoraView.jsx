@@ -1,8 +1,6 @@
 import AttentionList from './AttentionList.jsx'
 import { compactState, presentPulsePayload } from './pulseModel.js'
 
-export { compactState }
-
 export default function AhoraView({ data = {}, onCta }) {
   const presented = presentPulsePayload(data)
   const attention = presented.attention
