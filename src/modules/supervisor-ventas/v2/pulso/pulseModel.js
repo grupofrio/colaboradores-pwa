@@ -189,6 +189,40 @@ export function presentPulsePayload(raw = {}) {
 }
 
 /**
+ * Compact operational state for Ahora.
+ * When estado_compacto.available === false, never render defensive zeros
+ * as if they were a real measurement (UNAVAILABLE != ZERO).
+ */
+export function compactState(data) {
+  const value = data?.estado_compacto || data?.estado || data?.state || data?.compact_state
+  if (!value || typeof value !== 'object') return null
+
+  if (value.available === false) {
+    return {
+      title: value.title || 'Estado del día',
+      summary: value.summary || 'Estado operativo no disponible.',
+      value: null,
+      available: false,
+    }
+  }
+
+  const routes = value.routes_total
+  const departed = value.departed
+  const notDeparted = value.not_departed
+  if (routes == null && departed == null && notDeparted == null && !value.title) return null
+  return {
+    title: value.title || value.label || 'Estado del día',
+    summary: value.summary || (
+      routes != null
+        ? `${departed ?? '—'} salieron · ${notDeparted ?? '—'} sin salida · ${routes} rutas`
+        : null
+    ),
+    value: value.value ?? value.count ?? null,
+    available: value.available !== false,
+  }
+}
+
+/**
  * Currency-safe money projection for Ayer.
  * Never exposes a cross-currency consolidated total to the UI.
  */

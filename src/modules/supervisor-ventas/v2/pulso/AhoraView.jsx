@@ -1,23 +1,7 @@
 import AttentionList from './AttentionList.jsx'
-import { presentPulsePayload } from './pulseModel.js'
+import { compactState, presentPulsePayload } from './pulseModel.js'
 
-function compactState(data) {
-  const value = data?.estado_compacto || data?.estado || data?.state || data?.compact_state
-  if (!value || typeof value !== 'object') return null
-  const routes = value.routes_total
-  const departed = value.departed
-  const notDeparted = value.not_departed
-  if (routes == null && departed == null && notDeparted == null && !value.title) return null
-  return {
-    title: value.title || value.label || 'Estado del día',
-    summary: value.summary || (
-      routes != null
-        ? `${departed ?? '—'} salieron · ${notDeparted ?? '—'} sin salida · ${routes} rutas`
-        : null
-    ),
-    value: value.value ?? value.count ?? null,
-  }
-}
+export { compactState }
 
 export default function AhoraView({ data = {}, onCta }) {
   const presented = presentPulsePayload(data)

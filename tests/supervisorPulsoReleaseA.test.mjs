@@ -13,6 +13,7 @@ import {
 import {
   ATTENTION_TYPES,
   clearPulseSessionProjection,
+  compactState,
   conversionState,
   diagnosis,
   formatCashCopy,
@@ -357,4 +358,50 @@ test('FEATURE_DISABLED limpia proyección Pulse; network/unavailable no', () => 
     normalizePulseResponse({ status: 'error', code: 'FEATURE_DISABLED' }).status,
     PULSE_STATUS.FEATURE_DISABLED,
   )
+})
+
+test('AHORA partial + estado unavailable nunca renderiza ceros falsos', () => {
+  const unavailable = compactState(
+    presentPulsePayload({
+      partial: true,
+      capabilities: { day_control_available: false, routes_available: false },
+      blocks: {
+        estado_compacto: { available: false, reason: 'routes_unavailable' },
+      },
+    }),
+  )
+  assert.equal(unavailable.available, false)
+  assert.equal(unavailable.value, null)
+  assert.match(unavailable.summary, /no disponible/i)
+  assert.doesNotMatch(unavailable.summary, /0 salieron/)
+  assert.doesNotMatch(unavailable.summary, /0 sin salida/)
+  assert.doesNotMatch(unavailable.summary, /0 rutas/)
+
+  // Defensive zeros must not leak when available=false even if present.
+  const withZeros = compactState({
+    estado_compacto: {
+      available: false,
+      routes_total: 0,
+      departed: 0,
+      not_departed: 0,
+    },
+  })
+  assert.equal(withZeros.available, false)
+  assert.doesNotMatch(withZeros.summary || '', /0 salieron · 0 sin salida · 0 rutas/)
+
+  const usable = compactState(
+    presentPulsePayload({
+      partial: false,
+      blocks: {
+        estado_compacto: {
+          available: true,
+          routes_total: 4,
+          departed: 2,
+          not_departed: 2,
+        },
+      },
+    }),
+  )
+  assert.equal(usable.available, true)
+  assert.equal(usable.summary, '2 salieron · 2 sin salida · 4 rutas')
 })
