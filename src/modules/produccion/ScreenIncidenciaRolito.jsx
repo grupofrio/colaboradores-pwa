@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { api } from '../../lib/api'
 import { getMyShift } from './api'
 import {
@@ -31,11 +33,15 @@ const FALLBACK_SCRAP_REASONS = SCRAP_REASONS_PRODUCTION.map(r => ({ id: r.id, na
 const PARO_ICONS = { 'Falta de agua': '\uD83D\uDCA7', 'Corte de energia': '\u26A1', 'Falla de maquina': '\u2699' }
 const SCRAP_ICONS = { 'Derretido': '\uD83D\uDCC9', 'Roto': '\u274C', 'Sellado deficiente': '\u26A0' }
 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
+
 export default function ScreenIncidenciaRolito() {
   const navigate = useNavigate()
   const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  // Invariante de tests/brandTokensScope: superficie compartida por operador_rolito/operador_barra/auxiliar_produccion (ruta exclusiva de esos roles), adopta el tema claro incondicionalmente.
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role) || isBrandLightSession(session)
 
   const [shift, setShift] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -211,7 +217,7 @@ export default function ScreenIncidenciaRolito() {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+      background: `linear-gradient(160deg, ${TOKENS_LIGHT.colors.bg0} 0%, ${TOKENS_LIGHT.colors.bg1} 50%, ${TOKENS_LIGHT.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
@@ -228,19 +234,19 @@ export default function ScreenIncidenciaRolito() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
           <button onClick={() => navigate('/produccion')} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Reportar Incidencia</span>
+          <span style={{ ...typo.title, color: TOKENS_LIGHT.colors.textSoft }}>Reportar Incidencia</span>
         </div>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS_LIGHT.colors.border}`, borderTop: `2px solid ${TOKENS_LIGHT.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -260,7 +266,7 @@ export default function ScreenIncidenciaRolito() {
                   marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
                   background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
                 }}>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.warning, margin: 0 }}>
                     {voiceNote}
                   </p>
                 </div>
@@ -268,7 +274,7 @@ export default function ScreenIncidenciaRolito() {
             </div>
 
             {/* Mode selection — Paro vs Merma */}
-            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 2 }}>TIPO DE INCIDENCIA</p>
+            <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 2 }}>TIPO DE INCIDENCIA</p>
             <div style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
               {[{ key: 'paro', label: 'Paro', icon: '\u23F8' }, { key: 'merma', label: 'Merma', icon: '\uD83D\uDCC9' }].map(m => (
                 <button
@@ -276,13 +282,13 @@ export default function ScreenIncidenciaRolito() {
                   onClick={() => { setMode(m.key); setSelectedCategory(null) }}
                   style={{
                     flex: 1, padding: '14px 12px', borderRadius: TOKENS.radius.md,
-                    background: mode === m.key ? 'rgba(245,158,11,0.12)' : TOKENS.colors.surface,
-                    border: `2px solid ${mode === m.key ? 'rgba(245,158,11,0.4)' : TOKENS.colors.border}`,
+                    background: mode === m.key ? 'rgba(245,158,11,0.12)' : TOKENS_LIGHT.colors.surface,
+                    border: `2px solid ${mode === m.key ? 'rgba(245,158,11,0.4)' : TOKENS_LIGHT.colors.border}`,
                     textAlign: 'center',
                   }}
                 >
-                  <span style={{ fontSize: 24, display: 'block', marginBottom: 4 }}>{m.icon}</span>
-                  <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>{m.label}</span>
+                  <span style={{ fontSize: 24, display: 'block', marginBottom: 4, color: TOKENS_LIGHT.colors.text }}>{m.icon}</span>
+                  <span style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 600 }}>{m.label}</span>
                 </button>
               ))}
             </div>
@@ -290,7 +296,7 @@ export default function ScreenIncidenciaRolito() {
             {/* Line selector — required by backend */}
             {mode && lines.length > 0 && (
               <div>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 6 }}>LÍNEA</p>
+                <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 6 }}>LÍNEA</p>
                 <div style={{ display: 'flex', gap: 10 }}>
                   {lines.filter(l => {
                     const n = String(l.type || l.name || '').toLowerCase()
@@ -305,12 +311,12 @@ export default function ScreenIncidenciaRolito() {
                         onClick={() => setLineId(String(l.id))}
                         style={{
                           flex: 1, padding: '12px 10px', borderRadius: TOKENS.radius.md,
-                          background: isSelected ? 'rgba(43,143,224,0.15)' : TOKENS.colors.surface,
-                          border: `2px solid ${isSelected ? 'rgba(43,143,224,0.4)' : TOKENS.colors.border}`,
+                          background: isSelected ? TOKENS_LIGHT.colors.chipInfoBg : TOKENS_LIGHT.colors.surface,
+                          border: `2px solid ${isSelected ? TOKENS_LIGHT.colors.borderBlue : TOKENS_LIGHT.colors.border}`,
                           textAlign: 'center',
                         }}
                       >
-                        <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600, fontSize: 14 }}>
+                        <span style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 600, fontSize: 14 }}>
                           {l.name}
                         </span>
                       </button>
@@ -323,7 +329,7 @@ export default function ScreenIncidenciaRolito() {
             {/* Category/Reason selection */}
             {mode === 'paro' && (
               <>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 2 }}>CATEGORIA DEL PARO</p>
+                <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 2 }}>CATEGORIA DEL PARO</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {downtimeCategories.map(cat => {
                     const isSelected = selectedCategory?.id === cat.id
@@ -334,13 +340,13 @@ export default function ScreenIncidenciaRolito() {
                         style={{
                           display: 'flex', alignItems: 'center', gap: 14,
                           padding: '14px 16px', borderRadius: TOKENS.radius.md,
-                          background: isSelected ? 'rgba(245,158,11,0.12)' : TOKENS.colors.surface,
-                          border: `2px solid ${isSelected ? 'rgba(245,158,11,0.4)' : TOKENS.colors.border}`,
+                          background: isSelected ? 'rgba(245,158,11,0.12)' : TOKENS_LIGHT.colors.surface,
+                          border: `2px solid ${isSelected ? 'rgba(245,158,11,0.4)' : TOKENS_LIGHT.colors.border}`,
                           width: '100%', textAlign: 'left',
                         }}
                       >
-                        <span style={{ fontSize: 22 }}>{PARO_ICONS[cat.name] || '\u23F8'}</span>
-                        <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600, fontSize: 15 }}>
+                        <span style={{ fontSize: 22, color: TOKENS_LIGHT.colors.text }}>{PARO_ICONS[cat.name] || '\u23F8'}</span>
+                        <span style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 600, fontSize: 15 }}>
                           {cat.name}
                         </span>
                       </button>
@@ -352,7 +358,7 @@ export default function ScreenIncidenciaRolito() {
 
             {mode === 'merma' && (
               <>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 2 }}>RAZON DE MERMA</p>
+                <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 2 }}>RAZON DE MERMA</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {scrapReasons.map(r => {
                     const isSelected = selectedCategory?.id === r.id
@@ -363,13 +369,13 @@ export default function ScreenIncidenciaRolito() {
                         style={{
                           display: 'flex', alignItems: 'center', gap: 14,
                           padding: '14px 16px', borderRadius: TOKENS.radius.md,
-                          background: isSelected ? 'rgba(245,158,11,0.12)' : TOKENS.colors.surface,
-                          border: `2px solid ${isSelected ? 'rgba(245,158,11,0.4)' : TOKENS.colors.border}`,
+                          background: isSelected ? 'rgba(245,158,11,0.12)' : TOKENS_LIGHT.colors.surface,
+                          border: `2px solid ${isSelected ? 'rgba(245,158,11,0.4)' : TOKENS_LIGHT.colors.border}`,
                           width: '100%', textAlign: 'left',
                         }}
                       >
-                        <span style={{ fontSize: 22 }}>{SCRAP_ICONS[r.name] || '\uD83D\uDCC9'}</span>
-                        <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600, fontSize: 15 }}>
+                        <span style={{ fontSize: 22, color: TOKENS_LIGHT.colors.text }}>{SCRAP_ICONS[r.name] || '\uD83D\uDCC9'}</span>
+                        <span style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 600, fontSize: 15 }}>
                           {r.name}
                         </span>
                       </button>
@@ -382,13 +388,13 @@ export default function ScreenIncidenciaRolito() {
             {/* Kg lost (for merma) */}
             {isMerma && selectedCategory && (
               <div>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>KG PERDIDOS</p>
+                <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 8 }}>KG PERDIDOS</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => setKgLost(v => String(Math.max(0, (parseInt(v) || 0) - 5)))}
                     style={{
                       width: 48, height: 48, borderRadius: TOKENS.radius.md,
-                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                      color: TOKENS.colors.text, fontSize: 24, fontWeight: 700,
+                      background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+                      color: TOKENS_LIGHT.colors.text, fontSize: 24, fontWeight: 700,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>-</button>
                   <input
@@ -397,16 +403,16 @@ export default function ScreenIncidenciaRolito() {
                     placeholder="0"
                     style={{
                       flex: 1, padding: '12px', borderRadius: TOKENS.radius.md,
-                      background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                      color: 'white', fontSize: 24, fontWeight: 700, outline: 'none',
+                      background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+                      color: TOKENS_LIGHT.colors.text, fontSize: 24, fontWeight: 700, outline: 'none',
                       textAlign: 'center',
                     }}
                   />
                   <button onClick={() => setKgLost(v => String((parseInt(v) || 0) + 5))}
                     style={{
                       width: 48, height: 48, borderRadius: TOKENS.radius.md,
-                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                      color: TOKENS.colors.text, fontSize: 24, fontWeight: 700,
+                      background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+                      color: TOKENS_LIGHT.colors.text, fontSize: 24, fontWeight: 700,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>+</button>
                 </div>
@@ -416,15 +422,15 @@ export default function ScreenIncidenciaRolito() {
             {/* Notes */}
             {selectedCategory && (
               <div>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>DETALLE (OPCIONAL)</p>
+                <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 8 }}>DETALLE (OPCIONAL)</p>
                 <textarea
                   value={notes} onChange={e => setNotes(e.target.value)}
                   placeholder="Describe brevemente..."
                   rows={3}
                   style={{
                     width: '100%', padding: '12px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                    color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+                    background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+                    color: TOKENS_LIGHT.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
                   }}
                 />
               </div>
@@ -434,15 +440,15 @@ export default function ScreenIncidenciaRolito() {
             {error && (
               <div style={{
                 padding: 12, borderRadius: TOKENS.radius.md,
-                background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
-                color: TOKENS.colors.error, ...typo.caption, textAlign: 'center',
+                background: TOKENS_LIGHT.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
+                color: TOKENS_LIGHT.colors.error, ...typo.caption, textAlign: 'center',
               }}>{error}</div>
             )}
             {success && (
               <div style={{
                 padding: 12, borderRadius: TOKENS.radius.md,
                 background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
-                color: TOKENS.colors.success, ...typo.caption, textAlign: 'center',
+                color: TOKENS_LIGHT.colors.success, ...typo.caption, textAlign: 'center',
               }}>{success}</div>
             )}
 

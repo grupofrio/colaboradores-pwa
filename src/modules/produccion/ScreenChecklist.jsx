@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getMyShift, getChecklist, submitCheck, completeChecklist } from './api'
 import { resolveChecklistBackTarget, resolveChecklistRoleContext } from './checklistContext'
 import { logScreenError } from '../shared/logScreenError'
@@ -10,6 +12,8 @@ import {
   readFileAsDataURL,
   validateChecklistPhotoFile,
 } from '../shared/checklistPhoto'
+
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
 const CHECK_ICONS = {
   yes_no:  '✓',
@@ -34,6 +38,8 @@ export default function ScreenChecklist() {
   const activeRole = resolveChecklistRoleContext(session, location.state?.selected_role)
   const productionState = activeRole ? { selected_role: activeRole } : undefined
   const backTo = resolveChecklistBackTarget(location.state)
+  // Invariante de tests/brandTokensScope: superficie compartida por operador_rolito/operador_barra/auxiliar_produccion (ruta exclusiva de esos roles), adopta el tema claro incondicionalmente.
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role) || isBrandLightSession(session)
 
   // Resuelve el shift_id. El supervisor entra sin "mi turno" y el shift viaja
   // por navegación (location.state.shift). El operador cae al getMyShift().
@@ -231,7 +237,7 @@ export default function ScreenChecklist() {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+      background: `linear-gradient(160deg, ${TOKENS_LIGHT.colors.bg0} 0%, ${TOKENS_LIGHT.colors.bg1} 50%, ${TOKENS_LIGHT.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
@@ -250,18 +256,18 @@ export default function ScreenChecklist() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
           <button onClick={() => navigate(backTo, { state: backTo === '/produccion' ? productionState : undefined })} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            background: TOKENS_LIGHT.colors.surface, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
           <div style={{ flex: 1 }}>
-            <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Inspección y Limpieza</span>
+            <span style={{ ...typo.title, color: TOKENS_LIGHT.colors.textSoft }}>Inspección y Limpieza</span>
           </div>
           {checks.length > 0 && (
-            <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>
+            <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted }}>
               {passedCount}/{checks.length}
             </span>
           )}
@@ -271,12 +277,12 @@ export default function ScreenChecklist() {
         {checks.length > 0 && (
           <div style={{
             height: 4, borderRadius: 2,
-            background: TOKENS.colors.surface,
+            background: TOKENS_LIGHT.colors.surface,
             marginBottom: 20, overflow: 'hidden',
           }}>
             <div style={{
               height: '100%', borderRadius: 2,
-              background: passedCount === checks.length ? TOKENS.colors.success : TOKENS.colors.blue2,
+              background: passedCount === checks.length ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.blue,
               width: `${(passedCount / checks.length) * 100}%`,
               transition: 'width 0.3s ease',
             }} />
@@ -285,15 +291,15 @@ export default function ScreenChecklist() {
 
         {loading && (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS_LIGHT.colors.border}`, borderTop: `2px solid ${TOKENS_LIGHT.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         )}
 
         {!loading && error && (
           <div style={{
             marginTop: 20, padding: 16, borderRadius: TOKENS.radius.lg,
-            background: TOKENS.colors.errorSoft, border: `1px solid rgba(239,68,68,0.3)`,
-            color: TOKENS.colors.error, ...typo.body, textAlign: 'center',
+            background: TOKENS_LIGHT.colors.errorSoft, border: `1px solid rgba(239,68,68,0.3)`,
+            color: TOKENS_LIGHT.colors.error, ...typo.body, textAlign: 'center',
           }}>
             {error}
           </div>
@@ -307,8 +313,8 @@ export default function ScreenChecklist() {
             textAlign: 'center',
           }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>&#x2705;</div>
-            <p style={{ ...typo.title, color: TOKENS.colors.success }}>Inspección completada</p>
-            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6 }}>
+            <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.success }}>Inspección completada</p>
+            <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, marginTop: 6 }}>
               Todos los puntos fueron verificados. Puedes continuar con la producción.
             </p>
           </div>
@@ -340,8 +346,8 @@ export default function ScreenChecklist() {
               style={{
                 width: '100%', padding: '14px',
                 borderRadius: TOKENS.radius.lg,
-                background: allAnswered ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-                color: allAnswered ? 'white' : TOKENS.colors.textLow,
+                background: allAnswered ? TOKENS_LIGHT.colors.ctaGradient : TOKENS_LIGHT.colors.surface,
+                color: allAnswered ? 'white' : TOKENS_LIGHT.colors.textLow,
                 fontSize: 15, fontWeight: 600,
                 opacity: submitting ? 0.6 : 1,
                 boxShadow: allAnswered ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
@@ -363,29 +369,29 @@ function CheckItem({ check, idx, typo, onUpdate, onSave, onPhoto }) {
   return (
     <div style={{
       padding: '14px 16px', borderRadius: TOKENS.radius.lg,
-      background: check.saved ? 'rgba(34,197,94,0.06)' : TOKENS.glass.panel,
-      border: `1px solid ${check.saved ? 'rgba(34,197,94,0.2)' : TOKENS.colors.border}`,
+      background: check.saved ? 'rgba(34,197,94,0.06)' : TOKENS_LIGHT.glass.panel,
+      border: `1px solid ${check.saved ? 'rgba(34,197,94,0.2)' : TOKENS_LIGHT.colors.border}`,
       transition: `border-color ${TOKENS.motion.fast}, background ${TOKENS.motion.fast}`,
     }}>
       {/* Nombre del punto */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
         <span style={{
           width: 28, height: 28, borderRadius: '50%',
-          background: check.saved ? 'rgba(34,197,94,0.15)' : TOKENS.colors.surface,
+          background: check.saved ? 'rgba(34,197,94,0.15)' : TOKENS_LIGHT.colors.surface,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 13, flexShrink: 0,
-          color: check.saved ? TOKENS.colors.success : TOKENS.colors.textMuted,
+          color: check.saved ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.textMuted,
         }}>
           {check.saved ? '✓' : icon}
         </span>
-        <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0, lineHeight: 1.4 }}>
+        <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, margin: 0, lineHeight: 1.4 }}>
           {check.name}
         </p>
       </div>
 
       {/* Input según tipo */}
       {check.attempted && !check.saved && (
-        <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '0 0 10px 38px' }}>
+        <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.error, margin: '0 0 10px 38px' }}>
           Este punto aun no cumple la validacion de Odoo.
         </p>
       )}
@@ -400,13 +406,13 @@ function CheckItem({ check, idx, typo, onUpdate, onSave, onPhoto }) {
                 flex: 1, padding: '8px', borderRadius: TOKENS.radius.sm,
                 background: check.localValue === val
                   ? (val ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)')
-                  : TOKENS.colors.surface,
+                  : TOKENS_LIGHT.colors.surface,
                 border: `1px solid ${check.localValue === val
                   ? (val ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)')
-                  : TOKENS.colors.border}`,
+                  : TOKENS_LIGHT.colors.border}`,
                 color: check.localValue === val
-                  ? (val ? TOKENS.colors.success : TOKENS.colors.error)
-                  : TOKENS.colors.textMuted,
+                  ? (val ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.error)
+                  : TOKENS_LIGHT.colors.textMuted,
                 fontSize: 13, fontWeight: 600,
               }}
             >
@@ -440,12 +446,12 @@ function CheckItem({ check, idx, typo, onUpdate, onSave, onPhoto }) {
             placeholder={`${check.min_value ?? ''} a ${check.max_value ?? ''}`}
             style={{
               flex: 1, padding: '8px 12px', borderRadius: TOKENS.radius.sm,
-              background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-              color: 'white', fontSize: 14, outline: 'none',
+              background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+              color: TOKENS_LIGHT.colors.text, fontSize: 14, outline: 'none',
             }}
           />
           {check.min_value != null && (
-            <span style={{ ...typo.caption, color: TOKENS.colors.textLow, whiteSpace: 'nowrap' }}>
+            <span style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textLow, whiteSpace: 'nowrap' }}>
               {check.min_value}° a {check.max_value}°
             </span>
           )}
@@ -458,9 +464,9 @@ function CheckItem({ check, idx, typo, onUpdate, onSave, onPhoto }) {
             onClick={() => onPhoto(check.id)}
             style={{
               padding: '8px 16px', borderRadius: TOKENS.radius.sm,
-              background: check.hasPhoto ? 'rgba(34,197,94,0.15)' : TOKENS.colors.surface,
-              border: `1px solid ${check.hasPhoto ? 'rgba(34,197,94,0.3)' : TOKENS.colors.border}`,
-              color: check.hasPhoto ? TOKENS.colors.success : TOKENS.colors.blue2,
+              background: check.hasPhoto ? 'rgba(34,197,94,0.15)' : TOKENS_LIGHT.colors.surface,
+              border: `1px solid ${check.hasPhoto ? 'rgba(34,197,94,0.3)' : TOKENS_LIGHT.colors.border}`,
+              color: check.hasPhoto ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.blue,
               fontSize: 13, fontWeight: 600,
               display: 'flex', alignItems: 'center', gap: 6,
             }}
@@ -484,8 +490,8 @@ function CheckItem({ check, idx, typo, onUpdate, onSave, onPhoto }) {
             rows={2}
             style={{
               width: '100%', padding: '8px 12px', borderRadius: TOKENS.radius.sm,
-              background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-              color: 'white', fontSize: 13, outline: 'none', resize: 'vertical',
+              background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
+              color: TOKENS_LIGHT.colors.text, fontSize: 13, outline: 'none', resize: 'vertical',
               fontFamily: 'inherit',
             }}
           />
