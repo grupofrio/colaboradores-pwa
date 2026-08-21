@@ -2,7 +2,7 @@
  * Dark-launch gate for Supervisor Pulso Comercial.
  *
  * The values passed here are the server-authenticated sign-in projection. There
- * is deliberately no runtime override or dedicated localStorage flag.
+ * is deliberately no runtime or persistent client override.
  */
 export function computePulseFlag({ globalEnabled, branchEnabled } = {}) {
   if (globalEnabled !== true && branchEnabled !== true) {
