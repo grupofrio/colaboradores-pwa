@@ -1,18 +1,28 @@
 import AttentionList from './AttentionList.jsx'
+import { presentPulsePayload } from './pulseModel.js'
 
 function compactState(data) {
-  const value = data?.estado || data?.state || data?.compact_state
+  const value = data?.estado_compacto || data?.estado || data?.state || data?.compact_state
   if (!value || typeof value !== 'object') return null
+  const routes = value.routes_total
+  const departed = value.departed
+  const notDeparted = value.not_departed
+  if (routes == null && departed == null && notDeparted == null && !value.title) return null
   return {
-    title: value.title || value.label || 'Estado comercial',
-    summary: value.summary || value.message || null,
+    title: value.title || value.label || 'Estado del día',
+    summary: value.summary || (
+      routes != null
+        ? `${departed ?? '—'} salieron · ${notDeparted ?? '—'} sin salida · ${routes} rutas`
+        : null
+    ),
     value: value.value ?? value.count ?? null,
   }
 }
 
 export default function AhoraView({ data = {}, onCta }) {
-  const attention = data.attention || data.attention_items || []
-  const state = compactState(data)
+  const presented = presentPulsePayload(data)
+  const attention = presented.attention
+  const state = compactState(presented)
 
   return (
     <div className="pulse-view">
@@ -20,9 +30,9 @@ export default function AhoraView({ data = {}, onCta }) {
         <div className="pulse-section-heading">
           <div>
             <p className="pulse-eyebrow">Operación en curso</p>
-            <h2 id="pulse-ahora-attention">Requiere atención</h2>
+            <h2 id="pulse-ahora-attention">Necesita tu atención</h2>
           </div>
-          <span className="pulse-count">{attention.length}</span>
+          <span className="pulse-count">{presented.attention_total ?? attention.length}</span>
         </div>
         <AttentionList items={attention} max={5} onCta={onCta} />
       </section>

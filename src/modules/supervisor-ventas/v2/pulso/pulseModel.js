@@ -148,3 +148,40 @@ export function metricValue(metric, ...keys) {
   }
   return null
 }
+
+/**
+ * Flatten the SaleOps pulse envelope so views can read either top-level or
+ * `blocks.*` without inventing a second contract shape.
+ */
+export function presentPulsePayload(raw = {}) {
+  const blocks = raw?.blocks && typeof raw.blocks === 'object' ? raw.blocks : {}
+  const resultado = blocks.resultado || raw.resultado || raw.result || {}
+  const sales = resultado.sales || {}
+  const collection = resultado.collection || {}
+  return {
+    ...raw,
+    attention: raw.attention || raw.attention_items || [],
+    attention_total: raw.attention_total ?? (raw.attention || []).length,
+    funnel: blocks.funnel || raw.funnel || {},
+    diagnosis: blocks.diagnosis || raw.diagnosis || null,
+    quality: blocks.quality || raw.quality || raw.quality_metric || null,
+    recovery: blocks.recovery || raw.recovery || null,
+    estado_compacto: blocks.estado_compacto || raw.estado_compacto || raw.estado || null,
+    cash: blocks.cash || raw.cash || null,
+    yesterday_route_breakdown:
+      blocks.yesterday_route_breakdown
+      || raw.yesterday_route_breakdown
+      || raw.routes
+      || [],
+    resultado: {
+      sales_amount: sales.total ?? resultado.sales_amount ?? null,
+      orders: sales.orders ?? resultado.orders ?? null,
+      avg_ticket: sales.avg_ticket ?? resultado.avg_ticket ?? null,
+      cash: collection.cash ?? resultado.cash ?? null,
+      credit: collection.credit ?? resultado.credit_granted ?? resultado.credito_otorgado ?? null,
+      currency: sales.currency || collection.currency || resultado.currency || null,
+      credit_label: collection.credit_label || 'Crédito otorgado',
+    },
+  }
+}
+

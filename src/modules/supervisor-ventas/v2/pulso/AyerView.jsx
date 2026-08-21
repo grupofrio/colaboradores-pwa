@@ -6,21 +6,9 @@ import {
   diagnosis as buildDiagnosis,
   focusPulseRoute,
   metricValue,
+  presentPulsePayload,
   pulseRouteRowId,
 } from './pulseModel.js'
-
-const FUNNEL_LABELS = Object.freeze({
-  scheduled: 'Agendados',
-  agendados: 'Agendados',
-  visited: 'Visitados',
-  visitados: 'Visitados',
-  opportunities: 'Oportunidades',
-  oportunidades: 'Oportunidades',
-  converted: 'Convertidos',
-  convertidos: 'Convertidos',
-  sales: 'Ventas',
-  ventas: 'Ventas',
-})
 
 function displayValue(value, suffix = '') {
   if (value === null || value === undefined || value === '') return '—'
@@ -31,49 +19,38 @@ function displayValue(value, suffix = '') {
   return String(value)
 }
 
-function routeRows(data) {
-  if (Array.isArray(data?.routes)) return data.routes
-  if (Array.isArray(data?.route_breakdown)) return data.route_breakdown
-  if (Array.isArray(data?.breakdown?.routes)) return data.breakdown.routes
-  return []
+function moneyValue(amount, currency) {
+  if (amount === null || amount === undefined || amount === '') return '—'
+  const number = Number(amount)
+  if (!Number.isFinite(number)) return '—'
+  const formatted = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(number)
+  return currency ? `${formatted} ${currency}` : formatted
 }
 
 function funnelEntries(funnel) {
-  if (!funnel || typeof funnel !== 'object') return []
-  return Object.entries(funnel)
-    .filter(([key, value]) => FUNNEL_LABELS[key] && (typeof value === 'number' || typeof value === 'string'))
-    .map(([key, value]) => ({ key, label: FUNNEL_LABELS[key], value }))
+  return [
+    { key: 'agendados', label: 'Agendados', value: funnel.agendados ?? funnel.scheduled },
+    { key: 'visitados', label: 'Visitados', value: funnel.visitados ?? funnel.visited },
+    { key: 'compraron', label: 'Compraron', value: funnel.compraron ?? funnel.bought },
+  ]
 }
 
 export default function AyerView({ data = {}, onCta, focusTarget }) {
   const [routesOpen, setRoutesOpen] = useState(false)
   const rootRef = useRef(null)
-  const routes = useMemo(() => routeRows(data), [data])
-  const attention = data.attention || data.attention_items || []
-  const funnel = data.funnel || {}
-  const coverage = metricValue(
-    funnel,
-    'coverage_pct',
-    'coverage',
-  ) ?? metricValue(data.coverage, 'pct', 'value')
-  const conversion = metricValue(
-    funnel,
-    'conversion_pct',
-    'conversion',
-  ) ?? metricValue(data.conversion, 'pct', 'value')
-  const conversionInfo = conversionState(conversion)
-  const diagnosis = data.diagnosis?.kind
-    ? data.diagnosis
+  const presented = useMemo(() => presentPulsePayload(data), [data])
+  const routes = presented.yesterday_route_breakdown || []
+  const attention = presented.attention
+  const funnel = presented.funnel || {}
+  const coverage = metricValue(funnel, 'coverage_pct', 'coverage')
+  const conversion = metricValue(funnel, 'conversion_pct', 'conversion')
+  const conversionInfo = funnel.conversion_state || conversionState(conversion)
+  const diagnosis = presented.diagnosis?.kind
+    ? presented.diagnosis
     : buildDiagnosis(coverage, conversion)
-  const result = data.resultado || data.result || {}
-  const creditGranted = metricValue(
-    result,
-    'credit_granted',
-    'credito_otorgado',
-    'granted_credit',
-  )
-  const quality = data.quality || data.quality_metric || null
-  const recovery = data.recovery || null
+  const result = presented.resultado || {}
+  const quality = presented.quality
+  const recovery = presented.recovery
 
   useEffect(() => {
     if (focusTarget?.block !== 'routes') return undefined
@@ -95,16 +72,16 @@ export default function AyerView({ data = {}, onCta, focusTarget }) {
         <div className="pulse-section-heading">
           <div>
             <p className="pulse-eyebrow">Cierre de ayer</p>
-            <h2 id="pulse-ayer-attention">Requiere atención</h2>
+            <h2 id="pulse-ayer-attention">Necesita tu atención</h2>
           </div>
-          <span className="pulse-count">{attention.length}</span>
+          <span className="pulse-count">{presented.attention_total ?? attention.length}</span>
         </div>
         <AttentionList items={attention} max={5} onCta={onCta} />
       </section>
 
       {diagnosis?.summary ? (
         <section className="pulse-section pulse-diagnosis" aria-labelledby="pulse-diagnosis">
-          <p className="pulse-eyebrow">Diagnóstico principal</p>
+          <p className="pulse-eyebrow">Diagnóstico</p>
           <h2 id="pulse-diagnosis">{diagnosis.summary}</h2>
         </section>
       ) : null}
@@ -113,10 +90,10 @@ export default function AyerView({ data = {}, onCta, focusTarget }) {
         <div className="pulse-section-heading">
           <div>
             <p className="pulse-eyebrow">Embudo</p>
-            <h2 id="pulse-funnel">Ejecución y conversión</h2>
+            <h2 id="pulse-funnel">Agendados → Visitados → Compraron</h2>
           </div>
-          <span className={`pulse-tone pulse-tone--${conversionInfo.tone}`}>
-            {conversionInfo.label}
+          <span className={`pulse-tone pulse-tone--${conversionInfo.tone || 'unknown'}`}>
+            {conversionInfo.label || 'Sin dato'}
           </span>
         </div>
         <div className="pulse-metric-grid">
@@ -128,32 +105,52 @@ export default function AyerView({ data = {}, onCta, focusTarget }) {
           ))}
           <div className="pulse-metric">
             <span>Cobertura</span>
-            <strong>{displayValue(coverage, '%')}</strong>
+            <strong>{coverage == null ? '—' : displayValue(coverage, '%')}</strong>
           </div>
           <div className="pulse-metric">
             <span>Conversión</span>
-            <strong>{displayValue(conversion, '%')}</strong>
+            <strong>{conversion == null ? '—' : displayValue(conversion, '%')}</strong>
           </div>
         </div>
       </section>
 
       <section className="pulse-section" aria-labelledby="pulse-result">
         <p className="pulse-eyebrow">Resultado</p>
-        <div className="pulse-result-row">
-          <h2 id="pulse-result">Crédito otorgado</h2>
-          <strong>{displayValue(creditGranted)}</strong>
+        <h2 id="pulse-result">Venta del día</h2>
+        <div className="pulse-metric-grid">
+          <div className="pulse-metric">
+            <span>Venta</span>
+            <strong>{moneyValue(result.sales_amount, result.currency)}</strong>
+          </div>
+          <div className="pulse-metric">
+            <span>Pedidos</span>
+            <strong>{displayValue(result.orders)}</strong>
+          </div>
+          <div className="pulse-metric">
+            <span>Ticket</span>
+            <strong>{moneyValue(result.avg_ticket, result.currency)}</strong>
+          </div>
+          <div className="pulse-metric">
+            <span>Contado</span>
+            <strong>{moneyValue(result.cash, result.currency)}</strong>
+          </div>
+          <div className="pulse-metric">
+            <span>Crédito otorgado</span>
+            <strong>{moneyValue(result.credit, result.currency)}</strong>
+          </div>
         </div>
       </section>
 
-      {quality ? (
+      {quality && quality.available !== false ? (
         <section className="pulse-section" aria-labelledby="pulse-quality">
           <p className="pulse-eyebrow">Métrica de calidad</p>
           <div className="pulse-result-row">
             <div>
-              <h2 id="pulse-quality">{quality.label || 'Visitas para revisar'}</h2>
-              {quality.summary ? <p>{quality.summary}</p> : null}
+              <h2 id="pulse-quality">
+                Visitas a revisar: {displayValue(metricValue(quality, 'a_revisar', 'value', 'count'))}
+              </h2>
+              {quality.pct != null ? <p>{displayValue(quality.pct, '%')} del total evaluable</p> : null}
             </div>
-            <strong>{displayValue(metricValue(quality, 'value', 'count', 'pct'), quality.pct != null ? '%' : '')}</strong>
           </div>
         </section>
       ) : null}
@@ -161,15 +158,17 @@ export default function AyerView({ data = {}, onCta, focusTarget }) {
       {recovery && recovery.available !== false ? (
         <section className="pulse-section pulse-recovery" aria-labelledby="pulse-recovery">
           <p className="pulse-eyebrow">Recuperación</p>
-          <h2 id="pulse-recovery">{recovery.title || 'Clientes por recuperar'}</h2>
+          <h2 id="pulse-recovery">
+            Clientes prioritarios {displayValue(metricValue(recovery, 'count', 'total', 'value'))}
+          </h2>
           {recovery.summary ? <p>{recovery.summary}</p> : null}
           <Link className="pulse-primary-link" to="/equipo/recuperacion">
-            Abrir recuperación
+            Ver recuperación
           </Link>
         </section>
       ) : null}
 
-      <section className="pulse-section" aria-labelledby="pulse-routes">
+      <section className="pulse-section" aria-labelledby="pulse-routes" id="pulse-routes-block">
         <button
           className="pulse-collapse-button"
           type="button"
@@ -178,33 +177,40 @@ export default function AyerView({ data = {}, onCta, focusTarget }) {
           onClick={() => setRoutesOpen((open) => !open)}
         >
           <span>
-            <span className="pulse-eyebrow">Desglose</span>
-            <span id="pulse-routes" className="pulse-collapse-title">Rutas</span>
+            <p className="pulse-eyebrow">Rutas</p>
+            <h2 id="pulse-routes">Desglose de ayer</h2>
           </span>
-          <span aria-hidden>{routesOpen ? '−' : '+'}</span>
+          <strong>{routesOpen ? 'Ocultar' : 'Ver rutas'}</strong>
         </button>
-        <div id="pulse-route-breakdown" hidden={!routesOpen}>
-          {routes.length ? (
-            <div className="pulse-route-list">
-              {routes.map((route) => {
-                const entityId = route.entity_id ?? route.plan_id ?? route.id
-                const rowId = pulseRouteRowId(entityId)
-                return (
-                  <article className="pulse-route-row" data-pulse-row-id={rowId} key={rowId || route.name}>
-                    <div>
-                      <h3>{route.entity_name || route.route_name || route.name || 'Ruta'}</h3>
-                      <p>{route.owner_name || route.salesperson_name || 'Responsable por confirmar'}</p>
-                    </div>
-                    <div className="pulse-route-metrics">
-                      <span>{displayValue(metricValue(route, 'visited', 'visitados'))} visitas</span>
-                      <span>{displayValue(metricValue(route, 'conversion_pct', 'conversion'), '%')} conversión</span>
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
-          ) : <p className="pulse-empty">Sin desglose de rutas disponible.</p>}
-        </div>
+        {routesOpen ? (
+          <div id="pulse-route-breakdown" className="pulse-route-list">
+            {routes.length === 0 ? (
+              <p>No hay rutas en el alcance de ayer.</p>
+            ) : routes.map((route) => {
+              const entityId = route.plan_id ?? route.id ?? route.entity_id
+              const rowId = pulseRouteRowId(entityId)
+              return (
+                <article
+                  className="pulse-route-row"
+                  key={rowId || `${route.route_name}-${entityId}`}
+                  data-pulse-row-id={rowId || undefined}
+                >
+                  <div>
+                    <h3>{route.route_name || route.name || `Ruta ${entityId}`}</h3>
+                    {route.seller_name ? <p>{route.seller_name}</p> : null}
+                  </div>
+                  <dl>
+                    <div><dt>Agendados</dt><dd>{displayValue(route.scheduled)}</dd></div>
+                    <div><dt>Visitados</dt><dd>{displayValue(route.visited)}</dd></div>
+                    <div><dt>Compraron</dt><dd>{displayValue(route.bought)}</dd></div>
+                    <div><dt>Cobertura</dt><dd>{route.coverage_pct == null ? '—' : displayValue(route.coverage_pct, '%')}</dd></div>
+                    <div><dt>Conversión</dt><dd>{route.conversion_pct == null ? '—' : displayValue(route.conversion_pct, '%')}</dd></div>
+                  </dl>
+                </article>
+              )
+            })}
+          </div>
+        ) : null}
       </section>
     </div>
   )
