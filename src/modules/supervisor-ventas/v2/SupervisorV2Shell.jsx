@@ -15,8 +15,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTypo } from '../../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
+import { getSession } from '../../../lib/api.js'
 import { getSupervisorCopilotCapabilities } from './copilot/copilotSupervisorApi.js'
 import { resolveSupervisorCopilotTabVisible } from './copilot/copilotSupervisorModel.js'
+import { readPulseFlagFrom } from './pulso/pulseFlag.js'
 
 const C = TOKENS.colors
 
@@ -30,6 +32,12 @@ export const V2_TABS = Object.freeze([
   { key: 'copiloto', label: 'Copiloto', route: '/equipo/copiloto', glyph: '✎' },
   { key: 'mas', label: 'Más', route: '/equipo/mas', glyph: '⋯' },
 ])
+
+const PULSE_TAB = Object.freeze({ key: 'pulso', label: 'Pulso', route: '/equipo', glyph: '◈' })
+
+export function buildSupervisorV2Tabs(pulseEnabled = false) {
+  return pulseEnabled === true ? [PULSE_TAB, ...V2_TABS.slice(1)] : [...V2_TABS]
+}
 
 // Pastilla horizontal (icono + texto). Una sola forma; el rail hace scroll si no
 // caben. minHeight 44 para touch. Activa = fondo + texto fuerte + palabra, no
@@ -56,15 +64,23 @@ function TabButton({ tab, active, onClick }) {
   )
 }
 
-export default function SupervisorV2Shell({ active = 'hoy', children }) {
+export default function SupervisorV2Shell({ active = 'hoy', children, pulseEnabled }) {
   const navigate = useNavigate()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
   const [copilotOk, setCopilotOk] = useState(false)
   const typo = useMemo(() => getTypo(sw), [sw])
   const wide = sw >= 900
+  const pulseOn = useMemo(() => {
+    if (pulseEnabled !== undefined) return pulseEnabled === true
+    const session = getSession()
+    return readPulseFlagFrom(session, session?.capabilities).enabled
+  }, [pulseEnabled])
   const tabs = useMemo(
-    () => (copilotOk ? V2_TABS : V2_TABS.filter((t) => t.key !== 'copiloto')),
-    [copilotOk],
+    () => {
+      const available = buildSupervisorV2Tabs(pulseOn)
+      return copilotOk ? available : available.filter((t) => t.key !== 'copiloto')
+    },
+    [copilotOk, pulseOn],
   )
 
   useEffect(() => {

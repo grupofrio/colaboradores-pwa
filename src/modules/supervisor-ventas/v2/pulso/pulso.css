@@ -1,0 +1,373 @@
+.pulse-page {
+  color: #0f2a3d;
+}
+
+.pulse-hero {
+  padding: 20px;
+  border: 1px solid rgba(0, 119, 187, 0.18);
+  border-radius: 22px;
+  background: linear-gradient(135deg, #005a8d 0%, #00b8d4 100%);
+  box-shadow: 0 8px 24px rgba(15, 42, 61, 0.1);
+  color: #fff;
+}
+
+.pulse-hero h1,
+.pulse-section h2,
+.pulse-section h3,
+.pulse-state h2,
+.pulse-hero p,
+.pulse-section p,
+.pulse-state p {
+  margin: 0;
+}
+
+.pulse-hero h1 {
+  margin-top: 4px;
+  font-size: clamp(28px, 5vw, 40px);
+}
+
+.pulse-hero > p:last-child {
+  margin-top: 8px;
+  opacity: 0.92;
+}
+
+.pulse-eyebrow {
+  color: #005a8d;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pulse-hero .pulse-eyebrow {
+  color: #fff;
+  opacity: 0.86;
+}
+
+.pulse-horizons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 14px 0;
+  padding: 4px;
+  border: 1px solid #dbeff9;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.pulse-horizon {
+  min-height: 44px;
+  border-radius: 14px;
+  color: #5b7285;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pulse-horizon--active {
+  background: #e0f3fc;
+  color: #005a8d;
+}
+
+.pulse-view {
+  display: grid;
+  gap: 14px;
+}
+
+.pulse-section {
+  padding: 18px;
+  border: 1px solid #dbeff9;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 42, 61, 0.08);
+}
+
+.pulse-section--compact {
+  padding-block: 14px;
+}
+
+.pulse-section-heading,
+.pulse-state-row,
+.pulse-result-row,
+.pulse-attention-heading,
+.pulse-collapse-button,
+.pulse-route-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pulse-section-heading {
+  margin-bottom: 14px;
+}
+
+.pulse-section h2 {
+  margin-top: 3px;
+  font-size: 20px;
+}
+
+.pulse-section h3 {
+  font-size: 16px;
+}
+
+.pulse-count,
+.pulse-tone {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e0f3fc;
+  color: #005a8d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pulse-attention-list,
+.pulse-route-list {
+  display: grid;
+  gap: 10px;
+}
+
+.pulse-attention-card {
+  padding: 14px;
+  border: 1px solid #dbeff9;
+  border-left-width: 4px;
+  border-radius: 18px;
+  background: #f7fcff;
+}
+
+.pulse-attention-card--critical {
+  border-left-color: #b91c1c;
+}
+
+.pulse-attention-card--warning {
+  border-left-color: #b45309;
+}
+
+.pulse-attention-card--info {
+  border-left-color: #0077bb;
+}
+
+.pulse-attention-card h3 {
+  margin-top: 8px;
+}
+
+.pulse-attention-card p,
+.pulse-section > p,
+.pulse-state p,
+.pulse-route-row p {
+  margin-top: 6px;
+  color: #5b7285;
+  line-height: 1.45;
+}
+
+.pulse-severity,
+.pulse-entity,
+.pulse-owner {
+  color: #5b7285;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pulse-attention-card--critical .pulse-severity {
+  color: #b91c1c;
+}
+
+.pulse-attention-card--warning .pulse-severity {
+  color: #b45309;
+}
+
+.pulse-cash-copy {
+  color: #0f2a3d !important;
+  font-weight: 800;
+}
+
+.pulse-link-button,
+.pulse-secondary-button,
+.pulse-primary-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.pulse-link-button {
+  margin-top: 8px;
+  color: #005a8d;
+}
+
+.pulse-secondary-button {
+  width: 100%;
+  border: 1px solid rgba(0, 119, 187, 0.18);
+  background: #e0f3fc;
+  color: #005a8d;
+}
+
+.pulse-primary-link {
+  margin-top: 14px;
+  padding: 0 16px;
+  background: linear-gradient(90deg, #005a8d, #0077bb);
+  color: #fff;
+}
+
+.pulse-state {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  gap: 10px;
+  padding: 28px;
+  border: 1px solid #dbeff9;
+  border-radius: 22px;
+  background: #fff;
+  text-align: center;
+}
+
+.pulse-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #c9ebf8;
+  border-top-color: #0077bb;
+  border-radius: 50%;
+  animation: pulse-spin 0.8s linear infinite;
+}
+
+.pulse-partial {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(180, 83, 9, 0.25);
+  border-radius: 14px;
+  background: rgba(180, 83, 9, 0.1);
+  color: #b45309;
+  font-weight: 700;
+}
+
+.pulse-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pulse-metric {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f7fcff;
+}
+
+.pulse-metric span,
+.pulse-route-metrics span {
+  color: #5b7285;
+  font-size: 12px;
+}
+
+.pulse-metric strong,
+.pulse-result-row strong,
+.pulse-state-row strong {
+  color: #005a8d;
+  font-size: 22px;
+}
+
+.pulse-tone--critical {
+  background: rgba(185, 28, 28, 0.1);
+  color: #b91c1c;
+}
+
+.pulse-tone--attention,
+.pulse-tone--watch {
+  background: rgba(180, 83, 9, 0.1);
+  color: #b45309;
+}
+
+.pulse-tone--good {
+  background: rgba(22, 101, 52, 0.1);
+  color: #166534;
+}
+
+.pulse-diagnosis {
+  border-color: rgba(0, 119, 187, 0.3);
+  background: #f7fcff;
+}
+
+.pulse-recovery {
+  background: #f7fcff;
+}
+
+.pulse-collapse-button {
+  width: 100%;
+  min-height: 44px;
+  color: #0f2a3d;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pulse-collapse-title {
+  display: block;
+  margin-top: 3px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.pulse-route-list {
+  margin-top: 14px;
+}
+
+.pulse-route-row {
+  padding: 12px;
+  border: 1px solid #dbeff9;
+  border-radius: 14px;
+  background: #f7fcff;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.pulse-route-row--focused {
+  border-color: #0077bb;
+  background: #e0f3fc;
+  box-shadow: 0 0 0 3px rgba(0, 119, 187, 0.12);
+}
+
+.pulse-route-metrics {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 4px;
+  text-align: right;
+}
+
+.pulse-empty {
+  color: #5b7285;
+}
+
+@keyframes pulse-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (min-width: 760px) {
+  .pulse-view {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pulse-view > .pulse-section:first-child,
+  .pulse-view > .pulse-section:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .pulse-hero {
+    padding: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-spinner {
+    animation-duration: 1.8s;
+  }
+
+  .pulse-route-row {
+    transition: none;
+  }
+}
