@@ -226,7 +226,6 @@ const BriefEmbedScreen       = lazy(() => import('./modules/brief/BriefEmbedScre
 // ─── Contexto de sesión ──────────────────────────────────────────────────────
 // Compatibilidad: el contexto vive en lib/sessionContext; estas re-exportaciones
 // conservan los imports históricos de las pantallas sin crear otra autoridad.
-// eslint-disable-next-line react-refresh/only-export-components
 export { SessionContext }
 // eslint-disable-next-line react-refresh/only-export-components
 export function useSession() { return useSessionContext() }
