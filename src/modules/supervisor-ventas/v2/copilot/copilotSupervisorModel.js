@@ -1,3 +1,7 @@
+import { getModuleRouteDecisionForSession } from '../../../../lib/navModel.js'
+
+export const SUPERVISOR_COPILOT_MODULE_ID = 'copiloto_supervisor'
+
 export const SUPERVISOR_COPILOT_HREF_ALLOWLIST = Object.freeze([
   '/equipo',
   '/equipo/rutas',
@@ -33,4 +37,19 @@ export function resolveSupervisorCopilotTabVisible(capabilitiesPromise) {
   return Promise.resolve(capabilitiesPromise)
     .then((data) => supervisorCopilotEnabledFromLivePayload(data))
     .catch(() => false)
+}
+
+export function isSupervisorCopilotModuleAllowed(session) {
+  return getModuleRouteDecisionForSession(SUPERVISOR_COPILOT_MODULE_ID, session) === 'allow'
+}
+
+export function resolveSupervisorCopilotTabVisibleForSession(session, loadCapabilities) {
+  if (!isSupervisorCopilotModuleAllowed(session)) return Promise.resolve(false)
+  if (typeof loadCapabilities !== 'function') return Promise.resolve(false)
+
+  try {
+    return resolveSupervisorCopilotTabVisible(loadCapabilities())
+  } catch {
+    return Promise.resolve(false)
+  }
 }
