@@ -55,6 +55,12 @@
   background: #fff;
 }
 
+@media (min-width: 760px) {
+  .pulse-horizons {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .pulse-horizon {
   min-height: 44px;
   border-radius: 14px;
@@ -341,6 +347,118 @@
   color: #5b7285;
 }
 
+.pulse-movement-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pulse-movement-card {
+  display: grid;
+  gap: 6px;
+  min-height: 44px;
+  padding: 12px;
+  border: 1px solid #dbeff9;
+  border-radius: 14px;
+  background: #f7fcff;
+  color: #0f2a3d;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pulse-movement-card strong {
+  color: #005a8d;
+  font-size: 22px;
+}
+
+.pulse-movement-card span:last-child {
+  color: #5b7285;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pulse-movement-card--active,
+.pulse-block--focused {
+  border-color: #0077bb;
+  background: #e0f3fc;
+  box-shadow: 0 0 0 3px rgba(0, 119, 187, 0.12);
+}
+
+.pulse-matrix-wrap {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.pulse-matrix-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 1.2fr) repeat(7, minmax(44px, 1fr));
+  gap: 4px;
+  min-width: 520px;
+}
+
+.pulse-matrix-row--head {
+  color: #5b7285;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pulse-matrix-label {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pulse-matrix-day,
+.pulse-matrix-cell {
+  display: grid;
+  gap: 4px;
+  min-height: 44px;
+  place-content: center;
+  padding: 6px;
+  border-radius: 12px;
+  background: #f7fcff;
+  text-align: center;
+}
+
+.pulse-matrix-cell-value {
+  color: #005a8d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.pulse-drop-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pulse-drop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px;
+  border: 1px solid #dbeff9;
+  border-radius: 14px;
+  background: #f7fcff;
+}
+
+.pulse-drop-row h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.pulse-drop-row p {
+  margin-top: 4px;
+  color: #5b7285;
+}
+
 @keyframes pulse-spin {
   to {
     transform: rotate(360deg);
@@ -368,6 +486,11 @@
   }
 
   .pulse-route-row {
+    transition: none;
+  }
+
+  .pulse-movement-card,
+  .pulse-block--focused {
     transition: none;
   }
 }
