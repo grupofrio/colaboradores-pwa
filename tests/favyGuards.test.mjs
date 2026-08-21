@@ -2,30 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { validateAttendancePreflight, validateCupQuantity } from '../src/modules/favy/favyGuards.js'
 
-test('attendance accepts a precise point inside the 50 m CEDIS fence', () => {
+test('attendance accepts both required photos without geolocation', () => {
   assert.equal(validateAttendancePreflight({
     selfie: 'data:image/jpeg;base64,a',
     facade: 'data:image/jpeg;base64,b',
-    latitude: 19.411386,
-    longitude: -99.147021,
-    accuracy: 12,
   }).ok, true)
 })
 
-test('attendance rejects points outside the fence or low-precision GPS', () => {
+test('attendance rejects a missing required photo', () => {
   assert.equal(validateAttendancePreflight({
-    selfie: 'data:image/jpeg;base64,a',
+    selfie: '',
     facade: 'data:image/jpeg;base64,b',
-    latitude: 19.4125,
-    longitude: -99.147021,
-    accuracy: 12,
-  }).ok, false)
-  assert.equal(validateAttendancePreflight({
-    selfie: 'data:image/jpeg;base64,a',
-    facade: 'data:image/jpeg;base64,b',
-    latitude: 19.411386,
-    longitude: -99.147021,
-    accuracy: 26,
   }).ok, false)
 })
 

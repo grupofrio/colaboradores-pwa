@@ -56,13 +56,10 @@ function photoPayload(dataUrl, label) {
   return { base64: match[2], mimeType: match[1] }
 }
 
-export function checkInFavyAttendance({ selfie, facade, latitude, longitude, accuracy }) {
-  const selfiePhoto = photoPayload(selfie, 'Faviola')
+export function checkInFavyAttendance({ selfie, facade }) {
+  const selfiePhoto = photoPayload(selfie, 'colaborador')
   const facadePhoto = photoPayload(facade, 'fachada')
   return apiPost('/api/favy/attendance/check-in', {
-    latitude: Number(latitude),
-    longitude: Number(longitude),
-    accuracy: Number(accuracy),
     selfie_base64: selfiePhoto.base64,
     selfie_mime_type: selfiePhoto.mimeType,
     facade_base64: facadePhoto.base64,
