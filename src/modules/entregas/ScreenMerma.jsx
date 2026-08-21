@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { safeNumber } from '../../lib/safeNumber'
 import { getCedisInventory, createScrap, getScrapHistory, getScrapReasons } from './entregasService'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
@@ -26,10 +28,14 @@ const LLM_MOTIVO_KEYWORD = {
   // 'robo' y 'otro' no tienen match fiable en el catalogo actual
 }
 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
+
 export default function ScreenMerma() {
   const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const isLightSurface = session?.role === 'almacenista_entregas' || isBrandLightSession(session)
+  const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
 
   const warehouseId = Number(session?.warehouse_id || 0) || null
   const employeeId = Number(session?.employee_id || 0) || null
@@ -275,7 +281,7 @@ export default function ScreenMerma() {
     : ''
 
   return (
-    <ScreenShell title="Registrar Merma" backTo="/entregas">
+    <ScreenShell title="Registrar Merma" backTo="/entregas" tokens={TOKENS}>
       <style>{`
         @keyframes entregasMermaSpin { to { transform: rotate(360deg); } }
         input, textarea { font-family: 'DM Sans', sans-serif; }
@@ -284,8 +290,8 @@ export default function ScreenMerma() {
       {loadingInit ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
           <div style={{
-            width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
-            borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+            width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`,
+            borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%',
             animation: 'entregasMermaSpin 0.8s linear infinite',
           }} />
         </div>
@@ -293,12 +299,12 @@ export default function ScreenMerma() {
         <>
           {/* Messages */}
           {error && (
-            <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)', color: TOKENS.colors.error, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+            <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}4D`, color: TOKENS.colors.error, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
               {error}
             </div>
           )}
           {success && (
-            <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: '1px solid rgba(34,197,94,0.25)', color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+            <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}40`, color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
               {success}
             </div>
           )}
@@ -320,7 +326,7 @@ export default function ScreenMerma() {
             {voiceNote && (
               <div style={{
                 marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
-                background: TOKENS.colors.warningSoft, border: '1px solid rgba(245,158,11,0.25)',
+                background: TOKENS.colors.warningSoft, border: `1px solid ${TOKENS.colors.warning}40`,
               }}>
                 <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
                   {voiceNote}
@@ -344,9 +350,10 @@ export default function ScreenMerma() {
                   placeholder="Buscar producto..."
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)',
+                    background: TOKENS.colors.surfaceSoft,
                     border: `1px solid ${validationErrors.product ? TOKENS.colors.error : TOKENS.colors.border}`,
-                    color: 'white', fontSize: 14, outline: 'none',
+                    color: TOKENS.colors.text, fontSize: 14, outline: 'none',
+                    colorScheme: isLightSurface ? 'light' : 'dark',
                   }}
                 />
                 {showProductList && filteredProducts.length > 0 && (
@@ -377,7 +384,7 @@ export default function ScreenMerma() {
                 )}
               </div>
               {selectedProduct && (
-                <div style={{ marginTop: 6, padding: '6px 10px', borderRadius: TOKENS.radius.sm, background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.15)' }}>
+                <div style={{ marginTop: 6, padding: '6px 10px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.borderBlue}` }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.blue3, margin: 0, fontWeight: 600 }}>{selectedProduct.product}</p>
                 </div>
               )}
@@ -406,10 +413,11 @@ export default function ScreenMerma() {
                   onChange={e => setQty(safeNumber(e.target.value, { min: 0 }))}
                   style={{
                     flex: 1, height: 48, padding: '0 12px', textAlign: 'center',
-                    background: 'rgba(255,255,255,0.05)',
+                    background: TOKENS.colors.surfaceSoft,
                     border: `1px solid ${validationErrors.qty ? TOKENS.colors.error : TOKENS.colors.border}`,
                     borderLeft: 'none', borderRight: 'none',
-                    color: 'white', fontSize: 18, fontWeight: 700, outline: 'none',
+                    color: TOKENS.colors.text, fontSize: 18, fontWeight: 700, outline: 'none',
+                    colorScheme: isLightSurface ? 'light' : 'dark',
                   }}
                 />
                 <button
@@ -442,8 +450,8 @@ export default function ScreenMerma() {
                         onClick={() => { setSelectedReason(reason); setValidationErrors(prev => ({ ...prev, reason: undefined })) }}
                         style={{
                           padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                          background: active ? 'rgba(43,143,224,0.15)' : TOKENS.colors.surfaceSoft,
-                          border: `1.5px solid ${active ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                          background: active ? `${TOKENS.colors.blue}22` : TOKENS.colors.surfaceSoft,
+                          border: `1.5px solid ${active ? TOKENS.colors.blue : TOKENS.colors.border}`,
                           color: active ? TOKENS.colors.blue3 : TOKENS.colors.textSoft,
                           fontSize: 13, fontWeight: 600,
                           transition: `all ${TOKENS.motion.fast}`,
@@ -470,9 +478,10 @@ export default function ScreenMerma() {
                 rows={3}
                 style={{
                   width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                  background: 'rgba(255,255,255,0.05)',
+                  background: TOKENS.colors.surfaceSoft,
                   border: `1px solid ${validationErrors.notes ? TOKENS.colors.error : TOKENS.colors.border}`,
-                  color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+                  color: TOKENS.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
+                  colorScheme: isLightSurface ? 'light' : 'dark',
                 }}
               />
               {validationErrors.notes && <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>{validationErrors.notes}</p>}
@@ -484,9 +493,9 @@ export default function ScreenMerma() {
               disabled={submitting}
               style={{
                 width: '100%', padding: 14, borderRadius: TOKENS.radius.lg,
-                background: 'linear-gradient(90deg, #f59e0b, #d97706)', color: 'white',
+                background: TOKENS.colors.warning, color: TOKENS.colors.onPrimary,
                 fontSize: 15, fontWeight: 600, opacity: submitting ? 0.6 : 1,
-                boxShadow: '0 10px 24px rgba(245,158,11,0.25)',
+                boxShadow: `0 10px 24px ${TOKENS.colors.warning}40`,
               }}
             >
               {submitting ? 'Registrando...' : 'Registrar Merma'}
@@ -535,6 +544,7 @@ export default function ScreenMerma() {
         onConfirm={handleSubmit}
         onCancel={() => setConfirmOpen(false)}
         loading={submitting}
+        tokens={TOKENS}
       />
     </ScreenShell>
   )

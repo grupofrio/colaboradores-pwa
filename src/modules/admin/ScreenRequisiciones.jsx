@@ -169,9 +169,9 @@ function MobileRequisiciones() {
           background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
           marginBottom: 20,
         }}>
-          <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 0, marginBottom: 14 }}>NUEVA REQUISICION</p>
+          <p style={{ ...typo.overline, color: TOKENS.colors.textSoft, marginTop: 0, marginBottom: 14 }}>NUEVA REQUISICION</p>
 
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Empresa *</label>
+          <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Empresa *</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
             {companies.map(co => (
               <button key={co.id} onClick={() => setCompanyId(co.id)} style={{
@@ -186,10 +186,10 @@ function MobileRequisiciones() {
             ))}
           </div>
 
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Titulo / Descripcion *</label>
+          <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Titulo / Descripcion *</label>
           <input type="text" placeholder="Ej: Material de limpieza" value={title} onChange={e => setTitle(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }} />
 
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 8 }}>Productos necesarios</label>
+          <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 8 }}>Productos necesarios</label>
 
           {lines.map((line, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
@@ -220,7 +220,7 @@ function MobileRequisiciones() {
             <span style={{ ...typo.caption, color: TOKENS.colors.blue3, fontWeight: 600 }}>+ Agregar producto</span>
           </button>
 
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Notas (opcional)</label>
+          <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Notas (opcional)</label>
           <textarea placeholder="Detalles adicionales..." rows={3} value={notes} onChange={e => setNotes(e.target.value)}
             style={{ ...inputStyle, resize: 'vertical', marginBottom: 14 }}
           />
@@ -239,7 +239,7 @@ function MobileRequisiciones() {
         </div>
 
         {/* Requisitions List */}
-        <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>REQUISICIONES RECIENTES</p>
+        <p style={{ ...typo.overline, color: TOKENS.colors.textSoft, marginBottom: 10 }}>REQUISICIONES RECIENTES</p>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 30 }}>

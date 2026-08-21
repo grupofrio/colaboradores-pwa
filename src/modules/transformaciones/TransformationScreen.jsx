@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { useTransformationCatalog } from './hooks/useTransformationCatalog'
 import { useTransformationHistory } from './hooks/useTransformationHistory'
 import { cancelTransformation, createTransformation } from './services/transformationsApi'
@@ -20,6 +22,8 @@ import {
 } from './utils/transformationHelpers'
 import { todayLocal } from '../../lib/api'
 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
+
 function todayIso() {
   return todayLocal()
 }
@@ -30,6 +34,8 @@ export default function TransformationScreen({ roleScope }) {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const roleConfig = getRoleScopeConfig(roleScope)
+  const isLightSurface = roleScope === 'entregas' && (session?.role === 'almacenista_entregas' || isBrandLightSession(session))
+  const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
   const warehouseId = resolveTransformationWarehouseId(session, roleScope)
   const employeeId = Number(session?.employee_id || 0)
   const [draft, setDraft] = useState({
@@ -138,7 +144,7 @@ export default function TransformationScreen({ roleScope }) {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -174,7 +180,7 @@ export default function TransformationScreen({ roleScope }) {
           </div>
         ) : null}
 
-        <TransformationSummaryCard summary={summary} sw={sw} />
+        <TransformationSummaryCard summary={summary} sw={sw} tokens={TOKENS} />
         <div style={{ height: summary ? 12 : 0 }} />
 
         {catalogError ? (
@@ -194,6 +200,8 @@ export default function TransformationScreen({ roleScope }) {
           onSubmit={handleSubmit}
           saving={saving || catalogLoading}
           suggestedOutputQty={suggestedOutputQty}
+          tokens={TOKENS}
+          isLightSurface={isLightSurface}
         />
 
         <div style={{ marginTop: 18 }}>
@@ -208,7 +216,7 @@ export default function TransformationScreen({ roleScope }) {
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Cargando historial...</p>
             </div>
           ) : (
-            <TransformationHistoryList items={history} sw={sw} onCancel={handleCancel} cancellingId={cancellingId} />
+            <TransformationHistoryList items={history} sw={sw} onCancel={handleCancel} cancellingId={cancellingId} tokens={TOKENS} />
           )}
         </div>
       </div>

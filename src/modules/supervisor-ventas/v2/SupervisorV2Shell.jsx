@@ -13,10 +13,11 @@
 // solo color). Touch targets ≥44px.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSessionContext } from '../../../lib/sessionContext.js'
 import { getTypo } from '../../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { getSupervisorCopilotCapabilities } from './copilot/copilotSupervisorApi.js'
-import { resolveSupervisorCopilotTabVisible } from './copilot/copilotSupervisorModel.js'
+import { resolveSupervisorCopilotTabVisibleForSession } from './copilot/copilotSupervisorModel.js'
 
 const C = TOKENS.colors
 
@@ -64,6 +65,7 @@ function TabButton({ tab, active, onClick }) {
 
 export default function SupervisorV2Shell({ active = 'hoy', children, pulseEnabled }) {
   const navigate = useNavigate()
+  const session = useSessionContext()?.session
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
   const [copilotOk, setCopilotOk] = useState(false)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -85,10 +87,11 @@ export default function SupervisorV2Shell({ active = 'hoy', children, pulseEnabl
 
   useEffect(() => {
     let cancelled = false
-    resolveSupervisorCopilotTabVisible(getSupervisorCopilotCapabilities())
+    setCopilotOk(false)
+    resolveSupervisorCopilotTabVisibleForSession(session, getSupervisorCopilotCapabilities)
       .then((ok) => { if (!cancelled) setCopilotOk(ok === true) })
     return () => { cancelled = true }
-  }, [])
+  }, [session])
 
   const go = (tab) => { if (tab.key !== active) navigate(tab.route) }
   const shellMax = wide && active === 'hoy' ? 1680 : 980

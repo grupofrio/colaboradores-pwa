@@ -12,7 +12,12 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { getTorreRequisitions } from '../admin/api'
-import { TOKENS } from '../../tokens'
+import { TOKENS as DARK_TOKENS } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
+import { getEffectiveJobKeys } from '../../lib/roleContext'
+
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -30,26 +35,28 @@ const fmtDate = (d) => {
   }
 }
 
-const STATE_MAP = {
+const getStateMap = (TOKENS) => ({
   draft:    { label: 'Borrador', color: TOKENS.colors.textMuted },
-  sent:     { label: 'Enviado',  color: '#2B8FE0' },
-  purchase: { label: 'Confirmado', color: '#10B981' },
-  done:     { label: 'Completo',   color: '#10B981' },
-  cancel:   { label: 'Cancelado',  color: '#EF4444' },
-}
+  sent:     { label: 'Enviado',  color: TOKENS.colors.blue },
+  purchase: { label: 'Confirmado', color: TOKENS.colors.success },
+  done:     { label: 'Completo',   color: TOKENS.colors.success },
+  cancel:   { label: 'Cancelado',  color: TOKENS.colors.error },
+})
 
-const APPROVAL_MAP = {
+const getApprovalMap = (TOKENS) => ({
   none:     null,
-  pending:  { label: 'Aprobación pendiente', color: '#F59E0B' },
-  approved: { label: 'Aprobado',             color: '#10B981' },
-  rejected: { label: 'Rechazado',            color: '#EF4444' },
-}
+  pending:  { label: 'Aprobación pendiente', color: TOKENS.colors.warning },
+  approved: { label: 'Aprobado',             color: TOKENS.colors.success },
+  rejected: { label: 'Rechazado',            color: TOKENS.colors.error },
+})
 
 // ─── Componentes ─────────────────────────────────────────────────────────────
 
-function StateBadge({ state, approval }) {
-  const s = STATE_MAP[state] || { label: state, color: TOKENS.colors.textMuted }
-  const a = approval && approval !== 'none' ? APPROVAL_MAP[approval] : null
+function StateBadge({ state, approval, tokens = DARK_TOKENS }) {
+  const stateMap = getStateMap(tokens)
+  const approvalMap = getApprovalMap(tokens)
+  const s = stateMap[state] || { label: state, color: tokens.colors.textMuted }
+  const a = approval && approval !== 'none' ? approvalMap[approval] : null
   return (
     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
       <span style={{
@@ -72,24 +79,25 @@ function StateBadge({ state, approval }) {
   )
 }
 
-function RequisicionCard({ req, onClick }) {
+function RequisicionCard({ req, onClick, tokens = DARK_TOKENS }) {
+  const TOKENS = tokens
   const title = (req.origin || req.name || '').replace(/^PWA-Admin:\s*/i, '').trim() || req.name
   return (
     <button
       onClick={() => onClick(req.id)}
       style={{
-        width: '100%', textAlign: 'left', background: 'rgba(255,255,255,0.04)',
-        border: '1px solid rgba(255,255,255,0.09)', borderRadius: TOKENS.radius.card,
+        width: '100%', textAlign: 'left', background: TOKENS.colors.surfaceSoft,
+        border: `1px solid ${TOKENS.colors.border}`, borderRadius: TOKENS.radius.lg,
         padding: '14px 16px', cursor: 'pointer', display: 'flex',
         flexDirection: 'column', gap: 8, transition: 'background 0.15s',
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(43,143,224,0.08)')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+      onMouseEnter={(e) => (e.currentTarget.style.background = `${TOKENS.colors.blue}14`)}
+      onMouseLeave={(e) => (e.currentTarget.style.background = TOKENS.colors.surfaceSoft)}
     >
       {/* Fila superior: folio + fecha */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.92)' }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: TOKENS.colors.text }}>
             {req.name}
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 11, color: TOKENS.colors.textMuted }}>
@@ -103,15 +111,15 @@ function RequisicionCard({ req, onClick }) {
 
       {/* Empresa */}
       {req.company_name && (
-        <p style={{ margin: 0, fontSize: 11, color: '#2B8FE0', fontWeight: 600 }}>
+        <p style={{ margin: 0, fontSize: 11, color: TOKENS.colors.blue3, fontWeight: 600 }}>
           {req.company_name}
         </p>
       )}
 
       {/* Fila inferior: monto + estado */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <StateBadge state={req.state} approval={req.approval_state} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.82)' }}>
+        <StateBadge state={req.state} approval={req.approval_state} tokens={TOKENS} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: TOKENS.colors.textSoft }}>
           {req.amount_total ? fmt(req.amount_total) : '—'}
         </span>
       </div>
@@ -124,6 +132,8 @@ function RequisicionCard({ req, onClick }) {
 export default function ScreenTorreRequisiciones() {
   const { session } = useSession()
   const navigate = useNavigate()
+  const isLightSurface = getEffectiveJobKeys(session).includes('operador_torres') || isBrandLightSession(session)
+  const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
 
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -149,15 +159,16 @@ export default function ScreenTorreRequisiciones() {
 
   return (
     <div style={{
-      minHeight: '100dvh', background: TOKENS.colors.bg,
+      minHeight: '100dvh',
+      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
       fontFamily: "'DM Sans', system-ui, sans-serif",
       display: 'flex', flexDirection: 'column',
     }}>
       {/* Header */}
       <div style={{
         padding: '16px 20px 12px',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
-        background: 'rgba(3,8,17,0.95)',
+        borderBottom: `1px solid ${TOKENS.colors.border}`,
+        background: TOKENS.colors.surfaceSoft,
         position: 'sticky', top: 0, zIndex: 10,
         display: 'flex', alignItems: 'center', gap: 12,
       }}>
@@ -165,7 +176,7 @@ export default function ScreenTorreRequisiciones() {
           onClick={() => navigate('/')}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            padding: 4, color: 'rgba(255,255,255,0.6)', fontSize: 20,
+            padding: 4, color: TOKENS.colors.textMuted, fontSize: 20,
             display: 'flex', alignItems: 'center',
           }}
           aria-label="Volver"
@@ -173,7 +184,7 @@ export default function ScreenTorreRequisiciones() {
           ←
         </button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'rgba(255,255,255,0.92)' }}>
+          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: TOKENS.colors.text }}>
             Validar Requisiciones
           </h1>
           <p style={{ margin: 0, fontSize: 11, color: TOKENS.colors.textMuted }}>
@@ -184,9 +195,9 @@ export default function ScreenTorreRequisiciones() {
           onClick={load}
           disabled={loading}
           style={{
-            background: 'rgba(43,143,224,0.15)', border: '1px solid rgba(43,143,224,0.3)',
+            background: `${TOKENS.colors.blue}18`, border: `1px solid ${TOKENS.colors.blue}30`,
             borderRadius: 8, padding: '6px 12px', cursor: loading ? 'not-allowed' : 'pointer',
-            color: '#2B8FE0', fontSize: 12, fontWeight: 600,
+            color: TOKENS.colors.blue3, fontSize: 12, fontWeight: 600,
           }}
         >
           {loading ? '...' : 'Actualizar'}
@@ -198,10 +209,10 @@ export default function ScreenTorreRequisiciones() {
         {/* Error */}
         {error && !loading && (
           <div style={{
-            background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
-            borderRadius: TOKENS.radius.card, padding: '12px 16px', marginBottom: 16,
+            background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
+            borderRadius: TOKENS.radius.lg, padding: '12px 16px', marginBottom: 16,
           }}>
-            <p style={{ margin: 0, fontSize: 13, color: '#EF4444' }}>{error}</p>
+            <p style={{ margin: 0, fontSize: 13, color: TOKENS.colors.error }}>{error}</p>
           </div>
         )}
 
@@ -210,8 +221,8 @@ export default function ScreenTorreRequisiciones() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[1, 2, 3].map((i) => (
               <div key={i} style={{
-                height: 90, borderRadius: TOKENS.radius.card,
-                background: 'rgba(255,255,255,0.04)',
+                height: 90, borderRadius: TOKENS.radius.lg,
+                background: TOKENS.colors.surfaceSoft,
                 animation: 'pulse 1.5s ease-in-out infinite',
               }} />
             ))}
@@ -240,7 +251,7 @@ export default function ScreenTorreRequisiciones() {
                   {items.length} requisición{items.length !== 1 ? 'es' : ''} pendiente{items.length !== 1 ? 's' : ''}
                 </p>
                 {items.map((req) => (
-                  <RequisicionCard key={req.id} req={req} onClick={handleCard} />
+                  <RequisicionCard key={req.id} req={req} onClick={handleCard} tokens={TOKENS} />
                 ))}
               </div>
             )}

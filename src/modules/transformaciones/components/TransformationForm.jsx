@@ -1,12 +1,17 @@
-import { TOKENS, getTypo } from '../../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../../tokens'
 
-function fieldStyle(hasError) {
+const DEFAULT_SELECT_OPTION_STYLE = {
+  color: '#111827',
+  background: '#ffffff',
+}
+
+function fieldStyle(tokens, hasError) {
   return {
     width: '100%',
-    borderRadius: TOKENS.radius.md,
-    border: `1px solid ${hasError ? 'rgba(239,68,68,0.30)' : TOKENS.colors.border}`,
-    background: TOKENS.colors.surface,
-    color: TOKENS.colors.textSoft,
+    borderRadius: tokens.radius.md,
+    border: `1px solid ${hasError ? 'rgba(239,68,68,0.30)' : tokens.colors.border}`,
+    background: tokens.colors.surface,
+    color: tokens.colors.textSoft,
     padding: '12px 14px',
     fontSize: 15,
     outline: 'none',
@@ -24,8 +29,11 @@ export default function TransformationForm({
   onSubmit,
   saving,
   suggestedOutputQty,
+  tokens = DARK_TOKENS,
+  isLightSurface = false,
 }) {
   const typo = getTypo(sw)
+  const TOKENS = tokens
   const inputOptions = selectedRecipe?.input_product_options || []
   const outputProductName = selectedRecipe?.output_product?.name || ''
   const showSuggestion = Number(suggestedOutputQty || 0) > 0
@@ -36,9 +44,9 @@ export default function TransformationForm({
     <div style={{
       padding: 16,
       borderRadius: TOKENS.radius.xl,
-      background: TOKENS.glass.hero,
+      background: TOKENS.colors.surface,
       border: `1px solid ${TOKENS.colors.borderBlue}`,
-      boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
+      boxShadow: TOKENS.shadow.md,
       display: 'flex',
       flexDirection: 'column',
       gap: 12,
@@ -47,30 +55,30 @@ export default function TransformationForm({
         .gf-transformation-select {
           appearance: none;
           -webkit-appearance: none;
-          color-scheme: dark;
+          color-scheme: ${isLightSurface ? 'light' : 'dark'};
         }
         .gf-transformation-select option {
-          background: #14253c;
-          color: rgba(255,255,255,0.9);
+          background: ${isLightSurface ? '#ffffff' : '#14253c'};
+          color: ${isLightSurface ? '#111827' : 'rgba(255,255,255,0.9)'};
         }
       `}</style>
       <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>NUEVA TRANSFORMACION</p>
 
       <div>
-        <select className="gf-transformation-select" value={draft.recipe_code} onChange={(event) => onChange('recipe_code', event.target.value)} style={fieldStyle(errors.recipe_code)}>
+        <select className="gf-transformation-select" value={draft.recipe_code} onChange={(event) => onChange('recipe_code', event.target.value)} style={fieldStyle(TOKENS, errors.recipe_code)}>
           <option value="">Selecciona receta...</option>
           {recipes.map((recipe) => (
-            <option key={recipe.recipe_code} value={recipe.recipe_code}>{recipe.label}</option>
+            <option key={recipe.recipe_code} value={recipe.recipe_code} style={isLightSurface ? DEFAULT_SELECT_OPTION_STYLE : undefined}>{recipe.label}</option>
           ))}
         </select>
         {errors.recipe_code ? <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>{errors.recipe_code}</p> : null}
       </div>
 
       <div>
-        <select className="gf-transformation-select" value={draft.input_product_id} onChange={(event) => onChange('input_product_id', event.target.value)} style={fieldStyle(errors.input_product_id)}>
+        <select className="gf-transformation-select" value={draft.input_product_id} onChange={(event) => onChange('input_product_id', event.target.value)} style={fieldStyle(TOKENS, errors.input_product_id)}>
           <option value="">Producto de entrada...</option>
           {inputOptions.map((option) => (
-            <option key={`${option.recipe_code || 'recipe'}-${option.product_id}`} value={option.product_id}>{option.name}</option>
+            <option key={`${option.recipe_code || 'recipe'}-${option.product_id}`} value={option.product_id} style={isLightSurface ? DEFAULT_SELECT_OPTION_STYLE : undefined}>{option.name}</option>
           ))}
         </select>
         {errors.input_product_id ? <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>{errors.input_product_id}</p> : null}
@@ -98,7 +106,7 @@ export default function TransformationForm({
             placeholder={roleConfig.inputPlaceholder || 'Barras utilizadas'}
             value={draft.input_qty_units}
             onChange={(event) => onChange('input_qty_units', event.target.value)}
-            style={fieldStyle(errors.input_qty_units)}
+            style={fieldStyle(TOKENS, errors.input_qty_units)}
           />
           {errors.input_qty_units ? <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>{errors.input_qty_units}</p> : null}
         </div>
@@ -111,7 +119,7 @@ export default function TransformationForm({
             placeholder={roleConfig.outputPlaceholder || `${roleConfig.outputUomLabel} producidas`}
             value={draft.output_qty_units}
             onChange={(event) => onChange('output_qty_units', event.target.value)}
-            style={fieldStyle(errors.output_qty_units)}
+            style={fieldStyle(TOKENS, errors.output_qty_units)}
           />
           {errors.output_qty_units ? <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>{errors.output_qty_units}</p> : null}
           {!errors.output_qty_units && showSuggestion ? (
@@ -133,7 +141,7 @@ export default function TransformationForm({
         placeholder="Notas opcionales"
         value={draft.notes}
         onChange={(event) => onChange('notes', event.target.value)}
-        style={{ ...fieldStyle(false), resize: 'vertical' }}
+        style={{ ...fieldStyle(TOKENS, false), resize: 'vertical' }}
       />
 
       <button

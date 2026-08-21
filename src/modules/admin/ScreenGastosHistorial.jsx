@@ -35,7 +35,7 @@ export default function ScreenGastosHistorial() {
 const STATE_MAP = {
   draft: { label: 'Borrador', color: TOKENS.colors.textMuted },
   reported: { label: 'Reportado', color: TOKENS.colors.warning },
-  submitted: { label: 'Enviado', color: TOKENS.colors.blue2 },
+  submitted: { label: 'Enviado', color: TOKENS.colors.blue3 },
   approved: { label: 'Aprobado', color: TOKENS.colors.success },
   done: { label: 'Hecho', color: TOKENS.colors.success },
   refused: { label: 'Rechazado', color: TOKENS.colors.error },
@@ -202,9 +202,9 @@ function MobileHistorialGastos() {
           background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
           marginBottom: 18,
         }}>
-          <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 0, marginBottom: 14 }}>FILTROS</p>
+          <p style={{ ...typo.overline, color: TOKENS.colors.textSoft, marginTop: 0, marginBottom: 14 }}>FILTROS</p>
 
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Empresa / Sucursal</label>
+          <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Empresa / Sucursal</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
             {companies.map((co) => (
               <button key={co.id} onClick={() => setDraftFilters((current) => ({ ...current, companyId: co.id }))} style={{
@@ -221,18 +221,18 @@ function MobileHistorialGastos() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
             <div>
-              <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Desde</label>
-              <input type="date" value={draftFilters.dateFrom} onChange={(e) => setDraftFilters((current) => ({ ...current, dateFrom: e.target.value }))} style={{ ...inputStyle, colorScheme: 'dark' }} />
+              <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Desde</label>
+              <input type="date" value={draftFilters.dateFrom} onChange={(e) => setDraftFilters((current) => ({ ...current, dateFrom: e.target.value }))} style={{ ...inputStyle, colorScheme: 'light' }} />
             </div>
             <div>
-              <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Hasta</label>
-              <input type="date" value={draftFilters.dateTo} onChange={(e) => setDraftFilters((current) => ({ ...current, dateTo: e.target.value }))} style={{ ...inputStyle, colorScheme: 'dark' }} />
+              <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Hasta</label>
+              <input type="date" value={draftFilters.dateTo} onChange={(e) => setDraftFilters((current) => ({ ...current, dateTo: e.target.value }))} style={{ ...inputStyle, colorScheme: 'light' }} />
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
             <div>
-              <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Capturista</label>
+              <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Capturista</label>
               <input
                 type="text"
                 value={draftFilters.capturer}
@@ -242,7 +242,7 @@ function MobileHistorialGastos() {
               />
             </div>
             <div>
-              <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Estado</label>
+              <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Estado</label>
               <select value={draftFilters.stateFilter} onChange={(e) => setDraftFilters((current) => ({ ...current, stateFilter: e.target.value }))} style={inputStyle}>
                 <option value="">Todos</option>
                 {Object.entries(STATE_MAP).map(([key, cfg]) => (
@@ -252,7 +252,7 @@ function MobileHistorialGastos() {
             </div>
           </div>
 
-          <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Buscar</label>
+          <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Buscar</label>
           <input
             type="text"
             value={draftFilters.query}
@@ -271,8 +271,8 @@ function MobileHistorialGastos() {
 
         <div style={{
           padding: 16, borderRadius: TOKENS.radius.xl,
-          background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
-          boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`, marginBottom: 16,
+          background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.borderBlue}`,
+          boxShadow: TOKENS.shadow.md, marginBottom: 16,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
             <div>

@@ -1,31 +1,35 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getVanRoster, executeVanLoad, getProductsAtCedis } from './entregasService'
 import { ScreenShell, ConfirmDialog, EmptyState } from './components'
 import { buildLoadPreviewSummary } from './loadPreviewSummary'
 import LoadConfirmPreview from './components/LoadConfirmPreview'
 import { getCedisDispatchLabel, getVanDispatchSourceLabel, getVanUnitLabel } from './cargaUnidadesView'
 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Spinner({ size = 22, color }) {
+function Spinner({ size = 22, color, tokens = DARK_TOKENS }) {
   return (
     <div style={{
       width: size, height: size,
-      border: `2px solid rgba(255,255,255,0.10)`,
-      borderTop: `2px solid ${color || TOKENS.colors.blue2}`,
+      border: `2px solid ${tokens.colors.border}`,
+      borderTop: `2px solid ${color || tokens.colors.blue}`,
       borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0,
     }} />
   )
 }
 
-function VanIcon() {
+function VanIcon({ tokens = DARK_TOKENS }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-      stroke={TOKENS.colors.blue3} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      stroke={tokens.colors.blue3} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="1" y="3" width="15" height="13" rx="2" />
       <path d="M16 8h4l3 5v3h-7V8z" />
       <circle cx="5.5" cy="18.5" r="2.5" />
@@ -34,10 +38,10 @@ function VanIcon() {
   )
 }
 
-function ChevronIcon({ open }) {
+function ChevronIcon({ open, tokens = DARK_TOKENS }) {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      stroke={tokens.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
       style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
       <path d="M6 9l6 6 6-6" />
     </svg>
@@ -54,7 +58,8 @@ function PlusIcon() {
   )
 }
 
-function XIcon({ color = '#ef4444' }) {
+function XIcon({ color, tokens = DARK_TOKENS }) {
+  color = color || tokens.colors.error
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
       stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -82,9 +87,9 @@ function forecastDayLabel(dateStr) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Section label
 // ─────────────────────────────────────────────────────────────────────────────
-function SectionLabel({ children, typo }) {
+function SectionLabel({ children, typo, tokens = DARK_TOKENS }) {
   return (
-    <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '14px 0 6px', letterSpacing: '0.08em' }}>
+    <p style={{ ...typo.overline, color: tokens.colors.textLow, margin: '14px 0 6px', letterSpacing: '0.08em' }}>
       {children}
     </p>
   )
@@ -93,14 +98,15 @@ function SectionLabel({ children, typo }) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Stock row inside van card
 // ─────────────────────────────────────────────────────────────────────────────
-function StockRow({ product_id, product_name, requested, onHand, typo }) {
+function StockRow({ product_id, product_name, requested, onHand, typo, tokens = DARK_TOKENS }) {
+  const TOKENS = tokens
   const sufficient = onHand >= requested
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       padding: '7px 10px', borderRadius: TOKENS.radius.sm,
-      background: sufficient ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
-      border: `1px solid ${sufficient ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.30)'}`,
+      background: sufficient ? TOKENS.colors.successSoft : TOKENS.colors.errorSoft,
+      border: `1px solid ${sufficient ? TOKENS.colors.success + '30' : TOKENS.colors.error + '4D'}`,
     }}>
       <span style={{
         ...typo.caption, color: TOKENS.colors.textSoft,
@@ -113,7 +119,7 @@ function StockRow({ product_id, product_name, requested, onHand, typo }) {
           Pide: <strong style={{ color: TOKENS.colors.text }}>{requested}</strong>
         </span>
         <span style={{ fontSize: 11, color: TOKENS.colors.textMuted }}>
-          Exist: <strong style={{ color: sufficient ? TOKENS.colors.success : '#ef4444' }}>{onHand}</strong>
+          Exist: <strong style={{ color: sufficient ? TOKENS.colors.success : TOKENS.colors.error }}>{onHand}</strong>
         </span>
         <span style={{ fontSize: 13 }}>{sufficient ? '✓' : '⚠'}</span>
       </div>
@@ -128,6 +134,8 @@ export default function ScreenCargaUnidades() {
   const { session } = useSession()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const isLightSurface = session?.role === 'almacenista_entregas' || isBrandLightSession(session)
+  const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const [vans, setVans] = useState([])
@@ -333,21 +341,21 @@ export default function ScreenCargaUnidades() {
   const dispatchSourceLabel = getCedisDispatchLabel(vans)
 
   return (
-    <ScreenShell title="Cargar Unidades" backTo="/entregas">
+    <ScreenShell title="Cargar Unidades" backTo="/entregas" tokens={TOKENS}>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes toast-in { from { transform: translateX(-50%) translateY(16px); opacity:0; } to { transform: translateX(-50%) translateY(0); opacity:1; } }
         @keyframes slide-down { from { max-height:0; opacity:0; } to { max-height:2000px; opacity:1; } }
-        select { color-scheme: dark; }
-        select option { background-color: #1a1f2e; color: #e2e8f0; }
+        select { color-scheme: ${isLightSurface ? 'light' : 'dark'}; }
+        select option { background-color: ${isLightSurface ? '#ffffff' : '#1a1f2e'}; color: ${isLightSurface ? '#111827' : '#e2e8f0'}; }
       `}</style>
 
       {/* ── Summary bar ─────────────────────────────────────────────────── */}
       {!loading && vans.length > 0 && (
         <div style={{
           padding: '12px 16px', borderRadius: TOKENS.radius.lg, marginBottom: 16,
-          background: 'linear-gradient(180deg, rgba(21,73,155,0.18), rgba(21,73,155,0.06))',
-          border: `1px solid rgba(97,178,255,0.16)`,
+          background: TOKENS.colors.surface,
+          border: `1px solid ${TOKENS.colors.borderBlue}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div>
@@ -357,7 +365,7 @@ export default function ScreenCargaUnidades() {
               {doneCount > 0 ? ` · ${doneCount} cargado${doneCount !== 1 ? 's' : ''}` : ''}
             </p>
             {dispatchSourceLabel && (
-              <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: '6px 0 0', fontWeight: 700 }}>
+              <p style={{ ...typo.caption, color: TOKENS.colors.blue, margin: '6px 0 0', fontWeight: 700 }}>
                 Despacha desde {dispatchSourceLabel}
               </p>
             )}
@@ -366,13 +374,13 @@ export default function ScreenCargaUnidades() {
             onClick={loadVans}
             style={{
               width: 34, height: 34, borderRadius: TOKENS.radius.md, cursor: 'pointer',
-              background: 'rgba(43,143,224,0.10)', border: `1px solid rgba(43,143,224,0.25)`,
+              background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.borderBlue}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
             title="Recargar"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke={TOKENS.colors.blue2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              stroke={TOKENS.colors.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="23 4 23 10 17 10" />
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
@@ -385,7 +393,7 @@ export default function ScreenCargaUnidades() {
       {error && (
         <div style={{
           marginBottom: 12, padding: 12, borderRadius: TOKENS.radius.sm,
-          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)',
+          background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}33`,
         }}>
           <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{error}</p>
         </div>
@@ -394,10 +402,10 @@ export default function ScreenCargaUnidades() {
       {/* ── Loading ─────────────────────────────────────────────────────── */}
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-          <Spinner size={32} />
+          <Spinner size={32} tokens={TOKENS} />
         </div>
       ) : vans.length === 0 ? (
-        <EmptyState icon="🚛" title="Sin repartidores registrados para este CEDIS" />
+        <EmptyState icon="🚛" title="Sin repartidores registrados para este CEDIS" tokens={TOKENS} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {vans.map((van) => {
@@ -418,7 +426,7 @@ export default function ScreenCargaUnidades() {
               <div key={empId} style={{
                 borderRadius: TOKENS.radius.xl,
                 background: TOKENS.glass.panel,
-                border: `1px solid ${result?.ok ? 'rgba(34,197,94,0.25)' : TOKENS.colors.border}`,
+                border: `1px solid ${result?.ok ? TOKENS.colors.success + '40' : TOKENS.colors.border}`,
                 boxShadow: TOKENS.shadow.soft,
                 overflow: 'hidden',
               }}>
@@ -431,7 +439,7 @@ export default function ScreenCargaUnidades() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <VanIcon />
+                    <VanIcon tokens={TOKENS} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0, fontSize: 15 }}>
                         {van.employee_name || `Empleado ${empId}`}
@@ -439,12 +447,12 @@ export default function ScreenCargaUnidades() {
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '3px 0 0' }}>
                         Unidad destino: {getVanUnitLabel(van)}
                       </p>
-                      <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: '3px 0 0', fontWeight: 700 }}>
+                      <p style={{ ...typo.caption, color: TOKENS.colors.blue, margin: '3px 0 0', fontWeight: 700 }}>
                         Despacha desde: {getVanDispatchSourceLabel(van)}
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                      <ChevronIcon open={isExpanded} />
+                      <ChevronIcon open={isExpanded} tokens={TOKENS} />
                     </div>
                   </div>
                 </button>
@@ -461,7 +469,7 @@ export default function ScreenCargaUnidades() {
                     {result?.ok && (
                       <div style={{
                         margin: '12px 0 4px', padding: '9px 12px', borderRadius: TOKENS.radius.sm,
-                        background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
+                        background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}40`,
                         display: 'flex', alignItems: 'center', gap: 8,
                       }}>
                         <span style={{ fontSize: 15 }}>✓</span>
@@ -481,14 +489,14 @@ export default function ScreenCargaUnidades() {
                     {/* ── SUGERIDO ──────────────────────────────────── */}
                     {hasSuggestion ? (
                       <>
-                        <SectionLabel typo={typo}>
+                        <SectionLabel typo={typo} tokens={TOKENS}>
                           SUGERIDO SUPERVISOR
                           {van.forecast_date ? ` (${forecastDayLabel(van.forecast_date)})` : ''}
                         </SectionLabel>
                         <div style={{
                           borderRadius: TOKENS.radius.sm,
-                          border: '1px solid rgba(43,143,224,0.18)',
-                          background: 'rgba(43,143,224,0.05)',
+                          border: `1px solid ${TOKENS.colors.borderBlue}`,
+                          background: TOKENS.colors.surfaceSoft,
                           overflow: 'hidden',
                           marginBottom: 8,
                         }}>
@@ -497,14 +505,14 @@ export default function ScreenCargaUnidades() {
                               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                               padding: '9px 12px',
                               borderBottom: i < van.suggestion.length - 1
-                                ? '1px solid rgba(43,143,224,0.10)' : 'none',
+                                ? `1px solid ${TOKENS.colors.borderBlue}` : 'none',
                             }}>
                               <span style={{ ...typo.body, color: TOKENS.colors.textSoft, flex: 1, minWidth: 0 }}>
                                 {s.product_name || `#${s.product_id}`}
                               </span>
                               <span style={{
-                                fontSize: 13, fontWeight: 700, color: TOKENS.colors.blue2,
-                                background: 'rgba(43,143,224,0.15)', borderRadius: TOKENS.radius.pill,
+                                fontSize: 13, fontWeight: 700, color: TOKENS.colors.blue3,
+                                background: `${TOKENS.colors.blue}20`, borderRadius: TOKENS.radius.pill,
                                 padding: '2px 10px', flexShrink: 0, marginLeft: 10,
                               }}>{s.qty}</span>
                             </div>
@@ -514,8 +522,8 @@ export default function ScreenCargaUnidades() {
                           onClick={() => applySuggestion(van)}
                           style={{
                             width: '100%', padding: '8px 0', borderRadius: TOKENS.radius.sm,
-                            background: 'rgba(43,143,224,0.08)', border: '1px dashed rgba(43,143,224,0.35)',
-                            color: TOKENS.colors.blue2, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            background: TOKENS.colors.surfaceSoft, border: `1px dashed ${TOKENS.colors.borderBlue}`,
+                            color: TOKENS.colors.blue, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                             marginBottom: 4,
                           }}
                         >
@@ -531,7 +539,7 @@ export default function ScreenCargaUnidades() {
                     )}
 
                     {/* ── CARGA MANUAL ────────────────────────────── */}
-                    <SectionLabel typo={typo}>CARGA MANUAL</SectionLabel>
+                    <SectionLabel typo={typo} tokens={TOKENS}>CARGA MANUAL</SectionLabel>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
                       {lines.map((line, idx) => (
@@ -542,7 +550,7 @@ export default function ScreenCargaUnidades() {
                           {/* Product select — solo productos con stock en CIGU */}
                           {cat?.loading ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 0', marginBottom: 8 }}>
-                              <Spinner size={14} />
+                              <Spinner size={14} tokens={TOKENS} />
                               <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Cargando productos del CEDIS...</span>
                             </div>
                           ) : cat?.error ? (
@@ -556,18 +564,18 @@ export default function ScreenCargaUnidades() {
                                 background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
                                 color: line.product_id ? TOKENS.colors.text : TOKENS.colors.textMuted,
                                 fontSize: 13, marginBottom: 8, outline: 'none',
-                                colorScheme: 'dark',
+                                colorScheme: isLightSurface ? 'light' : 'dark',
                               }}
                             >
-                              <option value="">
+                              <option value="" style={isLightSurface ? { color: '#111827', background: '#ffffff' } : undefined}>
                                 {catalogItems.length ? `Seleccionar producto (${catalogItems.length} disponibles)...` : 'Sin stock en CEDIS'}
                               </option>
                               {/* Conservar selección actual si ya no está en catálogo */}
                               {line.product_id && !catalogItems.find((p) => String(p.product_id) === String(line.product_id)) && (
-                                <option value={String(line.product_id)}>{line.product_name || `Producto ${line.product_id}`}</option>
+                                <option value={String(line.product_id)} style={isLightSurface ? { color: '#111827', background: '#ffffff' } : undefined}>{line.product_name || `Producto ${line.product_id}`}</option>
                               )}
                               {catalogItems.map((p) => (
-                                <option key={p.product_id} value={String(p.product_id)}>
+                                <option key={p.product_id} value={String(p.product_id)} style={isLightSurface ? { color: '#111827', background: '#ffffff' } : undefined}>
                                   {p.product_name} — {p.on_hand} unid
                                 </option>
                               ))}
@@ -587,17 +595,18 @@ export default function ScreenCargaUnidades() {
                                 flex: 1, padding: '8px 10px', borderRadius: TOKENS.radius.sm,
                                 background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
                                 color: TOKENS.colors.text, fontSize: 13, outline: 'none',
+                                colorScheme: isLightSurface ? 'light' : 'dark',
                               }}
                             />
                             <button
                               onClick={() => removeLine(empId, idx)}
                               style={{
                                 width: 34, height: 34, borderRadius: TOKENS.radius.sm, flexShrink: 0,
-                                background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)',
+                                background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}38`,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                               }}
                             >
-                              <XIcon />
+                              <XIcon tokens={TOKENS} />
                             </button>
                           </div>
                         </div>
@@ -621,23 +630,23 @@ export default function ScreenCargaUnidades() {
                     {/* ── STOCK DE PRODUCTOS SELECCIONADOS ────────── */}
                     {stockSummary && stockSummary.length > 0 && (
                       <>
-                        <SectionLabel typo={typo}>
+                        <SectionLabel typo={typo} tokens={TOKENS}>
                           DISPONIBILIDAD EN CEDIS
                           {van.cedis_location_name ? ` · ${van.cedis_location_name}` : ''}
                         </SectionLabel>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 4 }}>
                           {stockSummary.map((row, i) => (
-                            <StockRow key={row.product_id || i} {...row} typo={typo} />
+                            <StockRow key={row.product_id || i} {...row} typo={typo} tokens={TOKENS} />
                           ))}
                         </div>
                         {stockInsufficient && (
                           <div style={{
                             marginTop: 4, padding: '8px 12px', borderRadius: TOKENS.radius.sm,
-                            background: 'rgba(239,68,68,0.09)', border: '1px solid rgba(239,68,68,0.28)',
+                            background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}47`,
                             display: 'flex', alignItems: 'center', gap: 8,
                           }}>
                             <span style={{ fontSize: 15 }}>⚠️</span>
-                            <p style={{ ...typo.caption, color: '#ef4444', margin: 0, fontWeight: 600 }}>
+                            <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0, fontWeight: 600 }}>
                               Stock insuficiente — ajusta las cantidades antes de confirmar
                             </p>
                           </div>
@@ -655,15 +664,15 @@ export default function ScreenCargaUnidades() {
                         cursor: canConfirm ? 'pointer' : 'default',
                         transition: `opacity ${TOKENS.motion.fast}`,
                         ...(stockInsufficient ? {
-                          background: 'rgba(239,68,68,0.12)', color: '#ef4444',
-                          border: '1px solid rgba(239,68,68,0.28)', boxShadow: 'none',
+                          background: TOKENS.colors.errorSoft, color: TOKENS.colors.error,
+                          border: `1px solid ${TOKENS.colors.error}47`, boxShadow: 'none',
                         } : !canConfirm ? {
                           background: TOKENS.colors.surface, color: TOKENS.colors.textMuted,
                           border: `1px solid ${TOKENS.colors.border}`, boxShadow: 'none',
                           opacity: 0.6,
                         } : {
-                          background: 'linear-gradient(90deg, #15499B, #2B8FE0)', color: '#fff',
-                          border: 'none', boxShadow: '0 8px 20px rgba(43,143,224,0.28)',
+                          background: TOKENS.colors.ctaGradient, color: TOKENS.colors.onPrimary,
+                          border: 'none', boxShadow: `0 8px 20px ${TOKENS.colors.blue}47`,
                         }),
                       }}
                     >
@@ -696,6 +705,7 @@ export default function ScreenCargaUnidades() {
           confirmLabel="Confirmar"
           onConfirm={handleConfirmLoad}
           onCancel={() => setConfirmVan(null)}
+          tokens={TOKENS}
         >
           <LoadConfirmPreview
             rows={getStockSummary(confirmVan.employee_id) || buildLoadPreviewSummary({
@@ -706,6 +716,7 @@ export default function ScreenCargaUnidades() {
             unitName={getVanUnitLabel(confirmVan)}
             locationName={getVanDispatchSourceLabel(confirmVan)}
             stockVerified={Boolean(getStockSummary(confirmVan.employee_id)?.length)}
+            tokens={TOKENS}
           />
         </ConfirmDialog>
       )}

@@ -1,8 +1,9 @@
-import { TOKENS, getTypo } from '../../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../../tokens'
 import TransformationStateBadges from './TransformationStateBadges'
 
-export default function TransformationHistoryList({ items, sw, onCancel, cancellingId }) {
+export default function TransformationHistoryList({ items, sw, onCancel, cancellingId, tokens = DARK_TOKENS }) {
   const typo = getTypo(sw)
+  const TOKENS = tokens
   if (!items.length) {
     return (
       <div style={{ padding: 16, borderRadius: TOKENS.radius.lg, background: TOKENS.glass.panelSoft, border: `1px solid ${TOKENS.colors.border}` }}>
@@ -24,7 +25,7 @@ export default function TransformationHistoryList({ items, sw, onCancel, cancell
             <div>
               <p style={{ ...typo.title, color: TOKENS.colors.textSoft, margin: 0 }}>{item.recipe_code || item.name}</p>
               <div style={{ marginTop: 6 }}>
-                <TransformationStateBadges item={item} />
+                <TransformationStateBadges item={item} tokens={TOKENS} />
               </div>
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
                 Barras: {Number(item.input_qty_units || item.input_qty || 0).toFixed(0)} · Salida: {Number(item.actual_output_qty_units || item.output_qty_units || 0).toFixed(2)}
