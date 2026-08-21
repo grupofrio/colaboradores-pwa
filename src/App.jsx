@@ -687,7 +687,7 @@ export default function App() {
   // otro rol hereda el claro.
   useEffect(() => {
     const root = document.documentElement
-    const isProductionLightRole = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role)
+    const isProductionLightRole = ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion'].includes(session?.role)
     if (isProductionLightRole || isBrandLightSession(session)) root.setAttribute('data-brand-light', '1')
     else root.removeAttribute('data-brand-light')
     return () => root.removeAttribute('data-brand-light')
