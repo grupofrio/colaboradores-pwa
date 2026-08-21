@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { findTicket, dispatchTicket, getPendingTickets, getCedisInventory } from './entregasService'
 import { ScreenShell, ConfirmDialog } from './components'
 import { logScreenError } from '../shared/logScreenError'
@@ -9,12 +11,15 @@ import { logScreenError } from '../shared/logScreenError'
    ScreenOperacionDia — Fusion of Tickets + Inventario in a tabbed view
 ============================================================================ */
 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 const TABS = { TICKETS: 'tickets', INVENTARIO: 'inventario' }
 
 export default function ScreenOperacionDia() {
   const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const isLightSurface = session?.role === 'almacenista_entregas' || isBrandLightSession(session)
+  const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
 
   const warehouseId = Number(session?.warehouse_id || 0) || null
 
@@ -165,15 +170,15 @@ export default function ScreenOperacionDia() {
   const Spinner = () => (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
       <div style={{
-        width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
-        borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+        width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`,
+        borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%',
         animation: 'entregasOpSpin 0.8s linear infinite',
       }} />
     </div>
   )
 
   return (
-    <ScreenShell title="Operacion del dia" backTo="/entregas">
+    <ScreenShell title="Operacion del dia" backTo="/entregas" tokens={TOKENS}>
       <style>{`
         @keyframes entregasOpSpin { to { transform: rotate(360deg); } }
         input { font-family: 'DM Sans', sans-serif; }
@@ -196,8 +201,8 @@ export default function ScreenOperacionDia() {
                 fontSize: 14,
                 fontWeight: 600,
                 color: active ? TOKENS.colors.text : TOKENS.colors.textMuted,
-                background: active ? 'rgba(43,143,224,0.12)' : TOKENS.colors.surfaceSoft,
-                borderBottom: active ? `2px solid ${TOKENS.colors.blue2}` : '2px solid transparent',
+                background: active ? TOKENS.colors.surfaceStrong : TOKENS.colors.surfaceSoft,
+                borderBottom: active ? `2px solid ${TOKENS.colors.blue}` : '2px solid transparent',
                 transition: `all ${TOKENS.motion.fast}`,
               }}
             >
@@ -225,8 +230,9 @@ export default function ScreenOperacionDia() {
                   placeholder="Folio o escanear QR..."
                   style={{
                     flex: 1, padding: '12px 14px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                    color: 'white', fontSize: 16, fontWeight: 600, outline: 'none', letterSpacing: '0.05em',
+                    background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.text, fontSize: 16, fontWeight: 600, outline: 'none', letterSpacing: '0.05em',
+                    colorScheme: isLightSurface ? 'light' : 'dark',
                   }}
                 />
                 <button
@@ -234,7 +240,7 @@ export default function ScreenOperacionDia() {
                   disabled={searching}
                   style={{
                     padding: '0 18px', borderRadius: TOKENS.radius.md,
-                    background: 'linear-gradient(90deg, #15499B, #2B8FE0)', color: 'white',
+                    background: TOKENS.colors.ctaGradient, color: TOKENS.colors.onPrimary,
                     fontSize: 14, fontWeight: 600, opacity: searching ? 0.6 : 1,
                   }}
                 >
@@ -244,12 +250,12 @@ export default function ScreenOperacionDia() {
 
               {/* Messages */}
               {ticketError && (
-                <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)', color: TOKENS.colors.error, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+                <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}4D`, color: TOKENS.colors.error, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
                   {ticketError}
                 </div>
               )}
               {ticketSuccess && (
-                <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: '1px solid rgba(34,197,94,0.25)', color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+                <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}40`, color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
                   {ticketSuccess}
                 </div>
               )}
@@ -265,7 +271,7 @@ export default function ScreenOperacionDia() {
                     <span style={{
                       padding: '4px 10px', borderRadius: TOKENS.radius.pill,
                       background: ticket.dispatched ? TOKENS.colors.successSoft : TOKENS.colors.warningSoft,
-                      border: `1px solid ${ticket.dispatched ? 'rgba(34,197,94,0.25)' : 'rgba(245,158,11,0.25)'}`,
+                      border: `1px solid ${ticket.dispatched ? TOKENS.colors.success + '40' : TOKENS.colors.warning + '40'}`,
                       fontSize: 11, fontWeight: 700, color: ticket.dispatched ? TOKENS.colors.success : TOKENS.colors.warning,
                     }}>
                       {ticket.dispatched ? 'DESPACHADO' : 'PENDIENTE'}
@@ -280,7 +286,7 @@ export default function ScreenOperacionDia() {
                           <span style={{ ...typo.caption, color: TOKENS.colors.textSoft, fontWeight: 600 }}>{line.product}</span>
                           <span style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginLeft: 8 }}>&times;{line.qty}</span>
                         </div>
-                        <span style={{ ...typo.caption, color: TOKENS.colors.blue2, fontWeight: 700 }}>${line.total?.toFixed(2)}</span>
+                        <span style={{ ...typo.caption, color: TOKENS.colors.blue, fontWeight: 700 }}>${line.total?.toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
@@ -296,7 +302,7 @@ export default function ScreenOperacionDia() {
                   {!isTicketFromMyWarehouse(ticket) && (
                     <div style={{
                       padding: 12, marginTop: 8, borderRadius: TOKENS.radius.md,
-                      background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
+                      background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}4D`,
                       color: TOKENS.colors.error, fontSize: 13, textAlign: 'center',
                     }}>
                       ⚠️ Este ticket pertenece a otro almacén
@@ -313,12 +319,12 @@ export default function ScreenOperacionDia() {
                       style={{
                         width: '100%', padding: 14, marginTop: 10, borderRadius: TOKENS.radius.lg,
                         background: isTicketFromMyWarehouse(ticket)
-                          ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                          ? TOKENS.colors.success
                           : TOKENS.colors.surface,
-                        color: isTicketFromMyWarehouse(ticket) ? 'white' : TOKENS.colors.textMuted,
+                        color: isTicketFromMyWarehouse(ticket) ? TOKENS.colors.onPrimary : TOKENS.colors.textMuted,
                         fontSize: 15, fontWeight: 600, opacity: dispatching ? 0.6 : 1,
                         boxShadow: isTicketFromMyWarehouse(ticket)
-                          ? '0 10px 24px rgba(34,197,94,0.30)' : 'none',
+                          ? `0 10px 24px ${TOKENS.colors.success}4D` : 'none',
                       }}
                     >
                       {dispatching
@@ -355,7 +361,7 @@ export default function ScreenOperacionDia() {
               )}
 
               {!ticket && pending.length === 0 && !searching && (
-                <div style={{ marginTop: 30, padding: 24, borderRadius: TOKENS.radius.xl, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', textAlign: 'center' }}>
+                <div style={{ marginTop: 30, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.successSoft, border: `1px solid ${TOKENS.colors.success}33`, textAlign: 'center' }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>&#x2705;</div>
                   <p style={{ ...typo.title, color: TOKENS.colors.success }}>Sin tickets pendientes</p>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6 }}>Ingresa un folio o escanea un QR para validar.</p>
@@ -378,8 +384,9 @@ export default function ScreenOperacionDia() {
                   placeholder="Buscar producto..."
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                    color: 'white', fontSize: 14, outline: 'none',
+                    background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.text, fontSize: 14, outline: 'none',
+                    colorScheme: isLightSurface ? 'light' : 'dark',
                   }}
                 />
               </div>
@@ -388,7 +395,7 @@ export default function ScreenOperacionDia() {
               <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
                 <div style={{ flex: 1, padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Productos</p>
-                  <p style={{ fontSize: 20, fontWeight: 700, color: TOKENS.colors.blue2, margin: 0 }}>{filteredInv.length}</p>
+                  <p style={{ fontSize: 20, fontWeight: 700, color: TOKENS.colors.blue, margin: 0 }}>{filteredInv.length}</p>
                 </div>
                 <div style={{ flex: 1, padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Total Kg</p>
@@ -418,7 +425,7 @@ export default function ScreenOperacionDia() {
                           {item.quantity} unidades &middot; Disp: {item.available ?? item.quantity}
                         </p>
                       </div>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: TOKENS.colors.blue2, flexShrink: 0, marginLeft: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: TOKENS.colors.blue, flexShrink: 0, marginLeft: 8 }}>
                         {(item.total_kg || item.quantity * (item.weight || 1)).toFixed(0)} kg
                       </span>
                     </div>
@@ -439,6 +446,7 @@ export default function ScreenOperacionDia() {
         onConfirm={handleDispatch}
         onCancel={() => setConfirmOpen(false)}
         loading={dispatching}
+        tokens={TOKENS}
       />
     </ScreenShell>
   )

@@ -62,12 +62,12 @@ export default function ScreenShell({ title, backTo = '/entregas', children, rig
               flexShrink: 0,
             }}
           >
-            <svg
+          <svg
               width="18"
               height="18"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="rgba(255,255,255,0.7)"
+              stroke={TOKENS.colors.textSoft}
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"

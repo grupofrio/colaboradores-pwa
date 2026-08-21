@@ -4,6 +4,7 @@ import { useSession } from '../../App'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { getTypo } from '../../tokens'
 import SessionErrorState from '../../components/SessionErrorState'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getVanLoadHistory } from './entregasService'
 import { buildVanLoadHistorySummary, groupVanLoadHistoryByVan, mexicoTodayDateKey } from './vanLoadHistory'
 import { ScreenShell, EmptyState } from './components'
@@ -87,7 +88,8 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
   const { session } = useSession()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 390)
   const typo = useMemo(() => getTypo(sw), [sw])
-  const tokens = useMemo(() => getHistorialCargasTheme(isAdmin), [isAdmin])
+  const isLightSurface = !isAdmin && (session?.role === 'almacenista_entregas' || isBrandLightSession(session))
+  const tokens = useMemo(() => getHistorialCargasTheme({ isAdmin, isLightSurface }), [isAdmin, isLightSurface])
   const [date, setDate] = useState(mexicoTodayDateKey())
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -133,7 +135,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
     <>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        input { color-scheme: ${isAdmin ? 'light' : 'dark'}; }
+        input { color-scheme: ${(isAdmin || isLightSurface) ? 'light' : 'dark'}; }
       `}</style>
 
       <div style={{
@@ -231,7 +233,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
       {loading ? (
         <Spinner tokens={tokens} />
       ) : groups.length === 0 ? (
-        <EmptyState icon="🚚" title="Sin cargas registradas ese día" subtitle={isAdmin ? 'El admin verá aquí lo registrado por almacén de entregas.' : 'Cuando registres cargas o recargas aparecerán aquí.'} />
+        <EmptyState icon="🚚" title="Sin cargas registradas ese día" subtitle={isAdmin ? 'El admin verá aquí lo registrado por almacén de entregas.' : 'Cuando registres cargas o recargas aparecerán aquí.'} tokens={tokens} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {groups.map((group) => (
@@ -320,7 +322,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
 
   if (!shell) return content
   return (
-    <ScreenShell title="Historial de cargas" backTo={backTo}>
+    <ScreenShell title="Historial de cargas" backTo={backTo} tokens={tokens}>
       {content}
     </ScreenShell>
   )

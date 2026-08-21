@@ -7,11 +7,15 @@ import { BRAND_TOKENS } from '../src/theme/brandTokens.js'
 import { getHistorialCargasTheme } from '../src/modules/entregas/historialCargasTheme.js'
 
 test('admin historial de cargas uses the light admin palette', () => {
-  assert.equal(getHistorialCargasTheme(true), BRAND_TOKENS)
+  assert.equal(getHistorialCargasTheme({ isAdmin: true }), BRAND_TOKENS)
 })
 
 test('entregas historial de cargas keeps the dark entregas palette', () => {
-  assert.equal(getHistorialCargasTheme(false), TOKENS)
+  assert.equal(getHistorialCargasTheme({ isAdmin: false }), TOKENS)
+})
+
+test('entregas historial de cargas uses the light palette for almacenista_entregas', () => {
+  assert.equal(getHistorialCargasTheme({ isAdmin: false, isLightSurface: true }), BRAND_TOKENS)
 })
 
 test('historial de cargas screen does not reference the removed TOKENS identifier directly', () => {

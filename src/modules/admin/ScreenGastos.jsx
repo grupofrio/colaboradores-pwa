@@ -4,6 +4,7 @@
 // IMPORTANTE: el gerente sigue usando GastosScreenBase en /gerente/gastos —
 // esta migración solo toca la ruta /admin/gastos.
 import { useEffect, useState } from 'react'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
 import GastosScreenBase from '../shared/GastosScreenBase'
 import { AdminProvider } from './AdminContext'
 import AdminShell from './components/AdminShell'
@@ -19,7 +20,7 @@ export default function ScreenGastos() {
   }, [])
 
   if (sw < 1024) {
-    return <GastosScreenBase title="Gastos" backRoute="/admin" listLabel="GASTOS DE HOY" />
+    return <GastosScreenBase title="Gastos" backRoute="/admin" listLabel="GASTOS DE HOY" tokens={BRAND_TOKENS} />
   }
 
   return (
