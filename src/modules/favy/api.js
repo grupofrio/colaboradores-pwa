@@ -12,7 +12,6 @@ import {
   receiveRequisitionProducts,
 } from '../admin/api.js'
 import { getVanRoster, getProductsAtCedis, executeVanLoad } from '../entregas/entregasService.js'
-import { getEntregasDestination } from '../almacen-pt/ptService.js'
 import { apiPost } from '../../lib/api.js'
 
 function toArray(value) {
@@ -87,8 +86,11 @@ export function executeFavyVanLoad(mobileLocationId, lines, driverEmployeeId) {
   return executeVanLoad(mobileLocationId, lines, driverEmployeeId)
 }
 
-export async function getFavyEntregasDestination() {
-  return getEntregasDestination()
+export function getFavyEntregasDestination() {
+  return Promise.resolve({
+    id: 1362,
+    name: 'CCDMX/Existencias',
+  })
 }
 
 export function isDoctorVan(van = {}) {
