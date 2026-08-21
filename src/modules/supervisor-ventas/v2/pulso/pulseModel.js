@@ -310,7 +310,7 @@ export function presentSameTranche(raw) {
   if (value.available === false) {
     return {
       available: false,
-      title: value.title || 'Resultado same-tranche',
+      title: value.title || 'Tendencia de sucursal (mismo tramo)',
       summary: value.summary || 'Comparativo no disponible.',
       money: presentMoney(value.money),
     }
@@ -323,7 +323,7 @@ export function presentSameTranche(raw) {
   )
   return {
     available: true,
-    title: value.title || 'Resultado same-tranche',
+    title: value.title || 'Tendencia de sucursal (mismo tramo)',
     summary: value.summary || null,
     current_label: value.current_label || value.current?.label || 'Periodo actual',
     previous_label: value.previous_label || value.previous?.label || 'Periodo anterior',
@@ -535,10 +535,19 @@ export function presentPurchaseDrops(raw) {
     available: true,
     title: value.title || 'Caídas de compra',
     summary: value.summary || null,
+    count: value.count ?? items.length,
     items: items.map((item) => ({
-      id: item.id ?? item.customer_id ?? item.entity_id,
+      id: item.id ?? item.partner_id ?? item.customer_id ?? item.entity_id,
       name: item.name || item.customer_name || item.entity_name || 'Cliente',
-      drop_pct: item.available === false ? null : finite(item.drop_pct ?? item.change_pct),
+      drop_pct: item.available === false
+        ? null
+        : finite(item.drop_pct ?? item.delta_pct ?? item.change_pct),
+      current_purchase_date: item.current_purchase_date || null,
+      previous_purchase_date: item.previous_purchase_date || null,
+      current_amount: finite(item.current_amount),
+      previous_amount: finite(item.previous_amount),
+      currency: item.currency || null,
+      severity: item.severity || null,
       summary: item.summary || null,
       available: item.available !== false,
     })),
@@ -579,7 +588,13 @@ export function presentPulsePayload(raw = {}) {
     trend: presentTrend(blocks.trend || raw.trend),
     products: presentProducts(blocks.products || raw.products),
     recurrent_execution: presentRecurrentExecution(blocks.recurrent_execution || raw.recurrent_execution),
-    purchase_drops: presentPurchaseDrops(blocks.purchase_drops || raw.purchase_drops || blocks.drops),
+    purchase_drops: presentPurchaseDrops(
+      blocks.customer_purchase_drop
+      || blocks.purchase_drops
+      || raw.customer_purchase_drop
+      || raw.purchase_drops
+      || blocks.drops
+    ),
     resultado: {
       money,
       sales_amount: money.consolidated ? money.sales_total : null,
