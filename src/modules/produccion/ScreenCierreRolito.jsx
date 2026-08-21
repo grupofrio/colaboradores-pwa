@@ -8,6 +8,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getModuleById } from '../registry'
 import { resolveModuleContextRole } from '../../lib/roleContext'
 import { getShiftOverview, saveBagReconciliation, getActiveCycle } from './rolitoService'
@@ -21,6 +23,8 @@ import {
   markOperatorTurnClosed,
   normalizeOperatorCloseRole,
 } from '../shared/operatorTurnCloseStore'
+
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
 export default function ScreenCierreRolito() {
   const navigate = useNavigate()
@@ -37,6 +41,8 @@ export default function ScreenCierreRolito() {
     ) || session?.role
   )
   const isBarraOperator = activeOperatorRole === 'operador_barra'
+  // Invariante de tests/brandTokensScope: superficie compartida por operador_rolito/operador_barra/auxiliar_produccion (ruta exclusiva de esos roles), adopta el tema claro incondicionalmente.
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role) || isBrandLightSession(session)
 
   const [data, setData] = useState({ shift: null, cycles: [], packing: [], kpis: null, bagMaterials: [] })
   const [loading, setLoading] = useState(true)
@@ -168,39 +174,39 @@ export default function ScreenCierreRolito() {
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
           <button onClick={() => navigate('/produccion')} style={iconBtn}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5" /><path d="M12 19l-7-7 7-7" />
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Cierre de Turno</span>
+          <span style={{ ...typo.title, color: TOKENS_LIGHT.colors.textSoft }}>Cierre de Turno</span>
         </div>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS_LIGHT.colors.border}`, borderTop: `2px solid ${TOKENS_LIGHT.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={heroCard}>
-              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 12 }}>RESUMEN DEL DIA</p>
+              <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, marginBottom: 12 }}>RESUMEN DEL DIA</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <SummaryItem label="Ciclos" value={kpis ? `${kpis.completedCycles}` : '0'} typo={typo} />
                 <SummaryItem
                   label="Producido"
                   value={kpis?.totalKgProduced != null ? `${kpis.totalKgProduced} kg` : '-'}
-                  accent={TOKENS.colors.blue2}
+                  accent={TOKENS_LIGHT.colors.blue}
                   typo={typo}
                 />
                 <SummaryItem
                   label="Empacado"
                   value={kpis?.totalKgPacked != null ? `${kpis.totalKgPacked} kg` : '-'}
-                  accent={TOKENS.colors.success}
+                  accent={TOKENS_LIGHT.colors.success}
                   typo={typo}
                 />
                 <SummaryItem
                   label="Merma"
                   value={kpis?.mermaKg != null && kpis?.mermaPct != null ? `${kpis.mermaKg} kg (${kpis.mermaPct}%)` : '-'}
-                  accent={kpis?.mermaExceeded ? TOKENS.colors.error : TOKENS.colors.success}
+                  accent={kpis?.mermaExceeded ? TOKENS_LIGHT.colors.error : TOKENS_LIGHT.colors.success}
                   typo={typo}
                 />
               </div>
@@ -208,10 +214,10 @@ export default function ScreenCierreRolito() {
 
             {!isBarraOperator && coherenceHeadline && (
               <div style={warningCard}>
-                <p style={{ ...typo.body, color: TOKENS.colors.warning, margin: 0, fontWeight: 600 }}>
+                <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.warning, margin: 0, fontWeight: 600 }}>
                   {coherenceHeadline}
                 </p>
-                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: '4px 0 0' }}>
                   Producido {Math.round(coherence.summary.totalProduced)} kg · Empacado {Math.round(coherence.summary.totalPacked)} kg
                 </p>
               </div>
@@ -220,8 +226,8 @@ export default function ScreenCierreRolito() {
             {!isBarraOperator && (
               <div style={panelCard}>
                 <div style={{ marginBottom: 12 }}>
-                  <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>CONTEO DE BOLSAS</p>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                  <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, margin: 0 }}>CONTEO DE BOLSAS</p>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: '4px 0 0' }}>
                     Este conteo se calcula automaticamente con materiales del turno y la declaracion final.
                   </p>
                 </div>
@@ -230,7 +236,7 @@ export default function ScreenCierreRolito() {
                   <ReadOnlyRow label="Bolsas recibidas" value={totalBagsReceived} typo={typo} />
                   <ReadOnlyRow label="Bolsas usadas" value={totalBagsUsed} typo={typo} />
                   <ReadOnlyRow label="Bolsas sobrantes" value={totalBagsReturned} typo={typo} />
-                  <ReadOnlyRow label="Bolsas merma" value={totalBagsDamaged} typo={typo} accent={TOKENS.colors.warning} />
+                  <ReadOnlyRow label="Bolsas merma" value={totalBagsDamaged} typo={typo} accent={TOKENS_LIGHT.colors.warning} />
 
                   {bagsDiff !== null && (
                     <div style={{
@@ -241,11 +247,11 @@ export default function ScreenCierreRolito() {
                       border: `1px solid ${bagsDiff === 0 ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>Diferencia</span>
+                        <span style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft, fontWeight: 600 }}>Diferencia</span>
                         <span style={{
                           ...typo.body,
                           fontWeight: 700,
-                          color: bagsDiff === 0 ? TOKENS.colors.success : TOKENS.colors.error,
+                          color: bagsDiff === 0 ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.error,
                         }}>
                           {bagsDiff === 0 ? 'Todo cuadra' : `${bagsDiff > 0 ? '+' : ''}${bagsDiff} bolsas`}
                         </span>
@@ -269,14 +275,14 @@ export default function ScreenCierreRolito() {
               style={declarationBtn}
             >
               <div>
-                  <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Declarar merma de bolsas</p>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '3px 0 0' }}>
+                  <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.text, margin: 0 }}>Declarar merma de bolsas</p>
+                  <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: '3px 0 0' }}>
                     {bagDeclarationReady
                       ? `Merma lista: ${totalBagsDamaged} bolsas quedaran como merma y ${totalBagsReturned} regresaran al cierre`
                       : 'Registra cuantas bolsas fueron merma. La devolucion util regresara automaticamente al cierre.'}
                   </p>
               </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textLow} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 18l6-6-6-6" />
                 </svg>
               </button>
@@ -284,17 +290,17 @@ export default function ScreenCierreRolito() {
 
             {!isBarraOperator && bagDeclarationRequired && !bagDeclarationReady && (
               <div style={warningCard}>
-                <p style={{ ...typo.body, color: TOKENS.colors.warning, margin: '0 0 4px', fontWeight: 700 }}>
+                <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.warning, margin: '0 0 4px', fontWeight: 700 }}>
                   Falta declarar la merma de bolsas
                 </p>
-                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
+                <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0 }}>
                   Antes de entregar el cierre al supervisor registra cuantas bolsas fueron merma. La devolucion util se preparara automaticamente con el saldo restante.
                 </p>
               </div>
             )}
 
             <div style={panelCard}>
-              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '0 0 12px' }}>CHECKLIST DE ENTREGA</p>
+              <p style={{ ...typo.overline, color: TOKENS_LIGHT.colors.textLow, margin: '0 0 12px' }}>CHECKLIST DE ENTREGA</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {checks.map((check) => (
                   <button
@@ -306,8 +312,8 @@ export default function ScreenCierreRolito() {
                       gap: 12,
                       padding: '12px 14px',
                       borderRadius: TOKENS.radius.md,
-                      background: check.done ? 'rgba(34,197,94,0.08)' : TOKENS.colors.surface,
-                      border: `1px solid ${check.done ? 'rgba(34,197,94,0.25)' : TOKENS.colors.border}`,
+                      background: check.done ? 'rgba(34,197,94,0.08)' : TOKENS_LIGHT.colors.surface,
+                      border: `1px solid ${check.done ? 'rgba(34,197,94,0.25)' : TOKENS_LIGHT.colors.border}`,
                       width: '100%',
                       textAlign: 'left',
                     }}
@@ -316,8 +322,8 @@ export default function ScreenCierreRolito() {
                       width: 24,
                       height: 24,
                       borderRadius: 6,
-                      background: check.done ? TOKENS.colors.success : 'transparent',
-                      border: `2px solid ${check.done ? TOKENS.colors.success : TOKENS.colors.textMuted}`,
+                      background: check.done ? TOKENS_LIGHT.colors.success : 'transparent',
+                      border: `2px solid ${check.done ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.textMuted}`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -332,7 +338,7 @@ export default function ScreenCierreRolito() {
                     <span style={{
                       ...typo.body,
                       fontWeight: 600,
-                      color: check.done ? TOKENS.colors.success : TOKENS.colors.textSoft,
+                      color: check.done ? TOKENS_LIGHT.colors.success : TOKENS_LIGHT.colors.textSoft,
                     }}>
                       {check.label}
                     </span>
@@ -346,10 +352,10 @@ export default function ScreenCierreRolito() {
                 padding: '12px 14px', borderRadius: TOKENS.radius.md,
                 background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
               }}>
-                <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>
+                <p style={{ ...typo.body, color: TOKENS_LIGHT.colors.error, margin: 0, fontWeight: 700 }}>
                   Hay un ciclo activo en progreso
                 </p>
-                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: '4px 0 0' }}>
                   Ciclo #{activeCycle.cycle_number || activeCycle.id} está {activeCycle.state === 'freezing' ? 'congelando' : 'en deshielo'}. Complétalo antes de entregar tu cierre.
                 </p>
               </div>
@@ -365,8 +371,8 @@ export default function ScreenCierreRolito() {
                 width: '100%',
                 padding: '16px',
                 borderRadius: TOKENS.radius.lg,
-                background: canClose ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-                color: canClose ? 'white' : TOKENS.colors.textLow,
+                background: canClose ? TOKENS_LIGHT.colors.ctaGradient : TOKENS_LIGHT.colors.surface,
+                color: canClose ? 'white' : TOKENS_LIGHT.colors.textLow,
                 fontSize: 16,
                 fontWeight: 700,
                 boxShadow: canClose ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
@@ -401,10 +407,10 @@ function SummaryItem({ label, value, accent, typo }) {
     <div style={{
       padding: '10px',
       borderRadius: TOKENS.radius.md,
-      background: 'rgba(255,255,255,0.04)',
+      background: TOKENS_LIGHT.colors.surfaceSoft,
     }}>
-      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginBottom: 3 }}>{label}</p>
-      <p style={{ fontSize: 15, fontWeight: 700, color: accent || TOKENS.colors.text, margin: 0 }}>{value}</p>
+      <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginBottom: 3 }}>{label}</p>
+      <p style={{ fontSize: 15, fontWeight: 700, color: accent || TOKENS_LIGHT.colors.text, margin: 0 }}>{value}</p>
     </div>
   )
 }
@@ -412,8 +418,8 @@ function SummaryItem({ label, value, accent, typo }) {
 function ReadOnlyRow({ label, value, typo, accent }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <span style={{ ...typo.body, color: TOKENS.colors.textSoft }}>{label}</span>
-      <span style={{ ...typo.body, color: accent || TOKENS.colors.text, fontWeight: 700 }}>{value}</span>
+      <span style={{ ...typo.body, color: TOKENS_LIGHT.colors.textSoft }}>{label}</span>
+      <span style={{ ...typo.body, color: accent || TOKENS_LIGHT.colors.text, fontWeight: 700 }}>{value}</span>
     </div>
   )
 }
@@ -424,9 +430,9 @@ function MessageBox({ kind, text, typo }) {
     <div style={{
       padding: 12,
       borderRadius: TOKENS.radius.md,
-      background: isError ? TOKENS.colors.errorSoft : 'rgba(34,197,94,0.08)',
+      background: isError ? TOKENS_LIGHT.colors.errorSoft : 'rgba(34,197,94,0.08)',
       border: isError ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(34,197,94,0.25)',
-      color: isError ? TOKENS.colors.error : TOKENS.colors.success,
+      color: isError ? TOKENS_LIGHT.colors.error : TOKENS_LIGHT.colors.success,
       ...typo.caption,
       textAlign: 'center',
     }}>
@@ -437,7 +443,7 @@ function MessageBox({ kind, text, typo }) {
 
 const pageStyle = {
   minHeight: '100dvh',
-  background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+  background: `linear-gradient(160deg, ${TOKENS_LIGHT.colors.bg0} 0%, ${TOKENS_LIGHT.colors.bg1} 50%, ${TOKENS_LIGHT.colors.bg2} 100%)`,
   paddingTop: 'env(safe-area-inset-top)',
   paddingBottom: 'env(safe-area-inset-bottom)',
 }
@@ -445,15 +451,15 @@ const pageStyle = {
 const heroCard = {
   padding: 16,
   borderRadius: TOKENS.radius.xl,
-  background: TOKENS.glass.hero,
-  border: `1px solid ${TOKENS.colors.borderBlue}`,
+  background: TOKENS_LIGHT.colors.surface,
+  border: `1px solid ${TOKENS_LIGHT.colors.borderBlue}`,
 }
 
 const panelCard = {
   padding: 16,
   borderRadius: TOKENS.radius.xl,
-  background: TOKENS.glass.panel,
-  border: `1px solid ${TOKENS.colors.border}`,
+  background: TOKENS_LIGHT.glass.panel,
+  border: `1px solid ${TOKENS_LIGHT.colors.border}`,
 }
 
 const warningCard = {
@@ -467,8 +473,8 @@ const declarationBtn = {
   width: '100%',
   padding: '14px 18px',
   borderRadius: TOKENS.radius.lg,
-  background: TOKENS.glass.panel,
-  border: `1px solid ${TOKENS.colors.border}`,
+  background: TOKENS_LIGHT.glass.panel,
+  border: `1px solid ${TOKENS_LIGHT.colors.border}`,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -480,8 +486,8 @@ const iconBtn = {
   width: 38,
   height: 38,
   borderRadius: TOKENS.radius.md,
-  background: TOKENS.colors.surface,
-  border: `1px solid ${TOKENS.colors.border}`,
+  background: TOKENS_LIGHT.colors.surface,
+  border: `1px solid ${TOKENS_LIGHT.colors.border}`,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',

@@ -573,7 +573,7 @@ function PageLoader() {
     }}>
       <div style={{
         width: 32, height: 32,
-        border: '2px solid rgba(255,255,255,0.12)',
+        border: '2px solid var(--spinner-track)',
         borderTop: '2px solid #2B8FE0',
         borderRadius: '50%',
         animation: 'spin 0.8s linear infinite',
@@ -614,10 +614,10 @@ class ErrorBoundary extends Component {
             background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
           }}>⚠️</div>
-          <p style={{ color: 'rgba(255,255,255,0.82)', fontSize: 16, fontWeight: 600, margin: 0 }}>
+          <p style={{ color: 'var(--text)', fontSize: 16, fontWeight: 600, margin: 0 }}>
             Algo salió mal
           </p>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, margin: 0, textAlign: 'center', maxWidth: 420 }}>
+          <p style={{ color: 'var(--text)', opacity: 0.6, fontSize: 13, margin: 0, textAlign: 'center', maxWidth: 420 }}>
             Ocurrió un error al cargar esta pantalla. Intenta de nuevo.
           </p>
           {msg && (
@@ -687,7 +687,8 @@ export default function App() {
   // otro rol hereda el claro.
   useEffect(() => {
     const root = document.documentElement
-    if (isBrandLightSession(session)) root.setAttribute('data-brand-light', '1')
+    const isProductionLightRole = ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion'].includes(session?.role)
+    if (isProductionLightRole || isBrandLightSession(session)) root.setAttribute('data-brand-light', '1')
     else root.removeAttribute('data-brand-light')
     return () => root.removeAttribute('data-brand-light')
   }, [session])
