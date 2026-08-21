@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { getModuleById } from '../src/modules/registry.js'
-import { getNavModules, getHomeModulesForSession } from '../src/lib/navModel.js'
+import {
+  getModuleRouteDecisionForSession,
+  getNavModules,
+  getHomeModulesForSession,
+} from '../src/lib/navModel.js'
 import {
   isSupervisorCopilotPath,
   SUPERVISOR_COPILOT_CHAT,
@@ -106,4 +110,63 @@ test('CAPABILITY-FRESCURA: tab Copiloto solo tras capabilities live; fail-closed
   assert.match(shell, /useState\(false\)/)
   assert.doesNotMatch(shell, /getSession\(/)
   assert.doesNotMatch(shell, /localStorage/)
+})
+
+test('rail Copiloto exige autorización canónica del módulo AND capability live', async () => {
+  const {
+    isSupervisorCopilotModuleAllowed,
+    resolveSupervisorCopilotTabVisibleForSession,
+  } = await import('../src/modules/supervisor-ventas/v2/copilot/copilotSupervisorModel.js')
+  const denied = s('supervisor_ventas')
+  const allowed = {
+    ...s('supervisor_ventas'),
+    capabilities: { supervisorCopilot: true },
+  }
+  const live = {
+    tools: [{ id: 'get_tomorrow_readiness' }],
+    read_only: true,
+    invoicing_enabled: false,
+  }
+  let deniedCalls = 0
+
+  assert.equal(getModuleRouteDecisionForSession('copiloto_supervisor', denied), 'home')
+  assert.equal(isSupervisorCopilotModuleAllowed(denied), false)
+  assert.equal(await resolveSupervisorCopilotTabVisibleForSession(denied, () => {
+    deniedCalls += 1
+    return Promise.resolve(live)
+  }), false)
+  assert.equal(deniedCalls, 0, 'sin acceso de módulo ni siquiera consulta capability live')
+
+  assert.equal(getModuleRouteDecisionForSession('copiloto_supervisor', allowed), 'allow')
+  assert.equal(isSupervisorCopilotModuleAllowed(allowed), true)
+  assert.equal(
+    await resolveSupervisorCopilotTabVisibleForSession(allowed, () => Promise.resolve(live)),
+    true,
+  )
+
+  assert.equal(
+    await resolveSupervisorCopilotTabVisibleForSession(allowed, () => Promise.resolve(false)),
+    false,
+  )
+  assert.equal(
+    await resolveSupervisorCopilotTabVisibleForSession(allowed, () => Promise.resolve(null)),
+    false,
+  )
+  assert.equal(
+    await resolveSupervisorCopilotTabVisibleForSession(allowed, () => Promise.reject(new Error('network'))),
+    false,
+  )
+})
+
+test('rail conserva superficies V2, Pulso/Hoy y gating Copiloto independientes', () => {
+  const shell = src('modules/supervisor-ventas/v2/SupervisorV2Shell.jsx')
+  const app = src('App.jsx')
+
+  for (const key of ['hoy', 'radar', 'rutas', 'clientes', 'prospectos', 'pendientes', 'copiloto', 'mas']) {
+    assert.match(shell, new RegExp(`key: '${key}'`))
+  }
+  assert.match(app, /pulseEnabled \? <PulsoTab \/> : <HoyTab \/>/)
+  assert.match(shell, /pulseEnabled === true \? \[PULSE_TAB, \.\.\.V2_TABS\.slice\(1\)\]/)
+  assert.match(shell, /copilotOk \? available : available\.filter\(\(t\) => t\.key !== 'copiloto'\)/)
+  assert.match(shell, /resolveSupervisorCopilotTabVisibleForSession\(session, getSupervisorCopilotCapabilities\)/)
 })
