@@ -122,11 +122,15 @@ test('Ayer presenta Crédito otorgado, diagnóstico y calidad fuera de attention
   assert.equal(conversionState(55).label, 'Vigilar')
 
   const ayer = src('modules/supervisor-ventas/v2/pulso/AyerView.jsx')
+  const model = src('modules/supervisor-ventas/v2/pulso/pulseModel.js')
   assert.match(ayer, />Crédito otorgado</)
   assert.match(ayer, />Métrica de calidad</)
-  assert.match(ayer, /data\.attention \|\| data\.attention_items/)
+  assert.match(ayer, /presentPulsePayload/)
+  assert.match(model, /raw\.attention \|\| raw\.attention_items/)
   assert.doesNotMatch(ayer, /attention\s*=\s*.*quality/)
   assert.match(ayer, /to="\/equipo\/recuperacion"/)
+  assert.match(ayer, />Contado</)
+  assert.match(ayer, />Ticket</)
 })
 
 test('pulse_focus mantiene Ayer, expande rutas y enfoca la fila sin navegar a Rutas', () => {
