@@ -7,8 +7,10 @@ import {
   ATTENTION_TYPES,
   matrixCellLabel,
   presentCustomerMovement,
+  presentExecution,
   presentMonthTargets,
   presentPulsePayload,
+  presentSameTranche,
   presentWeekMatrix,
   PULSE_HORIZONS,
   PULSE_HORIZON_KEYS,
@@ -19,6 +21,7 @@ import { normalizePulseResponse, PULSE_STATUS } from '../src/modules/supervisor-
 import { buildPulseRequest } from '../src/modules/supervisor-ventas/v2/pulso/pulseApi.js'
 
 const src = (relative) => readFileSync(fileURLToPath(new URL(`../src/${relative}`, import.meta.url)), 'utf8')
+const fixture = (name) => JSON.parse(readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), 'utf8'))
 
 test('Pulso expone exactamente Ahora, Ayer, Semana y Mes', () => {
   assert.deepEqual(PULSE_HORIZON_KEYS, ['ahora', 'ayer', 'semana', 'mes'])
@@ -242,4 +245,44 @@ test('PulsoTab handleCta usa horizon del focus CTA', () => {
   const tab = src('modules/supervisor-ventas/v2/pulso/PulsoTab.jsx')
   assert.match(tab, /setHorizon\(target\.horizon\)/)
   assert.doesNotMatch(tab, /setHorizon\('ayer'\)/)
+})
+
+test('backend-shaped Semana fixture → presentPulsePayload E2E', () => {
+  const raw = fixture('pulseBackendSemana.fixture.json')
+  assert.equal(raw.contract, 'gf.salesops.supervisor.pulse/2')
+  const presented = presentPulsePayload(raw)
+  assert.ok(presented.week_matrix.rows.length > 0)
+  assert.ok(presented.week_matrix.rows[0].cells.length > 0)
+  assert.equal(presented.week_matrix.rows[0].cells[0].label, '8/10')
+  const movement = presented.customer_movement
+  assert.equal(movement.cards.find((c) => c.key === 'recovered')?.count, 2)
+  assert.equal(movement.cards.find((c) => c.key === 'prospects_converted')?.count, 1)
+  assert.equal(movement.cards.find((c) => c.key === 'prospects_activated')?.count, 3)
+  assert.equal(movement.cards.find((c) => c.key === 'pending_to_buy')?.count, 4)
+  assert.equal(movement.cards.find((c) => c.key === 'opportunities')?.count, 5)
+  assert.equal(presented.execution.punctuality.value, 1)
+  assert.equal(presented.same_tranche.delta_pct, 20)
+})
+
+test('backend-shaped Mes fixture → targets/trend/products/recurrent E2E', () => {
+  const raw = fixture('pulseBackendMes.fixture.json')
+  const presented = presentPulsePayload(raw)
+  assert.equal(presentMonthTargets(presented.targets).sales.amount, 50000)
+  assert.equal(presented.targets.frozen_demand.amount, 48000)
+  assert.equal(presented.targets.direct_target.amount, 55000)
+  assert.equal(presented.trend.direction, 'up')
+  assert.equal(presented.products.items[0].name, 'Helado 1L')
+  assert.equal(presented.recurrent_execution.items[0].label, 'Puntualidad')
+  assert.equal(presented.customer_movement.cards.find((c) => c.key === 'recovered')?.count, 6)
+})
+
+test('backend-shaped Ahora fixture → recovered today visible', () => {
+  const raw = fixture('pulseBackendAhora.fixture.json')
+  const presented = presentPulsePayload(raw)
+  const recovered = presented.customer_movement.cards.find((c) => c.key === 'recovered')
+  assert.equal(recovered?.count, 1)
+  assert.equal(recovered?.label, 'Recuperados')
+  const ahora = src('modules/supervisor-ventas/v2/pulso/AhoraView.jsx')
+  assert.match(ahora, /CustomerMovementBlock/)
+  assert.match(ahora, /Movimiento hoy/)
 })

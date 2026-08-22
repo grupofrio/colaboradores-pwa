@@ -1,0 +1,57 @@
+{
+  "contract": "gf.salesops.supervisor.pulse/2",
+  "horizon": "mes",
+  "partial": false,
+  "attention": [],
+  "attention_total": 0,
+  "blocks": {
+    "targets": {
+      "available": true,
+      "currency": "MXN",
+      "sales": { "available": true, "amount": 50000, "currency": "MXN", "label": "Venta actual" },
+      "frozen_demand": { "available": true, "amount": 48000, "currency": "MXN", "label": "Demanda congelada" },
+      "direct_target": { "available": true, "amount": 55000, "currency": "MXN", "label": "Meta directa" },
+      "pace": { "available": true, "value": 32000, "label": "Ritmo a la fecha", "summary": "Al ritmo" }
+    },
+    "customer_movement": {
+      "available": true,
+      "recovered": { "available": true, "count": 6, "partners": [] },
+      "prospects_converted": { "available": true, "count": 2 },
+      "prospects_activated": { "available": true, "count": 1 },
+      "pending_to_buy": { "available": true, "count": 8, "partners": [] },
+      "opportunities": { "available": true, "count": 3, "open": 3 },
+      "opportunities_converted": { "available": true, "count": 1, "items": [] },
+      "purchase_drops": { "available": true, "count": 0, "items": [] }
+    },
+    "trend": {
+      "available": true,
+      "direction": "up",
+      "delta_pct": 12.5,
+      "current_label": "2026-08-01",
+      "previous_label": "2026-07-01"
+    },
+    "products": {
+      "available": true,
+      "count": 1,
+      "items": [{ "name": "Helado 1L", "change_pct": -8, "qty": 120, "amount": 2400, "direction": "down", "available": true }]
+    },
+    "recurrent_execution": {
+      "available": true,
+      "count": 1,
+      "items": [{ "type": "recurrent_issue", "label": "Puntualidad", "occurrences_this_week": 2, "previous_week_occurrences": 0, "recurrent": true, "persistent": false, "severity": "warning", "tone": "warning", "available": true }]
+    },
+    "execution": {
+      "available": true,
+      "punctuality": { "available": true, "count": 0, "tone": "good", "unit": "count" },
+      "km": { "available": true, "count": 1, "tone": "attention", "unit": "count" },
+      "capacity": { "available": true, "count": 0, "tone": "good", "unit": "count" },
+      "quality": { "available": true, "count": 1, "pct": 2.1, "tone": "attention", "unit": "count" },
+      "rows": []
+    },
+    "same_tranche": {
+      "available": true,
+      "delta_pct": 12.5,
+      "money": { "available": true, "consolidated": true, "currency": "MXN", "sales_total": 50000 }
+    }
+  }
+}

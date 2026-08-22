@@ -231,7 +231,46 @@ function presentMovementCards(raw) {
     }))
   }
 
+  const canonicalSlots = [
+    ['recovered', 'Recuperados'],
+    ['prospects_converted', 'Prospectos convertidos'],
+    ['prospects_activated', 'Prospectos activados'],
+    ['pending_to_buy', 'Pendientes de compra'],
+    ['opportunities', 'Oportunidades'],
+    ['opportunities_converted', 'Oportunidades convertidas'],
+  ]
   const cards = []
+  for (const [key, label] of canonicalSlots) {
+    const card = raw?.[key]
+    if (!card || typeof card !== 'object') continue
+    if (card.available === false) {
+      cards.push({
+        key,
+        label,
+        count: null,
+        tone: 'unknown',
+        tone_label: 'No disponible',
+        summary: card.reason || `${label} no disponible.`,
+        available: false,
+        cta: card.cta || null,
+      })
+      continue
+    }
+    const count = finite(card.count ?? card.open ?? card.total ?? card.value)
+    cards.push({
+      key,
+      label,
+      count,
+      tone: card.tone || (count != null && count > 0 ? 'watch' : 'good'),
+      tone_label: card.tone_label || toneLabel(card.tone),
+      summary: card.summary || null,
+      available: true,
+      cta: card.cta || null,
+    })
+  }
+  if (cards.length) return cards
+
+  // Legacy pre-canonical keys (tests/fixtures antiguos).
   for (const key of ['recovered', 'missing', 'drops', 'opportunities']) {
     const card = raw?.[key]
     if (!card || typeof card !== 'object') continue
@@ -283,14 +322,14 @@ export function presentWeekMatrix(raw) {
   const days = Array.isArray(value.days) ? value.days : (Array.isArray(value.columns) ? value.columns : [])
   const rows = Array.isArray(value.rows)
     ? value.rows.map((row) => ({
-      label: row.label || row.name || 'Indicador',
+      label: row.operational_plan_name || row.label || row.name || row.route_name || 'Indicador',
       cells: Array.isArray(row.cells)
         ? row.cells.map((cell) => ({
-          available: cell?.available !== false,
-          tone: cell?.tone || 'unknown',
+          available: cell?.available !== false && cell?.state !== 'unavailable',
+          tone: cell?.tone || (cell?.state === 'complete' ? 'good' : cell?.state === 'incomplete' ? 'attention' : 'unknown'),
           tone_label: cell?.tone_label || toneLabel(cell?.tone),
-          label: matrixCellLabel(cell),
-          value: cell?.available === false ? null : finite(cell?.pct ?? cell?.value),
+          label: cell?.label || matrixCellLabel(cell),
+          value: cell?.available === false ? null : finite(cell?.pct ?? cell?.value ?? cell?.visited),
         }))
         : [],
     }))

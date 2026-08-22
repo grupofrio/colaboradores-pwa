@@ -1,10 +1,12 @@
 import AttentionList from './AttentionList.jsx'
+import CustomerMovementBlock from './CustomerMovementBlock.jsx'
 import { compactState, presentPulsePayload } from './pulseModel.js'
 
 export default function AhoraView({ data = {}, onCta }) {
   const presented = presentPulsePayload(data)
   const attention = presented.attention
   const state = compactState(presented)
+  const movement = presented.customer_movement
 
   return (
     <div className="pulse-view">
@@ -18,6 +20,17 @@ export default function AhoraView({ data = {}, onCta }) {
         </div>
         <AttentionList items={attention} max={5} onCta={onCta} />
       </section>
+
+      {movement ? (
+        <CustomerMovementBlock
+          movement={{
+            ...movement,
+            title: 'Movimiento hoy',
+            summary: movement.summary || 'Recuperados y prospectos del día operativo.',
+          }}
+          onCta={onCta}
+        />
+      ) : null}
 
       {state ? (
         <section className="pulse-section pulse-section--compact" aria-label="Estado comercial">

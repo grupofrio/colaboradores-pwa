@@ -1,0 +1,26 @@
+{
+  "contract": "gf.salesops.supervisor.pulse/2",
+  "horizon": "ahora",
+  "partial": false,
+  "attention": [],
+  "attention_total": 0,
+  "blocks": {
+    "estado_compacto": {
+      "available": true,
+      "routes_total": 4,
+      "departed": 3,
+      "not_departed": 1
+    },
+    "cash": { "available": true, "pending": false },
+    "customer_movement": {
+      "available": true,
+      "recovered": { "available": true, "count": 1, "partners": [{ "partner_id": 42, "name": "Cliente recuperado" }] },
+      "prospects_converted": { "available": true, "count": 0 },
+      "prospects_activated": { "available": true, "count": 1 },
+      "pending_to_buy": { "available": false, "reason": "scheduled_today_source_unavailable" },
+      "opportunities": { "available": true, "count": 2, "open": 2 },
+      "opportunities_converted": { "available": true, "count": 0, "items": [] },
+      "purchase_drops": { "available": false, "count": 0, "items": [] }
+    }
+  }
+}
