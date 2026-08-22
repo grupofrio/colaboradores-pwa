@@ -66,17 +66,32 @@ test('rail reemplaza únicamente Hoy por Pulso y conserva el filtro de Copiloto'
   }
 })
 
-test('Pulso muestra solamente los horizontes Ahora y Ayer', () => {
+test('Pulso conserva horizontes Ahora y Ayer de Release A', () => {
   const model = src('modules/supervisor-ventas/v2/pulso/pulseModel.js')
   const tab = src('modules/supervisor-ventas/v2/pulso/PulsoTab.jsx')
   assert.match(model, /\{ key: 'ahora', label: 'Ahora' \}/)
   assert.match(model, /\{ key: 'ayer', label: 'Ayer' \}/)
-  assert.doesNotMatch(`${model}\n${tab}`, /label: 'Semana'|label: 'Mes'/)
+  assert.match(tab, /horizon === 'ahora'/)
+  assert.match(tab, /horizon === 'ayer'/)
+  assert.match(tab, /<AhoraView/)
+  assert.match(tab, /<AyerView/)
 })
 
-test('attention acepta solo 8 tipos y limita la portada a 5 con Ver todas', () => {
-  assert.equal(ATTENTION_TYPES.length, 8)
-  const items = ATTENTION_TYPES.map((type, index) => ({
+test('attention acepta tipos Release A, limita la portada a 5 con Ver todas', () => {
+  const releaseA = [
+    'route_not_departed',
+    'route_zero_visits',
+    'close_cash_composed',
+    'open_routes_over_7d',
+    'load_pending_acceptance',
+    'gps_stale',
+    'coverage_gap',
+    'conversion_watch',
+  ]
+  for (const type of releaseA) {
+    assert.ok(ATTENTION_TYPES.includes(type), `missing ${type}`)
+  }
+  const items = releaseA.map((type, index) => ({
     id: index,
     type,
     severity: index < 2 ? 'critical' : 'warning',
@@ -137,7 +152,7 @@ test('Ayer presenta Crédito otorgado, diagnóstico y calidad fuera de attention
   assert.match(ayer, />Ticket</)
 })
 
-test('pulse_focus mantiene Ayer, expande rutas y enfoca la fila sin navegar a Rutas', () => {
+test('pulse_focus expande rutas en Ayer y enfoca la fila sin navegar a Rutas', () => {
   assert.deepEqual(pulseFocusTarget({
     kind: 'pulse_focus',
     horizon: 'ayer',
@@ -150,7 +165,7 @@ test('pulse_focus mantiene Ayer, expande rutas y enfoca la fila sin navegar a Ru
   })
   const tab = src('modules/supervisor-ventas/v2/pulso/PulsoTab.jsx')
   const ayer = src('modules/supervisor-ventas/v2/pulso/AyerView.jsx')
-  assert.match(tab, /setHorizon\('ayer'\)/)
+  assert.match(tab, /setHorizon\(target\.horizon\)/)
   assert.doesNotMatch(`${tab}\n${ayer}`, /\/equipo\/rutas/)
   assert.match(ayer, /setRoutesOpen\(true\)/)
   assert.match(ayer, /focusPulseRoute/)

@@ -9,8 +9,10 @@ function createRequestId() {
   return `pulse-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+const VALID_HORIZONS = new Set(['ahora', 'ayer', 'semana', 'mes'])
+
 export function buildPulseRequest(horizon, requestId = createRequestId()) {
-  if (horizon !== 'ahora' && horizon !== 'ayer') {
+  if (!VALID_HORIZONS.has(horizon)) {
     throw new TypeError('Horizonte de pulso inválido')
   }
   return {
