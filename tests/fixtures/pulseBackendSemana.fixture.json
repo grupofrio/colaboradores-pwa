@@ -1,0 +1,109 @@
+{
+  "contract": "gf.salesops.supervisor.pulse/2",
+  "horizon": "semana",
+  "partial": false,
+  "attention": [],
+  "attention_total": 0,
+  "blocks": {
+    "customer_movement": {
+      "available": true,
+      "recovered": { "available": true, "count": 2, "partners": [] },
+      "prospects_converted": { "available": true, "count": 1 },
+      "prospects_activated": { "available": true, "count": 3 },
+      "pending_to_buy": { "available": true, "count": 4, "partners": [] },
+      "opportunities": { "available": true, "count": 5, "open": 5 },
+      "opportunities_converted": { "available": true, "count": 1, "items": [] },
+      "purchase_drops": { "available": true, "count": 1, "items": [{ "partner_id": 9, "name": "Cliente", "delta_pct": -5, "severity": null, "tone": "watch" }] }
+    },
+    "week_matrix": {
+      "available": true,
+      "days": [
+        { "date": "2026-08-17", "day_key": "mon", "label": "Lun" },
+        { "date": "2026-08-18", "day_key": "tue", "label": "Mar" },
+        { "date": "2026-08-19", "day_key": "wed", "label": "Mié" },
+        { "date": "2026-08-20", "day_key": "thu", "label": "Jue" },
+        { "date": "2026-08-21", "day_key": "fri", "label": "Vie" },
+        { "date": "2026-08-22", "day_key": "sat", "label": "Sáb" },
+        { "date": "2026-08-23", "day_key": "sun", "label": "Dom" }
+      ],
+      "rows": [
+        {
+          "operational_plan_key": "SO:1",
+          "operational_plan_type": "SO",
+          "operational_plan_id": 1,
+          "operational_plan_name": "Norte A",
+          "route_id": 10,
+          "cells": [
+            { "date": "2026-08-17", "day_key": "mon", "day_label": "Lun", "state": "complete", "label": "8/10", "available": true, "scheduled": 10, "visited": 8 },
+            { "date": "2026-08-18", "day_key": "tue", "day_label": "Mar", "state": "incomplete", "label": "3/10", "available": true, "scheduled": 10, "visited": 3 },
+            { "date": "2026-08-19", "day_key": "wed", "day_label": "Mié", "state": "not_scheduled", "label": "", "available": true },
+            { "date": "2026-08-20", "day_key": "thu", "day_label": "Jue", "state": "not_scheduled", "label": "", "available": true },
+            { "date": "2026-08-21", "day_key": "fri", "day_label": "Vie", "state": "not_scheduled", "label": "", "available": true },
+            { "date": "2026-08-22", "day_key": "sat", "day_label": "Sáb", "state": "not_scheduled", "label": "", "available": true },
+            { "date": "2026-08-23", "day_key": "sun", "day_label": "Dom", "state": "not_scheduled", "label": "", "available": true }
+          ]
+        }
+      ]
+    },
+    "execution": {
+      "available": true,
+      "punctuality": { "available": true, "count": 1, "tone": "attention", "unit": "count" },
+      "km": { "available": true, "count": 0, "tone": "good", "unit": "count" },
+      "capacity": { "available": true, "count": 1, "tone": "attention", "unit": "count" },
+      "quality": { "available": true, "count": 2, "pct": 4.5, "tone": "attention", "unit": "count" },
+      "rows": [
+        {
+          "plan_id": 101,
+          "route_id": 10,
+          "route_name": "Norte A",
+          "operational_plan": { "tipo": "SO", "id": 1, "name": "Norte A", "ambiguous": false },
+          "operational_plan_key": "SO:1",
+          "departure": {
+            "available": true,
+            "status": "late",
+            "attention": true,
+            "label": "Fuera de horario",
+            "severity": "warning"
+          },
+          "first_visit": {
+            "available": true,
+            "status": "on_time",
+            "attention": false,
+            "label": "En horario"
+          },
+          "km": {
+            "available": true,
+            "planned_km": 120,
+            "real_km": 118,
+            "delta_km": -2,
+            "delta_pct": -1.7,
+            "direction": "low",
+            "attention": false
+          },
+          "capacity": {
+            "available": true,
+            "pct": 105.5,
+            "state": "attention",
+            "attention": true,
+            "severity": "warning"
+          }
+        }
+      ]
+    },
+    "same_tranche": {
+      "available": true,
+      "current_label": "2026-08-17",
+      "previous_label": "2026-08-10",
+      "current": { "sales_total": 12000, "currency": "MXN" },
+      "previous": { "sales_total": 10000, "currency": "MXN" },
+      "delta_pct": 20.0,
+      "coverage": { "current_pct": 82, "previous_pct": 78, "delta_pct": 4 },
+      "money": { "available": true, "consolidated": true, "currency_status": "known_single", "currency": "MXN", "sales_total": 12000 }
+    },
+    "customer_purchase_drop": {
+      "available": true,
+      "count": 1,
+      "items": [{ "partner_id": 9, "name": "Cliente", "delta_pct": -5, "severity": null, "tone": "watch" }]
+    }
+  }
+}

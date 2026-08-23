@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useSessionContext } from '../../../../lib/sessionContext.js'
 import AhoraView from './AhoraView.jsx'
 import AyerView from './AyerView.jsx'
+import MesView from './MesView.jsx'
+import SemanaView from './SemanaView.jsx'
 import {
   clearPulseSessionProjection,
   PULSE_HORIZONS,
@@ -75,7 +77,7 @@ export default function PulsoTab() {
   const handleCta = useCallback((cta) => {
     const target = pulseFocusTarget(cta)
     if (target) {
-      setHorizon('ayer')
+      setHorizon(target.horizon)
       setFocusTarget({ ...target, requestKey: Date.now() })
       return
     }
@@ -126,6 +128,12 @@ export default function PulsoTab() {
       {usable && horizon === 'ahora' ? <AhoraView data={pulse.data} onCta={handleCta} /> : null}
       {usable && horizon === 'ayer'
         ? <AyerView data={pulse.data} onCta={handleCta} focusTarget={focusTarget} />
+        : null}
+      {usable && horizon === 'semana'
+        ? <SemanaView data={pulse.data} onCta={handleCta} focusTarget={focusTarget} />
+        : null}
+      {usable && horizon === 'mes'
+        ? <MesView data={pulse.data} onCta={handleCta} focusTarget={focusTarget} />
         : null}
       {!usable ? <PulseState status={pulse.status} error={pulse.error} onRetry={pulse.reload} /> : null}
     </div>
