@@ -35,6 +35,91 @@ function ExecutionMetric({ metric }) {
   )
 }
 
+function executionRowLabel(row) {
+  if (!row) return 'Ruta'
+  if (row.route_name) return row.route_name
+  if (row.operational_plan?.name) return row.operational_plan.name
+  if (row.plan_id != null) return `Plan ${row.plan_id}`
+  if (row.route_id != null) return `Ruta ${row.route_id}`
+  return 'Ruta'
+}
+
+function executionTimingLabel(timing) {
+  if (!timing || timing.available === false) return 'No disponible'
+  return timing.label || 'Sin dato'
+}
+
+function executionKmLabel(km) {
+  if (!km || km.available === false) return 'No disponible'
+  if (km.delta_km == null && km.delta_pct == null) return 'Sin dato'
+  const parts = []
+  if (km.delta_km != null) parts.push(`${displayValue(km.delta_km)} km`)
+  if (km.delta_pct != null) parts.push(`${displayValue(km.delta_pct, '%')}`)
+  return parts.join(' · ')
+}
+
+function executionCapacityLabel(capacity) {
+  if (!capacity || capacity.available === false) return 'No disponible'
+  if (capacity.pct == null) return capacity.tone_label || 'Sin dato'
+  return displayValue(capacity.pct, '%')
+}
+
+function ExecutionRowsDetail({ rows = [] }) {
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  return (
+    <div className="pulse-route-list pulse-execution-rows" data-pulse-block="execution_rows">
+      {rows.map((row) => {
+        const key = row.operational_plan_key
+          || (row.plan_id != null ? `plan-${row.plan_id}` : null)
+          || (row.route_id != null ? `route-${row.route_id}` : executionRowLabel(row))
+        return (
+          <article
+            className="pulse-route-row"
+            key={key}
+            data-pulse-execution-row={row.plan_id ?? row.route_id ?? undefined}
+          >
+            <h3>{executionRowLabel(row)}</h3>
+            <dl className="pulse-execution-detail">
+              <div>
+                <dt>Salida</dt>
+                <dd>
+                  <span className={`pulse-tone pulse-tone--${row.departure?.tone || 'unknown'}`}>
+                    {executionTimingLabel(row.departure)}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>Primera visita</dt>
+                <dd>
+                  <span className={`pulse-tone pulse-tone--${row.first_visit?.tone || 'unknown'}`}>
+                    {executionTimingLabel(row.first_visit)}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>Km</dt>
+                <dd>
+                  <span className={`pulse-tone pulse-tone--${row.km?.tone || 'unknown'}`}>
+                    {executionKmLabel(row.km)}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>Capacidad</dt>
+                <dd>
+                  <span className={`pulse-tone pulse-tone--${row.capacity?.tone || 'unknown'}`}>
+                    {executionCapacityLabel(row.capacity)}
+                  </span>
+                </dd>
+              </div>
+            </dl>
+          </article>
+        )
+      })}
+    </div>
+  )
+}
+
 function SameTrancheSection({ sameTranche }) {
   if (!sameTranche) return null
   if (sameTranche.available === false) {
@@ -163,10 +248,12 @@ export default function SemanaView({ data = {}, onCta, focusTarget }) {
               <div className="pulse-metric-grid">
                 <ExecutionMetric metric={execution.punctuality} />
                 <ExecutionMetric metric={execution.km} />
+                <ExecutionMetric metric={execution.capacity} />
                 <ExecutionMetric
                   metric={execution.quality ? { ...execution.quality, dataPulseBlock: 'quality' } : null}
                 />
               </div>
+              <ExecutionRowsDetail rows={execution.rows} />
             </>
           )}
         </section>

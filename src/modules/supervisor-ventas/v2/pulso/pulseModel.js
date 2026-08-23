@@ -373,6 +373,102 @@ export function presentSameTranche(raw) {
   }
 }
 
+function presentExecutionTiming(metric) {
+  const item = blockObject(metric)
+  if (!item || item.available === false) {
+    return {
+      available: false,
+      status: item?.status || 'unknown',
+      label: item?.label || 'Sin dato',
+      attention: false,
+      severity: null,
+      tone: 'unknown',
+      tone_label: toneLabel('unknown'),
+    }
+  }
+  const tone = item.attention
+    ? 'attention'
+    : item.status === 'on_time'
+      ? 'good'
+      : 'unknown'
+  return {
+    available: true,
+    status: item.status || 'unknown',
+    label: item.label || 'Sin dato',
+    attention: Boolean(item.attention),
+    severity: item.severity || null,
+    tone,
+    tone_label: item.label || toneLabel(tone),
+  }
+}
+
+function presentExecutionKm(km) {
+  const item = blockObject(km)
+  if (!item || item.available === false) {
+    return {
+      available: false,
+      planned_km: null,
+      real_km: null,
+      delta_km: null,
+      delta_pct: null,
+      direction: null,
+      attention: false,
+      tone: 'unknown',
+      tone_label: toneLabel('unknown'),
+    }
+  }
+  return {
+    available: true,
+    planned_km: finite(item.planned_km),
+    real_km: finite(item.real_km),
+    delta_km: finite(item.delta_km),
+    delta_pct: finite(item.delta_pct),
+    direction: item.direction || null,
+    attention: Boolean(item.attention),
+    tone: item.attention ? 'attention' : 'good',
+    tone_label: toneLabel(item.attention ? 'attention' : 'good'),
+  }
+}
+
+function presentExecutionCapacityRow(capacity) {
+  const item = blockObject(capacity)
+  if (!item || item.available === false) {
+    return {
+      available: false,
+      pct: null,
+      state: 'unavailable',
+      attention: false,
+      tone: 'unknown',
+      tone_label: toneLabel('unknown'),
+    }
+  }
+  const tone = item.state || (item.attention ? 'attention' : 'good')
+  return {
+    available: true,
+    pct: finite(item.pct),
+    state: item.state || null,
+    attention: Boolean(item.attention),
+    severity: item.severity || null,
+    tone,
+    tone_label: toneLabel(tone),
+  }
+}
+
+export function presentExecutionRow(row) {
+  if (!row || typeof row !== 'object') return null
+  return {
+    plan_id: row.plan_id ?? null,
+    route_id: row.route_id ?? null,
+    route_name: row.route_name || null,
+    operational_plan: row.operational_plan || null,
+    operational_plan_key: row.operational_plan_key || null,
+    departure: presentExecutionTiming(row.departure),
+    first_visit: presentExecutionTiming(row.first_visit),
+    km: presentExecutionKm(row.km),
+    capacity: presentExecutionCapacityRow(row.capacity),
+  }
+}
+
 export function presentExecution(raw) {
   const value = blockObject(raw)
   if (!value) return null
@@ -383,7 +479,9 @@ export function presentExecution(raw) {
       summary: value.summary || 'Ejecución no disponible.',
       punctuality: null,
       km: null,
+      capacity: null,
       quality: null,
+      rows: [],
     }
   }
 
@@ -415,7 +513,11 @@ export function presentExecution(raw) {
     summary: value.summary || null,
     punctuality: mapMetric(value.punctuality, 'Puntualidad'),
     km: mapMetric(value.km ?? value.km_deviation, 'Kilometraje'),
+    capacity: mapMetric(value.capacity, 'Capacidad'),
     quality: mapMetric(value.quality, 'Calidad'),
+    rows: (Array.isArray(value.rows) ? value.rows : [])
+      .map(presentExecutionRow)
+      .filter(Boolean),
   }
 }
 

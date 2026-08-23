@@ -121,6 +121,8 @@ test('presentPulsePayload proyecta bloques semana y mes sin confundir unavailabl
   assert.equal(semana.week_matrix.rows[0].cells[1].label, 'Sin dato')
   assert.equal(semana.same_tranche.money.sales_total, 12000)
   assert.equal(semana.execution.available, false)
+  assert.equal(semana.execution.capacity, null)
+  assert.deepEqual(semana.execution.rows, [])
   assert.doesNotMatch(semana.execution.summary || '', /\b0\b/)
 
   const mes = presentPulsePayload({
@@ -165,6 +167,10 @@ test('SemanaView compone movimiento, matriz, same-tranche y ejecución', () => {
   assert.match(semana, /PurchaseDropList/)
   assert.match(semana, /focusPulseBlock/)
   assert.match(semana, /presentPulsePayload/)
+  assert.match(semana, /execution\.capacity/)
+  assert.match(semana, /execution\.rows/)
+  assert.match(semana, /ExecutionRowsDetail/)
+  assert.match(semana, /data-pulse-block="execution_rows"/)
 
   const movement = presentCustomerMovement({
     available: true,
@@ -250,6 +256,8 @@ test('PulsoTab handleCta usa horizon del focus CTA', () => {
 test('backend-shaped Semana fixture → presentPulsePayload E2E', () => {
   const raw = fixture('pulseBackendSemana.fixture.json')
   assert.equal(raw.contract, 'gf.salesops.supervisor.pulse/2')
+  assert.ok(raw.blocks.execution.capacity.count > 0, 'fixture capacity count must be > 0')
+  assert.ok(raw.blocks.execution.rows.length > 0, 'fixture execution rows must be non-empty')
   const presented = presentPulsePayload(raw)
   assert.ok(presented.week_matrix.rows.length > 0)
   assert.ok(presented.week_matrix.rows[0].cells.length > 0)
@@ -260,8 +268,38 @@ test('backend-shaped Semana fixture → presentPulsePayload E2E', () => {
   assert.equal(movement.cards.find((c) => c.key === 'prospects_activated')?.count, 3)
   assert.equal(movement.cards.find((c) => c.key === 'pending_to_buy')?.count, 4)
   assert.equal(movement.cards.find((c) => c.key === 'opportunities')?.count, 5)
+  assert.ok(presented.execution.punctuality, 'execution.punctuality must be preserved')
+  assert.ok(presented.execution.km, 'execution.km must be preserved')
+  assert.ok(presented.execution.capacity, 'execution.capacity must be preserved')
+  assert.ok(presented.execution.quality, 'execution.quality must be preserved')
   assert.equal(presented.execution.punctuality.value, 1)
+  assert.equal(presented.execution.km.value, 0)
+  assert.equal(presented.execution.capacity.value, 1)
+  assert.equal(presented.execution.quality.value, 4.5)
+  assert.ok(presented.execution.rows.length > 0, 'execution.rows must be preserved')
+  const firstRow = presented.execution.rows[0]
+  assert.equal(firstRow.plan_id, 101)
+  assert.equal(firstRow.route_id, 10)
+  assert.equal(firstRow.route_name, 'Norte A')
+  assert.equal(firstRow.operational_plan_key, 'SO:1')
+  assert.equal(firstRow.departure.status, 'late')
+  assert.equal(firstRow.first_visit.status, 'on_time')
+  assert.equal(firstRow.km.delta_km, -2)
+  assert.equal(firstRow.capacity.pct, 105.5)
   assert.equal(presented.same_tranche.delta_pct, 20)
+})
+
+test('presentExecution unavailable preserves null capacity and empty rows', () => {
+  const presented = presentExecution({
+    available: false,
+    summary: 'Ejecución no disponible.',
+  })
+  assert.equal(presented.available, false)
+  assert.equal(presented.capacity, null)
+  assert.deepEqual(presented.rows, [])
+  assert.equal(presented.punctuality, null)
+  assert.equal(presented.km, null)
+  assert.equal(presented.quality, null)
 })
 
 test('backend-shaped Mes fixture → targets/trend/products/recurrent E2E', () => {

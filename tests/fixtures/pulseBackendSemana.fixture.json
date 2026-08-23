@@ -49,9 +49,46 @@
       "available": true,
       "punctuality": { "available": true, "count": 1, "tone": "attention", "unit": "count" },
       "km": { "available": true, "count": 0, "tone": "good", "unit": "count" },
-      "capacity": { "available": true, "count": 0, "tone": "good", "unit": "count" },
+      "capacity": { "available": true, "count": 1, "tone": "attention", "unit": "count" },
       "quality": { "available": true, "count": 2, "pct": 4.5, "tone": "attention", "unit": "count" },
-      "rows": []
+      "rows": [
+        {
+          "plan_id": 101,
+          "route_id": 10,
+          "route_name": "Norte A",
+          "operational_plan": { "tipo": "SO", "id": 1, "name": "Norte A", "ambiguous": false },
+          "operational_plan_key": "SO:1",
+          "departure": {
+            "available": true,
+            "status": "late",
+            "attention": true,
+            "label": "Fuera de horario",
+            "severity": "warning"
+          },
+          "first_visit": {
+            "available": true,
+            "status": "on_time",
+            "attention": false,
+            "label": "En horario"
+          },
+          "km": {
+            "available": true,
+            "planned_km": 120,
+            "real_km": 118,
+            "delta_km": -2,
+            "delta_pct": -1.7,
+            "direction": "low",
+            "attention": false
+          },
+          "capacity": {
+            "available": true,
+            "pct": 105.5,
+            "state": "attention",
+            "attention": true,
+            "severity": "warning"
+          }
+        }
+      ]
     },
     "same_tranche": {
       "available": true,

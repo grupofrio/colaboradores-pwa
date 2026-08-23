@@ -343,6 +343,35 @@
   text-align: right;
 }
 
+.pulse-execution-rows .pulse-route-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.pulse-execution-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pulse-execution-detail div {
+  display: grid;
+  gap: 4px;
+}
+
+.pulse-execution-detail dt {
+  color: #5b7285;
+  font-size: 12px;
+}
+
+.pulse-execution-detail dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f2a3d;
+}
+
 .pulse-empty {
   color: #5b7285;
 }
