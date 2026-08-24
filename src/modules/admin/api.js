@@ -415,6 +415,13 @@ export function getCapabilities() {
   return api('GET', '/pwa-admin/capabilities')
 }
 
+/** Alcance de operación (Plaza × Empresa) del actor autenticado — leído al boot.
+ *  { enabled: false } para actores normales; { enabled: true, scopes: [...],
+ *  default_plaza_id } para actores multi-compañía sin default (ej. Angelica). */
+export function getOperatingScope() {
+  return api('GET', '/pwa-admin/operating-scope')
+}
+
 // ── Cortes POS por turno ────────────────────────────────────────────────────
 
 /** Turno activo del alcance derivado exclusivamente del token del empleado. */
@@ -588,7 +595,10 @@ export function createRequisition(data) {
   return api('POST', '/pwa-admin/requisition-create', data)
 }
 
-/** Requisiciones recientes. Acepta filtros {companyId, state, dateFrom, dateTo, limit, offset}. */
+/** Requisiciones recientes. Acepta filtros {companyId, state, dateFrom, dateTo, limit, offset,
+ *  operatingPlazaId, operatingCompanyId}. Los dos últimos son opcionales — solo aplican a
+ *  actores multi-compañía v2 (ver getOperatingScope); si se omiten, el backend regresa
+ *  todo lo autorizado para el actor (OR sobre sus grants). */
 export function getRequisitions(filters = {}) {
   const mapped = {
     company_id: filters.companyId ?? filters.company_id,
@@ -598,6 +608,8 @@ export function getRequisitions(filters = {}) {
     date_to: filters.dateTo ?? filters.date_to,
     limit: filters.limit,
     offset: filters.offset,
+    operating_plaza_id: filters.operatingPlazaId ?? filters.operating_plaza_id,
+    operating_company_id: filters.operatingCompanyId ?? filters.operating_company_id,
   }
   const qs = toQuery(mapped)
   return api('GET', `/pwa-admin/requisitions${qs}`)

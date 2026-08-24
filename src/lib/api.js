@@ -1782,6 +1782,14 @@ async function directAdmin(method, path, body) {
     return odooHttp('GET', '/pwa-admin/capabilities', {})
   }
 
+  // ── Operating scope (Plaza × Empresa, actores multi-compañía v2) ────────
+  // Igual que capabilities: depende del actor autenticado (gf.operating.actor),
+  // nunca se resuelve localmente — el backend es la única fuente de verdad de
+  // qué pares (Plaza, Empresa) tiene autorizados.
+  if (cleanPath === '/pwa-admin/operating-scope' && method === 'GET') {
+    return odooHttp('GET', '/pwa-admin/operating-scope', {})
+  }
+
   // ── Requisitions (purchase.order) ───────────────────────────────────────
   // Lista de requisiciones recientes. El frontend acepta array plano o
   // { data: { requisitions: [...] } }. Filtros: company_id, state, fechas.
@@ -1990,6 +1998,12 @@ async function directAdmin(method, path, body) {
   //   2. Genere origin = "PWA-Admin: {name}" (requerido por el filtro del Torre)
   //   3. Cree el registro gf.pwa.requisition con approval_state
   //   4. Ejecute la lógica de umbral de aprobación
+  // company_id/warehouse_id/employee_id se descartan a propósito (ADR-08): la
+  // compañía v1 normal se deriva del token del empleado, no del cliente.
+  // operating_plaza_id/operating_company_id NO se descartan — son la
+  // excepción intencional para actores multi-compañía v2 (gf_operating_scope):
+  // el backend re-valida ese par contra los grants reales del actor antes de
+  // crear el PO, así que dejarlos pasar no reabre el hueco de autoridad.
   if (cleanPath === '/pwa-admin/requisition-create' && method === 'POST') {
     const {
       company_id: _companyId,

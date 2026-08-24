@@ -10,6 +10,8 @@ import { createRequisition, getRequisitions } from './api'
 import { AdminProvider } from './AdminContext'
 import AdminShell from './components/AdminShell'
 import AdminRequisicionForm from './forms/AdminRequisicionForm'
+import OperatingScopePicker from './components/OperatingScopePicker'
+import { bootOperatingScope, groupOperatingScopesByPlaza } from './adminService'
 import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenRequisiciones() {
@@ -52,6 +54,24 @@ function MobileRequisiciones() {
   const [lines, setLines] = useState([{ product_name: '', qty: 1 }])
   const [notes, setNotes] = useState('')
 
+  // Alcance de operación (Plaza × Empresa) para actores multi-compañía v2 —
+  // MobileRequisiciones no está envuelto en AdminProvider, así que duplica su
+  // propia llamada de boot (mismo precedente que ya sigue con `companies`
+  // arriba en vez de reusar AdminContext).
+  const [operatingScope, setOperatingScope] = useState({ enabled: false, scopes: [], defaultPlazaId: null })
+  const [operatingPlazaId, setOperatingPlazaId] = useState(null)
+  const [operatingCompanyId, setOperatingCompanyId] = useState(null)
+  const operatingScopeGroups = useMemo(
+    () => groupOperatingScopesByPlaza(operatingScope.scopes),
+    [operatingScope.scopes],
+  )
+
+  useEffect(() => {
+    let alive = true
+    bootOperatingScope(session).then(scope => { if (alive) setOperatingScope(scope) })
+    return () => { alive = false }
+  }, [session])
+
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
     window.addEventListener('resize', handler)
@@ -84,6 +104,10 @@ function MobileRequisiciones() {
 
   async function handleSubmit() {
     if (!title.trim()) { setError('Ingresa un titulo'); return }
+    if (operatingScope.enabled && (!operatingPlazaId || !operatingCompanyId)) {
+      setError('Selecciona la Plaza y empresa operativa')
+      return
+    }
     const validLines = lines.filter(l => l.product_name.trim())
     if (validLines.length === 0) { setError('Agrega al menos un producto'); return }
     setSubmitting(true)
@@ -97,6 +121,9 @@ function MobileRequisiciones() {
         sucursal: session?.sucursal || '',
         capturista: session?.name || '',
         lines: validLines.map(l => ({ product_name: l.product_name.trim(), qty: Number(l.qty) || 1 })),
+        ...(operatingScope.enabled
+          ? { operating_plaza_id: operatingPlazaId, operating_company_id: operatingCompanyId }
+          : {}),
       })
       setSuccess('Requisicion creada')
       setTitle('')
@@ -171,20 +198,35 @@ function MobileRequisiciones() {
         }}>
           <p style={{ ...typo.overline, color: TOKENS.colors.textSoft, marginTop: 0, marginBottom: 14 }}>NUEVA REQUISICION</p>
 
-          <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Empresa *</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-            {companies.map(co => (
-              <button key={co.id} onClick={() => setCompanyId(co.id)} style={{
-                padding: '8px 14px', borderRadius: TOKENS.radius.pill,
-                background: companyId === co.id ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
-                border: `1px solid ${companyId === co.id ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
-                color: companyId === co.id ? TOKENS.colors.blue3 : TOKENS.colors.textMuted,
-                fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              }}>
-                {co.name}
-              </button>
-            ))}
-          </div>
+          {operatingScope.enabled ? (
+            <OperatingScopePicker
+              groups={operatingScopeGroups}
+              plazaId={operatingPlazaId}
+              companyId={operatingCompanyId}
+              onChange={({ plazaId, companyId: opCompanyId }) => {
+                setOperatingPlazaId(plazaId)
+                setOperatingCompanyId(opCompanyId)
+              }}
+              required
+            />
+          ) : (
+            <>
+              <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Empresa *</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                {companies.map(co => (
+                  <button key={co.id} onClick={() => setCompanyId(co.id)} style={{
+                    padding: '8px 14px', borderRadius: TOKENS.radius.pill,
+                    background: companyId === co.id ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
+                    border: `1px solid ${companyId === co.id ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                    color: companyId === co.id ? TOKENS.colors.blue3 : TOKENS.colors.textMuted,
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    {co.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 4 }}>Titulo / Descripcion *</label>
           <input type="text" placeholder="Ej: Material de limpieza" value={title} onChange={e => setTitle(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }} />
