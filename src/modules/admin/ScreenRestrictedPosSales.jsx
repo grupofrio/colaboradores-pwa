@@ -217,7 +217,7 @@ function RestrictedPosSalesView({
         gap: 12,
         padding: '14px clamp(16px, 4vw, 32px)',
         borderBottom: `1px solid ${TOKENS.colors.border}`,
-        background: 'rgba(3,8,17,0.90)',
+        background: TOKENS.colors.navBg,
         backdropFilter: 'blur(12px)',
       }}>
         <button
@@ -255,7 +255,7 @@ function RestrictedPosSalesView({
       <main className="restricted-pos-sales-main" style={{ width: '100%', maxWidth: 840, margin: '0 auto', padding: '24px clamp(16px, 4vw, 32px) 40px' }}>
         {loading ? (
           <div aria-live="polite">
-            <Loader label="Cargando ventas de hoy…" />
+            <Loader label="Cargando ventas de hoy…" tokens={TOKENS} />
           </div>
         ) : error ? (
           <div role="alert">
@@ -267,6 +267,7 @@ function RestrictedPosSalesView({
                 ? 'Solicita revisar el permiso antes de continuar.'
                 : 'Revisa tu conexión e inténtalo de nuevo.'}
               onRetry={error === 'forbidden' ? undefined : onRetry}
+              tokens={TOKENS}
             />
           </div>
         ) : items.length === 0 ? (
@@ -274,6 +275,7 @@ function RestrictedPosSalesView({
             icon="🧾"
             title="No hay ventas registradas hoy"
             subtitle="Las ventas de este turno aparecerán aquí."
+            tokens={TOKENS}
           />
         ) : (
           <section aria-labelledby="restricted-pos-sales-list-title">
