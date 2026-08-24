@@ -105,13 +105,77 @@ export function toneLabel(tone) {
   return TONE_LABELS[tone] || TONE_LABELS.unknown
 }
 
+export const MATRIX_STATE_LABELS = Object.freeze({
+  complete: 'Completado',
+  incomplete: 'Incompleto',
+  not_scheduled: 'Sin ruta programada',
+  scheduled_no_data: 'Programado sin datos',
+  unavailable: 'No disponible',
+})
+
+export function resolveMatrixCellTone(cell) {
+  if (!cell) return 'unknown'
+  if (cell.tone) return cell.tone
+  switch (cell.state) {
+    case 'complete':
+      return 'good'
+    case 'incomplete':
+      return 'attention'
+    case 'scheduled_no_data':
+      return 'watch'
+    case 'not_scheduled':
+    case 'unavailable':
+      return 'unknown'
+    default:
+      return 'unknown'
+  }
+}
+
+export function matrixCellToneLabel(cell, resolvedTone) {
+  if (cell?.accessible_label) return cell.accessible_label
+  if (cell?.tone_label) return cell.tone_label
+  if (cell?.state && MATRIX_STATE_LABELS[cell.state]) return MATRIX_STATE_LABELS[cell.state]
+  if (cell?.available === false) return MATRIX_STATE_LABELS.unavailable
+  return toneLabel(resolvedTone)
+}
+
 export function matrixCellLabel(cell) {
-  if (!cell || cell.available === false) return 'Sin dato'
+  if (!cell) return 'Sin dato'
   if (cell.label) return String(cell.label)
+  if (cell.state === 'not_scheduled' || cell.state === 'scheduled_no_data' || cell.state === 'unavailable') {
+    return '—'
+  }
+  if (cell.available === false) return '—'
   const pct = finite(cell.pct ?? cell.value)
   if (pct === null) return 'Sin dato'
   if (cell.unit === 'count' || cell.kind === 'count') return displayValue(pct)
   return displayValue(pct, '%')
+}
+
+export function presentWeekMatrixDay(day, index = 0) {
+  if (typeof day === 'string') {
+    return { date: `legacy-${index}`, day_key: `legacy-${index}`, label: day }
+  }
+  if (day && typeof day === 'object') {
+    return {
+      date: day.date ?? null,
+      day_key: day.day_key ?? null,
+      label: day.label || day.day_label || '—',
+    }
+  }
+  return { date: `unknown-${index}`, day_key: `unknown-${index}`, label: '—' }
+}
+
+export function dayLabel(day) {
+  if (day && typeof day === 'object') return day.label || day.day_label || '—'
+  if (typeof day === 'string') return day
+  return '—'
+}
+
+export function dayKey(day, index) {
+  if (day && typeof day === 'object') return day.date || day.day_key || `day-${index}`
+  if (typeof day === 'string') return day
+  return `day-${index}`
 }
 
 export function isAttentionItem(item) {
@@ -319,18 +383,33 @@ export function presentWeekMatrix(raw) {
       rows: [],
     }
   }
-  const days = Array.isArray(value.days) ? value.days : (Array.isArray(value.columns) ? value.columns : [])
+  const rawDays = Array.isArray(value.days) ? value.days : (Array.isArray(value.columns) ? value.columns : [])
+  const days = rawDays.map((day, index) => presentWeekMatrixDay(day, index))
   const rows = Array.isArray(value.rows)
     ? value.rows.map((row) => ({
       label: row.operational_plan_name || row.label || row.name || row.route_name || 'Indicador',
+      operational_plan_key: row.operational_plan_key || null,
       cells: Array.isArray(row.cells)
-        ? row.cells.map((cell) => ({
-          available: cell?.available !== false && cell?.state !== 'unavailable',
-          tone: cell?.tone || (cell?.state === 'complete' ? 'good' : cell?.state === 'incomplete' ? 'attention' : 'unknown'),
-          tone_label: cell?.tone_label || toneLabel(cell?.tone),
-          label: cell?.label || matrixCellLabel(cell),
-          value: cell?.available === false ? null : finite(cell?.pct ?? cell?.value ?? cell?.visited),
-        }))
+        ? row.cells.map((cell) => {
+          const resolvedTone = resolveMatrixCellTone(cell)
+          return {
+            date: cell?.date ?? null,
+            day_key: cell?.day_key ?? null,
+            day_label: cell?.day_label ?? null,
+            state: cell?.state ?? null,
+            available: cell?.available !== false && cell?.state !== 'unavailable',
+            scheduled: cell?.scheduled ?? null,
+            visited: cell?.visited ?? null,
+            plan_id: cell?.plan_id ?? null,
+            label: cell?.label || matrixCellLabel(cell),
+            accessible_label: cell?.accessible_label ?? null,
+            tone: resolvedTone,
+            tone_label: matrixCellToneLabel(cell, resolvedTone),
+            value: cell?.available === false && !cell?.label
+              ? null
+              : finite(cell?.pct ?? cell?.value ?? cell?.visited),
+          }
+        })
         : [],
     }))
     : []

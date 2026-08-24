@@ -118,7 +118,8 @@ test('presentPulsePayload proyecta bloques semana y mes sin confundir unavailabl
   })
 
   assert.equal(semana.customer_movement.cards[0].count, 4)
-  assert.equal(semana.week_matrix.rows[0].cells[1].label, 'Sin dato')
+  assert.equal(semana.week_matrix.rows[0].cells[1].label, '—')
+  assert.equal(semana.week_matrix.rows[0].cells[1].tone_label, 'No disponible')
   assert.equal(semana.same_tranche.money.sales_total, 12000)
   assert.equal(semana.execution.available, false)
   assert.equal(semana.execution.capacity, null)
@@ -153,7 +154,7 @@ test('presentPulsePayload proyecta bloques semana y mes sin confundir unavailabl
 })
 
 test('matrixCellLabel y toneLabel nunca dependen solo del color', () => {
-  assert.equal(matrixCellLabel({ available: false }), 'Sin dato')
+  assert.equal(matrixCellLabel({ available: false }), '—')
   assert.equal(matrixCellLabel({ pct: 75 }), '75%')
   assert.equal(toneLabel('critical'), 'Crítico')
   assert.equal(toneLabel('unknown'), 'Sin dato')
@@ -183,7 +184,8 @@ test('SemanaView compone movimiento, matriz, same-tranche y ejecución', () => {
     days: ['L', 'M'],
     rows: [{ label: 'Cobertura', cells: [{ pct: 80, tone: 'good' }, { available: false }] }],
   })
-  assert.equal(matrix.rows[0].cells[1].label, 'Sin dato')
+  assert.equal(matrix.rows[0].cells[1].label, '—')
+  assert.equal(matrix.rows[0].cells[1].tone_label, 'No disponible')
 })
 
 test('MesView compone objetivos, tendencia, productos y ejecución recurrente', () => {
