@@ -280,7 +280,7 @@ export default function ScreenHome() {
   // Identidad clara para Gerente de sucursal (piloto): misma pantalla y misma
   // lógica de módulos, solo cambian los colores — ver ModuleCard/T más abajo.
   const lightHome = isGerenteBrandSurface(session)
-    || ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas'].includes(session?.role)
+    || ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas', 'jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
   const T = lightHome ? BRAND_TOKENS : TOKENS
 
   function handleModule(mod) {

@@ -22,7 +22,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 import {
   getMyRoutePlan,
   getVehicleChecklist,
@@ -44,6 +46,9 @@ const CHECK_ICONS = {
 
 export default function ScreenChecklistUnidad() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -459,7 +464,7 @@ export default function ScreenChecklistUnidad() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -496,7 +501,7 @@ export default function ScreenChecklistUnidad() {
 
         {loading && (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         )}
 
@@ -561,6 +566,7 @@ export default function ScreenChecklistUnidad() {
                 submitting={submittingCheckId === check.id}
                 uploadingPhoto={uploadingPhotoCheckId === check.id}
                 typo={typo}
+                tokens={TOKENS}
               />
             ))}
           </div>
@@ -570,27 +576,27 @@ export default function ScreenChecklistUnidad() {
         {!loading && completeError && !isCompleted && (
           <div style={{
             marginTop: 16, padding: 14, borderRadius: TOKENS.radius.md,
-            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+            background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
           }}>
-            <p style={{ ...typo.caption, color: '#ef4444', margin: 0, fontWeight: 700, marginBottom: 6 }}>
+            <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0, fontWeight: 700, marginBottom: 6 }}>
               {completeError.code === 'checks_pending'
                 ? 'Faltan puntos por responder'
                 : completeError.code === 'checks_failed_blocking'
                 ? 'Hay puntos críticos en falla'
                 : 'No se pudo completar la inspección'}
             </p>
-            <p style={{ ...typo.caption, color: '#ef4444', margin: 0 }}>{completeError.message}</p>
+            <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{completeError.message}</p>
             {Array.isArray(completeError.data?.missing_names) && completeError.data.missing_names.length > 0 && (
               <ul style={{ margin: '6px 0 0 14px', padding: 0 }}>
                 {completeError.data.missing_names.map((name, i) => (
-                  <li key={i} style={{ ...typo.caption, color: '#ef4444' }}>{name}</li>
+                  <li key={i} style={{ ...typo.caption, color: TOKENS.colors.error }}>{name}</li>
                 ))}
               </ul>
             )}
             {Array.isArray(completeError.data?.failed_names) && completeError.data.failed_names.length > 0 && (
               <ul style={{ margin: '6px 0 0 14px', padding: 0 }}>
                 {completeError.data.failed_names.map((name, i) => (
-                  <li key={i} style={{ ...typo.caption, color: '#ef4444' }}>{name}</li>
+                  <li key={i} style={{ ...typo.caption, color: TOKENS.colors.error }}>{name}</li>
                 ))}
               </ul>
             )}
@@ -607,6 +613,7 @@ export default function ScreenChecklistUnidad() {
                 width: '100%', padding: '14px',
                 borderRadius: TOKENS.radius.lg,
                 background: canComplete ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
+                border: canComplete ? 'none' : `1px solid ${TOKENS.colors.border}`,
                 color: canComplete ? 'white' : TOKENS.colors.textLow,
                 fontSize: 15, fontWeight: 600,
                 opacity: completing ? 0.6 : 1,
@@ -633,6 +640,7 @@ export default function ScreenChecklistUnidad() {
           onCancel={() => setReasonModal(null)}
           onSubmit={submitWithReason}
           typo={typo}
+          tokens={TOKENS}
         />
       )}
     </div>
@@ -641,7 +649,7 @@ export default function ScreenChecklistUnidad() {
 
 // ── CheckItem ─────────────────────────────────────────────────────────────────
 
-function CheckItem({ check, draft, onDraft, onSubmit, onPhotoClick, submitting, uploadingPhoto, typo }) {
+function CheckItem({ check, draft, onDraft, onSubmit, onPhotoClick, submitting, uploadingPhoto, typo, tokens: TOKENS }) {
   const icon = CHECK_ICONS[check.check_type] || '?'
   const answered = !!check.answered
   const passed = !!check.passed && answered
@@ -705,6 +713,7 @@ function CheckItem({ check, draft, onDraft, onSubmit, onPhotoClick, submitting, 
           answered={answered}
           passed={passed}
           typo={typo}
+          tokens={TOKENS}
         />
       )}
       {check.check_type === 'numeric' && (
@@ -717,6 +726,7 @@ function CheckItem({ check, draft, onDraft, onSubmit, onPhotoClick, submitting, 
           answered={answered}
           passed={passed}
           typo={typo}
+          tokens={TOKENS}
         />
       )}
       {check.check_type === 'text' && (
@@ -728,6 +738,7 @@ function CheckItem({ check, draft, onDraft, onSubmit, onPhotoClick, submitting, 
           submitting={submitting}
           answered={answered}
           typo={typo}
+          tokens={TOKENS}
         />
       )}
       {check.check_type === 'photo' && (
@@ -737,6 +748,7 @@ function CheckItem({ check, draft, onDraft, onSubmit, onPhotoClick, submitting, 
           onPhotoClick={onPhotoClick}
           answered={answered}
           typo={typo}
+          tokens={TOKENS}
         />
       )}
     </div>
@@ -745,7 +757,7 @@ function CheckItem({ check, draft, onDraft, onSubmit, onPhotoClick, submitting, 
 
 // ── Inputs por tipo ───────────────────────────────────────────────────────────
 
-function YesNoInput({ check, draft, onDraft, onSubmit, submitting, answered, passed, typo }) {
+function YesNoInput({ check, draft, onDraft, onSubmit, submitting, answered, passed, typo, tokens: TOKENS }) {
   // Si ya está respondido, mostrar valor read-only
   if (answered) {
     return (
@@ -788,7 +800,7 @@ function YesNoInput({ check, draft, onDraft, onSubmit, submitting, answered, pas
   )
 }
 
-function NumericInput({ check, draft, onDraft, onSubmit, submitting, answered, passed, typo }) {
+function NumericInput({ check, draft, onDraft, onSubmit, submitting, answered, passed, typo, tokens: TOKENS }) {
   if (answered) {
     return (
       <div style={{ marginLeft: 38, ...typo.body, color: passed ? TOKENS.colors.success : TOKENS.colors.warning, fontWeight: 600 }}>
@@ -818,8 +830,8 @@ function NumericInput({ check, draft, onDraft, onSubmit, submitting, answered, p
           : 'Valor'}
         style={{
           flex: 1, padding: '8px 12px', borderRadius: TOKENS.radius.sm,
-          background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-          color: 'white', fontSize: 14, outline: 'none',
+          background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+          color: TOKENS.colors.text, fontSize: 14, outline: 'none',
           opacity: submitting ? 0.6 : 1,
         }}
       />
@@ -832,7 +844,7 @@ function NumericInput({ check, draft, onDraft, onSubmit, submitting, answered, p
   )
 }
 
-function TextInput({ check, draft, onDraft, onSubmit, submitting, answered, typo }) {
+function TextInput({ check, draft, onDraft, onSubmit, submitting, answered, typo, tokens: TOKENS }) {
   if (answered) {
     return (
       <div style={{ marginLeft: 38, ...typo.body, color: TOKENS.colors.textSoft, whiteSpace: 'pre-wrap' }}>
@@ -853,8 +865,8 @@ function TextInput({ check, draft, onDraft, onSubmit, submitting, answered, typo
         placeholder={check.required ? 'Escribe el comentario…' : 'Opcional'}
         style={{
           width: '100%', padding: '8px 12px', borderRadius: TOKENS.radius.sm,
-          background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-          color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+          background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+          color: TOKENS.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
           opacity: submitting ? 0.6 : 1, fontFamily: 'inherit',
         }}
       />
@@ -862,7 +874,7 @@ function TextInput({ check, draft, onDraft, onSubmit, submitting, answered, typo
   )
 }
 
-function PhotoInput({ check, uploadingPhoto, onPhotoClick, answered, typo }) {
+function PhotoInput({ check, uploadingPhoto, onPhotoClick, answered, typo, tokens: TOKENS }) {
   return (
     <div style={{ marginLeft: 38 }}>
       <button
@@ -907,7 +919,7 @@ function PhotoInput({ check, uploadingPhoto, onPhotoClick, answered, typo }) {
 
 // ── Modal de razón ────────────────────────────────────────────────────────────
 
-function ReasonModal({ check, onCancel, onSubmit, typo }) {
+function ReasonModal({ check, onCancel, onSubmit, typo, tokens: TOKENS }) {
   const [text, setText] = useState('')
   return (
     <div style={{
@@ -935,8 +947,8 @@ function ReasonModal({ check, onCancel, onSubmit, typo }) {
           placeholder="Ej: Llanta delantera derecha gastada"
           style={{
             width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm,
-            background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-            color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+            background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+            color: TOKENS.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
             fontFamily: 'inherit',
           }}
         />

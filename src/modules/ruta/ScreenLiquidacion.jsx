@@ -5,7 +5,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 import { useToast } from '../../components/Toast'
 import { safeNumber } from '../../lib/safeNumber'
 import { getMyRoutePlan, confirmLiquidacion } from './api'
@@ -24,6 +26,9 @@ import {
 
 export default function ScreenLiquidacion() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -214,7 +219,7 @@ export default function ScreenLiquidacion() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -223,7 +228,7 @@ export default function ScreenLiquidacion() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : !plan ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
@@ -243,34 +248,34 @@ export default function ScreenLiquidacion() {
 
             {/* Summary */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <SummaryRow label="Efectivo esperado" value={fmtMoney(cashExp)} typo={typo} />
-              <SummaryRow label="Efectivo cobrado" value={fmtMoney(cashCol)} typo={typo} />
+              <SummaryRow label="Efectivo esperado" value={fmtMoney(cashExp)} typo={typo} tokens={TOKENS} />
+              <SummaryRow label="Efectivo cobrado" value={fmtMoney(cashCol)} typo={typo} tokens={TOKENS} />
               {Math.abs(cashDiff) > 0.01 && (
                 <SummaryRow label="Diferencia efectivo" value={fmtMoney(cashDiff)} typo={typo}
-                  color={cashDiff > 0 ? '#22c55e' : '#ef4444'} />
+                  color={cashDiff > 0 ? '#22c55e' : '#ef4444'} tokens={TOKENS} />
               )}
-              <SummaryRow label="Credito esperado" value={fmtMoney(creditExp)} typo={typo} />
-              <SummaryRow label="Credito cobrado" value={fmtMoney(creditCol)} typo={typo} />
+              <SummaryRow label="Credito esperado" value={fmtMoney(creditExp)} typo={typo} tokens={TOKENS} />
+              <SummaryRow label="Credito cobrado" value={fmtMoney(creditCol)} typo={typo} tokens={TOKENS} />
               {Math.abs(creditDiff) > 0.01 && (
                 <SummaryRow label="Diferencia credito" value={fmtMoney(creditDiff)} typo={typo}
-                  color={creditDiff > 0 ? '#22c55e' : '#ef4444'} />
+                  color={creditDiff > 0 ? '#22c55e' : '#ef4444'} tokens={TOKENS} />
               )}
               {(transferExp > 0 || transferCol > 0) && (
                 <>
-                  <SummaryRow label="Transferencia esperado" value={fmtMoney(transferExp)} typo={typo} />
-                  <SummaryRow label="Transferencia cobrado" value={fmtMoney(transferCol)} typo={typo} />
+                  <SummaryRow label="Transferencia esperado" value={fmtMoney(transferExp)} typo={typo} tokens={TOKENS} />
+                  <SummaryRow label="Transferencia cobrado" value={fmtMoney(transferCol)} typo={typo} tokens={TOKENS} />
                   {Math.abs(transferDiff) > 0.01 && (
                     <SummaryRow label="Diferencia transferencia" value={fmtMoney(transferDiff)} typo={typo}
-                      color={transferDiff > 0 ? '#22c55e' : '#ef4444'} />
+                      color={transferDiff > 0 ? '#22c55e' : '#ef4444'} tokens={TOKENS} />
                   )}
                 </>
               )}
               <div style={{ height: 4, borderTop: `1px solid ${TOKENS.colors.border}` }} />
-              <SummaryRow label="Total esperado" value={fmtMoney(totalExpected)} typo={typo} bold />
-              <SummaryRow label="Total cobrado" value={fmtMoney(totalCollected)} typo={typo} bold />
+              <SummaryRow label="Total esperado" value={fmtMoney(totalExpected)} typo={typo} bold tokens={TOKENS} />
+              <SummaryRow label="Total cobrado" value={fmtMoney(totalCollected)} typo={typo} bold tokens={TOKENS} />
               {Math.abs(totalDiff) > 0.01 && (
                 <SummaryRow label="DIFERENCIA TOTAL" value={fmtMoney(totalDiff)} typo={typo} bold
-                  color={totalDiff > 0 ? '#22c55e' : '#ef4444'} />
+                  color={totalDiff > 0 ? '#22c55e' : '#ef4444'} tokens={TOKENS} />
               )}
             </div>
 
@@ -299,21 +304,21 @@ export default function ScreenLiquidacion() {
             {/* Cash section */}
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>EFECTIVO</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <MoneyInput label="Esperado" value={cashExpected} typo={typo} readOnly />
-              <MoneyInput label="Trae" value={cashCollected} onChange={setCashCollected} typo={typo} />
+              <MoneyInput label="Esperado" value={cashExpected} typo={typo} readOnly tokens={TOKENS} />
+              <MoneyInput label="Trae" value={cashCollected} onChange={setCashCollected} typo={typo} tokens={TOKENS} />
             </div>
             {Math.abs(cashDiff) > 0.01 && (
-              <DiffBadge label="Diferencia efectivo" value={cashDiff} typo={typo} />
+              <DiffBadge label="Diferencia efectivo" value={cashDiff} typo={typo} tokens={TOKENS} />
             )}
 
             {/* Credit section */}
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8, marginTop: 16 }}>CREDITO</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <MoneyInput label="Esperado" value={creditExpected} typo={typo} readOnly />
-              <MoneyInput label="Sistema" value={creditCollected} typo={typo} readOnly />
+              <MoneyInput label="Esperado" value={creditExpected} typo={typo} readOnly tokens={TOKENS} />
+              <MoneyInput label="Sistema" value={creditCollected} typo={typo} readOnly tokens={TOKENS} />
             </div>
             {Math.abs(creditDiff) > 0.01 && (
-              <DiffBadge label="Diferencia credito" value={creditDiff} typo={typo} />
+              <DiffBadge label="Diferencia credito" value={creditDiff} typo={typo} tokens={TOKENS} />
             )}
 
             {/* Transfer section — only show if there's transfer data */}
@@ -321,11 +326,11 @@ export default function ScreenLiquidacion() {
               <>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8, marginTop: 16 }}>TRANSFERENCIA</p>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                  <MoneyInput label="Esperado" value={transferExpected} typo={typo} readOnly />
-                  <MoneyInput label="Sistema" value={transferCollected} typo={typo} readOnly />
+                  <MoneyInput label="Esperado" value={transferExpected} typo={typo} readOnly tokens={TOKENS} />
+                  <MoneyInput label="Sistema" value={transferCollected} typo={typo} readOnly tokens={TOKENS} />
                 </div>
                 {Math.abs(transferDiff) > 0.01 && (
-                  <DiffBadge label="Diferencia transferencia" value={transferDiff} typo={typo} />
+                  <DiffBadge label="Diferencia transferencia" value={transferDiff} typo={typo} tokens={TOKENS} />
                 )}
               </>
             )}
@@ -355,7 +360,7 @@ export default function ScreenLiquidacion() {
               )}
             </div>
 
-            <PaymentBreakdown breakdown={paymentBreakdown} typo={typo} />
+            <PaymentBreakdown breakdown={paymentBreakdown} typo={typo} tokens={TOKENS} />
 
             {/* Notes — required if difference */}
             {hasDifference && (
@@ -370,8 +375,8 @@ export default function ScreenLiquidacion() {
                   rows={3}
                   style={{
                     width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                    color: 'white', fontSize: 13, outline: 'none', resize: 'vertical',
+                    background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.text, fontSize: 13, outline: 'none', resize: 'vertical',
                   }}
                 />
               </div>
@@ -386,6 +391,7 @@ export default function ScreenLiquidacion() {
                 background: canConfirm && (!hasDifference || notes.trim())
                   ? 'linear-gradient(135deg, #15499B, #2B8FE0)'
                   : TOKENS.colors.surface,
+                border: canConfirm && (!hasDifference || notes.trim()) ? 'none' : `1px solid ${TOKENS.colors.border}`,
                 color: canConfirm ? 'white' : TOKENS.colors.textMuted,
                 fontWeight: 700, fontSize: 15,
                 opacity: canConfirm && (!hasDifference || notes.trim()) ? 1 : 0.5,
@@ -480,7 +486,7 @@ export default function ScreenLiquidacion() {
   )
 }
 
-function MoneyInput({ label, value, onChange, typo, readOnly = false }) {
+function MoneyInput({ label, value, onChange, typo, readOnly = false, tokens: TOKENS }) {
   return (
     <div style={{ flex: 1 }}>
       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 4px', fontSize: 10 }}>{label}</p>
@@ -495,9 +501,9 @@ function MoneyInput({ label, value, onChange, typo, readOnly = false }) {
           readOnly={readOnly}
           style={{
             width: '100%', padding: '10px 10px 10px 24px', borderRadius: TOKENS.radius.md,
-            background: readOnly ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.05)',
+            background: readOnly ? TOKENS.colors.surfaceSoft : TOKENS.colors.surface,
             border: `1px solid ${TOKENS.colors.border}`,
-            color: 'white', fontSize: 15, fontWeight: 600, outline: 'none',
+            color: TOKENS.colors.text, fontSize: 15, fontWeight: 600, outline: 'none',
             opacity: readOnly ? 0.85 : 1,
           }}
         />
@@ -506,7 +512,7 @@ function MoneyInput({ label, value, onChange, typo, readOnly = false }) {
   )
 }
 
-function DiffBadge({ label, value, typo }) {
+function DiffBadge({ label, value, typo, tokens: TOKENS }) {
   const color = value > 0 ? '#22c55e' : '#ef4444'
   return (
     <div style={{
@@ -522,7 +528,7 @@ function DiffBadge({ label, value, typo }) {
   )
 }
 
-function PaymentBreakdown({ breakdown, typo }) {
+function PaymentBreakdown({ breakdown, typo, tokens: TOKENS }) {
   const sections = [
     ['cash', 'Efectivo'],
     ['credit', 'Credito'],
@@ -557,7 +563,7 @@ function PaymentBreakdown({ breakdown, typo }) {
             {(data.orders || []).map((order) => (
               <div key={order.order_id || order.name} style={{
                 padding: 8, borderRadius: TOKENS.radius.md,
-                background: 'rgba(255,255,255,0.035)',
+                background: TOKENS.colors.surfaceStrong,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 700 }}>
@@ -573,7 +579,7 @@ function PaymentBreakdown({ breakdown, typo }) {
                 {(order.lines || []).map((line) => (
                   <div key={line.line_id || `${order.name}-${line.product_id}`} style={{
                     display: 'flex', justifyContent: 'space-between', gap: 8,
-                    paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)',
+                    paddingTop: 4, borderTop: `1px solid ${TOKENS.colors.border}`,
                   }}>
                     <span style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>
                       {line.product_name || 'Producto'}
@@ -592,7 +598,7 @@ function PaymentBreakdown({ breakdown, typo }) {
   )
 }
 
-function SummaryRow({ label, value, typo, color, bold }) {
+function SummaryRow({ label, value, typo, color, bold, tokens: TOKENS }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
       <span style={{ ...typo.caption, color: TOKENS.colors.textMuted, fontWeight: bold ? 600 : 400 }}>{label}</span>

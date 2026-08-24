@@ -146,11 +146,11 @@ function GastosAprobarInner() {
       </div>
 
       {loading ? (
-        <Loader label="Cargando gastos pendientes…" />
+        <Loader label="Cargando gastos pendientes…" tokens={TOKENS} />
       ) : error ? (
-        <ErrorState message={error} onRetry={load} />
+        <ErrorState message={error} onRetry={load} tokens={TOKENS} />
       ) : items.length === 0 ? (
-        <EmptyState icon="✓" title="Todo al día" subtitle="No hay gastos pendientes de aprobación" />
+        <EmptyState icon="✓" title="Todo al día" subtitle="No hay gastos pendientes de aprobación" tokens={TOKENS} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {items.map(exp => (

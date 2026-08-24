@@ -17,7 +17,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 import {
   getRouteDaySummary,
   calculateFlowState,
@@ -32,6 +34,9 @@ import {
 
 export default function ScreenMiRutaV2() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -117,7 +122,7 @@ export default function ScreenMiRutaV2() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -127,21 +132,21 @@ export default function ScreenMiRutaV2() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
             </svg>
           </button>
         </div>
 
         {error && (
-          <div style={{ margin: '0 0 12px', padding: 12, borderRadius: TOKENS.radius.md, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-            <p style={{ ...typo.caption, color: '#ef4444', margin: 0 }}>{error}</p>
+          <div style={{ margin: '0 0 12px', padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40` }}>
+            <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{error}</p>
           </div>
         )}
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : !plan ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
@@ -154,7 +159,8 @@ export default function ScreenMiRutaV2() {
             {/* Plan card */}
             <div style={{
               padding: 16, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
+              background: light ? TOKENS.colors.surface : TOKENS.glass.hero,
+              border: `1px solid ${TOKENS.colors.borderBlue}`,
               marginBottom: 16,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -169,7 +175,7 @@ export default function ScreenMiRutaV2() {
               {/* Progress bar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                 <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Paradas</span>
-                <div style={{ flex: 1, height: 6, borderRadius: 3, background: TOKENS.colors.surface, overflow: 'hidden' }}>
+                <div style={{ flex: 1, height: 6, borderRadius: 3, background: light ? TOKENS.colors.surfaceStrong : TOKENS.colors.surface, overflow: 'hidden' }}>
                   <div style={{
                     height: '100%', borderRadius: 3,
                     background: progressPct === 100 ? '#22c55e' : 'linear-gradient(90deg, #15499B, #2B8FE0)',
@@ -183,26 +189,26 @@ export default function ScreenMiRutaV2() {
 
               {/* Mini KPIs */}
               <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ flex: 1, padding: '6px 8px', borderRadius: TOKENS.radius.md, background: 'rgba(255,255,255,0.04)' }}>
+                <div style={{ flex: 1, padding: '6px 8px', borderRadius: TOKENS.radius.md, background: light ? 'rgba(15,42,61,0.04)' : 'rgba(255,255,255,0.04)' }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Venta</p>
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: targetProgress.salesPct >= 80 ? '#22c55e' : targetProgress.salesPct >= 50 ? '#f59e0b' : '#ef4444' }}>
                     {fmtPct(targetProgress.salesPct)}
                   </p>
                 </div>
-                <div style={{ flex: 1, padding: '6px 8px', borderRadius: TOKENS.radius.md, background: 'rgba(255,255,255,0.04)' }}>
+                <div style={{ flex: 1, padding: '6px 8px', borderRadius: TOKENS.radius.md, background: light ? 'rgba(15,42,61,0.04)' : 'rgba(255,255,255,0.04)' }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Cobranza</p>
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: targetProgress.collectionPct >= 80 ? '#22c55e' : targetProgress.collectionPct >= 50 ? '#f59e0b' : '#ef4444' }}>
                     {fmtPct(targetProgress.collectionPct)}
                   </p>
                 </div>
-                <div style={{ flex: 1, padding: '6px 8px', borderRadius: TOKENS.radius.md, background: 'rgba(255,255,255,0.04)' }}>
+                <div style={{ flex: 1, padding: '6px 8px', borderRadius: TOKENS.radius.md, background: light ? 'rgba(15,42,61,0.04)' : 'rgba(255,255,255,0.04)' }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Incidencias</p>
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: incidents.length > 0 ? '#f59e0b' : TOKENS.colors.textMuted }}>
                     {incidents.length}
                   </p>
                 </div>
                 {kmData.kmSalida && (
-                  <div style={{ flex: 1, padding: '6px 8px', borderRadius: TOKENS.radius.md, background: 'rgba(255,255,255,0.04)' }}>
+                  <div style={{ flex: 1, padding: '6px 8px', borderRadius: TOKENS.radius.md, background: light ? 'rgba(15,42,61,0.04)' : 'rgba(255,255,255,0.04)' }}>
                     <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>KM Salida</p>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: TOKENS.colors.blue2 }}>
                       {fmtNum(kmData.kmSalida)}
@@ -268,7 +274,7 @@ export default function ScreenMiRutaV2() {
 
                         {/* Arrow */}
                         {!isPending && (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textLow} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M9 18l6-6-6-6"/>
                           </svg>
                         )}
