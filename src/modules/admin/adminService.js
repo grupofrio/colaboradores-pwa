@@ -14,7 +14,8 @@ import {
   createRequisition as apiCreateRequisition,
   createCashClosing as apiCreateCashClosing,
   getCapabilities as apiGetCapabilities,
-} from './api'
+  getOperatingScope as apiGetOperatingScope,
+} from './api.js'
 import {
   buildSessionIdentity,
   readSessionRaw,
@@ -201,6 +202,68 @@ export async function bootCapabilities(session = null) {
     }
     return BACKEND_CAPS
   }
+}
+
+// ── Operating scope (Plaza × Empresa para actores multi-compañía v2) ────────
+// Algunos empleados (ej. Angelica Jaimes) tienen varias fichas de empleado
+// activas sin user_id propio — el backend (gf_operating_scope) no puede
+// inferir su compañía y exige operating_plaza_id + operating_company_id
+// explícitos en requisition-create. GET /pwa-admin/operating-scope dice si
+// el actor autenticado está en ese modo y qué pares (Plaza, Empresa) tiene
+// autorizados. Fallback seguro: enabled=false → flujo v1 sin cambios.
+const OPERATING_SCOPE_FALLBACK = Object.freeze({ enabled: false, scopes: [], defaultPlazaId: null })
+
+let operatingScopeRequestGeneration = 0
+
+/** Lectura autenticada vinculada a una generación e identidad de sesión
+ *  (mismo patrón anti-carrera que bootCapabilities). */
+export async function bootOperatingScope(session = null) {
+  const snapshot = capabilitySessionSnapshot(session)
+  const generation = ++operatingScopeRequestGeneration
+  if (!snapshot.employeeToken) return OPERATING_SCOPE_FALLBACK
+  try {
+    const res = await apiGetOperatingScope()
+    if (generation !== operatingScopeRequestGeneration) return OPERATING_SCOPE_FALLBACK
+    const current = capabilitySessionSnapshot(readSessionRaw())
+    if (current.sessionKey !== snapshot.sessionKey || current.employeeToken !== snapshot.employeeToken) {
+      return OPERATING_SCOPE_FALLBACK
+    }
+    const data = res?.data || res
+    if (!data?.enabled) return OPERATING_SCOPE_FALLBACK
+    return {
+      enabled: true,
+      scopes: Array.isArray(data.scopes) ? data.scopes : [],
+      defaultPlazaId: data.default_plaza_id ?? null,
+    }
+  } catch {
+    return OPERATING_SCOPE_FALLBACK
+  }
+}
+
+/** Agrupa los pares planos {plaza_id, plaza_name, company_id, company_name}
+ *  en [{plazaId, plazaName, companies:[{companyId, companyName}]}]. Nunca
+ *  cruza Plaza × Empresa libremente — solo agrupa lo que el backend ya
+ *  autorizó para este actor. */
+export function groupOperatingScopesByPlaza(scopes) {
+  if (!Array.isArray(scopes)) return []
+  const byPlaza = new Map()
+  for (const s of scopes) {
+    const plazaId = s?.plaza_id
+    if (plazaId == null) continue
+    if (!byPlaza.has(plazaId)) {
+      byPlaza.set(plazaId, {
+        plazaId,
+        plazaCode: s.plaza_code || '',
+        plazaName: s.plaza_name || `Plaza ${plazaId}`,
+        companies: [],
+      })
+    }
+    byPlaza.get(plazaId).companies.push({
+      companyId: s.company_id,
+      companyName: s.company_name || `ID ${s.company_id}`,
+    })
+  }
+  return [...byPlaza.values()]
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

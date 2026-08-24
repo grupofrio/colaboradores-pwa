@@ -8,13 +8,16 @@
 //   Nueva — formulario de creación
 //   Historial — lista paginada con filtros (estado, fecha) + recepción.
 //   Aprobación inline eliminada (MGR-RES-010): no CTAs write muertos.
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
+import { useSession } from '../../../App'
 import { useAdmin } from '../AdminContext'
 import {
   createRequisition,
   BACKEND_CAPS,
   filterByCompany,
+  bootOperatingScope,
+  groupOperatingScopesByPlaza,
 } from '../adminService'
 import {
   getRequisitions,
@@ -26,6 +29,7 @@ import {
 } from '../requisitionReceiptState'
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
 import ProductPicker from '../components/ProductPicker'
+import OperatingScopePicker from '../components/OperatingScopePicker'
 import RequisitionDetailModal from '../components/RequisitionDetailModal'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -315,6 +319,38 @@ function HistorialTab({ companyId }) {
 // ── Form de creación ──────────────────────────────────────────────────────────
 export default function AdminRequisicionForm() {
   const { companyId, companyLabel, warehouseId, sucursal } = useAdmin()
+  const { session } = useSession()
+
+  // Alcance de operación (Plaza × Empresa) para actores multi-compañía v2 —
+  // se resuelve aquí, no en AdminContext, para no disparar esta llamada en
+  // otras pantallas admin (POS, gastos) que también usan AdminProvider.
+  const [operatingScope, setOperatingScope] = useState({ enabled: false, scopes: [], defaultPlazaId: null })
+  const [operatingPlazaId, setOperatingPlazaId] = useState(null)
+  const [operatingCompanyId, setOperatingCompanyId] = useState(null)
+  const operatingScopeGroups = useMemo(
+    () => groupOperatingScopesByPlaza(operatingScope.scopes),
+    [operatingScope.scopes],
+  )
+  const setOperatingScopeSelection = useCallback(({ plazaId, companyId: opCompanyId }) => {
+    setOperatingPlazaId(plazaId)
+    setOperatingCompanyId(opCompanyId)
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    bootOperatingScope(session).then(scope => { if (alive) setOperatingScope(scope) })
+    return () => { alive = false }
+  }, [session])
+
+  // Para actores multi-compañía v2, la compañía real de la operación es la
+  // elegida en OperatingScopePicker, no la del selector de razón social viejo
+  // (ese company_id se descarta antes de llegar a Odoo — ver src/lib/api.js).
+  const resolvedCompanyId = operatingScope.enabled ? operatingCompanyId : companyId
+  const resolvedCompanyLabel = operatingScope.enabled
+    ? (operatingScopeGroups
+        .find(g => g.plazaId === operatingPlazaId)?.companies
+        .find(c => c.companyId === operatingCompanyId)?.companyName || 'la Plaza y empresa seleccionadas')
+    : companyLabel
 
   const [activeTab, setActiveTab] = useState('nueva') // 'nueva' | 'historial'
   const [submitting, setSubmitting] = useState(false)
@@ -343,7 +379,11 @@ export default function AdminRequisicionForm() {
 
   function validate() {
     if (!title.trim()) return 'Ingresa un título para la requisición'
-    if (!companyId) return 'Selecciona una razón social'
+    if (operatingScope.enabled) {
+      if (!operatingPlazaId || !operatingCompanyId) return 'Selecciona la Plaza y empresa operativa'
+    } else if (!companyId) {
+      return 'Selecciona una razón social'
+    }
     const validLines = lines.filter(l => l.product && Number(l.qty) > 0)
     if (validLines.length === 0) return 'Agrega al menos un producto con cantidad'
     if (BACKEND_CAPS.requisitionAnalytics && !analyticDistribution) {
@@ -377,11 +417,14 @@ export default function AdminRequisicionForm() {
         notes: notes.trim() || undefined,
         lines: validLines,
         analytic_distribution: analyticDistribution,
+        ...(operatingScope.enabled
+          ? { operating_plaza_id: operatingPlazaId, operating_company_id: operatingCompanyId }
+          : {}),
       })
 
       const data = res?.data ?? res
       setCreatedResult(data)
-      setSuccess(`Requisición creada en ${companyLabel}`)
+      setSuccess(`Requisición creada en ${resolvedCompanyLabel}`)
       setTitle('')
       setNotes('')
       setLines([emptyLine()])
@@ -494,13 +537,36 @@ export default function AdminRequisicionForm() {
               }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: TOKENS.colors.blue3 }} />
                 <span style={{ fontSize: 12, color: TOKENS.colors.textSoft }}>
-                  Se creará como <strong style={{ color: TOKENS.colors.text }}>borrador</strong> en {companyLabel}
+                  Se creará como <strong style={{ color: TOKENS.colors.text }}>borrador</strong> en {resolvedCompanyLabel}
                   {sucursal && <> · {sucursal}</>}
                   {BACKEND_CAPS.requisitionApproval && (
                     <> · montos &gt; {fmt(BACKEND_CAPS.requisitionApprovalThreshold)} requieren aprobación</>
                   )}
                 </span>
               </div>
+
+              {operatingScope.enabled && (
+                <div style={{
+                  padding: 14, borderRadius: TOKENS.radius.md,
+                  background: TOKENS.colors.surfaceSoft,
+                  border: `1px solid ${TOKENS.colors.border}`,
+                  marginBottom: 14,
+                }}>
+                  <p style={{
+                    fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
+                    color: TOKENS.colors.textLow, margin: '0 0 10px',
+                  }}>
+                    PLAZA Y EMPRESA OPERATIVA
+                  </p>
+                  <OperatingScopePicker
+                    groups={operatingScopeGroups}
+                    plazaId={operatingPlazaId}
+                    companyId={operatingCompanyId}
+                    onChange={setOperatingScopeSelection}
+                    required
+                  />
+                </div>
+              )}
 
               <label style={{ fontSize: 12, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
                 Título *
@@ -521,7 +587,7 @@ export default function AdminRequisicionForm() {
                       value={line.product}
                       onChange={(p) => updateLine(i, { product: p })}
                       warehouseId={warehouseId}
-                      companyId={companyId}
+                      companyId={resolvedCompanyId}
                       scope="requisition"
                       placeholder={`Producto ${i + 1}`}
                     />
@@ -577,12 +643,12 @@ export default function AdminRequisicionForm() {
                   fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
                   color: TOKENS.colors.textLow, margin: '0 0 10px',
                 }}>
-                  CLASIFICACIÓN ANALÍTICA · {companyLabel.toUpperCase()}
+                  CLASIFICACIÓN ANALÍTICA · {resolvedCompanyLabel.toUpperCase?.() || resolvedCompanyLabel}
                 </p>
                 <AnalyticAccountPicker
                   value={analyticDistribution}
                   onChange={setAnalyticDistribution}
-                  companyId={companyId}
+                  companyId={resolvedCompanyId}
                   required={BACKEND_CAPS.requisitionAnalytics}
                   label="Cuenta analítica (aplica a todas las líneas)"
                 />
@@ -612,14 +678,14 @@ export default function AdminRequisicionForm() {
             </div>
 
             {/* Preview recientes */}
-            <RecentList companyId={companyId} />
+            <RecentList companyId={resolvedCompanyId} />
           </div>
         </>
       )}
 
       {/* ── Tab: Historial ─────────────────────────────────────────────── */}
       {activeTab === 'historial' && (
-        <HistorialTab companyId={companyId} />
+        <HistorialTab companyId={resolvedCompanyId} />
       )}
 
       <div style={{ height: 40 }} />
