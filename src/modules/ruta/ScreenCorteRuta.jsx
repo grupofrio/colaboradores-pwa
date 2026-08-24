@@ -5,7 +5,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 import { getMyRoutePlan, getReconciliation, getLoadLines, validateCorte } from './api'
 import { logScreenError } from '../shared/logScreenError'
 import {
@@ -18,6 +20,9 @@ import {
 
 export default function ScreenCorteRuta() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -207,7 +212,7 @@ export default function ScreenCorteRuta() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -216,7 +221,7 @@ export default function ScreenCorteRuta() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : !invView || invView.source === 'empty' ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
@@ -233,19 +238,20 @@ export default function ScreenCorteRuta() {
             {/* Equation card */}
             <div style={{
               padding: 16, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
+              background: light ? TOKENS.colors.surface : TOKENS.glass.hero,
+              border: `1px solid ${TOKENS.colors.borderBlue}`,
               marginBottom: 16,
             }}>
               <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '0 0 10px' }}>ECUACION DE CUADRE</p>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                <EqBadge label="Cargado" value={totalLoaded} color={TOKENS.colors.blue2} typo={typo} />
+                <EqBadge label="Cargado" value={totalLoaded} color={TOKENS.colors.blue2} typo={typo} tokens={TOKENS} />
                 <span style={{ color: TOKENS.colors.textMuted, fontWeight: 700 }}>=</span>
-                <EqBadge label="Entregado" value={totalDelivered} color="#22c55e" typo={typo} />
+                <EqBadge label="Entregado" value={totalDelivered} color="#22c55e" typo={typo} tokens={TOKENS} />
                 <span style={{ color: TOKENS.colors.textMuted, fontWeight: 700 }}>+</span>
-                <EqBadge label="Devuelto" value={totalReturned} color="#f59e0b" typo={typo} />
+                <EqBadge label="Devuelto" value={totalReturned} color="#f59e0b" typo={typo} tokens={TOKENS} />
                 <span style={{ color: TOKENS.colors.textMuted, fontWeight: 700 }}>+</span>
-                <EqBadge label="Merma" value={totalScrap} color="#ef4444" typo={typo} />
+                <EqBadge label="Merma" value={totalScrap} color="#ef4444" typo={typo} tokens={TOKENS} />
               </div>
 
               {/* Result */}
@@ -395,6 +401,7 @@ export default function ScreenCorteRuta() {
                 style={{
                   width: '100%', padding: '14px 0', borderRadius: TOKENS.radius.lg,
                   background: isValid ? 'linear-gradient(135deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
+                  border: isValid ? 'none' : `1px solid ${TOKENS.colors.border}`,
                   color: isValid ? 'white' : TOKENS.colors.textMuted,
                   fontWeight: 700, fontSize: 15,
                   opacity: (isValid && !submitting) ? 1 : 0.5,
@@ -416,7 +423,7 @@ export default function ScreenCorteRuta() {
   )
 }
 
-function EqBadge({ label, value, color, typo }) {
+function EqBadge({ label, value, color, typo, tokens: TOKENS }) {
   return (
     <div style={{
       padding: '4px 10px', borderRadius: TOKENS.radius.pill,

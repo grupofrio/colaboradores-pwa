@@ -5,13 +5,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 import { getMyRoutePlan, getReconciliation, getLoadLines } from './api'
 import { buildInventoryView, fmtNum } from './routeControlService'
 import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenInventarioRuta() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -69,7 +74,7 @@ export default function ScreenInventarioRuta() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -79,7 +84,7 @@ export default function ScreenInventarioRuta() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
             </svg>
           </button>
@@ -87,7 +92,7 @@ export default function ScreenInventarioRuta() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : !invView || invView.source === 'empty' ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
@@ -113,10 +118,10 @@ export default function ScreenInventarioRuta() {
 
             {/* Totals */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-              <TotalCard label="Cargado" value={totals.loaded} color={TOKENS.colors.blue2} typo={typo} />
-              <TotalCard label="Entregado" value={totals.delivered} color="#22c55e" typo={typo} />
-              <TotalCard label="Devuelto" value={totals.returned} color="#f59e0b" typo={typo} />
-              <TotalCard label="Merma" value={totals.scrap} color="#ef4444" typo={typo} />
+              <TotalCard label="Cargado" value={totals.loaded} color={TOKENS.colors.blue2} typo={typo} tokens={TOKENS} />
+              <TotalCard label="Entregado" value={totals.delivered} color="#22c55e" typo={typo} tokens={TOKENS} />
+              <TotalCard label="Devuelto" value={totals.returned} color="#f59e0b" typo={typo} tokens={TOKENS} />
+              <TotalCard label="Merma" value={totals.scrap} color="#ef4444" typo={typo} tokens={TOKENS} />
             </div>
 
             {/* Difference alert */}
@@ -148,12 +153,12 @@ export default function ScreenInventarioRuta() {
                       {line.product}
                     </p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <MiniTag label="Carga" value={line.loaded} color={TOKENS.colors.blue2} typo={typo} />
-                      <MiniTag label="Entreg." value={line.delivered} color="#22c55e" typo={typo} />
-                      <MiniTag label="Devuel." value={line.returned} color="#f59e0b" typo={typo} />
-                      {line.scrap > 0 && <MiniTag label="Merma" value={line.scrap} color="#ef4444" typo={typo} />}
+                      <MiniTag label="Carga" value={line.loaded} color={TOKENS.colors.blue2} typo={typo} tokens={TOKENS} />
+                      <MiniTag label="Entreg." value={line.delivered} color="#22c55e" typo={typo} tokens={TOKENS} />
+                      <MiniTag label="Devuel." value={line.returned} color="#f59e0b" typo={typo} tokens={TOKENS} />
+                      {line.scrap > 0 && <MiniTag label="Merma" value={line.scrap} color="#ef4444" typo={typo} tokens={TOKENS} />}
                       {invView.source === 'reconciliation' && (
-                        <MiniTag label="Resta" value={remaining} color={remaining === 0 ? '#22c55e' : '#ef4444'} typo={typo} bold />
+                        <MiniTag label="Resta" value={remaining} color={remaining === 0 ? '#22c55e' : '#ef4444'} typo={typo} bold tokens={TOKENS} />
                       )}
                     </div>
                   </div>
@@ -175,7 +180,7 @@ export default function ScreenInventarioRuta() {
   )
 }
 
-function TotalCard({ label, value, color, typo }) {
+function TotalCard({ label, value, color, typo, tokens: TOKENS }) {
   return (
     <div style={{ padding: 14, borderRadius: TOKENS.radius.lg, background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}` }}>
       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginBottom: 4 }}>{label}</p>
@@ -184,7 +189,7 @@ function TotalCard({ label, value, color, typo }) {
   )
 }
 
-function MiniTag({ label, value, color, typo, bold }) {
+function MiniTag({ label, value, color, typo, bold, tokens: TOKENS }) {
   return (
     <div style={{
       padding: '2px 8px', borderRadius: TOKENS.radius.pill,

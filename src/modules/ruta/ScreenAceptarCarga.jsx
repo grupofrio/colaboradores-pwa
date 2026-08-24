@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 import { getMyRoutePlan, getMyLoad, acceptLoad, acceptRefill, getLoadLines } from './api'
 import { buildLoadState } from './loadState'
 import { logScreenError } from '../shared/logScreenError'
@@ -42,6 +44,9 @@ function aggregateLines(groups) {
 
 export default function ScreenAceptarCarga() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -233,14 +238,14 @@ export default function ScreenAceptarCarga() {
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
           <button onClick={() => navigate('/ruta')} style={{ width: 38, height: 38, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
           <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Carga Asignada</span>
         </div>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <>

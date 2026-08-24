@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 import { getMyTarget, getMyRoutePlan } from './api'
 import { logScreenError } from '../shared/logScreenError'
-
-function pctColor(pct) {
-  if (pct >= 80) return TOKENS.colors.success
-  if (pct >= 50) return TOKENS.colors.warning
-  return TOKENS.colors.error
-}
 
 function fmt(n) {
   if (n == null) return '—'
@@ -23,6 +19,14 @@ function fmtCurrency(n) {
 
 export default function ScreenKPIsRuta() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
+  function pctColor(pct) {
+    if (pct >= 80) return TOKENS.colors.success
+    if (pct >= 50) return TOKENS.colors.warning
+    return TOKENS.colors.error
+  }
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -72,14 +76,14 @@ export default function ScreenKPIsRuta() {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
           <button onClick={() => navigate('/ruta')} style={{ width: 38, height: 38, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
           </button>
           <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>KPIs y Metas</span>
         </div>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <>

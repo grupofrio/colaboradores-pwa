@@ -6,7 +6,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 import { getMyRoutePlan, getMyTarget, getReconciliation, getLoadLines } from './api'
 import { logScreenError } from '../shared/logScreenError'
 import VoiceInputButton from '../shared/voice/VoiceInputButton'
@@ -30,6 +32,9 @@ import {
 
 export default function ScreenCierreRuta() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -271,7 +276,7 @@ export default function ScreenCierreRuta() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -280,7 +285,7 @@ export default function ScreenCierreRuta() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : !plan ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
@@ -304,14 +309,14 @@ export default function ScreenCierreRuta() {
             {/* Day summary */}
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>RESUMEN DEL DIA</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
-              <SummaryItem label="Paradas" value={`${plan.stops_done || 0}/${plan.stops_total || 0} (${fmtPct(progressPct)})`} typo={typo} />
+              <SummaryItem label="Paradas" value={`${plan.stops_done || 0}/${plan.stops_total || 0} (${fmtPct(progressPct)})`} typo={typo} tokens={TOKENS} />
               <SummaryItem label="Venta vs meta" value={fmtPct(targetProgress.salesPct)} typo={typo}
-                valueColor={targetProgress.salesPct >= 80 ? '#22c55e' : '#f59e0b'} />
+                valueColor={targetProgress.salesPct >= 80 ? '#22c55e' : '#f59e0b'} tokens={TOKENS} />
               <SummaryItem label="Cobranza vs meta" value={fmtPct(targetProgress.collectionPct)} typo={typo}
-                valueColor={targetProgress.collectionPct >= 80 ? '#22c55e' : '#f59e0b'} />
-              <SummaryItem label="KM salida" value={fmtNum(parseFloat(kmSalida) || 0)} typo={typo} />
-              <SummaryItem label="KM llegada" value={fmtNum(parseFloat(kmLlegada) || 0)} typo={typo} />
-              <SummaryItem label="KM recorridos" value={fmtNum(kmRecorridos)} typo={typo} valueColor="#2B8FE0" />
+                valueColor={targetProgress.collectionPct >= 80 ? '#22c55e' : '#f59e0b'} tokens={TOKENS} />
+              <SummaryItem label="KM salida" value={fmtNum(parseFloat(kmSalida) || 0)} typo={typo} tokens={TOKENS} />
+              <SummaryItem label="KM llegada" value={fmtNum(parseFloat(kmLlegada) || 0)} typo={typo} tokens={TOKENS} />
+              <SummaryItem label="KM recorridos" value={fmtNum(kmRecorridos)} typo={typo} valueColor="#2B8FE0" tokens={TOKENS} />
             </div>
 
             <button onClick={() => navigate('/ruta')} style={{
@@ -373,8 +378,8 @@ export default function ScreenCierreRuta() {
                   placeholder="Ej: 45000"
                   style={{
                     width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                    color: 'white', fontSize: 16, fontWeight: 600, outline: 'none',
+                    background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.text, fontSize: 16, fontWeight: 600, outline: 'none',
                   }}
                 />
               </div>
@@ -389,8 +394,8 @@ export default function ScreenCierreRuta() {
                   placeholder="Ej: 45120"
                   style={{
                     width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                    color: 'white', fontSize: 16, fontWeight: 600, outline: 'none',
+                    background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.text, fontSize: 16, fontWeight: 600, outline: 'none',
                   }}
                 />
               </div>
@@ -480,6 +485,7 @@ export default function ScreenCierreRuta() {
               style={{
                 width: '100%', padding: '16px 0', borderRadius: TOKENS.radius.lg,
                 background: isValid ? 'linear-gradient(135deg, #15803d, #22c55e)' : TOKENS.colors.surface,
+                border: isValid ? 'none' : `1px solid ${TOKENS.colors.border}`,
                 color: isValid ? 'white' : TOKENS.colors.textMuted,
                 fontWeight: 700, fontSize: 16,
                 opacity: isValid ? 1 : 0.5,
@@ -496,7 +502,7 @@ export default function ScreenCierreRuta() {
   )
 }
 
-function SummaryItem({ label, value, typo, valueColor }) {
+function SummaryItem({ label, value, typo, valueColor, tokens: TOKENS }) {
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',

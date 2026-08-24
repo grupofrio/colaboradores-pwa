@@ -5,7 +5,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
 import { getMyRoutePlan, getMyTarget, getMyIncidents } from './api'
 import { logScreenError } from '../shared/logScreenError'
 import {
@@ -20,6 +22,9 @@ import {
 
 export default function ScreenControlRuta() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -97,7 +102,7 @@ export default function ScreenControlRuta() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -107,7 +112,7 @@ export default function ScreenControlRuta() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
             </svg>
           </button>
@@ -115,7 +120,7 @@ export default function ScreenControlRuta() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : !plan ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
@@ -126,7 +131,8 @@ export default function ScreenControlRuta() {
             {/* Big progress */}
             <div style={{
               padding: 20, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
+              background: light ? TOKENS.colors.surface : TOKENS.glass.hero,
+              border: `1px solid ${TOKENS.colors.borderBlue}`,
               textAlign: 'center', marginBottom: 16,
             }}>
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 4px' }}>PROGRESO DE PARADAS</p>
@@ -137,7 +143,7 @@ export default function ScreenControlRuta() {
                 {stopsDone} de {stopsTotal} paradas completadas
               </p>
               {/* Progress bar */}
-              <div style={{ height: 8, borderRadius: 4, background: TOKENS.colors.surface, overflow: 'hidden' }}>
+              <div style={{ height: 8, borderRadius: 4, background: light ? TOKENS.colors.surfaceStrong : TOKENS.colors.surface, overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', borderRadius: 4,
                   background: progressPct === 100 ? '#22c55e' : 'linear-gradient(90deg, #15499B, #2B8FE0)',
