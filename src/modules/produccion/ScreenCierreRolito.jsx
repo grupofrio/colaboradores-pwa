@@ -12,7 +12,7 @@ import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
 import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getModuleById } from '../registry'
 import { resolveModuleContextRole } from '../../lib/roleContext'
-import { getShiftOverview, saveBagReconciliation, getActiveCycle } from './rolitoService'
+import { getShiftOverview, saveBagReconciliation, getActiveCycle, resolveBagCloseTotals } from './rolitoService'
 import { getBagReturnDeclaration, matchesBagReturnDeclaration } from './bagReturnDeclarationStore'
 import { notifyOperatorClose } from './api'
 import { computeRolitoBagDifference, sumRolitoUsedBags } from './rolitoBagMath'
@@ -95,18 +95,15 @@ export default function ScreenCierreRolito() {
     bagsRemaining: totalBagsSystemRemaining,
   })
   const bagDeclarationFromBackend = totalBagsSystemDamaged > 0
-  const bagDeclarationReady = !bagDeclarationRequired || bagDeclarationFromStore || bagDeclarationFromBackend
-  const totalBagsUsed = bagDeclarationReady
-    ? Number((bagDeclarationFromStore ? bagDeclaration?.bags_used : null) ?? systemBagsUsed) || 0
-    : systemBagsUsed
-  const totalBagsReturned = bagDeclarationRequired
-    ? (bagDeclarationReady
-        ? Number((bagDeclarationFromStore ? bagDeclaration?.total_returned : null) ?? totalBagsSystemRemaining) || 0
-        : totalBagsSystemRemaining)
-    : 0
-  const totalBagsDamaged = bagDeclarationReady
-    ? Number((bagDeclarationFromStore ? bagDeclaration?.total_damaged : null) ?? totalBagsSystemDamaged) || 0
-    : 0
+  const { bagDeclarationReady, totalBagsUsed, totalBagsReturned, totalBagsDamaged } = resolveBagCloseTotals({
+    bagDeclarationRequired,
+    bagDeclarationFromStore,
+    bagDeclarationFromBackend,
+    bagDeclaration,
+    systemBagsUsed,
+    totalBagsSystemRemaining,
+    totalBagsSystemDamaged,
+  })
   const bagsDiff = totalBagsReceived > 0
     ? computeRolitoBagDifference({
         bagsReceived: totalBagsReceived,
