@@ -6,11 +6,13 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { getTypo, getCompaniesForSucursal } from '../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
+import { softWarehouse } from '../../lib/sessionGuards'
 import { createRequisition, getRequisitions } from './api'
 import { AdminProvider } from './AdminContext'
 import AdminShell from './components/AdminShell'
 import AdminRequisicionForm from './forms/AdminRequisicionForm'
 import OperatingScopePicker from './components/OperatingScopePicker'
+import ProductPicker from './components/ProductPicker'
 import { bootOperatingScope, groupOperatingScopesByPlaza } from './adminService'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -51,8 +53,9 @@ function MobileRequisiciones() {
   // Form state
   const [companyId, setCompanyId] = useState(session?.company_id || companies[0]?.id || null)
   const [title, setTitle] = useState('')
-  const [lines, setLines] = useState([{ product_name: '', qty: 1 }])
+  const [lines, setLines] = useState([{ product: null, qty: 1 }])
   const [notes, setNotes] = useState('')
+  const warehouseId = useMemo(() => softWarehouse(session), [session])
 
   // Alcance de operación (Plaza × Empresa) para actores multi-compañía v2 —
   // MobileRequisiciones no está envuelto en AdminProvider, así que duplica su
@@ -65,6 +68,7 @@ function MobileRequisiciones() {
     () => groupOperatingScopesByPlaza(operatingScope.scopes),
     [operatingScope.scopes],
   )
+  const resolvedCompanyId = operatingScope.enabled ? operatingCompanyId : companyId
 
   useEffect(() => {
     let alive = true
@@ -90,7 +94,7 @@ function MobileRequisiciones() {
   }
 
   function addLine() {
-    setLines(prev => [...prev, { product_name: '', qty: 1 }])
+    setLines(prev => [...prev, { product: null, qty: 1 }])
   }
 
   function updateLine(index, field, value) {
@@ -108,7 +112,7 @@ function MobileRequisiciones() {
       setError('Selecciona la Plaza y empresa operativa')
       return
     }
-    const validLines = lines.filter(l => l.product_name.trim())
+    const validLines = lines.filter(l => l.product && Number(l.qty) > 0)
     if (validLines.length === 0) { setError('Agrega al menos un producto'); return }
     setSubmitting(true)
     setError('')
@@ -120,14 +124,14 @@ function MobileRequisiciones() {
         company_id: companyId,
         sucursal: session?.sucursal || '',
         capturista: session?.name || '',
-        lines: validLines.map(l => ({ product_name: l.product_name.trim(), qty: Number(l.qty) || 1 })),
+        lines: validLines.map(l => ({ product_id: l.product.id, quantity: Number(l.qty) })),
         ...(operatingScope.enabled
           ? { operating_plaza_id: operatingPlazaId, operating_company_id: operatingCompanyId }
           : {}),
       })
       setSuccess('Requisicion creada')
       setTitle('')
-      setLines([{ product_name: '', qty: 1 }])
+      setLines([{ product: null, qty: 1 }])
       setNotes('')
       await loadRequisitions()
       setTimeout(() => setSuccess(''), 3000)
@@ -234,10 +238,14 @@ function MobileRequisiciones() {
           <label style={{ ...typo.caption, color: TOKENS.colors.textSoft, display: 'block', marginBottom: 8 }}>Productos necesarios</label>
 
           {lines.map((line, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-              <input type="text" placeholder="Nombre del producto" value={line.product_name}
-                onChange={e => updateLine(i, 'product_name', e.target.value)}
-                style={{ ...inputStyle, flex: 1 }}
+            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
+              <ProductPicker
+                value={line.product}
+                onChange={(p) => updateLine(i, 'product', p)}
+                warehouseId={warehouseId}
+                companyId={resolvedCompanyId}
+                scope="requisition"
+                placeholder={`Producto ${i + 1}`}
               />
               <input type="number" min="1" value={line.qty}
                 onChange={e => updateLine(i, 'qty', e.target.value)}
