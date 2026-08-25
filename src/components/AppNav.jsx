@@ -269,7 +269,7 @@ function DesktopRail({ nav, compact, onGo, t, light }) {
 export default function AppNav() {
   const { session } = useSession()
   const light = isGerenteBrandSurface(session)
-    || ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas', 'jefe_ruta', 'auxiliar_ruta'].includes(session?.role)
+    || ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas', 'jefe_ruta', 'auxiliar_ruta', 'favy_cedis'].includes(session?.role)
   const t = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const location = useLocation()
