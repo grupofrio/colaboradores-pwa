@@ -5,6 +5,7 @@ import { apiGet as _apiGet, apiPost as _apiPost, apiPatch as _apiPatch } from ".
 import { runLogout } from "../lib/logout";
 import { BRAND_TOKENS } from "../theme/brandTokens";
 import { isGerenteBrandSurface } from "../theme/gerenteBrandSurface.js";
+import { MOBILE_NAV_HEIGHT, DESKTOP_MIN } from "../lib/navModel";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -573,7 +574,7 @@ function EditPhotoSheet({ onClose, sw, employee, onPhotoUpdated }) {
     <div onClick={handleClose} style={{ position:"absolute", inset:0, zIndex:20, background:`rgba(${SKIN.scrim},${visible ? 0.72 : 0})`, transition:"background 220ms ease", display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display:"none" }} />
       <input ref={galleryRef} type="file" accept="image/*" onChange={handleFile} style={{ display:"none" }} />
-      <div onClick={(e) => e.stopPropagation()} style={{ background:SKIN.sheetBg, borderRadius:"24px 24px 0 0", border:`1px solid ${TOKENS.colors.borderBlue}`, borderBottom:"none", padding:`22px ${sw < 340 ? 16 : 22}px 36px`, boxShadow:SKIN.sheetShadow, transform:visible?"translateY(0)":"translateY(100%)", transition:`transform 280ms cubic-bezier(0.34,1.56,0.64,1)` }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background:SKIN.sheetBg, borderRadius:"24px 24px 0 0", border:`1px solid ${TOKENS.colors.borderBlue}`, borderBottom:"none", padding:`22px ${sw < 340 ? 16 : 22}px calc(36px + ${sw < DESKTOP_MIN ? MOBILE_NAV_HEIGHT : 0}px)`, boxShadow:SKIN.sheetShadow, transform:visible?"translateY(0)":"translateY(100%)", transition:`transform 280ms cubic-bezier(0.34,1.56,0.64,1)` }}>
         <div style={{ width:36, height:4, borderRadius:2, background:SKIN.sheetHandle, margin:"0 auto 18px" }} />
         <div style={{ ...typo.title, color:TOKENS.colors.text, marginBottom:16, textAlign:"center" }}>
           {uploading ? "Subiendo foto..." : "Editar foto de perfil"}
@@ -677,7 +678,7 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
   const { logout, session } = useSession();
   // `Yo` comparte la misma superficie clara de gerente que Home y Brief.
     const light = isGerenteBrandSurface(session)
-      || ["operador_rolito", "operador_barra", "auxiliar_produccion", "supervisor_produccion", "almacenista_entregas", "jefe_ruta", "auxiliar_ruta"].includes(session?.role);
+      || ["operador_rolito", "operador_barra", "auxiliar_produccion", "supervisor_produccion", "almacenista_entregas", "jefe_ruta", "auxiliar_ruta", "favy_cedis"].includes(session?.role);
   const theme = useMemo(
     () => ({ t: light ? BRAND_TOKENS : DARK_TOKENS, s: light ? SKINS.light : SKINS.dark, light }),
     [light],

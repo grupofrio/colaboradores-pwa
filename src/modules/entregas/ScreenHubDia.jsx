@@ -77,7 +77,7 @@ export default function ScreenHubDia() {
   const [error, setError] = useState('')
   const [fixedDestination, setFixedDestination] = useState(null)
 
-  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas'].includes(session?.role) || isBrandLightSession(session)
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas', 'favy_cedis'].includes(session?.role) || isBrandLightSession(session)
   const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
 
   const sessionWarehouseId = softWarehouse(session)

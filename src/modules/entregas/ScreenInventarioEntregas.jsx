@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { api } from '../../lib/api'
 
 const FILTERS = [
@@ -20,6 +22,8 @@ function fmtNum(n) {
 
 export default function ScreenInventarioEntregas() {
   const { session } = useSession()
+  const isLightSurface = ['almacenista_entregas', 'favy_cedis'].includes(session?.role) || isBrandLightSession(session)
+  const TOKENS = isLightSurface ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -78,7 +82,7 @@ export default function ScreenInventarioEntregas() {
         button { border: none; background: none; cursor: pointer; }
         input { font-family: 'DM Sans', sans-serif; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .inv-row:hover { background: rgba(255,255,255,0.04); }
+        .inv-row:hover { background: ${isLightSurface ? 'rgba(15,42,61,0.04)' : 'rgba(255,255,255,0.04)'}; }
       `}</style>
 
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
@@ -90,7 +94,7 @@ export default function ScreenInventarioEntregas() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -105,7 +109,7 @@ export default function ScreenInventarioEntregas() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
             </svg>
           </button>
@@ -139,8 +143,8 @@ export default function ScreenInventarioEntregas() {
           placeholder="Buscar producto..."
           style={{
             width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-            background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-            color: 'white', fontSize: 14, outline: 'none', marginBottom: 10,
+            background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+            color: TOKENS.colors.text, fontSize: 14, outline: 'none', marginBottom: 10,
           }}
         />
 
@@ -154,7 +158,7 @@ export default function ScreenInventarioEntregas() {
                 padding: '5px 12px', borderRadius: TOKENS.radius.pill, flexShrink: 0,
                 fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 background: filter === f.key ? TOKENS.colors.blue2 : TOKENS.colors.surface,
-                color: filter === f.key ? '#fff' : TOKENS.colors.textMuted,
+                color: filter === f.key ? TOKENS.colors.onPrimary : TOKENS.colors.textMuted,
                 border: `1px solid ${filter === f.key ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
               }}
             >
@@ -166,7 +170,7 @@ export default function ScreenInventarioEntregas() {
         {/* Lista */}
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : items.length === 0 ? (
           <div style={{
@@ -181,7 +185,7 @@ export default function ScreenInventarioEntregas() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {items.map(item => (
-              <ItemRow key={item.product_id} item={item} typo={typo} />
+              <ItemRow key={item.product_id} item={item} typo={typo} tokens={TOKENS} />
             ))}
           </div>
         )}
@@ -199,7 +203,7 @@ export default function ScreenInventarioEntregas() {
   )
 }
 
-function ItemRow({ item, typo }) {
+function ItemRow({ item, typo, tokens: TOKENS }) {
   const isNegative = item.on_hand_qty < 0
   const isZero     = !isNegative && item.available_qty <= 0
   const hasReserve = item.reserved_qty > 0

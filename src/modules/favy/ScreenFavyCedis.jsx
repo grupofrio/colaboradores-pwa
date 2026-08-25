@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
-import { 
+import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS } from '../../theme/brandTokens'
+import { isGerenteBrandSurface } from '../../theme/gerenteBrandSurface.js'
+import {
   createBagRequisition,
   getBagRequisitions,
   createFavyCupProduction,
@@ -75,6 +77,9 @@ const FAVY_CUP_COMPONENTS = [
 
 export default function ScreenFavyCedis() {
   const { session } = useSession()
+  const light = isGerenteBrandSurface(session)
+    || ['favy_cedis'].includes(session?.role)
+  const TOKENS = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -434,7 +439,7 @@ export default function ScreenFavyCedis() {
               flexShrink: 0,
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5" /><path d="M12 19l-7-7 7-7" />
             </svg>
           </button>
@@ -553,7 +558,7 @@ export default function ScreenFavyCedis() {
               <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>Requisiciones recientes</p>
               {requisitionLoading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 8 }}>
-                  <div style={{ width: 22, height: 22, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  <div style={{ width: 22, height: 22, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -774,7 +779,7 @@ export default function ScreenFavyCedis() {
 
             {vanLoading ? (
               <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 8 }}>
-                <div style={{ width: 22, height: 22, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <div style={{ width: 22, height: 22, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               </div>
             ) : doctorsOnlyVans.length === 0 ? (
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>No hay camionetas disponibles.</p>

@@ -9,20 +9,27 @@
 // de forma SÍNCRONA en App.jsx (useState(getStoredSession)): o hay sesión
 // válida en el primer render o no la hay => sin estado "cargando" ni flash.
 //
-// Espaciado del nav (Codex PR #66 "doble bottom padding"):
+// Espaciado del nav (Codex PR #66 "doble bottom padding"; revisado — la mayoría
+// de pantallas de módulo NUNCA implementó el <ModuleMobileSpacer/> que este
+// archivo prometía, así que su contenido quedaba oculto bajo la barra fija):
 //   DESKTOP → paddingLeft = ancho del rail (compacto/completo). Reservado aquí
 //     una sola vez para TODAS las pantallas (rail fijo opaco sobre esa franja).
-//   MÓVIL   → NO se agrega paddingBottom en el wrapper. El nav inferior es un
-//     overlay fijo de 64px con la MISMA huella que la vieja barra por pantalla,
-//     así las 5 universales (que ya reservaban su propio espacio) no quedan con
-//     doble padding. Los shells de módulo que antes NO tenían barra reciben su
-//     holgura con <ModuleMobileSpacer/> (misma altura canónica).
+//   MÓVIL   → un spacer real (no padding) del alto exacto del nav fijo
+//     (MOBILE_NAV_HEIGHT + safe-area) se agrega DESPUÉS del <Outlet/>, dentro
+//     del flujo normal del documento. Empuja el alto total de la página para
+//     que el scroll natural llegue hasta el final del contenido — nunca queda
+//     nada bajo la barra. Las pocas pantallas que ya reservaban su propio
+//     espacio (Home, AdminShell, etc.) solo ganan un colchón extra al fondo;
+//     no se rompe nada, y las que NO lo reservaban dejan de perder contenido.
+//     Las pantallas con su propio layout de altura fija (100dvh + overflow
+//     interno, ej. ScreenProfile) no se ven afectadas: el spacer queda fuera
+//     de su área visible.
 
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { useSession } from '../App'
 import AppNav from './AppNav'
-import { isNavHiddenForPath, railWidthFor, DESKTOP_MIN } from '../lib/navModel'
+import { isNavHiddenForPath, railWidthFor, DESKTOP_MIN, MOBILE_NAV_HEIGHT } from '../lib/navModel'
 import { isValidAuthenticatedSession } from '../lib/session'
 
 export default function AppShell() {
@@ -50,6 +57,13 @@ export default function AppShell() {
       }}
     >
       <Outlet />
+      {showNav && !isDesktop && (
+        <div
+          aria-hidden="true"
+          data-testid="mobile-nav-spacer"
+          style={{ height: `calc(${MOBILE_NAV_HEIGHT}px + env(safe-area-inset-bottom))`, flexShrink: 0 }}
+        />
+      )}
       <AppNav />
     </div>
   )

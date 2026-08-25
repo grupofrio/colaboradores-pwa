@@ -16,7 +16,7 @@ export default function ScreenRecibirPT() {
   const { session } = useSession()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
-  const isLightSurface = session?.role === 'almacenista_entregas' || isBrandLightSession(session)
+  const isLightSurface = ['almacenista_entregas', 'favy_cedis'].includes(session?.role) || isBrandLightSession(session)
   const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
 
   const [transfers, setTransfers] = useState([])

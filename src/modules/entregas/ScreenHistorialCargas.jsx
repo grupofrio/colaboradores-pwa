@@ -88,7 +88,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
   const { session } = useSession()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 390)
   const typo = useMemo(() => getTypo(sw), [sw])
-  const isLightSurface = !isAdmin && (session?.role === 'almacenista_entregas' || isBrandLightSession(session))
+  const isLightSurface = !isAdmin && (['almacenista_entregas', 'favy_cedis'].includes(session?.role) || isBrandLightSession(session))
   const tokens = useMemo(() => getHistorialCargasTheme({ isAdmin, isLightSurface }), [isAdmin, isLightSurface])
   const [date, setDate] = useState(mexicoTodayDateKey())
   const [items, setItems] = useState([])

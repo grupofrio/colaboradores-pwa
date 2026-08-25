@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiGet as _apiGet, todayLocal } from "../lib/api";
+import { MOBILE_NAV_HEIGHT, DESKTOP_MIN } from "../lib/navModel";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -302,7 +303,7 @@ function BadgeSheet({ badge, onClose, sw }) {
           borderRadius:"24px 24px 0 0",
           border:`1px solid ${TOKENS.colors.borderBlue}`,
           borderBottom:"none",
-          padding:`22px ${sw < 340 ? 16 : 22}px 36px`,
+          padding:`22px ${sw < 340 ? 16 : 22}px calc(36px + ${sw < DESKTOP_MIN ? MOBILE_NAV_HEIGHT : 0}px)`,
           boxShadow:`0 -20px 60px rgba(21,73,155,0.14), 0 0 40px rgba(43,143,224,0.10)`,
           transform:visible ? "translateY(0)" : "translateY(100%)",
           transition:`transform 280ms cubic-bezier(0.34,1.56,0.64,1)`,
@@ -575,7 +576,7 @@ function BadgesScreen({ sw: propSw, sh: propSh }) {
               </div>
             </div>
 
-            <div style={{ width:40, height:40, borderRadius:13, background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.20)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:20 }}>
+            <div style={{ width:44, height:44, borderRadius:14, background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.20)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:20, lineHeight:1, overflow:"visible" }}>
               🏆
             </div>
           </div>
