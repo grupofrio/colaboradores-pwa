@@ -62,6 +62,7 @@ function MobileRequisiciones() {
   // propia llamada de boot (mismo precedente que ya sigue con `companies`
   // arriba en vez de reusar AdminContext).
   const [operatingScope, setOperatingScope] = useState({ enabled: false, scopes: [], defaultPlazaId: null })
+  const [operatingScopeReady, setOperatingScopeReady] = useState(false)
   const [operatingPlazaId, setOperatingPlazaId] = useState(null)
   const [operatingCompanyId, setOperatingCompanyId] = useState(null)
   const operatingScopeGroups = useMemo(
@@ -72,7 +73,11 @@ function MobileRequisiciones() {
 
   useEffect(() => {
     let alive = true
-    bootOperatingScope(session).then(scope => { if (alive) setOperatingScope(scope) })
+    bootOperatingScope(session).then(scope => {
+      if (!alive) return
+      setOperatingScope(scope)
+      setOperatingScopeReady(true)
+    })
     return () => { alive = false }
   }, [session])
 
@@ -202,7 +207,15 @@ function MobileRequisiciones() {
         }}>
           <p style={{ ...typo.overline, color: TOKENS.colors.textSoft, marginTop: 0, marginBottom: 14 }}>NUEVA REQUISICION</p>
 
-          {operatingScope.enabled ? (
+          {!operatingScopeReady ? (
+            <div style={{
+              padding: '10px 14px', borderRadius: TOKENS.radius.md,
+              background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+              marginBottom: 14,
+            }}>
+              <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Cargando empresa…</span>
+            </div>
+          ) : operatingScope.enabled ? (
             <OperatingScopePicker
               groups={operatingScopeGroups}
               plazaId={operatingPlazaId}
