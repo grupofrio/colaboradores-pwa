@@ -2,9 +2,102 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  buildPackingPayload,
   computeAvailableBagMaterials,
   findNewMatchingPackingEntry,
+  resolveBagCloseTotals,
 } from '../src/modules/produccion/rolitoService.js'
+
+test('buildPackingPayload keeps only the hardened backend contract for packing', () => {
+  assert.deepEqual(
+    buildPackingPayload(103, 761, 12, 191),
+    {
+      shift_id: 103,
+      cycle_id: 191,
+      product_id: 761,
+      qty_bags: 12,
+    },
+  )
+})
+
+test('buildPackingPayload requires cycle_id for rolito packing', () => {
+  assert.throws(
+    () => buildPackingPayload(103, 761, 12, 0),
+    /cycle_id requerido/i,
+  )
+})
+
+test('resolveBagCloseTotals: backend ya resolvio la merma gana aunque haya declaracion local', () => {
+  const totals = resolveBagCloseTotals({
+    bagDeclarationRequired: true,
+    bagDeclarationFromStore: true,
+    bagDeclarationFromBackend: true,
+    bagDeclaration: { bags_used: 10, total_returned: 50, total_damaged: 5 },
+    systemBagsUsed: 90,
+    totalBagsSystemRemaining: 8,
+    totalBagsSystemDamaged: 2,
+  })
+  assert.deepEqual(totals, {
+    bagDeclarationReady: true,
+    totalBagsUsed: 90,
+    totalBagsReturned: 8,
+    totalBagsDamaged: 2,
+  })
+})
+
+test('resolveBagCloseTotals: solo hay declaracion local (backend no resuelto) gana el local', () => {
+  const totals = resolveBagCloseTotals({
+    bagDeclarationRequired: true,
+    bagDeclarationFromStore: true,
+    bagDeclarationFromBackend: false,
+    bagDeclaration: { bags_used: 10, total_returned: 50, total_damaged: 5 },
+    systemBagsUsed: 90,
+    totalBagsSystemRemaining: 8,
+    totalBagsSystemDamaged: 0,
+  })
+  assert.deepEqual(totals, {
+    bagDeclarationReady: true,
+    totalBagsUsed: 10,
+    totalBagsReturned: 50,
+    totalBagsDamaged: 5,
+  })
+})
+
+test('resolveBagCloseTotals: ni backend ni local gana el default del sistema', () => {
+  const totals = resolveBagCloseTotals({
+    bagDeclarationRequired: true,
+    bagDeclarationFromStore: false,
+    bagDeclarationFromBackend: false,
+    bagDeclaration: null,
+    systemBagsUsed: 90,
+    totalBagsSystemRemaining: 8,
+    totalBagsSystemDamaged: 0,
+  })
+  assert.deepEqual(totals, {
+    bagDeclarationReady: false,
+    totalBagsUsed: 90,
+    totalBagsReturned: 8,
+    totalBagsDamaged: 0,
+  })
+})
+
+test('resolveBagCloseTotals: bagDeclarationRequired=false deja totalBagsDamaged en 0', () => {
+  const totals = resolveBagCloseTotals({
+    bagDeclarationRequired: false,
+    bagDeclarationFromStore: false,
+    bagDeclarationFromBackend: false,
+    bagDeclaration: null,
+    systemBagsUsed: 90,
+    totalBagsSystemRemaining: 0,
+    totalBagsSystemDamaged: 0,
+  })
+  assert.deepEqual(totals, {
+    bagDeclarationReady: true,
+    totalBagsUsed: 90,
+    totalBagsReturned: 0,
+    totalBagsDamaged: 0,
+  })
+})
 
 test('computeAvailableBagMaterials consolidates duplicate issues by material even across settlements', () => {
   const issues = [

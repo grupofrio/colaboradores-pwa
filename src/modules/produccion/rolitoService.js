@@ -546,21 +546,28 @@ export async function markDump(cycleId, kgDumped, extra) {
 }
 
 /**
- * Register packing entry.
- * cycle_id is sent if available — backend may or may not link it.
+ * Build the minimal frontend payload for hardened rolito packing.
+ * Backend resolves actor, line, machine, company, warehouse and material context.
+ */
+export function buildPackingPayload(shiftId, productId, qtyBags, cycleId) {
+  const normalizedCycleId = Number(cycleId || 0) || 0
+  if (!normalizedCycleId) {
+    throw new Error('cycle_id requerido para registrar empaque')
+  }
+
+  return {
+    shift_id: Number(shiftId || 0),
+    cycle_id: normalizedCycleId,
+    product_id: Number(productId || 0),
+    qty_bags: parseInt(qtyBags, 10),
+  }
+}
+
+/**
+ * Register packing entry using the hardened backend contract.
  */
 export async function registerPacking(shiftId, productId, qtyBags, cycleId) {
-  const data = {
-    shift_id: shiftId,
-    product_id: Number(productId || 0),
-    qty_bags: parseInt(qtyBags),
-    production_order_id: 0,
-    timestamp: nowDatetime(),
-  }
-  if (cycleId) {
-    data.cycle_id = cycleId
-  }
-  return createPackingEntry(data)
+  return createPackingEntry(buildPackingPayload(shiftId, productId, qtyBags, cycleId))
 }
 
 // ── LIVE: Products ───────────────────────────────────────────────────────────
@@ -646,6 +653,40 @@ export async function saveBagReconciliation(shiftId, bagsReceived, bagsRemaining
     bags_received: parseInt(bagsReceived) || 0,
     bags_remaining: parseInt(bagsRemaining) || 0,
   })
+}
+
+/**
+ * Resolve the bag totals shown/used at shift close.
+ * Backend (settlement) is the material truth. The local declaration
+ * (bagDeclaration from bagReturnDeclarationStore) is only used as a temporary
+ * bridge when the backend has not yet reflected the adjustment — e.g. resolve-rejected
+ * blocked by role, pending an auxiliar admin sync (see syncWarning in ScreenDeclaracionBolsas).
+ */
+export function resolveBagCloseTotals({
+  bagDeclarationRequired,
+  bagDeclarationFromStore,
+  bagDeclarationFromBackend,
+  bagDeclaration,
+  systemBagsUsed,
+  totalBagsSystemRemaining,
+  totalBagsSystemDamaged,
+} = {}) {
+  const bagDeclarationReady = !bagDeclarationRequired || bagDeclarationFromStore || bagDeclarationFromBackend
+  const preferLocalDeclaration = bagDeclarationFromStore && !bagDeclarationFromBackend
+
+  const totalBagsUsed = bagDeclarationReady
+    ? Number((preferLocalDeclaration ? bagDeclaration?.bags_used : null) ?? systemBagsUsed) || 0
+    : systemBagsUsed
+  const totalBagsReturned = bagDeclarationRequired
+    ? (bagDeclarationReady
+        ? Number((preferLocalDeclaration ? bagDeclaration?.total_returned : null) ?? totalBagsSystemRemaining) || 0
+        : totalBagsSystemRemaining)
+    : 0
+  const totalBagsDamaged = bagDeclarationReady
+    ? Number((preferLocalDeclaration ? bagDeclaration?.total_damaged : null) ?? totalBagsSystemDamaged) || 0
+    : 0
+
+  return { bagDeclarationReady, totalBagsUsed, totalBagsReturned, totalBagsDamaged }
 }
 
 /**
