@@ -10,6 +10,7 @@ Reglas de UI:
 
 - No agregar dropdowns de dimensiones económicas.
 - Mostrador es fuente (`pwa_pos`), no canal. El canal sale del partner.
+- Servicios Compartidos es UN `SCC`, nunca Plaza.
 - Nómina no se captura como gasto PWA.
 - Subproducción (esperado vs empacado) es KPI, no merma contable.
 - Fail-closed contable no debe bloquear empacar hielo.
