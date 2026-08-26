@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
 import { useSession } from '../../App'
 import { logScreenError } from '../shared/logScreenError'
 import { getPendingBagCustody, declareBagCustody } from './bagCustodyService'
+import { ALMACEN_PT_TOKENS as TOKENS } from './ptLightTheme'
 
 export default function ScreenDeclaracionBolsasPT() {
   const navigate = useNavigate()
@@ -79,7 +80,7 @@ export default function ScreenDeclaracionBolsasPT() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -155,7 +156,7 @@ export default function ScreenDeclaracionBolsasPT() {
                 width: '100%', padding: '16px', borderRadius: TOKENS.radius.lg,
                 background: submitting ? TOKENS.colors.surface : 'linear-gradient(90deg, #15499B, #2B8FE0)',
                 border: 'none', cursor: submitting ? 'not-allowed' : 'pointer',
-                ...typo.title, color: 'white',
+                ...typo.title, color: TOKENS.colors.onPrimary,
                 opacity: (submitting || bagsDeclared === '') ? 0.5 : 1,
               }}
             >
@@ -197,7 +198,7 @@ export default function ScreenDeclaracionBolsasPT() {
 function Spinner() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-      <div style={{ width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 28, height: 28, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
     </div>
   )
 }

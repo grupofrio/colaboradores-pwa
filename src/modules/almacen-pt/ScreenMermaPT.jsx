@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
 import {
   getInventory,
   getScrapHistory,
@@ -18,6 +18,10 @@ import { logScreenError } from '../shared/logScreenError'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 import VoiceInputButton from '../shared/voice/VoiceInputButton'
 import { PT_SCRAP_REASONS } from '../shared/voice/catalogs'
+import { ALMACEN_PT_TOKENS } from './ptLightTheme'
+
+const UI = ALMACEN_PT_TOKENS
+const TOKENS = UI
 
 // Scrap reasons catálogo real en backend (Sebastián audit 2026-04-10):
 //   {damage, expired, shortage, contamination, other}
@@ -264,7 +268,7 @@ export default function ScreenMermaPT() {
     : ''
 
   return (
-    <ScreenShell title="Merma PT" backTo="/almacen-pt">
+    <ScreenShell title="Merma PT" backTo="/almacen-pt" tokens={ALMACEN_PT_TOKENS}>
       <style>{`
         @keyframes ptMermaSpin { to { transform: rotate(360deg); } }
         input, textarea { font-family: 'DM Sans', sans-serif; }
@@ -273,7 +277,7 @@ export default function ScreenMermaPT() {
       {loadingInit ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
           <div style={{
-            width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
+            width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`,
             borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
             animation: 'ptMermaSpin 0.8s linear infinite',
           }} />
@@ -340,9 +344,9 @@ export default function ScreenMermaPT() {
                   placeholder="Buscar producto..."
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)',
+                    background: TOKENS.colors.surface,
                     border: `1px solid ${validationErrors.product ? TOKENS.colors.error : TOKENS.colors.border}`,
-                    color: 'white', fontSize: 14, outline: 'none',
+                    color: TOKENS.colors.text, fontSize: 14, outline: 'none',
                   }}
                 />
                 {showProductList && filteredProducts.length > 0 && (
@@ -401,10 +405,10 @@ export default function ScreenMermaPT() {
                   onChange={e => setQty(parseFloat(e.target.value) || 0)}
                   style={{
                     flex: 1, height: 48, padding: '0 12px', textAlign: 'center',
-                    background: 'rgba(255,255,255,0.05)',
+                    background: TOKENS.colors.surface,
                     border: `1px solid ${validationErrors.qty ? TOKENS.colors.error : TOKENS.colors.border}`,
                     borderLeft: 'none', borderRight: 'none',
-                    color: 'white', fontSize: 18, fontWeight: 700, outline: 'none',
+                    color: TOKENS.colors.text, fontSize: 18, fontWeight: 700, outline: 'none',
                   }}
                 />
                 <button
@@ -459,9 +463,9 @@ export default function ScreenMermaPT() {
                 rows={3}
                 style={{
                   width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                  background: 'rgba(255,255,255,0.05)',
+                  background: TOKENS.colors.surface,
                   border: `1px solid ${validationErrors.notes ? TOKENS.colors.error : TOKENS.colors.border}`,
-                  color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+                  color: TOKENS.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
                 }}
               />
               {validationErrors.notes && <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>{validationErrors.notes}</p>}
@@ -472,7 +476,7 @@ export default function ScreenMermaPT() {
               disabled={submitting || blockedByHandover}
               style={{
                 width: '100%', padding: 14, borderRadius: TOKENS.radius.lg,
-                background: blockedByHandover ? TOKENS.colors.surface : 'linear-gradient(90deg, #f59e0b, #d97706)', color: blockedByHandover ? TOKENS.colors.textLow : 'white',
+                background: blockedByHandover ? TOKENS.colors.surface : 'linear-gradient(90deg, #f59e0b, #d97706)', color: blockedByHandover ? TOKENS.colors.textLow : TOKENS.colors.onPrimary,
                 fontSize: 15, fontWeight: 600, opacity: submitting ? 0.6 : 1,
                 boxShadow: blockedByHandover ? 'none' : '0 10px 24px rgba(245,158,11,0.25)',
               }}
@@ -514,6 +518,7 @@ export default function ScreenMermaPT() {
 
       <ConfirmDialog
         open={confirmOpen}
+        tokens={ALMACEN_PT_TOKENS}
         title="Registrar merma"
         message={confirmMessage}
         confirmLabel="Registrar"

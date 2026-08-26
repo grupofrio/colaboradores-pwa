@@ -17,8 +17,8 @@ import { TOKENS as DARK_TOKENS } from '../tokens'
 // (rebranding PR2 + piloto Gerente); cualquier otro rol conserva exactamente
 // la barra oscura de siempre.
 import { BRAND_TOKENS } from '../theme/brandTokens'
-import { isGerenteBrandSurface } from '../theme/gerenteBrandSurface.js'
 import { BRAND_LOGO_MARK } from '../theme/brandLight'
+import { isSharedLightSurfaceSession } from '../theme/sharedLightSurface'
 import {
   buildMobileNav, buildDesktopNav, navLabel,
   DESKTOP_MIN, RAIL_FULL_MIN, DESKTOP_RAIL_WIDTH, DESKTOP_RAIL_WIDTH_COMPACT,
@@ -268,8 +268,7 @@ function DesktopRail({ nav, compact, onGo, t, light }) {
 /* ── AppNav ───────────────────────────────────────────────────────────────── */
 export default function AppNav() {
   const { session } = useSession()
-  const light = isGerenteBrandSurface(session)
-    || ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas', 'jefe_ruta', 'auxiliar_ruta', 'favy_cedis'].includes(session?.role)
+  const light = isSharedLightSurfaceSession(session)
   const t = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()
   const location = useLocation()

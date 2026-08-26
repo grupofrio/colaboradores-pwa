@@ -76,9 +76,9 @@ test('resolveMaterialesSurfaceTheme uses light theme for production materiales r
   )
 })
 
-test('resolveMaterialesSurfaceTheme stays dark for almacen pt materials route', () => {
+test('resolveMaterialesSurfaceTheme uses light theme for almacen pt materials route', () => {
   assert.equal(
     resolveMaterialesSurfaceTheme({ materialesBasePath: '/almacen-pt/materiales' }, 'almacenista_pt'),
-    'dark',
+    'light',
   )
 })

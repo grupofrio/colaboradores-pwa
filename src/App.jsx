@@ -9,6 +9,7 @@ import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervi
 import { readPulseFlagFrom } from './modules/supervisor-ventas/v2/pulso/pulseFlag'
 import { api } from './lib/api'
 import { isBrandLightSession } from './theme/useBrandPalette'
+import { isSharedLightSurfaceSession } from './theme/sharedLightSurface'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById } from './modules/registry'
@@ -702,8 +703,7 @@ export default function App() {
   // otro rol hereda el claro.
   useEffect(() => {
     const root = document.documentElement
-    const isProductionLightRole = ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas', 'auxiliar_admin', 'gerente_sucursal', 'direccion_general', 'jefe_ruta', 'auxiliar_ruta', 'favy_cedis'].includes(session?.role)
-    if (isProductionLightRole || isBrandLightSession(session)) root.setAttribute('data-brand-light', '1')
+    if (isSharedLightSurfaceSession(session) || isBrandLightSession(session)) root.setAttribute('data-brand-light', '1')
     else root.removeAttribute('data-brand-light')
     return () => root.removeAttribute('data-brand-light')
   }, [session])
@@ -865,6 +865,7 @@ export default function App() {
             <Route path="/produccion/handover" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenHandoverTurno /></ProductionOperatorRoute></ModuleRoleRoute>} />
             <Route path="/produccion/turno-entregado" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute allowDelivered><ScreenTurnoEntregado /></ProductionOperatorRoute></ModuleRoleRoute>} />
             <Route path="/produccion/reconciliacion" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenReconciliacionPT /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/almacen-pt/reconciliacion" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenReconciliacionPT /></ModuleRoleRoute>} />
 
             {/* ── Almacén PT V2 ────────────────────────────────────────── */}
             <Route path="/almacen-pt" element={<ModuleRoleRoute moduleId="almacen_pt"><ScreenAlmacenPT /></ModuleRoleRoute>} />

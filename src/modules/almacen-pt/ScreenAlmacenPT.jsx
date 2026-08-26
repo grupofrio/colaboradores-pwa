@@ -5,7 +5,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { ALMACEN_PT_TOKENS as TOKENS } from './ptLightTheme'
 import {
   getDaySummary,
   getNextAction,
@@ -132,7 +133,7 @@ export default function ScreenAlmacenPT() {
     {
       id: 'reconciliacion', label: 'Verificar inventario',
       desc: 'Conteo fisico por producto PT',
-      route: '/produccion/reconciliacion',
+      route: '/almacen-pt/reconciliacion',
       state: { backTo: '/almacen-pt' },
       color: TOKENS.colors.blue2,
       icon: 'check',
@@ -191,7 +192,7 @@ export default function ScreenAlmacenPT() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -204,7 +205,7 @@ export default function ScreenAlmacenPT() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
             </svg>
           </button>
@@ -212,7 +213,7 @@ export default function ScreenAlmacenPT() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : error ? (
           <div style={{ marginTop: 24, padding: 16, borderRadius: TOKENS.radius.lg, background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.25)', textAlign: 'center' }}>
@@ -224,7 +225,7 @@ export default function ScreenAlmacenPT() {
         ) : shiftStatus?.view === 'receive_turn' ? (
           // Caso transitorio: el effect ya redirige a /almacen-pt/handover.
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <>
@@ -268,8 +269,9 @@ export default function ScreenAlmacenPT() {
             {/* KPI Cards */}
             <div style={{
               marginTop: (summary?.shift_handover_pending || ptBlockedByHandover) ? 12 : 8, padding: 16, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
-              boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
+              background: 'linear-gradient(135deg, rgba(0,119,187,0.10) 0%, rgba(0,184,212,0.16) 100%)',
+              border: `1px solid ${TOKENS.colors.borderBlue}`,
+              boxShadow: TOKENS.shadow.soft,
               display: 'flex', gap: 8,
             }}>
               <KpiBox label="Productos" value={fmtNum(summary?.inventory?.total_products || 0)} accent={TOKENS.colors.blue2} typo={typo} />
@@ -327,13 +329,13 @@ export default function ScreenAlmacenPT() {
                   background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
                   boxShadow: '0 10px 24px rgba(21,73,155,0.30)',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  color: 'white',
+                  color: TOKENS.colors.onPrimary,
                 }}>
                   <div>
-                    <p style={{ ...typo.title, margin: 0, color: 'white' }}>{next.label}</p>
-                    {next.count > 0 && <p style={{ ...typo.caption, margin: 0, marginTop: 2, color: 'rgba(255,255,255,0.7)' }}>{next.count} pendientes</p>}
+                    <p style={{ ...typo.title, margin: 0, color: TOKENS.colors.onPrimary }}>{next.label}</p>
+                    {next.count > 0 && <p style={{ ...typo.caption, margin: 0, marginTop: 2, color: 'rgba(255,255,255,0.82)' }}>{next.count} pendientes</p>}
                   </div>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.onPrimary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
                 </button>
               </>
             )}
@@ -454,7 +456,7 @@ function ActionCard({ action, typo, onClick }) {
         <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>{action.label}</p>
         <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{action.desc}</p>
       </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textLow} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
     </button>
   )
 }

@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const defaultOdooOrigin = env.VITE_ODOO_URL || 'https://grupofrio.odoo.com'
+  const salesOpsOdooOrigin = 'https://grupofrio-gf.odoo.com'
 
   // ── Fixtures de DEMOSTRACIÓN: fail-closed ──────────────────────────────────
   // Antes cada alias preguntaba por `mode`. Eso resultó frágil: el build de
@@ -120,7 +122,7 @@ export default defineConfig(({ command, mode }) => {
           rewrite: (path) => path.replace(/^\/api-n8n/, '')
         },
         '/api-odoo': {
-          target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
+          target: defaultOdooOrigin,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api-odoo/, '/api')
         },
@@ -133,7 +135,7 @@ export default defineConfig(({ command, mode }) => {
         // inyecta aqui, en el proceso Node del dev server — nunca llega al
         // navegador ni al bundle del cliente.
         '/odoo-api/pwa-admin': {
-          target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
+          target: defaultOdooOrigin,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/odoo-api/, ''),
           configure: (proxy) => {
@@ -144,8 +146,28 @@ export default defineConfig(({ command, mode }) => {
             })
           }
         },
+        // Replica en dev la regla de vercel.json ("/odoo-api/gf/salesops/:path*" ->
+        // "/api/salesops"). Sin esta ruta, SalesOps cae al proxy generico y
+        // llega a Odoo sin `GF_SALESOPS_TOKEN`, provocando 401 y expiracion de
+        // sesion en flujos criticos como PT -> Entregas. Ademas debe pegarle al
+        // mismo host canonico que Vercel (`grupofrio-gf.odoo.com`): si usa el
+        // origen generico, Odoo responde `UNAUTHORIZED` con "X-GF-Token
+        // inválido.". El secreto se inyecta en el proceso Node del dev server;
+        // nunca se serializa al navegador.
+        '/odoo-api/gf/salesops': {
+          target: salesOpsOdooOrigin,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/odoo-api/, ''),
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              if (env.GF_SALESOPS_TOKEN) {
+                proxyReq.setHeader('X-GF-Token', env.GF_SALESOPS_TOKEN)
+              }
+            })
+          }
+        },
         '/odoo-api': {
-          target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
+          target: defaultOdooOrigin,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/odoo-api/, '')
         }

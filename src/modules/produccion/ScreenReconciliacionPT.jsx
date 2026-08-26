@@ -37,13 +37,15 @@ export default function ScreenReconciliacionPT() {
   const { session } = useSession()
   const navigate = useNavigate()
   const location = useLocation()
-  const _useLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role) || isBrandLightSession(session)
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
   const warehouseId = Number(session?.warehouse_id || DEFAULT_WAREHOUSE_ID)
   const employeeId = Number(session?.employee_id || session?.employee?.id || 0) || 0
   const backTo = location.state?.backTo || '/almacen-pt/recepcion'
+  const selfRoute = location.pathname.startsWith('/almacen-pt')
+    ? '/almacen-pt/reconciliacion'
+    : '/produccion/reconciliacion'
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -242,7 +244,15 @@ export default function ScreenReconciliacionPT() {
               </div>
             )}
 
-            <div style={{ position: 'sticky', bottom: 0, padding: '14px 0 18px', background: 'linear-gradient(180deg, rgba(240,249,255,0) 0%, rgba(240,249,255,0.96) 35%)' }}>
+            <div style={{
+              position: 'sticky',
+              bottom: 0,
+              padding: '16px 0 18px',
+              marginTop: 12,
+              background: 'linear-gradient(180deg, rgba(240,249,255,0) 0%, rgba(240,249,255,0.84) 24%, rgba(240,249,255,0.98) 52%)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+            }}>
               <button
                 onClick={handleSave}
                 disabled={saving || rows.length === 0}
@@ -256,7 +266,7 @@ export default function ScreenReconciliacionPT() {
                 {saving ? 'Guardando...' : 'Guardar validacion fisica'}
               </button>
               <button
-                onClick={() => navigate('/almacen-pt/traspaso', { state: { backTo: '/produccion/reconciliacion' } })}
+                onClick={() => navigate('/almacen-pt/traspaso', { state: { backTo: selfRoute } })}
                 style={{
                   width: '100%', padding: '13px', marginTop: 10, borderRadius: TOKENS.radius.lg,
                   color: TOKENS.colors.blue2, fontSize: 14, fontWeight: 800,
@@ -379,11 +389,12 @@ function SummaryCard({ typo, totals, sourceLabel, warehouseName }) {
   return (
     <div style={{
       ...cardStyle(),
-      background: 'linear-gradient(160deg, rgba(43,143,224,0.12), rgba(15,23,42,0.64))',
-      border: '1px solid rgba(43,143,224,0.28)',
+      background: 'linear-gradient(145deg, rgba(0,119,187,0.10) 0%, rgba(0,184,212,0.15) 100%)',
+      border: '1px solid rgba(0,119,187,0.20)',
+      boxShadow: TOKENS.shadow.soft,
     }}>
-      <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>INVENTARIO PT CONSOLIDADO</p>
-      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 12px' }}>
+      <p style={{ ...typo.overline, color: TOKENS.colors.blue3, margin: 0 }}>INVENTARIO PT CONSOLIDADO</p>
+      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 14px' }}>
         {warehouseName || 'Almacen PT'} · {sourceLabel}
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -401,7 +412,9 @@ function MiniMetric({ typo, label, value, sub, tone = 'normal' }) {
   return (
     <div style={{
       padding: '10px 12px', borderRadius: TOKENS.radius.md,
-      background: 'rgba(255,255,255,0.035)', border: `1px solid ${TOKENS.colors.border}`,
+      background: 'rgba(255,255,255,0.82)',
+      border: `1px solid rgba(219,239,249,0.96)`,
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.72)',
     }}>
       <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>{label}</p>
       <p style={{ ...typo.title, color, margin: '2px 0 0' }}>{value}</p>
@@ -414,8 +427,8 @@ function InfoCard({ typo, children }) {
   return (
     <div style={{
       ...cardStyle(),
-      background: 'rgba(43,143,224,0.07)',
-      border: '1px solid rgba(43,143,224,0.22)',
+      background: 'linear-gradient(180deg, rgba(255,255,255,0.74) 0%, rgba(224,243,252,0.72) 100%)',
+      border: '1px solid rgba(0,119,187,0.16)',
     }}>
       <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, lineHeight: 1.55 }}>{children}</p>
     </div>
@@ -540,6 +553,7 @@ function cardStyle() {
     marginBottom: 12,
     background: TOKENS.glass.panel,
     border: `1px solid ${TOKENS.colors.border}`,
+    boxShadow: TOKENS.shadow.soft,
   }
 }
 
@@ -552,6 +566,7 @@ function fieldStyle() {
     border: `1px solid ${TOKENS.colors.border}`,
     color: TOKENS.colors.text,
     outline: 'none',
+    colorScheme: 'light',
   }
 }
 

@@ -39,11 +39,13 @@ export function resolveMaterialesRouteBase(state, fallback = '/almacen-pt/materi
 }
 
 export function resolveMaterialesSurfaceTheme(state, role = '', fallback = '/almacen-pt/materiales') {
+  const normalized = String(role || '').trim()
   const basePath = resolveMaterialesRouteBase(
     state,
     defaultMaterialesRouteForRole(role, fallback),
     role,
   )
+  if (normalized === 'almacenista_pt') return 'light'
   return String(basePath || '').startsWith('/produccion/materiales') ? 'light' : 'dark'
 }
 
