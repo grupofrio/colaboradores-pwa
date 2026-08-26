@@ -5,6 +5,7 @@ import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
 import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
 import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getMyShift } from './api'
+import { resolveDeliveredTurnBackTarget } from './turnoEntregadoNavigation'
 import {
   clearStaleOperatorTurnClosed,
   getOperatorCloseState,
@@ -39,6 +40,7 @@ export default function ScreenTurnoEntregado({ shift: shiftProp = null, role: ro
   const role = normalizeOperatorCloseRole(roleProp || location.state?.role || session?.role || '')
   const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(role) || isBrandLightSession(session)
   const UI = isLightSurface ? TOKENS_LIGHT : TOKENS
+  const backTarget = resolveDeliveredTurnBackTarget({ pathname: location.pathname })
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -139,7 +141,7 @@ export default function ScreenTurnoEntregado({ shift: shiftProp = null, role: ro
 
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
-          <button onClick={() => navigate('/produccion', { state: { selected_role: role } })} style={{
+          <button onClick={() => navigate(backTarget, { state: backTarget === '/produccion' ? { selected_role: role } : undefined })} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
             background: UI.colors.surface, border: `1px solid ${UI.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
