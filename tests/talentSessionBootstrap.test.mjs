@@ -75,4 +75,7 @@ test('App bootstraps Talent with the current React session and persists login be
   const discard = loginBody.indexOf('discardUnownedEmployeeScopedKeys()')
   assert.ok(discard >= 0, 'login must drop unowned PT/packing keys')
   assert.ok(discard < persist, 'unowned keys must be discarded before the new identity is persisted')
+  const outgoing = loginBody.indexOf('clearOutgoingEmployeeScopedState(prevEmpId)')
+  assert.ok(outgoing >= 0, 'login must clear the outgoing employee namespace on identity change')
+  assert.ok(outgoing < persist, 'outgoing employee keys must be cleared before the new session is persisted')
 })

@@ -108,6 +108,38 @@ function loadKindLabel(kind) {
   return 'Carga'
 }
 
+export function resolveLoadRegisteredBy(row = {}) {
+  const employeeName = row.load_employee_name
+    || relationName(row.x_pwa_load_employee_id)
+    || relationName(row.load_employee_id)
+  const employeeId = relationId(row.x_pwa_load_employee_id)
+    || relationId(row.load_employee_id)
+  const ficha = String(row.load_employee_barcode || row.employee_barcode || '').trim()
+    || (employeeId ? String(employeeId) : '')
+  const technicalName = row.technical_user_name
+    || relationName(row.x_pwa_load_user_id)
+    || relationName(row.create_uid)
+    || ''
+  if (employeeName) {
+    return {
+      registeredById: employeeId,
+      registeredByName: ficha ? `${employeeName} · ficha ${ficha}` : employeeName,
+      technicalUserName: technicalName,
+    }
+  }
+  const fallbackId = relationId(row.registered_by_id) || relationId(row.user_id) || relationId(row.registeredById)
+  const fallbackName = row.registered_by_name
+    || row.registeredByName
+    || relationName(row.registered_by_id)
+    || relationName(row.user_id)
+    || ''
+  return {
+    registeredById: fallbackId,
+    registeredByName: fallbackName,
+    technicalUserName: technicalName,
+  }
+}
+
 function normalizeLine(line = {}) {
   const productId = relationId(line.product_id) || relationId(line.productId)
   const productName = line.product_name
@@ -139,12 +171,10 @@ export function normalizeVanLoadHistoryItems(rows = []) {
       || relationName(row.mobile_location_id)
       || relationName(row.location_dest_id)
       || ''
-    const registeredById = relationId(row.registered_by_id) || relationId(row.user_id) || relationId(row.registeredById)
-    const registeredByName = row.registered_by_name
-      || row.registeredByName
-      || relationName(row.registered_by_id)
-      || relationName(row.user_id)
-      || ''
+    const registered = resolveLoadRegisteredBy(row)
+    const registeredById = registered.registeredById
+    const registeredByName = registered.registeredByName
+    const technicalUserName = registered.technicalUserName
     const routePlanId = relationId(row.route_plan_id) || relationId(row.gf_route_plan_id) || relationId(row.routePlanId)
     const routePlanName = row.route_plan_name
       || row.routePlanName
@@ -167,6 +197,7 @@ export function normalizeVanLoadHistoryItems(rows = []) {
       mobileLocationName,
       registeredById,
       registeredByName,
+      technicalUserName,
       routePlanId,
       routePlanName,
       totalQty: lines.reduce((sum, line) => sum + line.qty, 0),

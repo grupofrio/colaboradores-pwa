@@ -72,6 +72,12 @@ import {
   shouldBackfillShiftChecklistLink,
 } from '../modules/produccion/checklistContext.js'
 import { sumRolitoLocationStock } from '../modules/produccion/rolitoBagMath.js'
+import {
+  folioFromFindTicketPath,
+  normalizeDispatchTicketResult,
+  normalizeFindTicketResult,
+  normalizePendingTicketsResult,
+} from '../modules/entregas/dispatchTicketTransport.js'
 import { normalizeChecklistPhotoValue } from '../modules/shared/checklistPhoto.js'
 import { normalizeWriteResponse, WRITE_PHASE } from '../modules/supervisor-ventas/v2/normalizeWriteResponse.js'
 import {
@@ -1664,17 +1670,11 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/find-ticket' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
-    const folio = String(query.get('folio') || '').trim()
+    const folio = folioFromFindTicketPath(path)
     if (!folio) return null
-    const result = await odooHttp('GET', `/pwa-admin/find-ticket?folio=${encodeURIComponent(folio)}`)
-    if (!result?.ok) return null
-    const row = result.data || result
-    return row?.id ? normalizeSaleOrder({
-      ...row,
-      customer: row.customer || row.partner_id?.[1] || '',
-      total: Number(row.total || row.amount_total || 0),
-    }) : null
+    return normalizeFindTicketResult(
+      await odooHttp('GET', `/pwa-admin/find-ticket?folio=${encodeURIComponent(folio)}`),
+    )
   }
 
   if (cleanPath === '/pwa-admin/sale-detail' && method === 'GET') {
@@ -1701,32 +1701,13 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
-    const result = await odooHttp('GET', '/pwa-admin/pending-tickets')
-    const tickets = result?.data?.tickets || result?.tickets
-    return Array.isArray(tickets) ? tickets.map((row) => ({
-      id: row.id,
-      name: row.name,
-      customer: row.customer || row.partner_id?.[1] || '',
-      total: Number(row.total || row.amount_total || 0),
-      state: row.state || 'sale',
-      date_order: row.date_order || null,
-      warehouse_id: row.warehouse_id || 0,
-    })) : []
+    return normalizePendingTicketsResult(await odooHttp('GET', '/pwa-admin/pending-tickets'))
   }
 
   if (cleanPath === '/pwa-admin/dispatch-ticket' && method === 'POST') {
-    const result = await odooJson('/pwa-admin/dispatch-ticket', {
+    return normalizeDispatchTicketResult(await odooJson('/pwa-admin/dispatch-ticket', {
       order_id: Number(body?.order_id || 0),
-    })
-    const env = result?.result && typeof result.result === 'object' ? result.result : result
-    if (env?.ok === true || env?.success === true) {
-      return { success: true, ok: true, ...(env.data || env) }
-    }
-    return {
-      success: false,
-      ok: false,
-      error: env?.message || env?.error || 'Backend rechazó el despacho',
-    }
+    }))
   }
 
   // ── Analytic accounts (Odoo 18 — account.analytic.account) ──────────────
@@ -7361,7 +7342,8 @@ async function directEntregas(method, path, body) {
     const pickingRows = pickListResponse(await readModelSorted('stock.picking', {
       fields: ['id', 'name', 'state', 'create_date', 'scheduled_date', 'date_done',
         'location_id', 'location_dest_id', 'create_uid', 'gf_route_plan_id',
-        'gf_route_id', 'gf_route_load_kind', 'origin'],
+        'gf_route_id', 'gf_route_load_kind', 'origin',
+        'x_pwa_load_employee_id', 'x_pwa_load_user_id'],
       domain: [
         ['location_id', '=', sourceLocationId],
         ['location_dest_id', 'in', mobileLocationIds],
@@ -7416,7 +7398,12 @@ async function directEntregas(method, path, body) {
         location_dest_id: picking.location_dest_id || null,
         mobile_location_id: picking.location_dest_id || null,
         mobile_location_name: Array.isArray(picking.location_dest_id) ? picking.location_dest_id[1] : '',
-        registered_by_id: picking.create_uid || null,
+        x_pwa_load_employee_id: picking.x_pwa_load_employee_id || null,
+        x_pwa_load_user_id: picking.x_pwa_load_user_id || null,
+        registered_by_id: picking.x_pwa_load_employee_id || picking.create_uid || null,
+        registered_by_name: Array.isArray(picking.x_pwa_load_employee_id)
+          ? picking.x_pwa_load_employee_id[1]
+          : '',
         route_id: picking.gf_route_id || route?.id || null,
         route_plan_id: picking.gf_route_plan_id || null,
         driver_employee_id: driverRef || null,

@@ -713,9 +713,9 @@ Lista completa (≈40 endpoints) en [`src/modules/admin/api.js`](../src/modules/
 | `/pwa-admin/liquidaciones/*` | varios | `gerente_sucursal` (validación final) | Liquidación de jefes de ruta |
 | `/pwa-admin/traspaso-mp/iguala-stock` | GET | Capacidad servidor `traspasoMp` + scope de planta configurado | Inventario MP. Plaza/almacén salen de `ir.config_parameter`; sin config → 403. |
 | `/pwa-admin/traspaso-mp/iguala-transfer` | POST | Misma capacidad/scope | Crea `gf.production.material.issue`. Actor = empleado del token; `issued_by` del payload se ignora. |
-| `/pwa-admin/find-ticket` | GET | Token + `employee.warehouse_id` | Lectura. Ignora warehouse del cliente. |
-| `/pwa-admin/pending-tickets` | GET | Token + `employee.warehouse_id` | Lectura. Scope = almacén del empleado. |
-| `/pwa-admin/dispatch-ticket` | POST | Token + almacén del empleado coincidente | Lock de fila + `validate_all_deliveries`. Actor empleado ≠ usuario técnico. |
+| `/pwa-admin/find-ticket` | GET | Token + capacidad despacho (`dispatch.job_keys`) + almacén operativo | Lectura. El dominio incluye `warehouse_id` desde la búsqueda exacta y la parcial. |
+| `/pwa-admin/pending-tickets` | GET | Token + capacidad despacho + almacén operativo | Lectura. Scope = almacén del empleado, no el query. |
+| `/pwa-admin/dispatch-ticket` | POST | Token + capacidad despacho + almacén coincidente | Lock de fila + `validate_all_deliveries`. Actor empleado ≠ usuario técnico. |
 
 Para gasto general, el comprobante se sube primero a `/pwa/evidence/upload` con
 `context: "expense"`, sin `linked_model` ni `linked_id`. El `attachment_id`

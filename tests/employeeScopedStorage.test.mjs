@@ -7,6 +7,7 @@ import {
   EMPLOYEE_SCOPED_KEYS,
   UNOWNED_LEGACY_KEYS,
   discardUnownedEmployeeScopedKeys,
+  clearOutgoingEmployeeScopedState,
   employeeScopedKey,
   readEmployeeScopedJson,
   writeEmployeeScopedJson,
@@ -178,4 +179,32 @@ test('mapa de reservaciones solo suma filas del empleado y almacén pedidos', ()
   })
   assert.equal(map[50], 7)
   assert.deepEqual(reservationMap({ warehouseId: 94, employeeId: 0 }), {})
+})
+
+test('cambio de identidad 738 → 694 borra claves operativas de 738 y conserva preferencias', () => {
+  const storage = globalThis.localStorage
+  storage.setItem('gf_pt_transfers.v2.738', JSON.stringify([{ employee_id: 738 }]))
+  storage.setItem('gf_pt_receptions.v2.738', JSON.stringify([{ employee_id: 738 }]))
+  storage.setItem('gfsc.packing_local.v3.738', JSON.stringify({ 1: { entries: [] } }))
+  storage.setItem('gf_ui_theme', 'dark')
+  storage.setItem('printer_pref', 'tm-t20')
+
+  clearOutgoingEmployeeScopedState(738, storage)
+
+  assert.equal(storage.getItem('gf_pt_transfers.v2.738'), null)
+  assert.equal(storage.getItem('gf_pt_receptions.v2.738'), null)
+  assert.equal(storage.getItem('gfsc.packing_local.v3.738'), null)
+  assert.equal(storage.getItem('gf_ui_theme'), 'dark')
+  assert.equal(storage.getItem('printer_pref'), 'tm-t20')
+
+  const nextSession = {
+    employee_id: 694,
+    role: 'almacenista_entregas',
+    session_token: 'tok-694',
+  }
+  storage.setItem('gf_session', JSON.stringify(nextSession))
+  const persisted = JSON.parse(storage.getItem('gf_session'))
+  assert.equal(persisted.employee_id, 694)
+  assert.equal(persisted.role, 'almacenista_entregas')
+  assert.equal(storage.getItem(employeeScopedKey(EMPLOYEE_SCOPED_KEYS.transfers, 694)), null)
 })

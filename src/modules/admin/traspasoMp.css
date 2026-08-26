@@ -1,0 +1,23 @@
+.traspaso-mp-unavailable {
+  padding: 32px 0;
+}
+
+.traspaso-mp-unavailable-card {
+  padding: 20px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #dbeff9;
+}
+
+.traspaso-mp-unavailable-title {
+  margin: 0 0 6px;
+  color: #0f2a3d;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.traspaso-mp-unavailable-body {
+  margin: 0;
+  color: #5b7285;
+  line-height: 1.45;
+}

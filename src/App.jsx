@@ -10,7 +10,7 @@ import { readPulseFlagFrom } from './modules/supervisor-ventas/v2/pulso/pulseFla
 import { api } from './lib/api'
 import { isBrandLightSession } from './theme/useBrandPalette'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
-import { discardUnownedEmployeeScopedKeys } from './lib/employeeScopedStorage'
+import { discardUnownedEmployeeScopedKeys, clearOutgoingEmployeeScopedState } from './lib/employeeScopedStorage'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById } from './modules/registry'
 import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
@@ -773,6 +773,10 @@ export default function App() {
     }
     const nextEmpId = next?.employee_id || null
     const prevEmpId = session?.employee_id || null
+    // Al cambiar de ficha, el namespace del empleado saliente no debe quedar.
+    if (prevEmpId && nextEmpId && Number(prevEmpId) !== Number(nextEmpId)) {
+      try { clearOutgoingEmployeeScopedState(prevEmpId) } catch { /* ignore */ }
+    }
     // Claves históricas sin dueño nunca se asignan a la identidad que entra.
     try { discardUnownedEmployeeScopedKeys() } catch { /* ignore */ }
     // Persistir antes de publicar el estado: los efectos hijos (p.ej. Talento)

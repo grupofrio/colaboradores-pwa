@@ -25,3 +25,11 @@ Menú, tarjeta del hub y deep-link de Traspaso MP leen `BACKEND_CAPS.traspasoMp`
 publicado por `GET /pwa-admin/capabilities`. Sin capacidades cargadas o con
 `traspasoMp !== true`, la superficie no aparece. Eso anticipa al servidor; no
 concede autoridad.
+
+El despacho de tickets tampoco usa la navegación como autoridad: Odoo exige
+capacidad (`gf_pwa_admin.dispatch.job_keys`) y almacén operativo.
+
+Al cambiar de `employee_id` en `login()`, se borran las claves namespaced del
+empleado saliente (`gf_pt_transfers.v2.<id>`, `gf_pt_receptions.v2.<id>`,
+`gfsc.packing_local.v3.<id>`) antes de persistir la sesión nueva. Las
+preferencias no sensibles no se tocan.

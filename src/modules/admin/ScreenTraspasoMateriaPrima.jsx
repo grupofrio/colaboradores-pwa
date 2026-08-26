@@ -10,6 +10,7 @@ import { AdminProvider, useAdmin } from './AdminContext'
 import { BACKEND_CAPS } from './adminService.js'
 import { isTraspasoMpNavigationVisible } from '../../lib/navModel.js'
 import AdminShell from './components/AdminShell'
+import './traspasoMp.css'
 
 export default function ScreenTraspasoMateriaPrima() {
   const [sw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
@@ -134,18 +135,15 @@ function TraspasoMPForm() {
   if (!allowed) {
     return (
       <div
+        className="traspaso-mp-unavailable"
         data-origin="traspaso-mp-unavailable"
         data-testid="traspaso-mp-unavailable"
-        style={{ padding: '32px 0' }}
       >
-        <div style={{
-          padding: '20px', borderRadius: TOKENS.radius.lg,
-          background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-        }}>
-          <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '0 0 6px' }}>
+        <div className="traspaso-mp-unavailable-card">
+          <p className="traspaso-mp-unavailable-title">
             Traspaso MP no disponible
           </p>
-          <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0 }}>
+          <p className="traspaso-mp-unavailable-body">
             Esta planta no está en tu alcance o el servidor no publicó la capacidad.
           </p>
         </div>

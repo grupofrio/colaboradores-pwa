@@ -61,3 +61,14 @@ export function rowBelongsToEmployee(row, employeeId) {
   if (!id || !row || typeof row !== 'object') return false
   return Number(row.employee_id) === id
 }
+
+export function clearOutgoingEmployeeScopedState(previousEmployeeId, storage = globalThis.localStorage) {
+  const id = toEmployeeId(previousEmployeeId)
+  if (!id || !storage) return
+  for (const prefix of Object.values(EMPLOYEE_SCOPED_KEYS)) {
+    const key = employeeScopedKey(prefix, id)
+    if (!key) continue
+    try { storage.removeItem(key) } catch { /* ignore */ }
+  }
+}
+
