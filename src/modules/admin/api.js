@@ -794,7 +794,9 @@ export function getTorreRequisitionDetail(id) {
   return api('GET', `/pwa-admin/torre/requisition-detail?id=${id}`)
 }
 
-/** Actualiza líneas: price_unit y/o analytic_distribution. */
+/** Actualiza líneas: price_unit y/o analytic_distribution.
+ *  Transporte mínimo: el backend documental valida token/capacidad/scope.
+ *  Fase B deniega la escritura (Compras = Fase C). */
 export function updateTorreRequisitionLines(poId, lines) {
   return api('POST', '/pwa-admin/torre/requisition-update', { id: poId, lines })
 }

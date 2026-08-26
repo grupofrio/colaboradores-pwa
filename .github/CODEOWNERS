@@ -30,7 +30,7 @@
 /src/modules/torre/**              @yamilestebanh-collab
 /src/lib/roleContext.js            @yamilestebanh-collab
 /src/lib/sessionGuards.js          @yamilestebanh-collab
-/src/lib/effectiveRoles.js         @yamilestebanh-collab
+/src/lib/capabilityContract.js     @yamilestebanh-collab
 /src/lib/api.js                    @yamilestebanh-collab
 /.github/workflows/**              @yamilestebanh-collab
 /scripts/**                        @yamilestebanh-collab

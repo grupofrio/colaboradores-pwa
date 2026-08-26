@@ -1,7 +1,6 @@
-// ─── CompanySelector — dropdown persistente de razón social ─────────────────
-// Componente crítico: vive en el top bar de AdminShell y controla el company_id
-// global del rol. Al cambiar, persiste el valor en el AdminContext y a través
-// de éste en session.company_id → localStorage → headers de api.js.
+// ─── CompanySelector — dropdown local de razón social ───────────────────────
+// Vive en el top bar de AdminShell. El valor es estado del módulo Admin:
+// no reescribe session.company_id, gf_session ni el alcance de Entregas.
 import { useState, useRef, useEffect } from 'react'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'

@@ -92,7 +92,37 @@ export function normalizeSessionRoleContext(session = {}) {
 }
 
 export function getEffectiveJobKeys(session = {}) {
-  return normalizeJobKeys([session?.role || '', ...(session?.additional_job_keys || [])])
+  const extra = Array.isArray(session?.additional_job_keys)
+    ? session.additional_job_keys
+    : session?.additional_roles
+  return normalizeJobKeys([session?.role || '', ...(extra || [])])
+}
+
+export function getAuthorizationJobKeys(session = {}) {
+  const keys = getEffectiveJobKeys(session)
+  if (keys[0] === 'gerente_sucursal') return keys
+  // Un gerente_sucursal adicional no concede autorización ni evade el clamp.
+  return keys.filter((key) => key !== 'gerente_sucursal')
+}
+
+export function authorizationJobKeysFrom(roles = [], session = null) {
+  if (session) return getAuthorizationJobKeys(session)
+  const keys = normalizeJobKeys(roles)
+  if (keys[0] === 'gerente_sucursal') return keys
+  return keys.filter((key) => key !== 'gerente_sucursal')
+}
+
+export function getEffectiveRoles(session = {}) {
+  return getEffectiveJobKeys(session)
+}
+
+export function hasEffectiveRole(session, role) {
+  return getEffectiveJobKeys(session).includes(String(role || '').trim())
+}
+
+export function normalizeAdditionalRoles(input) {
+  if (!Array.isArray(input)) return []
+  return normalizeJobKeys(input)
 }
 
 export function getCompatibleModuleRoles(module, effectiveRoles = []) {

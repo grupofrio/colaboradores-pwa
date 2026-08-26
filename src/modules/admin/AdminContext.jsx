@@ -1,7 +1,6 @@
-// ─── AdminContext — estado global del Auxiliar Administrativo ───────────────
-// Provee los filtros globales (razón social, sucursal, almacén) que todas las
-// pantallas del rol consumen. Persiste company_id en session para que api.js
-// lo lea en headers en cada request al backend.
+// ─── AdminContext — estado del módulo Auxiliar Administrativo ───────────────
+// El selector de compañía es estado LOCAL del módulo. Nunca reescribe
+// session.company_id, gf_session ni el alcance de Entregas.
 //
 // Guards de sesión: si falta warehouse_id o company_id, la app muestra error
 // explícito (ver SessionErrorState) en lugar de trabajar con IDs hardcodeados.
@@ -10,11 +9,14 @@ import { useSession } from '../../App'
 import { COMPANY_LABELS, getCompaniesForSucursal } from '../../tokens'
 import { softWarehouse, softEmployee } from '../../lib/sessionGuards'
 import { buildSessionIdentity } from '../supervisor-ventas/v2/sessionScope'
+import { publishedScope } from '../../lib/capabilityContract.js'
 import {
+  BACKEND_CAPS,
   bootCapabilities,
   invalidateCashShiftCapabilities,
 } from './adminService'
 import { resetCashShiftRequestRegistry } from './cashShiftService'
+import { nextAdminCompanyId } from './adminLocalCompany.js'
 
 const AdminContext = createContext(null)
 
@@ -26,12 +28,13 @@ export function useAdmin() {
 }
 
 export function AdminProvider({ children }) {
-  const { session, updateSession } = useSession()
+  const { session } = useSession()
 
-  const sucursal = session?.sucursal || ''
+  const published = publishedScope(BACKEND_CAPS)
+  const sucursal = published?.plaza_label || ''
   // Soft guards: si no hay warehouse/employee, lo dejamos null para que las
   // pantallas validen y muestren mensaje de error claro al usuario.
-  const warehouseId = softWarehouse(session)
+  const warehouseId = published?.warehouse_id || softWarehouse(session)
   const employeeId = softEmployee(session)
   const employeeName = session?.name || ''
 
@@ -70,23 +73,9 @@ export function AdminProvider({ children }) {
     }
   }, [session, sessionIdentity, employeeToken])
 
-  // Si cambia la sesión externa (logout/login), re-sincroniza
-  useEffect(() => {
-    if (session?.company_id && session.company_id !== companyId) {
-      if (availableCompanies.some(c => c.id === session.company_id)) {
-        setCompanyIdInternal(session.company_id)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.company_id])
-
   const setCompanyId = useCallback((id) => {
-    const num = Number(id)
-    if (!availableCompanies.some(c => c.id === num)) return
-    setCompanyIdInternal(num)
-    // Persistir en session → localStorage → api.js headers
-    if (updateSession) updateSession({ company_id: num })
-  }, [availableCompanies, updateSession])
+    setCompanyIdInternal((current) => nextAdminCompanyId(availableCompanies, current, id))
+  }, [availableCompanies])
 
   const companyLabel = COMPANY_LABELS[companyId] || `ID ${companyId}`
 

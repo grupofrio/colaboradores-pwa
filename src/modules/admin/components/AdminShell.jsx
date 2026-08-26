@@ -14,39 +14,20 @@ import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { useSession } from '../../../App'
 import { getEffectiveJobKeys } from '../../../lib/roleContext'
-import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible } from '../../../lib/navModel.js'
+import { publishedScope } from '../../../lib/capabilityContract.js'
 import { BACKEND_CAPS } from '../adminService.js'
 import {
   filterAdminNavForGerentePilot,
   resolveGerentePilotCapabilities,
 } from '../gerentePilotCaps.js'
 import { NAV_ITEMS } from '../adminNavItems.js'
+import { navItemsForRoles } from '../adminRouteAccess.js'
 import CompanySelector from './CompanySelector'
 import ActivityFeed from './ActivityFeed'
 
 // NAV_ITEMS vive en ../adminNavItems.js: lo comparten el menú y la
 // autorización por subruta (adminRouteAccess.js). Se re-exporta por compatibilidad.
 export { NAV_ITEMS }
-
-/** Filtra NAV_ITEMS por el rol actual. Export para tests y HubV2. */
-// eslint-disable-next-line react-refresh/only-export-components
-export function navItemsForRole(role, capabilities = {}) {
-  if (!role) return []
-  return NAV_ITEMS.filter((item) => (
-    item.roles.includes(role)
-    && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
-    && (item.id !== 'traspaso-mp' || isTraspasoMpNavigationVisible(capabilities))
-  ))
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function navItemsForRoles(roles = [], capabilities = {}) {
-  return NAV_ITEMS.filter((item) => (
-    item.roles.some((role) => roles.includes(role))
-    && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
-    && (item.id !== 'traspaso-mp' || isTraspasoMpNavigationVisible(capabilities))
-  ))
-}
 
 export default function AdminShell({
   activeBlock = 'hub',
@@ -59,8 +40,9 @@ export default function AdminShell({
   hideNavigation = false,
 }) {
   const navigate = useNavigate()
-  const { sucursal, employeeName, capsReady } = useAdmin()
+  const { employeeName, capsReady } = useAdmin()
   const { session } = useSession()
+  const sucursal = publishedScope(BACKEND_CAPS)?.plaza_label || ''
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const typo = useMemo(() => getTypo(sw), [sw])
   const isDesktop = sw >= 1024

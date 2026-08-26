@@ -28,6 +28,7 @@ import { readAttendanceAccess } from '../modules/asistencias/access.js'
 import { readTalentRhAccess } from '../modules/talento/access.js'
 import { readConfiguredVentasIgualaAccessForSession } from '../modules/ventas-iguala/access.js'
 import { hasSupervisorCopilotCapability } from '../modules/supervisor-ventas/v2/sessionProjection.js'
+import { capabilityAllowed, ownCatalogEntry } from './capabilityContract.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
 // Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
@@ -108,7 +109,16 @@ export function isCashShiftNavigationVisible(capabilities = {}) {
 }
 
 export function isTraspasoMpNavigationVisible(capabilities = {}) {
+  if (capabilityAllowed(capabilities, 'materials.issue.iguala')) return true
   return ownCapabilityTrue(capabilities, 'traspasoMp')
+}
+
+export function isLiquidationNavigationVisible(roles = [], capabilities = {}) {
+  const entry = ownCatalogEntry(capabilities, 'liquidation.read.gdl')
+  if (entry) return entry.allowed === true
+  // Compatibilidad temporal: sin contrato v2, mando histórico.
+  const list = Array.isArray(roles) ? roles : []
+  return list.some((role) => role === 'gerente_sucursal' || role === 'direccion_general')
 }
 
 // Ancho del rail según viewport (AppShell reserva exactamente este espacio).

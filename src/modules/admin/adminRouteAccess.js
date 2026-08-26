@@ -16,7 +16,8 @@ import {
   ADMIN_NAV_ACCESS,
   isGerentePilotReadOnly,
 } from './gerentePilotCaps.js'
-import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible } from '../../lib/navModel.js'
+import { authorizationJobKeysFrom } from '../../lib/roleContext.js'
+import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible, isLiquidationNavigationVisible } from '../../lib/navModel.js'
 
 /** Ruta absoluta → roles autorizados, derivado de NAV_ITEMS. */
 export const ADMIN_ROUTE_ROLES = Object.freeze(
@@ -88,10 +89,11 @@ function policyForRoute(route) {
 export function adminRouteAllows(route, effectiveRoles = [], ctx = {}) {
   const policy = policyForRoute(String(route || ''))
   if (!policy) return false
-  if (!Array.isArray(effectiveRoles) || effectiveRoles.length === 0) return false
-  if (!effectiveRoles.some((role) => policy.roles.includes(role))) return false
-
   const session = ctx.session || null
+  const roles = authorizationJobKeysFrom(effectiveRoles, session)
+  if (!Array.isArray(roles) || roles.length === 0) return false
+  if (!roles.some((role) => policy.roles.includes(role))) return false
+
   const capabilities = ctx.capabilities || {}
 
   // Paridad con AdminShell.navItemsForRoles: cierre solo si cash-shift visible.
@@ -100,6 +102,10 @@ export function adminRouteAllows(route, effectiveRoles = [], ctx = {}) {
   }
 
   if (policy.navId === 'traspaso-mp' && !isTraspasoMpNavigationVisible(capabilities)) {
+    return false
+  }
+
+  if (policy.navId === 'liquidaciones' && !isLiquidationNavigationVisible(roles, capabilities)) {
     return false
   }
 
@@ -114,4 +120,21 @@ export function adminRouteAllows(route, effectiveRoles = [], ctx = {}) {
 /** Export for tests — inspect policy (roles + access) for a route. */
 export function adminRoutePolicy(route) {
   return policyForRoute(String(route || ''))
+}
+
+/** Filtra NAV_ITEMS por un rol. Misma decisión que el menú de AdminShell. */
+export function navItemsForRole(role, capabilities = {}) {
+  if (!role) return []
+  return navItemsForRoles([role], capabilities)
+}
+
+/** Filtra NAV_ITEMS por job keys autorizadas. Menú ≡ adminRouteAllows. */
+export function navItemsForRoles(roles = [], capabilities = {}) {
+  const authRoles = authorizationJobKeysFrom(roles, null)
+  return NAV_ITEMS.filter((item) => (
+    item.roles.some((role) => authRoles.includes(role))
+    && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
+    && (item.id !== 'traspaso-mp' || isTraspasoMpNavigationVisible(capabilities))
+    && (item.id !== 'liquidaciones' || isLiquidationNavigationVisible(authRoles, capabilities))
+  ))
 }

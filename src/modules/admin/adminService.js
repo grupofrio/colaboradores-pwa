@@ -25,6 +25,7 @@ import {
   stripExpenseCreateReservedFields,
   unwrapExpenseListEnvelope,
 } from './expenseListEnvelope.js'
+import { emptyCatalog, publishedScope, validateContract } from '../../lib/capabilityContract.js'
 
 // ── Feature caps del backend ────────────────────────────────────────────────
 // Los defaults están en true porque `gf_pwa_admin` ya expone todos estos
@@ -112,6 +113,12 @@ export const BACKEND_CAPS = {
 
   // Piloto Gerente Iguala: fail-closed until GET /pwa-admin/capabilities confirms ON.
   gerenteWritesEnabled: false,
+
+  // Contrato canónico v2. No son flags planos; applyCapabilities los valida aparte.
+  contract_version: '',
+  effective_job_keys: [],
+  published_scope: null,
+  capabilities: null,
 }
 
 const FAIL_CLOSED_CAPABILITY_KEYS = Object.freeze([
@@ -124,8 +131,42 @@ const FAIL_CLOSED_CAPABILITY_KEYS = Object.freeze([
   'traspasoMp',
 ])
 
+const CANONICAL_CONTRACT_KEYS = Object.freeze([
+  'contract_version',
+  'effective_job_keys',
+  'published_scope',
+  'capabilities',
+])
+
+function resetCanonicalContract(code = 'invalid_contract') {
+  BACKEND_CAPS.contract_version = ''
+  BACKEND_CAPS.effective_job_keys = []
+  BACKEND_CAPS.published_scope = null
+  BACKEND_CAPS.capabilities = emptyCatalog(code)
+}
+
+function applyCanonicalContract(safeCaps) {
+  const parsed = validateContract(safeCaps)
+  if (!parsed.ok) {
+    resetCanonicalContract('invalid_contract')
+    return
+  }
+  BACKEND_CAPS.contract_version = parsed.contract.contract_version
+  BACKEND_CAPS.effective_job_keys = Array.isArray(parsed.contract.effective_job_keys)
+    ? parsed.contract.effective_job_keys
+    : []
+  BACKEND_CAPS.published_scope = publishedScope(parsed.contract)
+  BACKEND_CAPS.capabilities = parsed.contract.capabilities
+  if (parsed.contract.requisitionApproval === true) {
+    BACKEND_CAPS.requisitionApproval = true
+  } else if (parsed.contract.requisitionApproval === false) {
+    BACKEND_CAPS.requisitionApproval = false
+  }
+}
+
 function resetFailClosedCapabilities() {
   for (const key of FAIL_CLOSED_CAPABILITY_KEYS) BACKEND_CAPS[key] = false
+  resetCanonicalContract()
 }
 
 let capabilityRequestGeneration = 0
@@ -162,6 +203,7 @@ export function applyCapabilities(caps, session = null) {
   const safeCaps = clampGerentePilotWriteCapabilities(session || readSessionRaw(), caps)
   if (!safeCaps || typeof safeCaps !== 'object') return BACKEND_CAPS
   for (const key of Object.keys(BACKEND_CAPS)) {
+    if (CANONICAL_CONTRACT_KEYS.includes(key)) continue
     if (!Object.prototype.hasOwnProperty.call(safeCaps, key)) continue
     const incoming = safeCaps[key]
     const currentType = typeof BACKEND_CAPS[key]
@@ -175,6 +217,8 @@ export function applyCapabilities(caps, session = null) {
       BACKEND_CAPS[key] = String(incoming)
     } else if (FAIL_CLOSED_CAPABILITY_KEYS.includes(key)) {
       BACKEND_CAPS[key] = incoming === true
+    } else if (currentType === 'object') {
+      continue
     } else {
       BACKEND_CAPS[key] = Boolean(incoming)
     }
@@ -183,6 +227,7 @@ export function applyCapabilities(caps, session = null) {
   if (Array.isArray(runtimeAllowed) && runtimeAllowed.includes('traspaso_mp')) {
     BACKEND_CAPS.traspasoMp = true
   }
+  applyCanonicalContract(safeCaps)
   return BACKEND_CAPS
 }
 

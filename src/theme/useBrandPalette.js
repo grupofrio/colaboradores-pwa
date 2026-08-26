@@ -8,7 +8,7 @@
 //
 // Módulo PURO en su parte decisoria (isBrandLightSession) para poder testearse
 // sin React.
-import { hasEffectiveRole } from '../lib/effectiveRoles.js'
+import { hasEffectiveRole } from '../lib/roleContext.js'
 import { BRAND_LIGHT, BRAND_LIGHT_ROLE } from './brandLight.js'
 
 /** ¿esta sesión ve la identidad clara? Fail-closed: cualquier duda ⇒ oscuro. */
