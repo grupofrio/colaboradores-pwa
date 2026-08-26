@@ -9,21 +9,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
 import { getActiveShift } from '../supervision/api'
 import { getMaterialIssues, stateLabel, lineOf, validateMaterialIssueReceipt, cancelMaterialIssue } from './materialsService'
-import { buildMaterialesNavState, resolveMaterialesBackTo } from './materialsNavigation'
+import { buildMaterialesNavState, resolveMaterialesBackTo, resolveMaterialesRouteBase, resolveMaterialesSurfaceTheme } from './materialsNavigation'
 import { fmtNum, DEFAULT_WAREHOUSE_ID } from './ptService'
 import { logScreenError } from '../shared/logScreenError'
 import { normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
 
 const LINE_ORDER = ['BARRA', 'ROLITO', 'OTRO']
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
-function colorForState(state) {
-  if (state === 'validated') return TOKENS.colors.success
-  if (state === 'rejected')  return TOKENS.colors.error
-  if (state === 'disputed')  return TOKENS.colors.warning
-  if (state === 'reported')  return TOKENS.colors.blue2
-  return TOKENS.colors.textMuted
+function colorForState(state, ui) {
+  if (state === 'validated') return ui.colors.success
+  if (state === 'rejected')  return ui.colors.error
+  if (state === 'disputed')  return ui.colors.warning
+  if (state === 'reported')  return ui.colors.blue2
+  return ui.colors.textMuted
 }
 
 export default function ScreenMaterialesIssue() {
@@ -37,7 +39,10 @@ export default function ScreenMaterialesIssue() {
   // Importante: pasar el rol contextual (no session?.role) para que un
   // operador con rol secundario gerente no sea redirigido a /admin.
   const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt', activeRole || session?.role)
-  const canCreateIssue = activeRole !== 'operador_rolito'
+  const materialesBasePath = resolveMaterialesRouteBase(location.state, '/almacen-pt/materiales', activeRole || session?.role)
+  const surfaceTheme = resolveMaterialesSurfaceTheme(location.state, activeRole || session?.role)
+  const UI = surfaceTheme === 'light' ? TOKENS_LIGHT : TOKENS
+  const canCreateIssue = String(materialesBasePath || '').startsWith('/almacen-pt/materiales')
 
   const [shift, setShift] = useState(null)
   const [items, setItems] = useState([])
@@ -130,18 +135,18 @@ export default function ScreenMaterialesIssue() {
   }, [items])
 
   return (
-    <div style={pageStyle}>
-      <GlobalStyles />
+    <div style={pageStyle(UI)}>
+      <GlobalStyles isLight={surfaceTheme === 'light'} />
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
-        <Header title="Materiales del turno" subtitle={shift?.id ? `Turno #${shift.id}` : ''} onBack={() => navigate(backTo)} onReload={loadData} typo={typo} />
+        <Header title="Materiales del turno" subtitle={shift?.id ? `Turno #${shift.id}` : ''} onBack={() => navigate(backTo)} onReload={loadData} typo={typo} ui={UI} />
 
         {shift?.id && canCreateIssue && (
           <button
-            onClick={() => navigate('/almacen-pt/materiales/crear', {
-              state: buildMaterialesNavState(location.state, '/almacen-pt/materiales', session?.role),
+            onClick={() => navigate(`${materialesBasePath}/crear`, {
+              state: buildMaterialesNavState(location.state, materialesBasePath, activeRole || session?.role),
             })}
             style={{
-              width: '100%', padding: '12px 14px', borderRadius: TOKENS.radius.lg,
+              width: '100%', padding: '12px 14px', borderRadius: UI.radius.lg,
               background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
               color: 'white', fontSize: 14, fontWeight: 700, marginBottom: 12,
               boxShadow: '0 8px 18px rgba(21,73,155,0.25)',
@@ -154,23 +159,23 @@ export default function ScreenMaterialesIssue() {
         )}
 
         {error && (
-          <div style={errorBox}>
-            <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{error}</p>
+          <div style={errorBox(UI)}>
+            <p style={{ ...typo.caption, color: UI.colors.error, margin: 0 }}>{error}</p>
           </div>
         )}
 
         {loading ? (
-          <Loader />
+          <Loader ui={UI} />
         ) : items.length === 0 && !error ? (
-          <div style={{ padding: 24, textAlign: 'center', color: TOKENS.colors.textMuted, ...typo.body }}>
+          <div style={{ padding: 24, textAlign: 'center', color: UI.colors.textMuted, ...typo.body }}>
             No hay materiales entregados para este turno.
           </div>
         ) : (
           groups.map(g => (
             <div key={g.line} style={{ marginTop: 16 }}>
-              <div style={lineHeader}>
-                <span style={{ ...typo.caption, color: TOKENS.colors.textSoft, fontWeight: 700, letterSpacing: '0.08em' }}>{g.line}</span>
-                <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>{g.items.length} material{g.items.length === 1 ? '' : 'es'}</span>
+              <div style={lineHeader(UI)}>
+                <span style={{ ...typo.caption, color: UI.colors.textSoft, fontWeight: 700, letterSpacing: '0.08em' }}>{g.line}</span>
+                <span style={{ ...typo.caption, color: UI.colors.textMuted }}>{g.items.length} material{g.items.length === 1 ? '' : 'es'}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {g.items.map(it => {
@@ -186,22 +191,22 @@ export default function ScreenMaterialesIssue() {
 
                   if (isPendingReceipt) {
                     return (
-                      <div key={issueId} style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+                      <div key={issueId} style={{ ...rowStyle(UI), flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ ...typo.body, color: TOKENS.colors.text, margin: 0, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <p style={{ ...typo.body, color: UI.colors.text, margin: 0, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {it.product_name || it.material_name || '—'}
                             </p>
-                            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
-                              Gerente envió: <b style={{ color: TOKENS.colors.textSoft }}>{fmtNum(it.qty_issued)}</b> {it.uom || ''}
+                            <p style={{ ...typo.caption, color: UI.colors.textMuted, margin: 0, marginTop: 2 }}>
+                              Gerente envió: <b style={{ color: UI.colors.textSoft }}>{fmtNum(it.qty_issued)}</b> {it.uom || ''}
                             </p>
                           </div>
                           <span style={{
                             ...typo.caption,
-                            padding: '3px 8px', borderRadius: TOKENS.radius.pill,
-                            background: `${TOKENS.colors.warning}14`,
-                            color: TOKENS.colors.warning,
-                            border: `1px solid ${TOKENS.colors.warning}40`,
+                            padding: '3px 8px', borderRadius: UI.radius.pill,
+                            background: `${UI.colors.warning}14`,
+                            color: UI.colors.warning,
+                            border: `1px solid ${UI.colors.warning}40`,
                             fontWeight: 700, flexShrink: 0,
                           }}>
                             Por recibir
@@ -213,9 +218,9 @@ export default function ScreenMaterialesIssue() {
                               onClick={() => handleRejectIssue(issueId)}
                               disabled={validatingSubmit}
                               style={{
-                                padding: '10px 12px', borderRadius: TOKENS.radius.md,
-                                background: 'transparent', border: `1px solid ${TOKENS.colors.error}60`,
-                                color: TOKENS.colors.error, fontSize: 13, fontWeight: 700,
+                                padding: '10px 12px', borderRadius: UI.radius.md,
+                                background: 'transparent', border: `1px solid ${UI.colors.error}60`,
+                                color: UI.colors.error, fontSize: 13, fontWeight: 700,
                               }}
                             >
                               Rechazar
@@ -227,7 +232,7 @@ export default function ScreenMaterialesIssue() {
                                 setValidateError('')
                               }}
                               style={{
-                                flex: 1, padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                                flex: 1, padding: '10px 14px', borderRadius: UI.radius.md,
                                 background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
                                 color: 'white', fontSize: 13, fontWeight: 700,
                               }}
@@ -237,7 +242,7 @@ export default function ScreenMaterialesIssue() {
                           </div>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <label style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>
+                            <label style={{ ...typo.caption, color: UI.colors.textSoft }}>
                               ¿Cuántas {it.uom || 'unidades'} recibiste realmente?
                             </label>
                             <input
@@ -248,23 +253,23 @@ export default function ScreenMaterialesIssue() {
                               onChange={e => setQtyReceived(e.target.value)}
                               placeholder={`${fmtNum(it.qty_issued)} (propuesto)`}
                               style={{
-                                padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                                background: 'rgba(255,255,255,0.05)',
-                                border: `1px solid ${TOKENS.colors.border}`,
-                                color: 'white', fontSize: 16, fontWeight: 600, outline: 'none',
+                                padding: '10px 14px', borderRadius: UI.radius.md,
+                                background: surfaceTheme === 'light' ? UI.colors.surface : 'rgba(255,255,255,0.05)',
+                                border: `1px solid ${UI.colors.border}`,
+                                color: UI.colors.text, fontSize: 16, fontWeight: 600, outline: 'none',
                               }}
                             />
                             {validateError && (
-                              <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{validateError}</p>
+                              <p style={{ ...typo.caption, color: UI.colors.error, margin: 0 }}>{validateError}</p>
                             )}
                             <div style={{ display: 'flex', gap: 8 }}>
                               <button
                                 onClick={() => { setValidatingId(null); setQtyReceived(''); setValidateError('') }}
                                 disabled={validatingSubmit}
                                 style={{
-                                  flex: 1, padding: '10px', borderRadius: TOKENS.radius.md,
-                                  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                                  color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 600,
+                                  flex: 1, padding: '10px', borderRadius: UI.radius.md,
+                                  background: UI.colors.surface, border: `1px solid ${UI.colors.border}`,
+                                  color: UI.colors.textSoft, fontSize: 13, fontWeight: 600,
                                 }}
                               >
                                 Cancelar
@@ -273,8 +278,8 @@ export default function ScreenMaterialesIssue() {
                                 onClick={() => handleValidateReceipt(issueId)}
                                 disabled={validatingSubmit || !(Number(qtyReceived) > 0)}
                                 style={{
-                                  flex: 2, padding: '10px', borderRadius: TOKENS.radius.md,
-                                  background: validatingSubmit ? TOKENS.colors.surface : 'linear-gradient(90deg, #15499B, #2B8FE0)',
+                                  flex: 2, padding: '10px', borderRadius: UI.radius.md,
+                                  background: validatingSubmit ? UI.colors.surface : 'linear-gradient(90deg, #15499B, #2B8FE0)',
                                   color: 'white', fontSize: 13, fontWeight: 700,
                                   opacity: (validatingSubmit || !(Number(qtyReceived) > 0)) ? 0.5 : 1,
                                 }}
@@ -291,27 +296,27 @@ export default function ScreenMaterialesIssue() {
                   return (
                   <button
                     key={issueId}
-                    onClick={() => canReport && navigate(`/almacen-pt/materiales/report/${issueId}`, {
-                      state: buildMaterialesNavState({ ...location.state, issue: it }, '/almacen-pt/materiales', session?.role),
+                    onClick={() => canReport && navigate(`${materialesBasePath}/report/${issueId}`, {
+                      state: buildMaterialesNavState({ ...location.state, issue: it }, materialesBasePath, activeRole || session?.role),
                     })}
-                    style={{ ...rowStyle, opacity: canReport ? 1 : 0.7, cursor: canReport ? 'pointer' : 'default' }}
+                    style={{ ...rowStyle(UI), opacity: canReport ? 1 : 0.7, cursor: canReport ? 'pointer' : 'default' }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ ...typo.body, color: TOKENS.colors.text, margin: 0, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p style={{ ...typo.body, color: UI.colors.text, margin: 0, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {it.product_name || it.material_name || '—'}
                       </p>
-                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
-                        Entregado: <b style={{ color: TOKENS.colors.textSoft }}>{fmtNum(it.qty_issued)}</b> {it.uom || ''}
+                      <p style={{ ...typo.caption, color: UI.colors.textMuted, margin: 0, marginTop: 2 }}>
+                        Entregado: <b style={{ color: UI.colors.textSoft }}>{fmtNum(it.qty_issued)}</b> {it.uom || ''}
                         {it.qty_used != null && <> · Usado: <b>{fmtNum(it.qty_used)}</b></>}
                         {it.qty_remaining != null && <> · Sobrante: <b>{fmtNum(it.qty_remaining)}</b></>}
                       </p>
                     </div>
                     <span style={{
                       ...typo.caption,
-                      padding: '3px 8px', borderRadius: TOKENS.radius.pill,
-                      background: `${colorForState(displayState)}14`,
-                      color: colorForState(displayState),
-                      border: `1px solid ${colorForState(displayState)}40`,
+                      padding: '3px 8px', borderRadius: UI.radius.pill,
+                      background: `${colorForState(displayState, UI)}14`,
+                      color: colorForState(displayState, UI),
+                      border: `1px solid ${colorForState(displayState, UI)}40`,
                       fontWeight: 700, flexShrink: 0, marginLeft: 8,
                     }}>
                       {stateLabel(displayState)}
@@ -331,53 +336,62 @@ export default function ScreenMaterialesIssue() {
 }
 
 // Shared styles and small components
-const pageStyle = {
-  minHeight: '100dvh',
-  background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
-  paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)',
+function pageStyle(ui) {
+  return {
+    minHeight: '100dvh',
+    background: `linear-gradient(160deg, ${ui.colors.bg0} 0%, ${ui.colors.bg1} 50%, ${ui.colors.bg2} 100%)`,
+    paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)',
+  }
 }
-const errorBox = {
-  padding: 10, borderRadius: TOKENS.radius.md, marginBottom: 12,
-  background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
+function errorBox(ui) {
+  return {
+    padding: 10, borderRadius: ui.radius.md, marginBottom: 12,
+    background: ui.colors.errorSoft, border: `1px solid ${ui.colors.error}40`,
+  }
 }
-const lineHeader = {
-  padding: '8px 12px', borderRadius: TOKENS.radius.sm,
-  background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
-  display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6,
+function lineHeader(ui) {
+  return {
+    padding: '8px 12px', borderRadius: ui.radius.sm,
+    background: ui.colors.surfaceSoft, border: `1px solid ${ui.colors.border}`,
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6,
+  }
 }
-const rowStyle = {
-  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-  borderRadius: TOKENS.radius.md, textAlign: 'left', width: '100%',
-  background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+function rowStyle(ui) {
+  return {
+    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+    borderRadius: ui.radius.md, textAlign: 'left', width: '100%',
+    background: ui.glass.panel, border: `1px solid ${ui.colors.border}`,
+  }
 }
 
-function GlobalStyles() {
+function GlobalStyles({ isLight = false }) {
   return (
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
       * { font-family: 'DM Sans', sans-serif; box-sizing: border-box; }
       button { border: none; background: none; cursor: pointer; }
       input, textarea { font-family: 'DM Sans', sans-serif; }
+      input::placeholder, textarea::placeholder { color: ${isLight ? '#5B7285' : 'rgba(255,255,255,0.6)'}; }
       @keyframes spin { to { transform: rotate(360deg); } }
     `}</style>
   )
 }
 
-function Header({ title, subtitle, onBack, onReload, typo }) {
+function Header({ title, subtitle, onBack, onReload, typo, ui }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-      <button onClick={onBack} style={iconBtn}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <button onClick={onBack} style={iconBtn(ui)}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={ui.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
         </svg>
       </button>
       <div style={{ flex: 1 }}>
-        <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>{title}</span>
-        {subtitle && <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{subtitle}</p>}
+        <span style={{ ...typo.title, color: ui.colors.textSoft }}>{title}</span>
+        {subtitle && <p style={{ ...typo.caption, color: ui.colors.textMuted, margin: 0, marginTop: 2 }}>{subtitle}</p>}
       </div>
       {onReload && (
-        <button onClick={onReload} style={iconBtn}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <button onClick={onReload} style={iconBtn(ui)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={ui.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
           </svg>
         </button>
@@ -386,16 +400,18 @@ function Header({ title, subtitle, onBack, onReload, typo }) {
   )
 }
 
-function Loader() {
+function Loader({ ui }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-      <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 32, height: 32, border: `2px solid ${ui.colors.border}`, borderTop: `2px solid ${ui.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
     </div>
   )
 }
 
-const iconBtn = {
-  width: 38, height: 38, borderRadius: TOKENS.radius.md,
-  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+function iconBtn(ui) {
+  return {
+    width: 38, height: 38, borderRadius: ui.radius.md,
+    background: ui.colors.surface, border: `1px solid ${ui.colors.border}`,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  }
 }

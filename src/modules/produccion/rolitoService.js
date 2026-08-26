@@ -411,7 +411,7 @@ export function getNextAction(shift, cycles, checklist, packing = [], bagMateria
       action: 'need_materials',
       label: 'Espera bolsa',
       description: 'No hay bolsa disponible en el turno para iniciar produccion',
-      route: '/almacen-pt/materiales',
+      route: '/produccion/materiales',
       urgency: 'required',
     }
   }

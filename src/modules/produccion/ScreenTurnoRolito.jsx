@@ -394,7 +394,7 @@ export default function ScreenTurnoRolito() {
                 disabled={!!activeCycle || totalBagsAvailable <= 0}
                 disabledMsg={activeCycle ? 'Hay producción activa' : 'No hay bolsa disponible'} />
               <ActionButton label="Materiales" icon={'\uD83D\uDCE6'} color={TOKENS_LIGHT.colors.warning}
-                onClick={() => navigate('/almacen-pt/materiales', { state: { backTo: '/produccion' } })} typo={typo} />
+                onClick={() => navigate('/produccion/materiales', { state: { backTo: '/produccion' } })} typo={typo} />
               <ActionButton label="Empaque" icon={'\uD83D\uDCE6'} color={TOKENS_LIGHT.colors.success}
                 onClick={() => navigate('/produccion/empaque')} typo={typo} />
               <ActionButton label="Reportar problema" icon={'\u26A0'} color={TOKENS_LIGHT.colors.warning}

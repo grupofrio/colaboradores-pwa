@@ -855,6 +855,10 @@ export default function App() {
             <Route path="/produccion/transformacion" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenTransformacion /></ProductionOperatorRoute></ModuleRoleRoute>} />
             <Route path="/produccion/tanque" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenTanqueLista /></ProductionOperatorRoute></ModuleRoleRoute>} />
             <Route path="/produccion/tanque/:machineId" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenTanque /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/materiales" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenMaterialesIssue /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/materiales/crear" element={<Navigate to="/produccion/materiales" replace />} />
+            <Route path="/produccion/materiales/report/:issueId" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenMaterialesReport /></ProductionOperatorRoute></ModuleRoleRoute>} />
+            <Route path="/produccion/materiales/reconciliar" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenMaterialesReconcile /></ProductionOperatorRoute></ModuleRoleRoute>} />
             <Route path="/produccion/incidencia" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenIncidenciaRolito /></ProductionOperatorRoute></ModuleRoleRoute>} />
             <Route path="/produccion/cierre" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenCierreRolito /></ProductionOperatorRoute></ModuleRoleRoute>} />
             <Route path="/produccion/declaracion-bolsas" element={<ModuleRoleRoute moduleId="registro_produccion"><ProductionOperatorRoute><ScreenDeclaracionBolsas /></ProductionOperatorRoute></ModuleRoleRoute>} />

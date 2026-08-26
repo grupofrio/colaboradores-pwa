@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { getMyShift, getTransformationProducts, createTransformation } from './api'
 import { validateTransformBalance } from './productionRules'
 
@@ -138,7 +139,7 @@ export default function ScreenTransformacion() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -147,7 +148,7 @@ export default function ScreenTransformacion() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`, borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -304,13 +305,13 @@ export default function ScreenTransformacion() {
 
 const inputStyle = {
   width: '100%', padding: '10px 12px', borderRadius: 14,
-  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-  color: 'white', fontSize: 15, fontWeight: 600, outline: 'none',
+  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+  color: TOKENS.colors.text, fontSize: 15, fontWeight: 600, outline: 'none',
 }
 
 const selectStyle = {
   ...inputStyle, appearance: 'none',
-  backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'10\' height=\'6\' viewBox=\'0 0 10 6\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M1 1L5 5L9 1\' stroke=\'rgba(255,255,255,0.4)\' stroke-width=\'1.5\' stroke-linecap=\'round\'/%3E%3C/svg%3E")',
+  backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'10\' height=\'6\' viewBox=\'0 0 10 6\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M1 1L5 5L9 1\' stroke=\'%23475569\' stroke-width=\'1.5\' stroke-linecap=\'round\'/%3E%3C/svg%3E")',
   backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center',
   paddingRight: 32,
 }

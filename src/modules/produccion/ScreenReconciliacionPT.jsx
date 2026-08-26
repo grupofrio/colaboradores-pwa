@@ -9,7 +9,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import {
   DEFAULT_WAREHOUSE_ID,
   createScrap,
@@ -20,6 +22,8 @@ import {
   getTodayTransfers,
 } from '../almacen-pt/ptService'
 import { logScreenError } from '../shared/logScreenError'
+
+const TOKENS = BRAND_TOKENS_LIGHT
 
 const FALLBACK_REASONS = [
   { id: 'damage', name: 'Roto / danado' },
@@ -33,6 +37,7 @@ export default function ScreenReconciliacionPT() {
   const { session } = useSession()
   const navigate = useNavigate()
   const location = useLocation()
+  const _useLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role) || isBrandLightSession(session)
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
@@ -189,7 +194,7 @@ export default function ScreenReconciliacionPT() {
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
           <button onClick={() => navigate(backTo)} style={circleButtonStyle()}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -208,7 +213,7 @@ export default function ScreenReconciliacionPT() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 70 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`, borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <>
@@ -237,7 +242,7 @@ export default function ScreenReconciliacionPT() {
               </div>
             )}
 
-            <div style={{ position: 'sticky', bottom: 0, padding: '14px 0 18px', background: 'linear-gradient(180deg, rgba(5,14,25,0) 0%, rgba(5,14,25,0.96) 35%)' }}>
+            <div style={{ position: 'sticky', bottom: 0, padding: '14px 0 18px', background: 'linear-gradient(180deg, rgba(240,249,255,0) 0%, rgba(240,249,255,0.96) 35%)' }}>
               <button
                 onClick={handleSave}
                 disabled={saving || rows.length === 0}

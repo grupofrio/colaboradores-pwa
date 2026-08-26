@@ -2,6 +2,14 @@ function isSafeAppPath(value) {
   return typeof value === 'string' && value.startsWith('/')
 }
 
+export function defaultMaterialesRouteForRole(role, fallback = '/almacen-pt/materiales') {
+  const normalized = String(role || '').trim()
+  if (['operador_barra', 'operador_rolito', 'auxiliar_produccion'].includes(normalized)) {
+    return '/produccion/materiales'
+  }
+  return fallback
+}
+
 export function defaultMaterialesBackToForRole(role, fallback = '/almacen-pt') {
   const normalized = String(role || '').trim()
   if (['operador_barra', 'operador_rolito', 'auxiliar_produccion'].includes(normalized)) {
@@ -25,9 +33,24 @@ export function resolveMaterialesBackTo(state, fallback = '/almacen-pt', role = 
   return defaultMaterialesBackToForRole(role, fallback)
 }
 
+export function resolveMaterialesRouteBase(state, fallback = '/almacen-pt/materiales', role = '') {
+  if (isSafeAppPath(state?.materialesBasePath)) return state.materialesBasePath
+  return defaultMaterialesRouteForRole(role, fallback)
+}
+
+export function resolveMaterialesSurfaceTheme(state, role = '', fallback = '/almacen-pt/materiales') {
+  const basePath = resolveMaterialesRouteBase(
+    state,
+    defaultMaterialesRouteForRole(role, fallback),
+    role,
+  )
+  return String(basePath || '').startsWith('/produccion/materiales') ? 'light' : 'dark'
+}
+
 export function buildMaterialesNavState(state = {}, fallback = '/almacen-pt', role = '') {
   return {
     ...state,
     backTo: resolveMaterialesBackTo(state, fallback, role),
+    materialesBasePath: resolveMaterialesRouteBase(state, fallback, role),
   }
 }
