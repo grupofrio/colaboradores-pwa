@@ -54,12 +54,19 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
     // árbol de rutas exclusivo de esos 3 roles, tema claro incondicional desde
     // 2026-08-19 (reemplaza el hack de filter:invert() que causaba el bug de
     // texto ilegible). Ver ADMIN_THEME_SCOPE_STYLE en adminTheme.js.
+    //
+    // modules/produccion/**: superficie operativa exclusiva del módulo
+    // `registro_produccion`. Desde 2026-08-26 varias vistas de operación
+    // (Rolito/Barra/materiales del turno) adoptan la identidad clara de forma
+    // intencional. Siguen detrás de rutas protegidas del módulo de producción,
+    // así que no exponen el tema claro a superficies compartidas.
     if (
       f.startsWith('modules/supervisor-ventas/')
       || f.startsWith('modules/gerente/v2/')
       || f === 'modules/gerente/ScreenCopilotoGerencial.jsx'
       || f === 'modules/ventas-iguala/ScreenVentasIguala.jsx'
       || f.startsWith('modules/admin/')
+      || f.startsWith('modules/produccion/')
       || f.startsWith('theme/')
     ) continue
 
@@ -68,11 +75,12 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
     // Importarlo a secas dejaría a producción/almacén con la paleta equivocada.
     const src = readFileSync(path.join(SRC, f), 'utf8')
     // Vale preguntar por el rol directamente (`isBrandLightSession`) o a través
-    // de `resolvePalette(session, …)`, que es el helper que envuelve a esa misma
-    // función y devuelve además la paleta. Lo que NO vale es importar el tema
-    // claro a secas: eso dejaría a producción/almacén con la paleta equivocada.
+    // de helpers que envuelven esa decisión (`resolvePalette(session, …)`,
+    // `isGerenteBrandSurface`, `resolveMaterialesSurfaceTheme`). Lo que NO vale
+    // es importar el tema claro a secas: eso dejaría a producción/almacén con
+    // la paleta equivocada.
     assert.match(
-      src, /isBrandLightSession|resolvePalette\(session|isGerenteBrandSurface/,
+      src, /isBrandLightSession|resolvePalette\(session|isGerenteBrandSurface|resolveMaterialesSurfaceTheme/,
       `${f} es compartido y adopta el tema claro sin conmutar por rol`,
     )
     assert.match(
