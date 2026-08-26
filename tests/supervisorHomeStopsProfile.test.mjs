@@ -149,7 +149,7 @@ test('el perfil conmuta el tema por rol y deja el oscuro como default', () => {
   const src = PERFIL()
   // Misma función que ya conmuta la navegación global: si un rol deja de ser
   // claro allá, aquí cambia solo. No hay una segunda lista de roles.
-  assert.match(src, /isGerenteBrandSurface\(session\)/, 'decide por rol en runtime')
+  assert.match(src, /isSharedLightSurfaceSession\(session\)/, 'decide por helper compartido en runtime')
   assert.match(src, /const DARK_TOKENS = \{/, 'el tema oscuro sigue siendo un objeto propio')
   // El default del contexto es OSCURO: montar un componente fuera del árbol no
   // puede caer en claro por accidente.

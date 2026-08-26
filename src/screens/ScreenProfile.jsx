@@ -4,7 +4,7 @@ import { useSession } from "../App";
 import { apiGet as _apiGet, apiPost as _apiPost, apiPatch as _apiPatch } from "../lib/api";
 import { runLogout } from "../lib/logout";
 import { BRAND_TOKENS } from "../theme/brandTokens";
-import { isGerenteBrandSurface } from "../theme/gerenteBrandSurface.js";
+import { isSharedLightSurfaceSession } from "../theme/sharedLightSurface.js";
 import { MOBILE_NAV_HEIGHT, DESKTOP_MIN } from "../lib/navModel";
 
 /* ============================================================================
@@ -676,9 +676,8 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
   const [winH, setWinH] = useState(window.innerHeight);
   const navigate = useNavigate();
   const { logout, session } = useSession();
-  // `Yo` comparte la misma superficie clara de gerente que Home y Brief.
-    const light = isGerenteBrandSurface(session)
-      || ["operador_rolito", "operador_barra", "auxiliar_produccion", "supervisor_produccion", "almacenista_entregas", "jefe_ruta", "auxiliar_ruta", "favy_cedis"].includes(session?.role);
+  // `Yo` comparte exactamente el mismo selector de superficie clara que Home/Nav.
+  const light = isSharedLightSurfaceSession(session);
   const theme = useMemo(
     () => ({ t: light ? BRAND_TOKENS : DARK_TOKENS, s: light ? SKINS.light : SKINS.dark, light }),
     [light],

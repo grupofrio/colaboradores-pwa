@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
 import TransformationScreen from '../transformaciones/TransformationScreen'
 import { getDaySummary, DEFAULT_WAREHOUSE_ID } from './ptService'
 import { useSession } from '../../App'
 import { logScreenError } from '../shared/logScreenError'
+import { ALMACEN_PT_TOKENS as TOKENS } from './ptLightTheme'
 
 export default function ScreenTransformacionPT() {
   const { session } = useSession()
@@ -48,7 +49,7 @@ export default function ScreenTransformacionPT() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             marginBottom: 20,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>

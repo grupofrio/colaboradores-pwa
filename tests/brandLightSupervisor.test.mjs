@@ -84,11 +84,11 @@ test('ScreenHome hace early-return SOLO tras isBrandLightSession', () => {
   assert.match(src, /if \(isBrandLightSession\(session\)\) \{[\s\S]*?<SupervisorVentasHome/,
     'la portada clara de supervisión vive detrás de SU gate de rol exclusivo')
   // El render genérico (compartido por el resto de roles) sigue existiendo
-  // tal cual, y TOKENS (oscuro) sigue siendo una de sus dos ramas posibles —
-  // Gerente de sucursal (piloto) es la única que conmuta a BRAND_TOKENS ahí,
-  // vía `lightHome = isGerenteBrandSurface(session)`.
+  // tal cual, y TOKENS (oscuro) sigue siendo una de sus dos ramas posibles.
+  // La decisión clara de esa cáscara ya no vive en una lista inline: sale de
+  // un helper explícito para superficies compartidas (Home/Nav).
   assert.ok(src.includes('linear-gradient(160deg, ${T.colors.bg0}'), 'la portada genérica sigue pintándose')
-  assert.match(src, /const\s+lightHome\s*=\s*isGerenteBrandSurface\(session\)/, 'Gerente conmuta por rol, no por import fijo')
+  assert.match(src, /const\s+lightHome\s*=\s*isSharedLightSurfaceSession\(session\)/, 'la cáscara compartida conmuta por helper explícito')
   assert.match(src, /const\s+T\s*=\s*lightHome\s*\?\s*BRAND_TOKENS\s*:\s*TOKENS/, 'el resto de roles conserva TOKENS oscuro')
 })
 

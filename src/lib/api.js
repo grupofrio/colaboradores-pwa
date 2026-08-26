@@ -167,6 +167,11 @@ function getCompanyId() {
   return Number(session.company_id || 0) || 0
 }
 
+function usesEmployeeBearerAuth(path = '') {
+  const clean = String(path || '').split('?')[0]
+  return clean.startsWith('/gf/logistics/api/employee/')
+}
+
 function isBypass() {
   return getSession()._bypass === true
 }
@@ -215,18 +220,23 @@ function buildBaseHeaders(path = '') {
   const headers = {
     'Content-Type': 'application/json',
   }
+  const employeeBearerOnly = usesEmployeeBearerAuth(path)
   const token = getToken()
-  if (token) headers.Authorization = `Bearer ${token}`
+  const employeeToken = getEmployeeToken()
+  if (employeeBearerOnly) {
+    if (employeeToken) headers.Authorization = `Bearer ${employeeToken}`
+  } else if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
   // pwa-admin/* goes through the Vercel proxy that injects ODOO_PWA_SERVICE_API_KEY.
   // Never attach a client/session Api-Key on those paths — it is not authority
   // and a rejected key can leak into Odoo error HTML ("The key … is not allowed").
   const clean = String(path || '').split('?')[0]
-  if (!clean.startsWith('/pwa-admin/') && !clean.includes('/pwa-admin/')) {
+  if (!employeeBearerOnly && !clean.startsWith('/pwa-admin/') && !clean.includes('/pwa-admin/')) {
     const apiKey = getApiKey()
     if (apiKey) headers['Api-Key'] = apiKey
   }
-  const employeeToken = getEmployeeToken()
-  if (employeeToken) headers['X-GF-Employee-Token'] = employeeToken
+  if (!employeeBearerOnly && employeeToken) headers['X-GF-Employee-Token'] = employeeToken
   return headers
 }
 

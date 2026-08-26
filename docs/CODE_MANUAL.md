@@ -1227,7 +1227,7 @@ Para reactivar, según comentarios y BACKEND_TODO:
 |----------|-------|
 | Framework detectado | Vite (auto) |
 | Build | `npm run build` → `dist/` |
-| Rewrites | `/api-n8n/*` → `https://n8n.grupofrio.mx/webhook/*`; `/api-odoo/*` → `https://grupofrio.odoo.com/api/*`; `/odoo-api/*` → `https://grupofrio.odoo.com/*`. SPA fallback a `/index.html` excepto `/assets`, `/icons`, `/manifest`. |
+| Rewrites | `/api-n8n/*` → `https://n8n.grupofrio.mx/webhook/*`; `/api-odoo/*` → `https://grupofrio-gf.odoo.com/api/*`; `/odoo-api/gf/salesops/*` → función interna `api/salesops` que inyecta `GF_SALESOPS_TOKEN` y reenvía a `https://grupofrio-gf.odoo.com/gf/salesops/*`; resto de `/odoo-api/*` → `https://grupofrio-gf.odoo.com/*`. SPA fallback a `/index.html` excepto `/assets`, `/icons`, `/manifest`. |
 | Headers | `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: geolocation=(), microphone=(self), camera=()` |
 | Cache | `/assets/*` immutable 1 año, `/icons/*` 1 día |
 | Dominio público | `colaboradores.grupofrio.mx`. **URL pública pendiente de verificación runtime por Yamil.** |
@@ -1242,7 +1242,7 @@ Para reactivar, según comentarios y BACKEND_TODO:
 | `VITE_N8N_VOICE_WEBHOOK_URL` | solo si voice activo | sí | `VoiceInputButton.jsx:40` | `https://n8n.grupofrio.mx/webhook/voice-intake` |
 | `VITE_N8N_VOICE_FEEDBACK_URL` | solo si voice activo | sí | `voiceFeedback.js:4` | `https://n8n.grupofrio.mx/webhook/voice-feedback` |
 | `VITE_N8N_VOICE_TOKEN` | solo si voice activo | sí | `VoiceInputButton.jsx:41`, `voiceFeedback.js:5` | (rotar con `scripts/voice/init_token.mjs`) |
-| `VITE_ODOO_URL` | sí | sí | `vite.config.js` proxy, `ScreenSurveys.jsx` | `https://grupofrio.odoo.com` |
+| `VITE_ODOO_URL` | sí | sí | `vite.config.js` proxy genérico, `ScreenSurveys.jsx` | `https://grupofrio-gf.odoo.com` |
 | `GF_SALESOPS_TOKEN` | **requerida en Vercel** para producción | **no** | `api/salesops.js` | Secreto compartido usado por los endpoints `/gf/salesops/*`; Vercel lo inyecta server-side y nunca se incluye en el bundle, sesión ni login. Si falta o no coincide con Odoo, el endpoint responde `UNAUTHORIZED`. La autorización por rol se deriva del header `X-GF-Employee-Token` (ver ADR-08). |
 | `VITE_METABASE_URL` | sí | sí | `ScreenDashboardGerente.jsx`, `ScreenDashboardVentas.jsx` | `https://bi.grupofrio.mx` |
 | `VITE_WA_PHONE_ID_OPERACIONES` | informativo | sí (referencia) | NO se usa programáticamente en `src/` | (ID línea operaciones) |
@@ -1296,7 +1296,7 @@ npm test
 
 ### Troubleshooting frecuente
 
-1. **"Respuesta vacía del servidor" al login.** Verificar que `VITE_ODOO_URL` apunte a `grupofrio.odoo.com` y que el navegador no esté bloqueando cookies cross-site del proxy de Vercel/Vite.
+1. **"Respuesta vacía del servidor" al login.** Verificar que `VITE_ODOO_URL` apunte a `grupofrio-gf.odoo.com` y que el navegador no esté bloqueando cookies cross-site del proxy de Vercel/Vite.
 2. **CORS errors en dev.** Asegurarse de que el dev server proxea (no acceder directo a `https://grupofrio.odoo.com`). Las rutas a usar son `/odoo-api/*`, `/api-odoo/*`, `/api-n8n/*`.
 3. **Error `Permissions-Policy: microphone` al usar voz.** El header de Vercel permite `microphone=(self)`. En localhost debe funcionar; si no, verificar permisos del navegador para `localhost:5173`.
 4. **Sesión que no persiste al recargar.** Es probable que `exp` esté en el pasado (sesión expirada — App.jsx la purga). Volver a loggearse.
@@ -1571,7 +1571,7 @@ Una entrada por trampa: síntoma → causa → fix.
 
 - **Síntoma:** Almacenista Entregas presiona "Ejecutar carga" y el endpoint responde 401.
 - **Causa:** `GF_SALESOPS_TOKEN` falta o no coincide con `gf_salesops.api_token` en Odoo.
-- **Fix:** Configurar `GF_SALESOPS_TOKEN` como secreto de Production en Vercel Project Settings → Environment Variables. El proxy la agrega server-side; el navegador no debe enviarla.
+- **Fix:** Configurar `GF_SALESOPS_TOKEN` como secreto de Production en Vercel Project Settings → Environment Variables. En local, el proxy de Vite para `/odoo-api/gf/salesops/*` también debe correr con ese valor y apuntar a `https://grupofrio-gf.odoo.com`. El navegador no debe enviarla.
 
 ---
 
@@ -1647,5 +1647,6 @@ Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_s
 | 2026-07-28 | Codex (cortes POS por turno) | §6.6 documenta alcance autoritativo, periodos manuales, snapshots, evidencia, idempotencia, concurrencia e invariantes. §7.4 agrega endpoints/capacidades Noche-Día y separa Legacy. §12.4 fija el orden de upgrade backend-first y rollback antes/después de activación. El manual por rol añade la operación completa de Angy. |
 | 2026-04-27 | Claude (auto-generado, review por Yamil) | Generación inicial. Cubre 18 secciones, 162+ endpoints, 9 roles operativos + 7 fuera de scope, 5 diagramas Mermaid embebidos. Branch: `docs/code-manual-initial`. Necesita review humano antes de considerarse fuente única de verdad. |
 | 2026-04-27 | Claude (verificación P1 + ajustes scope) | Reescritura de §8 a 11 roles operativos (9 primarios + 2 secundarios `auxiliar_produccion` y `auxiliar_ruta`). §8.12 reducida a 5 roles fuera de scope. Matriz Mermaid §4.4 actualizada con 2 nuevos nodos. §12 actualizada con dominio real `colaboradores-pwa.vercel.app`. §7.7 anota que `gf.inventory.posting` vive en `gf_production_ops` y que tiene 56.2% records en error en producción al momento de la auditoría. |
+| 2026-08-26 | Codex | Corrección documental y de frontend tras verificación backend: `gf_saleops/*` mantiene hoy un contrato mixto. PT, Warehouse, Supervisor V2 y Gerente V2 siguen usando `X-GF-Employee-Token`; rutas nuevas puntuales pueden exigir `Authorization: Bearer <gf_employee_token>`. Se restauró el transporte predominante del frontend y se documentó la coexistencia de ambos contratos. |
 | 2026-05-05 | Claude (Fase 4 — cierre del ciclo de seguridad/inventario) | §4.3 reescrito: el sistema NO usa JWT, los tokens reales son opacos (`gf_employee_token` en BD y secreto estático de SalesOps). §6 actualiza modelo de sesión. §7.7 cierra el aviso de bloqueador en `/pwa-pt/reception-create`. §8.6 (Almacenista PT) marca G013 cerrado y referencia G026 con la mitigación preventiva (`setup-plantas-produccion.md` en repo backend). §9.1 y §12.2 incorporan referencia obligatoria al setup de plantas. ADR-03 corregido para reflejar diagnóstico real del session_token. **Nuevo ADR-08:** autorización en `gf_saleops` derivada de `X-GF-Employee-Token`, no de payload, con flag `require_employee_token=True` en producción desde 2026-05-05. §15 actualiza gotcha G15.6 (gf.inventory.posting resuelto) y agrega G15.11 (privilege escalation resuelto). §16 reordena top 10 sin G002/G013. §17 expande glosario con definiciones precisas de `gf_employee_token`, secreto SalesOps y `session_token`. |
 | 2026-04-27 | Claude (actualización post-fixes operativos PR #21–#29) | Revisión incremental tras los fixes operativos ya en `main`. **§2 estado actual:** entregas/ruta/supervisor-ventas con QA PASS reciente y rangos de completitud actualizados. **§7.8 `/pwa-entregas/*`:** tabla detallada con `load-execute` (envelope gf_saleops, hoy autenticado por proxy server-side), `confirm-load` (alias legacy), `returns`/`return-accept` (modelo `gf.route.stop.line`), `scrap-create` (defensa `ok:false`), `live-inventory` (`available = quantity - reserved_quantity`). **§7.9 `/pwa-ruta/*`:** filtros de `my-plan`, `accept-load` validado con carga por forecast, `vehicle-checklist*` integrados. **§7.10 `/pwa-supv/*`:** detalle de cascada de `analytic_account_id` y normalización de `channel` a lowercase. **§8.7, §8.8, §8.9** actualizadas con QA PASS y fixes recientes. **§15:** nuevos gotchas G15.12 (`missing_x_analytic_account_id`) y G15.13 (UNAUTHORIZED SalesOps). |

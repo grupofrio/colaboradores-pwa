@@ -16,7 +16,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { ALMACEN_PT_TOKENS as TOKENS } from './ptLightTheme'
 import {
   getPendingReceptions,
   confirmReception,
@@ -332,7 +333,7 @@ export default function ScreenRecepcion() {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
           <button onClick={() => navigate('/almacen-pt')} style={iconBtn}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -343,7 +344,7 @@ export default function ScreenRecepcion() {
             </p>
           </div>
           <button onClick={loadData} style={iconBtn}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
             </svg>
           </button>
@@ -401,7 +402,7 @@ export default function ScreenRecepcion() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : selected ? (
           <CaptureForm
@@ -419,7 +420,7 @@ export default function ScreenRecepcion() {
         ) : !hasPending ? (
           <EmptyState
             typo={typo}
-            onNext={() => navigate('/produccion/reconciliacion', { state: { backTo: '/almacen-pt/recepcion' } })}
+            onNext={() => navigate('/almacen-pt/reconciliacion', { state: { backTo: '/almacen-pt/recepcion' } })}
           />
         ) : (
           <>
@@ -447,7 +448,7 @@ export default function ScreenRecepcion() {
             {/* Next-step hint */}
             <NextStepHint
               typo={typo}
-              onNext={() => navigate('/produccion/reconciliacion', { state: { backTo: '/almacen-pt/recepcion' } })}
+              onNext={() => navigate('/almacen-pt/reconciliacion', { state: { backTo: '/almacen-pt/recepcion' } })}
             />
             <div style={{ height: 32 }} />
           </>
@@ -512,7 +513,7 @@ function PendingRow({ row, onSelect, typo }) {
           <MiniKpi label="Pendiente" value={fmtNum(row.qty_pending)}  color={TOKENS.colors.warning}    typo={typo} />
         </div>
       </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textLow} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
     </button>
   )
 }
@@ -572,7 +573,7 @@ function CaptureForm({ selected, qtyReceived, setQtyReceived, notes, setNotes, c
         style={{
           width: '100%', padding: '16px', borderRadius: TOKENS.radius.lg,
           background: canSave ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-          color: canSave ? 'white' : TOKENS.colors.textLow,
+          color: canSave ? TOKENS.colors.onPrimary : TOKENS.colors.textLow,
           fontSize: 15, fontWeight: 700, opacity: saving ? 0.6 : 1,
           boxShadow: canSave ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
           cursor: canSave ? 'pointer' : 'not-allowed',
@@ -611,7 +612,7 @@ function EmptyState({ typo, onNext }) {
       </p>
       <button onClick={onNext} style={{
         marginTop: 14, padding: '10px 20px', borderRadius: TOKENS.radius.pill,
-        background: 'linear-gradient(90deg, #15499B, #2B8FE0)', color: 'white',
+        background: 'linear-gradient(90deg, #15499B, #2B8FE0)', color: TOKENS.colors.onPrimary,
         fontSize: 13, fontWeight: 700,
       }}>
         Ir a reconciliar
@@ -634,7 +635,7 @@ function NextStepHint({ typo, onNext }) {
           Al terminar, reconcilia el turno
         </p>
       </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textLow} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
     </button>
   )
 }
@@ -662,13 +663,13 @@ const successBox = {
 }
 const inputStyle = {
   width: '100%', padding: '10px 12px', borderRadius: 14,
-  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-  color: 'white', fontSize: 15, fontWeight: 600, outline: 'none',
+  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+  color: TOKENS.colors.text, fontSize: 15, fontWeight: 600, outline: 'none',
 }
 const btnPM = {
   width: 48, height: 48, borderRadius: 14,
-  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
-  color: 'rgba(255,255,255,0.7)', fontSize: 22, fontWeight: 600,
+  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+  color: TOKENS.colors.textSoft, fontSize: 22, fontWeight: 600,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   cursor: 'pointer',
 }

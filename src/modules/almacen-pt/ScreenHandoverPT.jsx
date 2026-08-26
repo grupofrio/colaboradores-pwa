@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
 import {
   getInventory,
   getPendingHandover,
@@ -14,6 +14,9 @@ import {
   DEFAULT_WAREHOUSE_ID,
 } from './ptService'
 import { ScreenShell, ConfirmDialog } from '../entregas/components'
+import { ALMACEN_PT_TOKENS } from './ptLightTheme'
+
+const TOKENS = ALMACEN_PT_TOKENS
 
 const MODES = { ACEPTAR: 'aceptar', ENTREGAR: 'entregar' }
 
@@ -244,7 +247,7 @@ export default function ScreenHandoverPT() {
   const canSubmitAcceptar = hasScrolledBottom && acceptLines.length > 0
 
   return (
-    <ScreenShell title="Entrega de Turno PT" backTo="/almacen-pt">
+    <ScreenShell title="Entrega de Turno PT" backTo="/almacen-pt" tokens={ALMACEN_PT_TOKENS}>
       <style>{`
         @keyframes ptTurnoSpin { to { transform: rotate(360deg); } }
         input, textarea { font-family: 'DM Sans', sans-serif; }
@@ -284,7 +287,7 @@ export default function ScreenHandoverPT() {
               {tab.badge > 0 && (
                 <span style={{
                   width: 18, height: 18, borderRadius: '50%',
-                  background: TOKENS.colors.error, color: 'white',
+                  background: TOKENS.colors.error, color: TOKENS.colors.onPrimary,
                   fontSize: 10, fontWeight: 700,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 }}>
@@ -328,7 +331,7 @@ export default function ScreenHandoverPT() {
       {loadingInit ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
           <div style={{
-            width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
+            width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`,
             borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
             animation: 'ptTurnoSpin 0.8s linear infinite',
           }} />
@@ -390,7 +393,7 @@ export default function ScreenHandoverPT() {
                                 style={{
                                   width: '100%', padding: '6px 8px', borderRadius: TOKENS.radius.sm,
                                   background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.15)',
-                                  color: 'white', fontSize: 16, fontWeight: 700, outline: 'none', textAlign: 'center',
+                                  color: TOKENS.colors.text, fontSize: 16, fontWeight: 700, outline: 'none', textAlign: 'center',
                                 }}
                               />
                             </div>
@@ -410,8 +413,8 @@ export default function ScreenHandoverPT() {
                               style={{
                                 width: '100%', padding: '8px 10px', marginTop: 8,
                                 borderRadius: TOKENS.radius.sm,
-                                background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                                color: 'white', fontSize: 13, outline: 'none',
+                                background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                color: TOKENS.colors.text, fontSize: 13, outline: 'none',
                               }}
                             />
                           )}
@@ -429,8 +432,8 @@ export default function ScreenHandoverPT() {
                       rows={3}
                       style={{
                         width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                        background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                        color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+                        background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                        color: TOKENS.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
                       }}
                     />
                   </div>
@@ -453,7 +456,7 @@ export default function ScreenHandoverPT() {
                       style={{
                         width: '100%', padding: 14, borderRadius: TOKENS.radius.lg,
                         background: canSubmitAcceptar ? 'linear-gradient(90deg, #22c55e, #16a34a)' : TOKENS.colors.surface,
-                        color: canSubmitAcceptar ? 'white' : TOKENS.colors.textMuted,
+                        color: canSubmitAcceptar ? TOKENS.colors.onPrimary : TOKENS.colors.textMuted,
                         fontSize: 15, fontWeight: 600, opacity: submitting ? 0.6 : 1,
                         boxShadow: canSubmitAcceptar ? '0 10px 24px rgba(34,197,94,0.25)' : 'none',
                       }}
@@ -507,8 +510,8 @@ export default function ScreenHandoverPT() {
                     onChange={(e) => setShiftInEmployeeId(Number(e.target.value) || 0)}
                     style={{
                       width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                      background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                      color: 'white', fontSize: 14, outline: 'none',
+                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                      color: TOKENS.colors.text, fontSize: 14, outline: 'none',
                       fontFamily: 'DM Sans, sans-serif',
                     }}
                   >
@@ -569,7 +572,7 @@ export default function ScreenHandoverPT() {
                                 style={{
                                   width: '100%', padding: '6px 8px', borderRadius: TOKENS.radius.sm,
                                   background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.15)',
-                                  color: 'white', fontSize: 16, fontWeight: 700, outline: 'none', textAlign: 'center',
+                                  color: TOKENS.colors.text, fontSize: 16, fontWeight: 700, outline: 'none', textAlign: 'center',
                                 }}
                               />
                             </div>
@@ -589,9 +592,9 @@ export default function ScreenHandoverPT() {
                               style={{
                                 width: '100%', padding: '8px 10px', marginTop: 8,
                                 borderRadius: TOKENS.radius.sm,
-                                background: 'rgba(255,255,255,0.05)',
+                                background: TOKENS.colors.surface,
                                 border: `1px solid ${needsNote && !line.note.trim() ? TOKENS.colors.error : TOKENS.colors.border}`,
-                                color: 'white', fontSize: 13, outline: 'none',
+                                color: TOKENS.colors.text, fontSize: 13, outline: 'none',
                               }}
                             />
                           )}
@@ -609,8 +612,8 @@ export default function ScreenHandoverPT() {
                       rows={3}
                       style={{
                         width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                        background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                        color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+                        background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                        color: TOKENS.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
                       }}
                     />
                   </div>
@@ -632,7 +635,7 @@ export default function ScreenHandoverPT() {
                     style={{
                       width: '100%', padding: 14, borderRadius: TOKENS.radius.lg,
                       background: canSubmitEntregar ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-                      color: canSubmitEntregar ? 'white' : TOKENS.colors.textMuted,
+                      color: canSubmitEntregar ? TOKENS.colors.onPrimary : TOKENS.colors.textMuted,
                       fontSize: 15, fontWeight: 600, opacity: submitting ? 0.6 : 1,
                       boxShadow: canSubmitEntregar ? '0 10px 24px rgba(43,143,224,0.25)' : 'none',
                     }}
@@ -654,6 +657,7 @@ export default function ScreenHandoverPT() {
 
       <ConfirmDialog
         open={confirmOpen}
+        tokens={ALMACEN_PT_TOKENS}
         title={confirmAction === 'reject' ? 'Disputar turno' : confirmAction === 'entregar' ? 'Entregar turno' : 'Aceptar turno'}
         message={getConfirmMessage()}
         confirmLabel={confirmAction === 'reject' ? 'Disputar' : confirmAction === 'entregar' ? 'Entregar' : 'Aceptar'}

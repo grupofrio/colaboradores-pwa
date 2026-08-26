@@ -76,11 +76,11 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
     const src = readFileSync(path.join(SRC, f), 'utf8')
     // Vale preguntar por el rol directamente (`isBrandLightSession`) o a través
     // de helpers que envuelven esa decisión (`resolvePalette(session, …)`,
-    // `isGerenteBrandSurface`, `resolveMaterialesSurfaceTheme`). Lo que NO vale
-    // es importar el tema claro a secas: eso dejaría a producción/almacén con
-    // la paleta equivocada.
+    // `isGerenteBrandSurface`, `isSharedLightSurfaceSession`,
+    // `resolveMaterialesSurfaceTheme`). Lo que NO vale es importar el tema claro
+    // a secas: eso dejaría a producción/almacén con la paleta equivocada.
     assert.match(
-      src, /isBrandLightSession|resolvePalette\(session|isGerenteBrandSurface|resolveMaterialesSurfaceTheme/,
+      src, /isBrandLightSession|resolvePalette\(session|isGerenteBrandSurface|isSharedLightSurfaceSession|resolveMaterialesSurfaceTheme/,
       `${f} es compartido y adopta el tema claro sin conmutar por rol`,
     )
     assert.match(
@@ -92,11 +92,10 @@ test('el tema claro solo se adopta INCONDICIONALMENTE en la superficie de superv
 
 test('la navegación global conmuta por rol, no por import fijo', () => {
   const nav = readFileSync(path.join(SRC, 'components/AppNav.jsx'), 'utf8')
-  // La decisión sale de `isGerenteBrandSurface(session)` (envuelve
-  // isBrandLightSession OR isGerenteSucursalPilotSession) desde que Gerente de
-  // sucursal también adoptó la identidad clara; ese booleano se nombra
-  // `light` porque también decide el logo del rail. Se comprueba la CADENA.
-  assert.match(nav, /const\s+light\s*=\s*isGerenteBrandSurface\(session\)/)
+  // La decisión sale de un helper explícito para superficies compartidas. Ahí
+  // se preservan supervisor/gerente y se agregan los roles claros acotados sin
+  // reintroducir arrays inline en la nav.
+  assert.match(nav, /const\s+light\s*=\s*isSharedLightSurfaceSession\(session\)/)
   assert.match(nav, /light\s*\?\s*BRAND_TOKENS\s*:\s*DARK_TOKENS/)
 })
 

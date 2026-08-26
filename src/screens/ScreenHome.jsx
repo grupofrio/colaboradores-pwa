@@ -7,8 +7,8 @@ import ModuleRolePrompt from '../components/ModuleRolePrompt'
 import { upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
 import { isBrandLightSession } from '../theme/useBrandPalette'
-import { isGerenteBrandSurface } from '../theme/gerenteBrandSurface.js'
 import { BRAND_TOKENS } from '../theme/brandTokens'
+import { isSharedLightSurfaceSession } from '../theme/sharedLightSurface'
 import SupervisorVentasHome from '../modules/supervisor-ventas/brand/SupervisorVentasHome'
 
 /* ============================================================================
@@ -277,10 +277,10 @@ export default function ScreenHome() {
   const companyLabel = COMPANY_LABELS[session?.company_id] ?? session?.company ?? ''
   const sucursal = session?.sucursal ?? ''
   const turnoLabel = TURNO_LABELS[session?.turno] ?? ''
-  // Identidad clara para Gerente de sucursal (piloto): misma pantalla y misma
-  // lógica de módulos, solo cambian los colores — ver ModuleCard/T más abajo.
-  const lightHome = isGerenteBrandSurface(session)
-    || ['operador_rolito', 'operador_barra', 'auxiliar_produccion', 'supervisor_produccion', 'almacenista_entregas', 'jefe_ruta', 'auxiliar_ruta', 'favy_cedis'].includes(session?.role)
+  // Superficie clara compartida por Home/Nav: decisión explícita por sesión
+  // para no abrir el claro globalmente ni mezclarlo con el gate exclusivo de
+  // la portada de Supervisor Ventas.
+  const lightHome = isSharedLightSurfaceSession(session)
   const T = lightHome ? BRAND_TOKENS : TOKENS
 
   function handleModule(mod) {

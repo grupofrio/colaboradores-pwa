@@ -6,7 +6,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { ALMACEN_PT_TOKENS as TOKENS } from './ptLightTheme'
 import {
   getInventory,
   getEntregasDestination,
@@ -21,6 +22,7 @@ import {
   DEFAULT_WAREHOUSE_ID,
 } from './ptService'
 import { logScreenError } from '../shared/logScreenError'
+import { resolveCreatedPtTransferState } from './ptTransferCreateState'
 
 const MX_TIME_ZONE = 'America/Mexico_City'
 
@@ -56,6 +58,25 @@ function transferLineItems(t) {
     name: l.product_name || l.product || (l.product_id ? `#${l.product_id}` : 'Producto'),
     qty: Number(l.qty_done ?? l.qty_demand ?? l.qty ?? l.quantity ?? 0),
   }))
+}
+
+const SHELL_CARD = {
+  background: 'rgba(255,255,255,0.72)',
+  border: '1px solid rgba(146, 197, 255, 0.22)',
+  boxShadow: '0 18px 38px rgba(62, 110, 159, 0.10)',
+  backdropFilter: 'blur(10px)',
+}
+
+const SECTION_CARD = {
+  ...SHELL_CARD,
+  borderRadius: 24,
+  padding: 16,
+}
+
+const SOFT_PANEL = {
+  background: 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(246,251,255,0.96) 100%)',
+  border: '1px solid rgba(173, 212, 244, 0.58)',
+  boxShadow: '0 12px 26px rgba(71, 121, 177, 0.08)',
 }
 
 export default function ScreenTraspasoPT() {
@@ -197,14 +218,17 @@ export default function ScreenTraspasoPT() {
         logScreenError('ScreenTraspasoPT', 'getPendingPtTransfers(after-create)', e)
         return []
       })
-      const backendId = result?.picking_id || result?.id || null
-      const syncState = pending.length > 0 ? 'backend_pending' : 'local_pending_only'
-      if (pending.length === 0) {
-        setError('Odoo no publico aun un pendiente visible para Entregas. La PWA dejara la cantidad apartada como pendiente local de validacion.')
+      const transferState = resolveCreatedPtTransferState({
+        result,
+        pendingTransfers: pending,
+        destinationName: destination.name || 'CIGU/Existencias',
+      })
+      if (transferState.warningMessage) {
+        setError(transferState.warningMessage)
       }
 
       logTransferLocal({
-        backend_id: backendId,
+        backend_id: transferState.backendId,
         cedis_id: destination.id,
         destination_warehouse_id: destination.id,
         cedis_name: destination.name || 'CIGU/Existencias',
@@ -214,14 +238,11 @@ export default function ScreenTraspasoPT() {
         total_kg: validLines.reduce((s, l) => s + l.total_kg, 0),
         employee_id: employeeId,
         employee_name: session?.name || '',
-        sync_state: syncState,
+        name: transferState.transferRef || undefined,
+        sync_state: transferState.syncState,
         pending_validation: true,
       })
-      setSuccess(
-        pending.length > 0
-          ? `Pendiente generado: ${validLines.length} productos -> ${destination.name || 'CIGU/Existencias'}`
-          : `Reserva local creada: ${validLines.length} productos pendientes por validar en Entregas`
-      )
+      setSuccess(transferState.successMessage)
       setLines([])
       refreshTodayTransfers()
       setTimeout(() => setSuccess(''), 4000)
@@ -265,7 +286,7 @@ export default function ScreenTraspasoPT() {
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
+      <div style={{ maxWidth: 520, margin: '0 auto', padding: '0 16px 20px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
           <button onClick={() => navigate('/almacen-pt')} style={{
@@ -273,7 +294,7 @@ export default function ScreenTraspasoPT() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -282,18 +303,18 @@ export default function ScreenTraspasoPT() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.spinnerTrack}`, borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ ...SECTION_CARD, display: 'flex', flexDirection: 'column', gap: 18 }}>
 
             {/* Fixed destination */}
             <div>
               <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>DESTINO</p>
               <div style={{
-                padding: 14, borderRadius: TOKENS.radius.lg,
-                background: 'rgba(43,143,224,0.08)',
-                border: '1px solid rgba(43,143,224,0.24)',
+                ...SOFT_PANEL,
+                padding: 16,
+                borderRadius: 20,
               }}>
                 <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 800 }}>
                   {destination?.name || 'CIGU/Existencias'}
@@ -309,6 +330,7 @@ export default function ScreenTraspasoPT() {
                 padding: 14, borderRadius: TOKENS.radius.lg,
                 background: 'rgba(245,158,11,0.08)',
                 border: '1px solid rgba(245,158,11,0.24)',
+                boxShadow: '0 10px 22px rgba(245,158,11,0.10)',
               }}>
                 <p style={{ ...typo.body, color: TOKENS.colors.warning, margin: 0, fontWeight: 800 }}>
                   {fmtNum(totalPendingValidation)} uds pendientes por validacion en Entregas
@@ -326,8 +348,8 @@ export default function ScreenTraspasoPT() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {lines.map(line => (
                     <div key={line.product_id} style={{
-                      padding: '12px 14px', borderRadius: TOKENS.radius.md,
-                      background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+                      ...SOFT_PANEL,
+                      padding: '14px 14px', borderRadius: 20,
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -356,8 +378,8 @@ export default function ScreenTraspasoPT() {
                           placeholder="0"
                           style={{
                             flex: 1, padding: '8px', borderRadius: 10, textAlign: 'center',
-                            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                            color: 'white', fontSize: 18, fontWeight: 700, outline: 'none',
+                            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                            color: TOKENS.colors.text, fontSize: 18, fontWeight: 700, outline: 'none',
                           }}
                         />
                         <button onClick={() => updateLineQty(line.product_id, String((Number(line.qty) || 0) + 1))}
@@ -383,19 +405,44 @@ export default function ScreenTraspasoPT() {
             {availableToAdd.length > 0 && (
               <div>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>AGREGAR PRODUCTO</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ ...SOFT_PANEL, borderRadius: 22, padding: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {availableToAdd.map(item => (
                     <button key={item.product_id || item.id} onClick={() => addLine(item)}
                       style={{
-                        padding: '8px 12px', borderRadius: TOKENS.radius.sm,
-                        background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: 18,
+                        background: 'rgba(255,255,255,0.92)',
+                        border: `1px solid ${TOKENS.colors.border}`,
+                        boxShadow: '0 6px 18px rgba(90, 143, 201, 0.07)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        textAlign: 'left',
                       }}>
-                      <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        + {item.product || item.product_name || ''}
-                      </p>
-                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 1 }}>
-                        En PT {fmtNum(item.quantity)} · Pend. {fmtNum(item.pending_validation || 0)} · Nuevo traspaso {fmtNum(item.available_to_transfer || 0)}
-                      </p>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 700 }}>
+                          {item.product || item.product_name || ''}
+                        </p>
+                        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                          En PT {fmtNum(item.quantity)} · Pend. {fmtNum(item.pending_validation || 0)} · Nuevo traspaso {fmtNum(item.available_to_transfer || 0)}
+                        </p>
+                      </div>
+                      <div style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 12,
+                        background: 'rgba(43,143,224,0.12)',
+                        border: '1px solid rgba(43,143,224,0.20)',
+                        color: TOKENS.colors.blue2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 20,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}>+</div>
                     </button>
                   ))}
                 </div>
@@ -405,8 +452,10 @@ export default function ScreenTraspasoPT() {
             {/* Total summary */}
             {totalQty > 0 && destination?.id && (
               <div style={{
-                padding: 14, borderRadius: TOKENS.radius.lg,
-                background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)',
+                padding: 16, borderRadius: 20,
+                background: 'linear-gradient(180deg, rgba(233, 250, 239, 0.92) 0%, rgba(245, 255, 248, 0.98) 100%)',
+                border: '1px solid rgba(34,197,94,0.22)',
+                boxShadow: '0 12px 24px rgba(34,197,94,0.09)',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
@@ -444,20 +493,21 @@ export default function ScreenTraspasoPT() {
             {/* Submit */}
             <button onClick={handleSave} disabled={!canSave}
               style={{
-                width: '100%', padding: '16px', borderRadius: TOKENS.radius.lg,
+                width: '100%', padding: '17px', borderRadius: 20,
                 background: canSave ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-                color: canSave ? 'white' : TOKENS.colors.textLow,
+                color: canSave ? TOKENS.colors.onPrimary : TOKENS.colors.textLow,
                 fontSize: 15, fontWeight: 700, opacity: saving ? 0.6 : 1,
-                boxShadow: canSave ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
+                boxShadow: canSave ? '0 16px 30px rgba(21,73,155,0.22)' : 'inset 0 1px 0 rgba(255,255,255,0.6)',
+                border: canSave ? '1px solid rgba(25,95,185,0.20)' : `1px solid ${TOKENS.colors.border}`,
               }}>
               {saving ? 'Registrando...' : 'CONFIRMAR TRASPASO'}
             </button>
 
             {/* Today history (backend /api/pt/transfers/history with local fallback) */}
             {todayTransfers.length > 0 && (
-              <>
+              <div style={{ ...SOFT_PANEL, borderRadius: 22, padding: 12 }}>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 8 }}>TRASPASOS DE HOY</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {todayTransfers.map(t => {
                     // Normalize backend row vs local-log row
                     const rawDate = t.date || t.date_done || t.scheduled_date || t.timestamp || null
@@ -478,10 +528,11 @@ export default function ScreenTraspasoPT() {
                     const isPending = t.pending_validation === true || t.state === 'Listo para recibir'
                     return (
                       <div key={t.id || `${t.name}-${rawDate}`} style={{
-                        padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                        background: isPending ? 'rgba(245,158,11,0.06)' : TOKENS.colors.surfaceSoft,
+                        padding: '12px 14px', borderRadius: 18,
+                        background: isPending ? 'linear-gradient(180deg, rgba(255,248,232,0.95) 0%, rgba(255,253,246,0.98) 100%)' : 'rgba(255,255,255,0.92)',
                         border: isPending ? '1px solid rgba(245,158,11,0.22)' : `1px solid ${TOKENS.colors.border}`,
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        boxShadow: isPending ? '0 10px 20px rgba(245,158,11,0.08)' : '0 8px 18px rgba(90, 143, 201, 0.06)',
                       }}>
                         <div>
                           <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600 }}>
@@ -513,7 +564,7 @@ export default function ScreenTraspasoPT() {
                     )
                   })}
                 </div>
-              </>
+              </div>
             )}
 
             <div style={{ height: 32 }} />
@@ -526,8 +577,8 @@ export default function ScreenTraspasoPT() {
 
 const btnSmall = {
   width: 40, height: 40, borderRadius: 10,
-  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
-  color: 'rgba(255,255,255,0.7)', fontSize: 20, fontWeight: 600,
+  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+  color: TOKENS.colors.textSoft, fontSize: 20, fontWeight: 600,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   cursor: 'pointer',
 }

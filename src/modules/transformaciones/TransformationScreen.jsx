@@ -34,7 +34,10 @@ export default function TransformationScreen({ roleScope }) {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const roleConfig = getRoleScopeConfig(roleScope)
-  const isLightSurface = roleScope === 'entregas' && (['almacenista_entregas', 'favy_cedis'].includes(session?.role) || isBrandLightSession(session))
+  const isLightSurface = (
+    roleScope === 'pt' ||
+    (roleScope === 'entregas' && (['almacenista_entregas', 'favy_cedis'].includes(session?.role) || isBrandLightSession(session)))
+  )
   const TOKENS = isLightSurface ? TOKENS_LIGHT : DARK_TOKENS
   const warehouseId = resolveTransformationWarehouseId(session, roleScope)
   const employeeId = Number(session?.employee_id || 0)
