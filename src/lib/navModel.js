@@ -107,6 +107,10 @@ export function isCashShiftNavigationVisible(capabilities = {}) {
   return cashShiftAccessMode(capabilities) !== 'denied'
 }
 
+export function isTraspasoMpNavigationVisible(capabilities = {}) {
+  return ownCapabilityTrue(capabilities, 'traspasoMp')
+}
+
 // Ancho del rail según viewport (AppShell reserva exactamente este espacio).
 export function railWidthFor(width) {
   if (!Number.isFinite(width) || width < DESKTOP_MIN) return 0

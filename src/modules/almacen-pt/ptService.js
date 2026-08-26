@@ -27,6 +27,12 @@ import {
   normalizePendingPtHandover,
   translatePtBlockedError,
 } from './ptHandoverState'
+import {
+  EMPLOYEE_SCOPED_KEYS,
+  readEmployeeScopedJson,
+  writeEmployeeScopedJson,
+  rowBelongsToEmployee,
+} from '../../lib/employeeScopedStorage.js'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -430,31 +436,32 @@ export function getNextAction(summary) {
  * only to avoid a second round-trip to render the recent list immediately.
  */
 export function saveReceptionLocal(reception) {
-  const key = 'gf_pt_receptions'
-  const existing = JSON.parse(localStorage.getItem(key) || '[]')
+  const employeeId = Number(reception?.employee_id)
+  if (!Number.isInteger(employeeId) || employeeId <= 0) return null
+  const existing = readEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.receptions, employeeId, [])
+  const list = Array.isArray(existing) ? existing : []
   const entry = {
     id: Date.now(),
     ...reception,
+    employee_id: employeeId,
     timestamp: new Date().toISOString(),
   }
-  existing.unshift(entry)
-  // Keep last 200
-  if (existing.length > 200) existing.length = 200
-  localStorage.setItem(key, JSON.stringify(existing))
+  list.unshift(entry)
+  if (list.length > 200) list.length = 200
+  writeEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.receptions, employeeId, list)
   return entry
 }
 
 /**
  * Get local reception log for today.
  */
-export function getTodayReceptionsLocal() {
-  const key = 'gf_pt_receptions'
-  const all = JSON.parse(localStorage.getItem(key) || '[]')
+export function getTodayReceptionsLocal(employeeId) {
+  const all = getAllReceptionsLocal(employeeId)
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime()
   return all.filter(r => {
-    if (!r.timestamp) return false
+    if (!rowBelongsToEmployee(r, employeeId) || !r.timestamp) return false
     const ts = new Date(r.timestamp).getTime()
     return ts >= startOfToday && ts < startOfTomorrow
   })
@@ -463,9 +470,10 @@ export function getTodayReceptionsLocal() {
 /**
  * Get all local receptions.
  */
-export function getAllReceptionsLocal() {
-  const key = 'gf_pt_receptions'
-  return JSON.parse(localStorage.getItem(key) || '[]')
+export function getAllReceptionsLocal(employeeId) {
+  const all = readEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.receptions, employeeId, [])
+  if (!Array.isArray(all)) return []
+  return all.filter((row) => rowBelongsToEmployee(row, employeeId))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -504,20 +512,23 @@ export async function createTransfer(transfer) {
  * El endpoint oficial ahora es getTransfersHistory() → /api/pt/transfers/history.
  */
 export function logTransferLocal(entry) {
-  const key = 'gf_pt_transfers'
-  const existing = JSON.parse(localStorage.getItem(key) || '[]')
+  const employeeId = Number(entry?.employee_id)
+  if (!Number.isInteger(employeeId) || employeeId <= 0) return null
+  const existing = readEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.transfers, employeeId, [])
+  const list = Array.isArray(existing) ? existing : []
   const row = {
     id: entry.backend_id || Date.now(),
     ...entry,
+    employee_id: employeeId,
     destination_warehouse_id: entry.destination_warehouse_id || entry.cedis_id || 0,
     pending_validation: entry.pending_validation ?? true,
     sync_state: entry.sync_state || (entry.backend_id ? 'backend_pending' : 'local_pending_only'),
     resolved_at: entry.resolved_at || null,
     timestamp: new Date().toISOString(),
   }
-  existing.unshift(row)
-  if (existing.length > 200) existing.length = 200
-  localStorage.setItem(key, JSON.stringify(existing))
+  list.unshift(row)
+  if (list.length > 200) list.length = 200
+  writeEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.transfers, employeeId, list)
   return row
 }
 
@@ -526,21 +537,22 @@ export function logTransferLocal(entry) {
  * Compares using local-timezone Date boundaries so transfers made after
  * midnight UTC (e.g. after ~7 PM Mexico CDT) are not incorrectly excluded.
  */
-export function getTodayTransfersLocal() {
-  const key = 'gf_pt_transfers'
-  const all = JSON.parse(localStorage.getItem(key) || '[]')
+export function getTodayTransfersLocal(employeeId) {
+  const all = readEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.transfers, employeeId, [])
+  if (!Array.isArray(all)) return []
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime()
   return all.filter(t => {
-    if (!t.timestamp) return false
+    if (!rowBelongsToEmployee(t, employeeId) || !t.timestamp) return false
     const ts = new Date(t.timestamp).getTime()
     return ts >= startOfToday && ts < startOfTomorrow
   })
 }
 
-export function getPendingTransferReservationMap({ warehouseId, destinationWarehouseId } = {}) {
-  const items = getTodayTransfersLocal().filter((row) => {
+export function getPendingTransferReservationMap({ warehouseId, destinationWarehouseId, employeeId } = {}) {
+  const items = getTodayTransfersLocal(employeeId).filter((row) => {
+    if (!rowBelongsToEmployee(row, employeeId)) return false
     if (warehouseId && Number(row.warehouse_id || 0) !== Number(warehouseId)) return false
     if (destinationWarehouseId && Number(row.destination_warehouse_id || row.cedis_id || 0) !== Number(destinationWarehouseId)) return false
     return row.pending_validation !== false
@@ -558,12 +570,15 @@ export function getPendingTransferReservationMap({ warehouseId, destinationWareh
   return reservation
 }
 
-export function resolveLocalTransferByPicking(pickingId, action = 'accepted') {
-  const key = 'gf_pt_transfers'
-  const all = JSON.parse(localStorage.getItem(key) || '[]')
+export function resolveLocalTransferByPicking(pickingId, action = 'accepted', employeeId) {
+  if (!Number(employeeId) || !Number(pickingId)) return false
+  const all = readEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.transfers, employeeId, [])
+  if (!Array.isArray(all)) return false
   let changed = false
   const next = all.map((row) => {
-    if (Number(row.backend_id || row.id || 0) !== Number(pickingId || 0)) return row
+    if (!rowBelongsToEmployee(row, employeeId)) return row
+    const rowPicking = Number(row.picking_id || row.backend_id || row.id || 0)
+    if (!rowPicking || rowPicking !== Number(pickingId || 0)) return row
     changed = true
     return {
       ...row,
@@ -572,7 +587,7 @@ export function resolveLocalTransferByPicking(pickingId, action = 'accepted') {
       resolved_at: new Date().toISOString(),
     }
   })
-  if (changed) localStorage.setItem(key, JSON.stringify(next))
+  if (changed) writeEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.transfers, employeeId, next)
   return changed
 }
 
@@ -621,7 +636,7 @@ export async function getTransfersHistory({
  * Local entries with negative backend_id (picking_id = -transfer_id convention)
  * are never deduplicated against positive-id backend rows.
  */
-export async function getTodayTransfers(warehouseId = DEFAULT_WAREHOUSE_ID) {
+export async function getTodayTransfers(warehouseId = DEFAULT_WAREHOUSE_ID, employeeId) {
   const today = todayLocal()
   let backendRows = []
   try {
@@ -635,14 +650,14 @@ export async function getTodayTransfers(warehouseId = DEFAULT_WAREHOUSE_ID) {
   } catch (err) {
     console.warn('[GFSC][ptService] getTodayTransfers backend error:', err?.message || err)
     // Full fallback: backend unreachable, show only local
-    return getTodayTransfersLocal()
+    return getTodayTransfersLocal(employeeId)
   }
 
   // Merge locally-pending transfers not yet resolved by Entregas
   const backendIds = new Set(
     backendRows.map(r => Number(r.id || 0)).filter(id => id > 0)
   )
-  const localPending = getTodayTransfersLocal()
+  const localPending = getTodayTransfersLocal(employeeId)
     .filter(t => {
       if (t.pending_validation === false) return false
       const bid = Number(t.backend_id || t.id || 0)

@@ -65,6 +65,7 @@ export default function ScreenTraspasoPT() {
   const typo = useMemo(() => getTypo(sw), [sw])
 
   const warehouseId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
+  const employeeId = Number(session?.employee_id || session?.employee?.id || 0) || 0
 
   const [inventory, setInventory] = useState([])
   const [destination, setDestination] = useState(null)
@@ -89,7 +90,7 @@ export default function ScreenTraspasoPT() {
       const [inv, destinationInfo, history] = await Promise.all([
         getInventory(warehouseId).catch((e) => { logScreenError('ScreenTraspasoPT', 'getInventory', e); return [] }),
         getEntregasDestination().catch((e) => { logScreenError('ScreenTraspasoPT', 'getEntregasDestination', e); return null }),
-        getTodayTransfers(warehouseId).catch((e) => { logScreenError('ScreenTraspasoPT', 'getTodayTransfers', e); return [] }),
+        getTodayTransfers(warehouseId, employeeId).catch((e) => { logScreenError('ScreenTraspasoPT', 'getTodayTransfers', e); return [] }),
       ])
       const summary = await getDaySummary(warehouseId).catch((e) => {
         logScreenError('ScreenTraspasoPT', 'getDaySummary', e)
@@ -103,6 +104,7 @@ export default function ScreenTraspasoPT() {
       setReservationMap(getPendingTransferReservationMap({
         warehouseId,
         destinationWarehouseId: destinationInfo?.id,
+        employeeId,
       }))
       setBlockedByHandover(Boolean(summary?.pt_blocked_by_handover))
       if (!inv.length) {
@@ -119,11 +121,12 @@ export default function ScreenTraspasoPT() {
 
   async function refreshTodayTransfers() {
     try {
-      const history = await getTodayTransfers(warehouseId)
+      const history = await getTodayTransfers(warehouseId, employeeId)
       setTodayTransfers(Array.isArray(history) ? history : [])
       setReservationMap(getPendingTransferReservationMap({
         warehouseId,
         destinationWarehouseId: destination?.id,
+        employeeId,
       }))
     } catch (e) {
       logScreenError('ScreenTraspasoPT', 'refreshTodayTransfers', e)
@@ -163,7 +166,6 @@ export default function ScreenTraspasoPT() {
   const totalQty = lines.reduce((s, l) => s + (Number(l.qty) || 0), 0)
   const totalKg = lines.reduce((s, l) => s + ((Number(l.qty) || 0) * l.weight), 0)
   const selectedCedisObj = destination?.id ? { ...destination, name: destination.name || 'CIGU/Existencias' } : null
-  const employeeId = Number(session?.employee_id || session?.employee?.id || 0) || 0
 
   async function handleSave() {
     if (!destination?.id || lines.length === 0 || totalQty <= 0) return

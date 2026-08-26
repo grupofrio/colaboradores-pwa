@@ -1,30 +1,15 @@
-// ScreenTraspasoMateriaPrima — Gerente sucursal entrega MP Laurita al rolito.
-// Lee inventario REAL de PIGU/MP-IGUALA (loc 1172) filtrado a las 3 MP Laurita,
-// y emite un material.issue con destination='rolito' que internamente crea
-// el stock.move real PIGU/MP-IGUALA → PIGU/MP-IGUALA/PROCESO-ROLITO.
-//
-// Hardcoded para Fabricación-Iguala (warehouse 76) — único caso de uso hoy.
+// ScreenTraspasoMateriaPrima — entrega MP Laurita al rolito de la planta
+// configurada en Odoo. Plaza, almacén y actor salen del servidor.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTypo } from '../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
-import { useSession } from '../../App'
 import { logScreenError } from '../shared/logScreenError'
 import { getTraspasoMpIgualaStock, traspasoMpIgualaTransfer } from '../almacen-pt/materialsService'
-import { AdminProvider } from './AdminContext'
+import { AdminProvider, useAdmin } from './AdminContext'
+import { BACKEND_CAPS } from './adminService.js'
+import { isTraspasoMpNavigationVisible } from '../../lib/navModel.js'
 import AdminShell from './components/AdminShell'
-
-// Fallback fijo para Fabricación de Congelados (company 35) — Planta Iguala (76).
-// Se usa cuando session.warehouse_id viene null (gerentes sin warehouse asignado).
-const FABRICACION_COMPANY_ID = 35
-const PLANTA_IGUALA_WAREHOUSE_ID = 76
-
-function resolveWarehouseId(session) {
-  if (session?.warehouse_id) return session.warehouse_id
-  const companyId = Number(session?.company_id || 0)
-  if (companyId === FABRICACION_COMPANY_ID) return PLANTA_IGUALA_WAREHOUSE_ID
-  return null
-}
 
 export default function ScreenTraspasoMateriaPrima() {
   const [sw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
@@ -80,12 +65,11 @@ function MobileTraspasoMP() {
 }
 
 function TraspasoMPForm() {
-  const { session } = useSession()
+  const { capsReady } = useAdmin()
   const navigate = useNavigate()
   const [sw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const typo = useMemo(() => getTypo(sw), [sw])
-
-  const warehouseId = resolveWarehouseId(session)
+  const allowed = capsReady && isTraspasoMpNavigationVisible(BACKEND_CAPS)
 
   const [stockData, setStockData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -112,13 +96,20 @@ function TraspasoMPForm() {
     }
   }
 
-  useEffect(() => { loadStock() }, [])
+  useEffect(() => {
+    if (!allowed) {
+      setLoading(false)
+      return
+    }
+    loadStock()
+  }, [allowed])
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!allowed) return
     if (!selectedProduct?.product_id || !(Number(qty) > 0)) return
     if (Number(qty) > Number(selectedProduct.qty_available)) {
-      setSubmitError(`Solo hay ${selectedProduct.qty_available} disponibles en PIGU/MP-IGUALA`)
+      setSubmitError(`Solo hay ${selectedProduct.qty_available} disponibles`)
       return
     }
     setSubmitting(true)
@@ -128,7 +119,6 @@ function TraspasoMPForm() {
         productId: Number(selectedProduct.product_id),
         qty: Number(qty),
         notes,
-        issuedBy: session?.employee_id,
       })
       setSuccess(true)
     } catch (e) {
@@ -137,6 +127,30 @@ function TraspasoMPForm() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (!capsReady) return <Spinner />
+
+  if (!allowed) {
+    return (
+      <div
+        data-origin="traspaso-mp-unavailable"
+        data-testid="traspaso-mp-unavailable"
+        style={{ padding: '32px 0' }}
+      >
+        <div style={{
+          padding: '20px', borderRadius: TOKENS.radius.lg,
+          background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+        }}>
+          <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '0 0 6px' }}>
+            Traspaso MP no disponible
+          </p>
+          <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0 }}>
+            Esta planta no está en tu alcance o el servidor no publicó la capacidad.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (loading) return <Spinner />

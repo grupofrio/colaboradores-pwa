@@ -30,6 +30,15 @@ const KNOWN_SENSITIVE_KEYS = [
 // gfsc.reconciliation.v1.<shiftId> y debemos limpiar todas al cerrar sesión.
 const KNOWN_SENSITIVE_PREFIXES = [
   'gfsc.reconciliation.v1.',
+  'gf_pt_transfers.v2.',
+  'gf_pt_receptions.v2.',
+  'gfsc.packing_local.v3.',
+]
+
+const UNOWNED_LEGACY_KEYS = [
+  'gf_pt_transfers',
+  'gf_pt_receptions',
+  'gfsc.packing_local.v2',
 ]
 
 /**
@@ -48,6 +57,9 @@ export function clearGrupoFrioLocalState() {
 
     // 1. Keys exactas conocidas
     KNOWN_SENSITIVE_KEYS.forEach((key) => {
+      try { localStorage.removeItem(key) } catch { /* ignore */ }
+    })
+    UNOWNED_LEGACY_KEYS.forEach((key) => {
       try { localStorage.removeItem(key) } catch { /* ignore */ }
     })
 

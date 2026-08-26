@@ -4,6 +4,7 @@ import { TOKENS as DARK_TOKENS, getTypo } from '../../tokens'
 import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
 import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { findTicket, dispatchTicket, getPendingTickets, getCedisInventory } from './entregasService'
+import { getTicketWarehouseId, isTicketFromMyWarehouse } from './dispatchTicketGuard'
 import { ScreenShell, ConfirmDialog } from './components'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -100,25 +101,17 @@ export default function ScreenOperacionDia() {
   // Además: bloqueamos despacho si el ticket pertenece a otro warehouse,
   // porque el backend NO valida scope (auditado runtime 2026-04-26 — desde
   // sesión Iguala se despacharon 3 órdenes ajenas con success:true).
-  function getTicketWarehouseId(t) {
-    if (!t) return 0
-    const w = t.warehouse_id
-    if (typeof w === 'number') return w
-    if (Array.isArray(w) && typeof w[0] === 'number') return w[0]
-    return 0
-  }
-  function isTicketFromMyWarehouse(t) {
-    const tw = getTicketWarehouseId(t)
-    if (!warehouseId) return false
-    if (!tw) return true // backend no devolvió warehouse → permitir y dejar que server decida
-    return tw === warehouseId
+  function ticketBelongsHere(t) {
+    return isTicketFromMyWarehouse(t, warehouseId)
   }
 
   async function handleDispatch() {
     if (!ticket?.id) return
-    if (!isTicketFromMyWarehouse(ticket)) {
+    if (!ticketBelongsHere(ticket)) {
       const tw = getTicketWarehouseId(ticket)
-      setTicketError(`Este ticket pertenece a otro almacén (warehouse ${tw}). No puedes despacharlo desde aquí.`)
+      setTicketError(tw
+        ? `Este ticket pertenece a otro almacén (warehouse ${tw}). No puedes despacharlo desde aquí.`
+        : 'Este ticket no tiene almacén conocido. El despacho queda bloqueado.')
       setConfirmOpen(false)
       return
     }
@@ -297,9 +290,9 @@ export default function ScreenOperacionDia() {
                     <span style={{ fontSize: 22, fontWeight: 700, color: TOKENS.colors.text }}>${ticket.total?.toFixed(2)}</span>
                   </div>
 
-                  {/* BLD-20260426-P0-2: aviso si el ticket es de OTRO warehouse.
-                      Backend no valida scope; el cliente bloquea defensivamente. */}
-                  {!isTicketFromMyWarehouse(ticket) && (
+                  {/* Aviso si el ticket es de otro warehouse o no trae almacén.
+                      El cliente bloquea fail-closed; Odoo es la autoridad. */}
+                  {!ticketBelongsHere(ticket) && (
                     <div style={{
                       padding: 12, marginTop: 8, borderRadius: TOKENS.radius.md,
                       background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}4D`,
@@ -315,21 +308,21 @@ export default function ScreenOperacionDia() {
                   {!ticket.dispatched && (
                     <button
                       onClick={() => setConfirmOpen(true)}
-                      disabled={dispatching || !isTicketFromMyWarehouse(ticket)}
+                      disabled={dispatching || !ticketBelongsHere(ticket)}
                       style={{
                         width: '100%', padding: 14, marginTop: 10, borderRadius: TOKENS.radius.lg,
-                        background: isTicketFromMyWarehouse(ticket)
+                        background: ticketBelongsHere(ticket)
                           ? TOKENS.colors.success
                           : TOKENS.colors.surface,
-                        color: isTicketFromMyWarehouse(ticket) ? TOKENS.colors.onPrimary : TOKENS.colors.textMuted,
+                        color: ticketBelongsHere(ticket) ? TOKENS.colors.onPrimary : TOKENS.colors.textMuted,
                         fontSize: 15, fontWeight: 600, opacity: dispatching ? 0.6 : 1,
-                        boxShadow: isTicketFromMyWarehouse(ticket)
+                        boxShadow: ticketBelongsHere(ticket)
                           ? `0 10px 24px ${TOKENS.colors.success}4D` : 'none',
                       }}
                     >
                       {dispatching
                         ? 'Despachando...'
-                        : isTicketFromMyWarehouse(ticket)
+                        : ticketBelongsHere(ticket)
                           ? 'Confirmar Despacho'
                           : 'Bloqueado: ticket de otro almacén'}
                     </button>

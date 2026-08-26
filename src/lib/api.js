@@ -1667,19 +1667,13 @@ async function directAdmin(method, path, body) {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const folio = String(query.get('folio') || '').trim()
     if (!folio) return null
-    const result = await readModelSorted('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'payment_method', 'x_studio_mtodo_de_pago'],
-      domain: [['name', 'ilike', folio]],
-      sort_column: 'id',
-      sort_desc: true,
-      limit: 1,
-      sudo: 1,
-    })
-    const row = pickFirstResponse(result)
-    return row ? normalizeSaleOrder({
+    const result = await odooHttp('GET', `/pwa-admin/find-ticket?folio=${encodeURIComponent(folio)}`)
+    if (!result?.ok) return null
+    const row = result.data || result
+    return row?.id ? normalizeSaleOrder({
       ...row,
-      customer: row.partner_id?.[1] || '',
-      total: Number(row.amount_total || 0),
+      customer: row.customer || row.partner_id?.[1] || '',
+      total: Number(row.total || row.amount_total || 0),
     }) : null
   }
 
@@ -1707,34 +1701,32 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
-    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
-    const domain = [['state', 'in', ['sale', 'done']]]
-    if (reqWarehouseId) domain.push(['warehouse_id', '=', reqWarehouseId])
-    const result = await readModelSorted('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'payment_method', 'x_studio_mtodo_de_pago'],
-      domain,
-      sort_column: 'date_order',
-      sort_desc: true,
-      limit: 100,
-      sudo: 1,
-    })
-    return pickListResponse(result).map((row) => ({
+    const result = await odooHttp('GET', '/pwa-admin/pending-tickets')
+    const tickets = result?.data?.tickets || result?.tickets
+    return Array.isArray(tickets) ? tickets.map((row) => ({
       id: row.id,
       name: row.name,
-      customer: row.partner_id?.[1] || '',
-      total: Number(row.amount_total || 0),
+      customer: row.customer || row.partner_id?.[1] || '',
+      total: Number(row.total || row.amount_total || 0),
       state: row.state || 'sale',
       date_order: row.date_order || null,
-      warehouse_id: row.warehouse_id?.[0] || reqWarehouseId || 0,
-    }))
+      warehouse_id: row.warehouse_id || 0,
+    })) : []
   }
 
   if (cleanPath === '/pwa-admin/dispatch-ticket' && method === 'POST') {
-    const result = await odooJson('/public_api/sale_order/validate_deliveries', {
-      sale_order_id: Number(body?.order_id || 0),
+    const result = await odooJson('/pwa-admin/dispatch-ticket', {
+      order_id: Number(body?.order_id || 0),
     })
-    return result
+    const env = result?.result && typeof result.result === 'object' ? result.result : result
+    if (env?.ok === true || env?.success === true) {
+      return { success: true, ok: true, ...(env.data || env) }
+    }
+    return {
+      success: false,
+      ok: false,
+      error: env?.message || env?.error || 'Backend rechazó el despacho',
+    }
   }
 
   // ── Analytic accounts (Odoo 18 — account.analytic.account) ──────────────
@@ -3437,7 +3429,7 @@ async function directProduction(method, path, body) {
       throw new ApiError(msg, { status: 200, code: 'packing_save_failed' })
     }
     const entry = entryId !== raw?.id ? { ...raw, id: entryId } : raw
-    if (shiftId) addLocalPackingEntry(shiftId, entry)
+    if (shiftId) addLocalPackingEntry(shiftId, entry, getEmployeeId())
     return entry
   }
 
@@ -3455,11 +3447,11 @@ async function directProduction(method, path, body) {
       const odooEntries = pickListResponse(result)
       if (odooEntries.length > 0) {
         // Odoo tiene datos: actualizar cache local y retornar
-        saveLocalPackingEntries(shiftId, odooEntries)
+        saveLocalPackingEntries(shiftId, odooEntries, getEmployeeId())
         return odooEntries
       }
       // Odoo devolvio vacio: usar cache local como fallback
-      const localEntries = getLocalPackingEntries(shiftId)
+      const localEntries = getLocalPackingEntries(shiftId, getEmployeeId())
       return localEntries.length > 0 ? localEntries : odooEntries
     }
 

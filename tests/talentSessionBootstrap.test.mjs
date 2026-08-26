@@ -72,4 +72,7 @@ test('App bootstraps Talent with the current React session and persists login be
   const publish = loginBody.indexOf('setSession(next)')
   assert.ok(persist >= 0, 'login must persist the new session synchronously')
   assert.ok(persist < publish, 'persistence must happen before React state can bootstrap children')
+  const discard = loginBody.indexOf('discardUnownedEmployeeScopedKeys()')
+  assert.ok(discard >= 0, 'login must drop unowned PT/packing keys')
+  assert.ok(discard < persist, 'unowned keys must be discarded before the new identity is persisted')
 })

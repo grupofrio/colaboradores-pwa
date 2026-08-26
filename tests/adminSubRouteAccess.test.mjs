@@ -110,6 +110,24 @@ test('nested admin routes: ticket MIXED allowed under RO; write extras denied', 
   assert.equal(adminRoutePolicy('/admin/materiales/validar')?.access, ADMIN_NAV_ACCESS.WRITE)
 })
 
+test('traspaso-mp: sin capability → DENIED; con traspasoMp → PASS (menú ≡ deep-link)', () => {
+  const aux = { role: 'auxiliar_admin', employee_id: 694 }
+  const route = '/admin/traspaso-materia-prima'
+  assert.equal(
+    adminRouteAllows(route, ['auxiliar_admin'], { session: aux, capabilities: {} }),
+    false,
+    'caps vacías / no cargadas fallan cerrado',
+  )
+  assert.equal(
+    adminRouteAllows(route, ['auxiliar_admin'], { session: aux, capabilities: { traspasoMp: false } }),
+    false,
+  )
+  assert.equal(
+    adminRouteAllows(route, ['auxiliar_admin'], { session: aux, capabilities: { traspasoMp: true } }),
+    true,
+  )
+})
+
 test('cierre respeta capability cash-shift (parity AdminShell)', () => {
   // cashShiftRead alone is NOT enough — navModel requires manage|authorize.
   assert.equal(

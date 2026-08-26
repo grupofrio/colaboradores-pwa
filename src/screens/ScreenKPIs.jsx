@@ -140,107 +140,37 @@ function EmbedSkeleton() {
 }
 
 // Dashboard simulado (reemplaza al iframe real en producción)
-function MockMetabaseDashboard({ period, sw }) {
+function KpisUnavailable({ sw }) {
   const typo = getTypo(sw);
-  const [animVal, setAnimVal] = useState(0);
-
-  useEffect(() => {
-    const t = setTimeout(() => setAnimVal(1), 100);
-    return () => clearTimeout(t);
-  }, [period]);
-
-  useEffect(() => { setAnimVal(0); }, [period]);
-
-  const data = {
-    hoy:    { pct:82, visitas:14, meta:17, cobranza:8200, metaCob:10000, label:"Hoy" },
-    semana: { pct:74, visitas:68, meta:85, cobranza:41000, metaCob:52000, label:"Esta semana" },
-    mes:    { pct:91, visitas:312, meta:340, cobranza:198000, metaCob:218000, label:"Este mes" },
-  }[period];
-
-  const pctColor = data.pct >= 85 ? TOKENS.colors.success : data.pct >= 65 ? TOKENS.colors.warning : TOKENS.colors.error;
-
-  const Bar = ({ label, val, max, color }) => {
-    const pct = Math.min(100, Math.round((val/max)*100));
-    return (
-      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-          <span style={{ fontSize:11, color:TOKENS.colors.textMuted }}>{label}</span>
-          <span style={{ fontSize:11, fontWeight:700, color:TOKENS.colors.text }}>{pct}%</span>
-        </div>
-        <div style={{ height:7, borderRadius:4, background:"rgba(21,73,155,0.08)", overflow:"hidden" }}>
-          <div style={{ height:"100%", width:`${animVal * pct}%`, borderRadius:4, background:`linear-gradient(90deg, ${color}88, ${color})`, transition:"width 0.9s cubic-bezier(0.34,1.56,0.64,1)" }}/>
-        </div>
-        <div style={{ display:"flex", justifyContent:"space-between" }}>
-          <span style={{ fontSize:10, color:TOKENS.colors.textLow }}>{val.toLocaleString()} / {max.toLocaleString()}</span>
-          <span style={{ fontSize:10, color, fontWeight:600 }}>{val >= max ? "✓ Meta" : `${max-val} restantes`}</span>
-        </div>
-      </div>
-    );
-  };
-
   return (
-    <div style={{ width:"100%", height:"100%", overflowY:"auto", padding:"14px 16px", display:"flex", flexDirection:"column", gap:16 }}>
-
-      {/* Gauge principal */}
-      <div style={{ textAlign:"center", padding:"16px 0 8px" }}>
-        <div style={{ position:"relative", width:120, height:60, margin:"0 auto 12px" }}>
-          <svg width="120" height="60" viewBox="0 0 120 60">
-            <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="rgba(21,73,155,0.10)" strokeWidth="10" strokeLinecap="round"/>
-            <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke={pctColor} strokeWidth="10" strokeLinecap="round"
-              strokeDasharray={`${animVal * data.pct * 1.571} 200`}
-              style={{ transition:"stroke-dasharray 0.9s cubic-bezier(0.34,1.56,0.64,1)" }}
-            />
-          </svg>
-          <div style={{ position:"absolute", bottom:0, left:"50%", transform:"translateX(-50%)", textAlign:"center" }}>
-            <div style={{ fontSize:22, fontWeight:700, color:pctColor, lineHeight:1 }}>{data.pct}%</div>
-          </div>
-        </div>
-        <div style={{ ...typo.caption, color:TOKENS.colors.textMuted }}>Cumplimiento · {data.label}</div>
-      </div>
-
-      <div style={{ height:1, background:"rgba(21,73,155,0.08)" }}/>
-
-      {/* Barras KPI */}
-      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-        <Bar label="Visitas / Pedidos" val={data.visitas} max={data.meta} color={TOKENS.colors.blue3}/>
-        <Bar label="Cobranza" val={data.cobranza} max={data.metaCob} color={TOKENS.colors.warning}/>
-      </div>
-
-      <div style={{ height:1, background:"rgba(21,73,155,0.08)" }}/>
-
-      {/* Mini stats grid */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-        {[
-          { label:"Clientes nuevos",  value: period==="hoy"?"2": period==="semana"?"8":"31",   accent:TOKENS.colors.success },
-          { label:"Devoluciones",     value: period==="hoy"?"1": period==="semana"?"3":"9",    accent:TOKENS.colors.error },
-          { label:"Ticket promedio",  value: period==="hoy"?"$586": period==="semana"?"$603":"$635", accent:TOKENS.colors.text },
-          { label:"Tiempo en ruta",   value: period==="hoy"?"6.2h": period==="semana"?"38h":"154h",  accent:TOKENS.colors.text },
-        ].map(s => (
-          <div key={s.label} style={{ borderRadius:14, padding:"10px 12px", background:"rgba(255,255,255,0.92)", border:`1px solid ${TOKENS.colors.border}` }}>
-            <div style={{ fontSize:10, color:TOKENS.colors.textMuted, marginBottom:4 }}>{s.label}</div>
-            <div style={{ fontSize:16, fontWeight:700, color:s.accent }}>{s.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Nota Metabase */}
-      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:12, background:"rgba(43,143,224,0.08)", border:"1px solid rgba(43,143,224,0.18)" }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.blue3} strokeWidth="2" strokeLinecap="round">
-          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        <span style={{ fontSize:10, color:TOKENS.colors.blue2, lineHeight:1.4 }}>
-          Dashboard live en producción via Metabase embed con JWT firmado por n8n
-        </span>
-      </div>
-
-      <div style={{ height:4 }}/>
+    <div
+      data-origin="kpis-unavailable"
+      data-testid="kpis-unavailable"
+      style={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        padding: "24px 32px",
+        textAlign: "center",
+      }}
+    >
+      <p style={{ ...typo.h2, color: TOKENS.colors.textSoft, margin: 0 }}>
+        KPIs no disponibles
+      </p>
+      <p style={{ ...typo.body, color: TOKENS.colors.textMuted, margin: 0, lineHeight: 1.5 }}>
+        No hay un dashboard configurado para este puesto. No se muestran cifras simuladas.
+      </p>
     </div>
   );
 }
 
 /* ============================================================================
-   METABASE FRAME (switcher loading → mock/real)
+   METABASE FRAME (iframe real o estado no disponible)
 ============================================================================ */
+
 function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) {
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -257,8 +187,8 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
   }, [period]);
 
   // Cargar token Metabase real desde Odoo.
-  // Si el endpoint no existe o falla, degradamos silenciosamente al
-  // MockDashboard. NUNCA propagar error que pueda causar logout — este
+  // Si el endpoint no existe o falla, mostramos "no disponible".
+  // NUNCA propagar error que pueda causar logout — este
   // endpoint está en la lista de "optionalEndpoint" del interceptor global.
   useEffect(() => {
     let cancelled = false;
@@ -270,7 +200,7 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
         if (cancelled) return;
         // El handler directo de lib/api.js siempre responde con shape consistente:
         //   { success: true,  embed_url: "https://..." }  → usar iframe
-        //   { success: false, embed_url: null, reason: ... } → mock dashboard
+        //   { success: false, embed_url: null, reason: ... } → no disponible
         if (res?.success && res?.embed_url) {
           const sep = res.embed_url.includes('?') ? '&' : '?';
           setEmbedUrl(`${res.embed_url}${sep}period=${encodeURIComponent(period)}`);
@@ -283,7 +213,7 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
         if (cancelled) return;
         // Swallow — este endpoint es opcional. Nunca debe causar logout.
         // El interceptor ya no propaga 401 de este path, pero por si acaso.
-        console.warn('[ScreenKPIs] Metabase token no disponible, usando mock:', err?.message || err);
+        console.warn('[ScreenKPIs] Metabase token no disponible:', err?.message || err);
         setEmbedUrl(null);
         setLoading(false);
       });
@@ -342,7 +272,7 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
             onError={() => setHasError(true)}
           />
         ) : (
-          <MockMetabaseDashboard period={period} sw={sw}/>
+          <KpisUnavailable sw={sw}/>
         )}
       </div>
     </div>
@@ -353,17 +283,9 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
    KPI SCREEN PRINCIPAL
 ============================================================================ */
 // ── Rama por ROL ─────────────────────────────────────────────────────────────
-// `supervisor_ventas` ve un panel NATIVO con dato real. Todos los demás roles
-// siguen exactamente donde estaban: Metabase, y el mock oscuro cuando su puesto
-// no tiene dashboard. Es un early-return ANTES de cualquier estado, para que su
-// rama no pase por una sola línea nueva.
-//
-// Por qué el mock se retira solo para este rol: los números que pintaba (82% de
-// cumplimiento, 14 visitas, "31 clientes nuevos") están escritos a mano en el
-// archivo. Para un supervisor que decide con ellos eso no es una maqueta, es
-// información falsa. Para los demás roles el reemplazo requiere su propia
-// fuente y su propia decisión de dirección; quitarlo sin eso los dejaría sin
-// pantalla.
+// `supervisor_ventas` ve un panel NATIVO con dato real. Los demás roles
+// usan Metabase cuando hay embed_url; si no, un estado "no disponible"
+// (nunca cifras simuladas).
 function KPIScreen({ sw: propSw, sh: propSh }) {
   if (isBrandLightSession(getSession())) {
     return <PanelKpisSupervisor />;

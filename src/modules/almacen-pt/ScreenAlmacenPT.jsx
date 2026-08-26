@@ -67,8 +67,8 @@ export default function ScreenAlmacenPT() {
     }
   }
 
-  const todayReceptions = getTodayReceptionsLocal()
-  const todayTransfers = getTodayTransfersLocal()
+  const todayReceptions = getTodayReceptionsLocal(employeeId)
+  const todayTransfers = getTodayTransfersLocal(employeeId)
   const ptBlockedByHandover = Boolean(summary?.pt_blocked_by_handover)
   const next = summary
     ? ptBlockedByHandover

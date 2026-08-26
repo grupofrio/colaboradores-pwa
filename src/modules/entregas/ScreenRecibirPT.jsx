@@ -101,7 +101,7 @@ export default function ScreenRecibirPT() {
         return
       }
 
-      if (target.picking_id) resolveLocalTransferByPicking(target.picking_id, 'accepted')
+      if (target.picking_id) resolveLocalTransferByPicking(target.picking_id, 'accepted', session?.employee_id)
       const transferState = String(response?.data?.transfer_state || '').toLowerCase()
       const retryAfterSeconds = Number(response?.data?.retry_after || 0) || 0
       if (transferState === 'processing' || retryAfterSeconds > 0) {
@@ -160,7 +160,7 @@ export default function ScreenRecibirPT() {
         await loadData()
         return
       }
-      if (target.picking_id) resolveLocalTransferByPicking(target.picking_id, 'rejected')
+      if (target.picking_id) resolveLocalTransferByPicking(target.picking_id, 'rejected', session?.employee_id)
       showToast(response?.message || 'Transferencia rechazada')
       await loadData()
     } catch (e) {

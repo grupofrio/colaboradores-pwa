@@ -9,7 +9,7 @@ import { getTypo } from '../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { useSession } from '../../App'
 import { getEffectiveJobKeys } from '../../lib/roleContext'
-import { isCashShiftNavigationVisible } from '../../lib/navModel.js'
+import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible } from '../../lib/navModel.js'
 import { getTodaySales, getTodayExpenses } from './api'
 import { logScreenError } from '../shared/logScreenError'
 import { AdminProvider, useAdmin } from './AdminContext'
@@ -56,11 +56,17 @@ function MobileAdminHub() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  const warehouseId = session?.warehouse_id || 89
+  const warehouseId = Number(session?.warehouse_id || 0) || null
 
   useEffect(() => {
     let alive = true
     async function loadData() {
+      if (!warehouseId) {
+        setSalesCount(0)
+        setExpensesCount(0)
+        setLoading(false)
+        return
+      }
       setLoading(true)
       try {
         const [sales, expenses] = await Promise.all([
@@ -92,6 +98,7 @@ function MobileAdminHub() {
   const visibleActions = ACTIONS.filter((action) => (
     (!action.roles || action.roles.some((role) => effectiveRoles.includes(role)))
     && (action.id !== 'cierre' || (capsReady && isCashShiftNavigationVisible(BACKEND_CAPS)))
+    && (action.id !== 'traspaso_mp' || (capsReady && isTraspasoMpNavigationVisible(BACKEND_CAPS)))
   ))
 
   return (

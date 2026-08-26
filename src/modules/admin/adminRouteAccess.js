@@ -16,7 +16,7 @@ import {
   ADMIN_NAV_ACCESS,
   isGerentePilotReadOnly,
 } from './gerentePilotCaps.js'
-import { isCashShiftNavigationVisible } from '../../lib/navModel.js'
+import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible } from '../../lib/navModel.js'
 
 /** Ruta absoluta → roles autorizados, derivado de NAV_ITEMS. */
 export const ADMIN_ROUTE_ROLES = Object.freeze(
@@ -96,6 +96,10 @@ export function adminRouteAllows(route, effectiveRoles = [], ctx = {}) {
 
   // Paridad con AdminShell.navItemsForRoles: cierre solo si cash-shift visible.
   if (policy.navId === 'cierre' && !isCashShiftNavigationVisible(capabilities)) {
+    return false
+  }
+
+  if (policy.navId === 'traspaso-mp' && !isTraspasoMpNavigationVisible(capabilities)) {
     return false
   }
 
