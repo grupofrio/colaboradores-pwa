@@ -13,7 +13,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getActiveShift } from '../supervision/api'
 import { resolveSupervisionWarehouseId } from '../supervision/shiftContext'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
@@ -29,6 +31,8 @@ import {
 } from '../shared/incidentService'
 import { logScreenError } from '../shared/logScreenError'
 
+const TOKENS = BRAND_TOKENS_LIGHT
+
 const INITIAL_FORM = {
   incidents: '',
   pending_tasks: '',
@@ -40,6 +44,7 @@ const INITIAL_FORM = {
 export default function ScreenHandoverTurno() {
   const { session } = useSession()
   const navigate = useNavigate()
+  const _useLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(session?.role) || isBrandLightSession(session)
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
@@ -213,8 +218,8 @@ export default function ScreenHandoverTurno() {
 
   const inputStyle = {
     width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm,
-    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-    color: 'white', fontSize: 13, fontFamily: 'inherit', marginBottom: 10,
+    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+    color: TOKENS.colors.text, fontSize: 13, fontFamily: 'inherit', marginBottom: 10,
   }
 
   return (
@@ -238,7 +243,7 @@ export default function ScreenHandoverTurno() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -269,7 +274,7 @@ export default function ScreenHandoverTurno() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`, borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : !shift ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
@@ -449,7 +454,7 @@ export default function ScreenHandoverTurno() {
                       flex: 2, padding: '10px', borderRadius: TOKENS.radius.sm,
                       background: !canSave ? TOKENS.colors.surface : 'linear-gradient(135deg, #15499B 0%, #2B8FE0 100%)',
                       border: `1px solid ${!canSave ? TOKENS.colors.border : 'transparent'}`,
-                      color: 'white', fontSize: 13, fontWeight: 600,
+                      color: !canSave ? TOKENS.colors.textLow : 'white', fontSize: 13, fontWeight: 600,
                       opacity: saving ? 0.6 : 1,
                     }}>
                     {saving ? 'Firmando...' : 'Firmar entrega'}

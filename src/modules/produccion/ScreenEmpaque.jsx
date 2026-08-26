@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { getModuleById } from '../registry'
 import { resolveModuleContextRole } from '../../lib/roleContext'
 import { getMyShift, getPackingProducts, createPackingEntry, getPackingEntries } from './api'
@@ -144,7 +145,7 @@ export default function ScreenEmpaque() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -153,7 +154,7 @@ export default function ScreenEmpaque() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`, borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -183,8 +184,8 @@ export default function ScreenEmpaque() {
                   placeholder="Buscar producto..."
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                    color: 'white', fontSize: 14, fontWeight: 500, outline: 'none',
+                    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.text, fontSize: 14, fontWeight: 500, outline: 'none',
                     marginBottom: 10,
                   }}
                 />
@@ -233,8 +234,8 @@ export default function ScreenEmpaque() {
                 placeholder="0"
                 style={{
                   width: '100%', padding: '12px 14px', borderRadius: TOKENS.radius.md,
-                  background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                  color: 'white', fontSize: 22, fontWeight: 700, outline: 'none',
+                  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                  color: TOKENS.colors.text, fontSize: 22, fontWeight: 700, outline: 'none',
                   textAlign: 'center', letterSpacing: '-0.02em',
                 }}
               />

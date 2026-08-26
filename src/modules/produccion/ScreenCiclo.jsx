@@ -2,12 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getModuleById } from '../registry'
 import { resolveModuleContextRole } from '../../lib/roleContext'
 import { getMyShift, createCycle, updateCycle, getCycles } from './api'
 
 // V2: Rolito users get the new guided cycle flow
 import ScreenCicloRolito from './ScreenCicloRolito'
+
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
 export default function ScreenCiclo() {
   const { session } = useSession()
@@ -22,6 +26,8 @@ export default function ScreenCiclo() {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const isBarras = activeRole === 'operador_barra'
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(activeRole) || isBrandLightSession(session)
+  const UI = isLightSurface ? TOKENS_LIGHT : TOKENS
   const [shift, setShift] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -128,7 +134,7 @@ export default function ScreenCiclo() {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+      background: `linear-gradient(160deg, ${UI.colors.bg0} 0%, ${UI.colors.bg1} 50%, ${UI.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
@@ -146,41 +152,41 @@ export default function ScreenCiclo() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
           <button onClick={() => navigate('/produccion')} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            background: UI.colors.surface, border: `1px solid ${UI.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={UI.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>{isBarras ? 'Producción' : 'Nuevo Ciclo'}</span>
+          <span style={{ ...typo.title, color: UI.colors.textSoft }}>{isBarras ? 'Producción' : 'Nuevo Ciclo'}</span>
         </div>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${UI.colors.border}`, borderTop: `2px solid ${UI.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* Congelación */}
-            <SectionLabel text="CONGELACIÓN" typo={typo} />
+            <SectionLabel text="CONGELACIÓN" typo={typo} ui={UI} />
             <div style={{ display: 'flex', gap: 10 }}>
-              <TimeField label="Hora inicio" value={freezeStart} onChange={setFreezeStart} onNow={() => setFreezeStart(nowTime())} typo={typo} required />
-              <TimeField label="Hora fin" value={freezeEnd} onChange={setFreezeEnd} onNow={() => setFreezeEnd(nowTime())} typo={typo} />
+              <TimeField label="Hora inicio" value={freezeStart} onChange={setFreezeStart} onNow={() => setFreezeStart(nowTime())} typo={typo} ui={UI} required />
+              <TimeField label="Hora fin" value={freezeEnd} onChange={setFreezeEnd} onNow={() => setFreezeEnd(nowTime())} typo={typo} ui={UI} />
             </div>
 
             {/* Deshielo */}
-            <SectionLabel text="DESHIELO" typo={typo} />
+            <SectionLabel text="DESHIELO" typo={typo} ui={UI} />
             <div style={{ display: 'flex', gap: 10 }}>
-              <TimeField label="Hora inicio" value={defrostStart} onChange={setDefrostStart} onNow={() => setDefrostStart(nowTime())} typo={typo} />
-              <TimeField label="Hora fin" value={defrostEnd} onChange={setDefrostEnd} onNow={() => setDefrostEnd(nowTime())} typo={typo} />
+              <TimeField label="Hora inicio" value={defrostStart} onChange={setDefrostStart} onNow={() => setDefrostStart(nowTime())} typo={typo} ui={UI} />
+              <TimeField label="Hora fin" value={defrostEnd} onChange={setDefrostEnd} onNow={() => setDefrostEnd(nowTime())} typo={typo} ui={UI} />
             </div>
 
             {/* Kg descargados */}
-            <SectionLabel text={isBarras ? 'RESULTADO' : 'DESCARGA'} typo={typo} />
+            <SectionLabel text={isBarras ? 'RESULTADO' : 'DESCARGA'} typo={typo} ui={UI} />
             <div>
-              <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>{isBarras ? 'Kg producidos' : 'Kg descargados'}</label>
+              <label style={{ ...typo.caption, color: UI.colors.textMuted, display: 'block', marginBottom: 6 }}>{isBarras ? 'Kg producidos' : 'Kg descargados'}</label>
               <input
                 type="number"
                 inputMode="decimal"
@@ -189,8 +195,8 @@ export default function ScreenCiclo() {
                 placeholder="0"
                 style={{
                   width: '100%', padding: '12px 14px', borderRadius: TOKENS.radius.md,
-                  background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                  color: 'white', fontSize: 18, fontWeight: 700, outline: 'none',
+                  background: UI.colors.surface, border: `1px solid ${UI.colors.border}`,
+                  color: UI.colors.text, fontSize: 18, fontWeight: 700, outline: 'none',
                   letterSpacing: '-0.02em',
                 }}
               />
@@ -211,8 +217,8 @@ export default function ScreenCiclo() {
             {error && (
               <div style={{
                 padding: 12, borderRadius: TOKENS.radius.md,
-                background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
-                color: TOKENS.colors.error, ...typo.caption, textAlign: 'center',
+                background: UI.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
+                color: UI.colors.error, ...typo.caption, textAlign: 'center',
               }}>
                 {error}
               </div>
@@ -223,7 +229,7 @@ export default function ScreenCiclo() {
               <div style={{
                 padding: 12, borderRadius: TOKENS.radius.md,
                 background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
-                color: TOKENS.colors.success, ...typo.caption, textAlign: 'center',
+                color: UI.colors.success, ...typo.caption, textAlign: 'center',
               }}>
                 {success}
               </div>
@@ -236,8 +242,8 @@ export default function ScreenCiclo() {
               style={{
                 width: '100%', padding: '14px',
                 borderRadius: TOKENS.radius.lg,
-                background: canSubmit ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-                color: canSubmit ? 'white' : TOKENS.colors.textLow,
+                background: canSubmit ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : UI.colors.surface,
+                color: canSubmit ? 'white' : UI.colors.textLow,
                 fontSize: 15, fontWeight: 600,
                 opacity: saving ? 0.6 : 1,
                 boxShadow: canSubmit ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
@@ -255,17 +261,17 @@ export default function ScreenCiclo() {
   )
 }
 
-function SectionLabel({ text, typo }) {
+function SectionLabel({ text, typo, ui }) {
   return (
-    <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0, marginTop: 8 }}>{text}</p>
+    <p style={{ ...typo.overline, color: ui.colors.textLow, margin: 0, marginTop: 8 }}>{text}</p>
   )
 }
 
-function TimeField({ label, value, onChange, onNow, typo, required }) {
+function TimeField({ label, value, onChange, onNow, typo, ui, required }) {
   return (
     <div style={{ flex: 1 }}>
-      <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
-        {label}{required && <span style={{ color: TOKENS.colors.error }}> *</span>}
+      <label style={{ ...typo.caption, color: ui.colors.textMuted, display: 'block', marginBottom: 6 }}>
+        {label}{required && <span style={{ color: ui.colors.error }}> *</span>}
       </label>
       <div style={{ display: 'flex', gap: 6 }}>
         <input
@@ -274,8 +280,8 @@ function TimeField({ label, value, onChange, onNow, typo, required }) {
           onChange={e => onChange(e.target.value)}
           style={{
             flex: 1, padding: '10px 12px', borderRadius: TOKENS.radius.sm,
-            background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-            color: 'white', fontSize: 15, fontWeight: 600, outline: 'none',
+            background: ui.colors.surface, border: `1px solid ${ui.colors.border}`,
+            color: ui.colors.text, fontSize: 15, fontWeight: 600, outline: 'none',
           }}
         />
         <button
@@ -283,7 +289,7 @@ function TimeField({ label, value, onChange, onNow, typo, required }) {
           style={{
             padding: '0 10px', borderRadius: TOKENS.radius.sm,
             background: 'rgba(43,143,224,0.12)', border: `1px solid rgba(43,143,224,0.25)`,
-            color: TOKENS.colors.blue2, fontSize: 11, fontWeight: 700,
+            color: ui.colors.blue2, fontSize: 11, fontWeight: 700,
           }}
         >
           AHORA

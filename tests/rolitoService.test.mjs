@@ -5,6 +5,7 @@ import {
   buildPackingPayload,
   computeAvailableBagMaterials,
   findNewMatchingPackingEntry,
+  getNextAction,
   resolveBagCloseTotals,
 } from '../src/modules/produccion/rolitoService.js'
 
@@ -96,6 +97,24 @@ test('resolveBagCloseTotals: bagDeclarationRequired=false deja totalBagsDamaged 
     totalBagsUsed: 90,
     totalBagsReturned: 0,
     totalBagsDamaged: 0,
+  })
+})
+
+test('getNextAction sends production operators to production materials route when bags are missing', () => {
+  const nextAction = getNextAction(
+    { id: 51 },
+    [],
+    { state: 'completed' },
+    [],
+    [],
+  )
+
+  assert.deepEqual(nextAction, {
+    action: 'need_materials',
+    label: 'Espera bolsa',
+    description: 'No hay bolsa disponible en el turno para iniciar produccion',
+    route: '/produccion/materiales',
+    urgency: 'required',
   })
 })
 

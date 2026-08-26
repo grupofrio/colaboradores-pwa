@@ -15,7 +15,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSession } from '../../App'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { listSlots, reportIncident, INCIDENT_TYPES } from './barraService'
 import { getMyShift, harvestWithPtReception } from './api'
 import { buildPtReceptionFromHarvest, resolveBarHarvestQuantities, resolveHarvestShiftId } from './barraHarvestReception'
@@ -26,10 +27,10 @@ import { TANK_INCIDENTS } from '../shared/voice/catalogs'
 
 // ── Colores por estado ───────────────────────────────────────────────────────
 const STATE_META = {
-  draft:     { label: 'Vacio',      bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' },
+  draft:     { label: 'Vacio',      bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.22)', color: TOKENS.colors.textMuted },
   freezing:  { label: 'Congelando', bg: 'rgba(43,143,224,0.14)',  border: 'rgba(97,178,255,0.35)',  color: '#61b2ff' },
   ready:     { label: 'Lista',      bg: 'rgba(34,197,94,0.16)',   border: 'rgba(34,197,94,0.40)',   color: '#22c55e' },
-  harvested: { label: 'Cosechada',  bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.30)' },
+  harvested: { label: 'Cosechada',  bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.18)', color: TOKENS.colors.textLow },
 }
 const stateMeta = s => STATE_META[s] || STATE_META.draft
 
@@ -424,7 +425,7 @@ export default function ScreenTanque() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -438,7 +439,7 @@ export default function ScreenTanque() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`, borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -548,7 +549,7 @@ export default function ScreenTanque() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <p style={{ ...typo.overline, color: '#22c55e', margin: 0 }}>SIGUIENTE A COSECHAR</p>
-                    <p style={{ ...typo.h2, color: 'white', margin: 0, marginTop: 2 }}>Canastilla {s.name}</p>
+                    <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0, marginTop: 2 }}>Canastilla {s.name}</p>
                     {s.time_in_ready_hours > 0 && (
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
                         Lista hace {s.time_in_ready_hours.toFixed(1)}h
@@ -691,7 +692,7 @@ export default function ScreenTanque() {
           setHarvestVoiceNote('')
         }}>
           <p style={{ ...typo.overline, color: TOKENS.colors.blue3, margin: 0 }}>COSECHAR CANASTILLA</p>
-          <p style={{ ...typo.h1, color: 'white', margin: 0, marginTop: 4 }}>{harvestSlot.name}</p>
+          <p style={{ ...typo.h1, color: TOKENS.colors.text, margin: 0, marginTop: 4 }}>{harvestSlot.name}</p>
 
           <div style={{
             marginTop: 10, padding: 10, borderRadius: TOKENS.radius.sm,
@@ -762,8 +763,8 @@ export default function ScreenTanque() {
               placeholder="-10.5"
               style={{
                 width: '100%', padding: '12px 14px', borderRadius: TOKENS.radius.md,
-                background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                color: 'white', fontSize: 18, fontWeight: 700, outline: 'none',
+                background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                color: TOKENS.colors.text, fontSize: 18, fontWeight: 700, outline: 'none',
               }}
             />
           </div>
@@ -809,8 +810,8 @@ export default function ScreenTanque() {
                   disabled={harvestBusy}
                   style={{
                     width: '100%', padding: '12px 14px', borderRadius: TOKENS.radius.md,
-                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                    color: 'white', fontSize: 18, fontWeight: 700, outline: 'none',
+                    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.text, fontSize: 18, fontWeight: 700, outline: 'none',
                   }}
                 />
                 {harvestQuantities?.valid && (
@@ -900,7 +901,7 @@ export default function ScreenTanque() {
           setIncidentVoiceNote('')
         }}>
           <p style={{ ...typo.overline, color: TOKENS.colors.warning, margin: 0 }}>INCIDENCIA DE TANQUE</p>
-          <p style={{ ...typo.h2, color: 'white', margin: 0, marginTop: 4 }}>
+          <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0, marginTop: 4 }}>
             {tank?.display_name || 'Reportar'}
           </p>
 
@@ -960,8 +961,8 @@ export default function ScreenTanque() {
               placeholder="Detalle breve de la incidencia"
               style={{
                 width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm,
-                background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
-                color: 'white', fontSize: 14, outline: 'none', resize: 'vertical',
+                background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                color: TOKENS.colors.text, fontSize: 14, outline: 'none', resize: 'vertical',
               }}
             />
           </div>
@@ -1019,7 +1020,7 @@ function MiniStat({ label, value, typo, alert }) {
     <div style={{ textAlign: 'center' }}>
       <p style={{
         fontSize: 16, fontWeight: 800,
-        color: alert ? TOKENS.colors.warning : 'white',
+        color: alert ? TOKENS.colors.warning : TOKENS.colors.text,
         margin: 0, lineHeight: 1,
       }}>{value}</p>
       <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0, marginTop: 4 }}>{label}</p>

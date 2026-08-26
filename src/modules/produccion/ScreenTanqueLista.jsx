@@ -4,7 +4,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TOKENS, getTypo } from '../../tokens'
+import { getTypo } from '../../tokens'
+import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { listTanks } from './barraService'
 
 export default function ScreenTanqueLista() {
@@ -52,7 +53,7 @@ export default function ScreenTanqueLista() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
@@ -61,7 +62,7 @@ export default function ScreenTanqueLista() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${TOKENS.colors.border}`, borderTop: `2px solid ${TOKENS.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         ) : error ? (
           <div style={{
@@ -110,13 +111,13 @@ function TankCard({ tank, typo, onClick }) {
           background: TOKENS.colors.blueGlow, border: `1px solid ${TOKENS.colors.borderBlue}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#61b2ff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="16" rx="2"/>
             <line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="4" x2="12" y2="20"/>
           </svg>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ ...typo.h2, color: 'white', margin: 0 }}>{tank.display_name || tank.name}</p>
+          <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0 }}>{tank.display_name || tank.name}</p>
           {tank.line_name && (
             <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{tank.line_name}</p>
           )}
@@ -153,7 +154,7 @@ function MiniStat({ label, value, typo, alert }) {
     <div style={{ textAlign: 'center' }}>
       <p style={{
         fontSize: 16, fontWeight: 800,
-        color: alert ? TOKENS.colors.warning : 'white',
+        color: alert ? TOKENS.colors.warning : TOKENS.colors.text,
         margin: 0, lineHeight: 1,
       }}>{value}</p>
       <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0, marginTop: 4 }}>{label}</p>

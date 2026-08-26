@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
+import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
+import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getModuleById } from '../registry'
 import { resolveModuleContextRole } from '../../lib/roleContext'
 import { getMyShift, getCycles, getPackingEntries } from './api'
@@ -15,11 +17,13 @@ import ScreenTurnoEntregado from './ScreenTurnoEntregado'
 // V2: Rolito users get redirected to the new guided hub
 import ScreenTurnoRolito from './ScreenTurnoRolito'
 
+const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
+
 const STATES = {
-  draft:       { label: 'Pendiente',   color: TOKENS.colors.textMuted },
-  in_progress: { label: 'En progreso', color: TOKENS.colors.blue2 },
-  closed:      { label: 'Cerrado',     color: TOKENS.colors.success },
-  audited:     { label: 'Auditado',    color: TOKENS.colors.success },
+  draft:       { label: 'Pendiente',   color: TOKENS_LIGHT.colors.textMuted },
+  in_progress: { label: 'En progreso', color: TOKENS_LIGHT.colors.blue2 },
+  closed:      { label: 'Cerrado',     color: TOKENS_LIGHT.colors.success },
+  audited:     { label: 'Auditado',    color: TOKENS_LIGHT.colors.success },
 }
 
 export default function ScreenMiTurno() {
@@ -32,6 +36,8 @@ export default function ScreenMiTurno() {
   ) || session?.role || ''
 
   const navigate = useNavigate()
+  const isLightSurface = ['operador_rolito', 'operador_barra', 'auxiliar_produccion'].includes(activeRole) || isBrandLightSession(session)
+  const UI = isLightSurface ? TOKENS_LIGHT : TOKENS
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const [shift, setShift] = useState(null)
@@ -110,7 +116,7 @@ export default function ScreenMiTurno() {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+      background: `linear-gradient(160deg, ${UI.colors.bg0} 0%, ${UI.colors.bg1} 50%, ${UI.colors.bg2} 100%)`,
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
@@ -130,20 +136,20 @@ export default function ScreenMiTurno() {
         }}>
           <button onClick={() => navigate('/')} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            background: UI.colors.surface, border: `1px solid ${UI.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={UI.colors.textSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Registro de Turno</span>
+          <span style={{ ...typo.title, color: UI.colors.textSoft }}>Registro de Turno</span>
         </div>
 
         {/* Loading */}
         {loading && (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: 32, height: 32, border: `2px solid ${UI.colors.border}`, borderTop: `2px solid ${UI.colors.blue}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           </div>
         )}
 
@@ -151,11 +157,11 @@ export default function ScreenMiTurno() {
         {!loading && error && (
           <div style={{
             marginTop: 20, padding: 16, borderRadius: TOKENS.radius.lg,
-            background: TOKENS.colors.errorSoft, border: `1px solid rgba(239,68,68,0.3)`,
-            color: TOKENS.colors.error, ...typo.body, textAlign: 'center',
+            background: UI.colors.errorSoft, border: `1px solid rgba(239,68,68,0.3)`,
+            color: UI.colors.error, ...typo.body, textAlign: 'center',
           }}>
             {error}
-            <button onClick={loadData} style={{ display: 'block', margin: '10px auto 0', color: TOKENS.colors.blue2, ...typo.caption, textDecoration: 'underline' }}>
+            <button onClick={loadData} style={{ display: 'block', margin: '10px auto 0', color: UI.colors.blue2, ...typo.caption, textDecoration: 'underline' }}>
               Reintentar
             </button>
           </div>
@@ -165,12 +171,12 @@ export default function ScreenMiTurno() {
         {!loading && !error && !shift && (
           <div style={{
             marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl,
-            background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+            background: UI.glass.panel, border: `1px solid ${UI.colors.border}`,
             textAlign: 'center',
           }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>&#x1F3ED;</div>
-            <p style={{ ...typo.title, color: TOKENS.colors.text, marginBottom: 6 }}>Sin turno activo</p>
-            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>No hay un turno de producción asignado para hoy. Contacta a tu supervisor.</p>
+            <p style={{ ...typo.title, color: UI.colors.text, marginBottom: 6 }}>Sin turno activo</p>
+            <p style={{ ...typo.caption, color: UI.colors.textMuted }}>No hay un turno de producción asignado para hoy. Contacta a tu supervisor.</p>
           </div>
         )}
 
@@ -180,16 +186,16 @@ export default function ScreenMiTurno() {
             {/* Card del turno */}
             <div style={{
               marginTop: 8, padding: 18, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
-              boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
+              background: UI.glass.hero, border: `1px solid ${UI.colors.borderBlue}`,
+              boxShadow: `${UI.shadow.md}, ${UI.shadow.inset}`,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 6 }}>TURNO ACTIVO</p>
-                  <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0 }}>
+                  <p style={{ ...typo.overline, color: 'rgba(255,255,255,0.82)', marginBottom: 6 }}>TURNO ACTIVO</p>
+                  <p style={{ ...typo.h2, color: UI.colors.onPrimary, margin: 0 }}>
                     {shift.name || `Turno ${shift.shift_code}`}
                   </p>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 4 }}>
+                  <p style={{ ...typo.caption, color: UI.colors.onPrimary, opacity: 0.86, marginTop: 4 }}>
                     {shift.date} &middot; {TURNO_LABELS[shift.shift_code] || `Turno ${shift.shift_code}`}
                   </p>
                 </div>
@@ -216,19 +222,19 @@ export default function ScreenMiTurno() {
                     <MiniStat
                       label="Canastillas listas"
                       value={tankData?.ready_slots_count ?? '—'}
-                      accent={(tankData?.ready_slots_count || 0) > 0 ? TOKENS.colors.success : TOKENS.colors.textMuted}
+                      accent={(tankData?.ready_slots_count || 0) > 0 ? UI.colors.success : UI.colors.textMuted}
                       typo={typo}
                     />
                     <MiniStat
                       label="Temp salmuera"
                       value={saltData?.brine_temp ? `${saltData.brine_temp}°C` : '—'}
-                      accent={tempBad ? TOKENS.colors.error : TOKENS.colors.blue2}
+                      accent={tempBad ? UI.colors.error : UI.colors.blue2}
                       typo={typo}
                     />
                     <MiniStat
                       label={`Sal (${saltUnit})`}
                       value={saltData?.salt_level ? saltData.salt_level : '—'}
-                      accent={saltBad ? TOKENS.colors.warning : TOKENS.colors.blue2}
+                      accent={saltBad ? UI.colors.warning : UI.colors.blue2}
                       typo={typo}
                     />
                   </div>
@@ -237,7 +243,7 @@ export default function ScreenMiTurno() {
                     <MiniStat
                       label="Extrac. 30min"
                       value={tankData?.extractions_last_30min ?? '—'}
-                      accent={TOKENS.colors.blue2}
+                      accent={UI.colors.blue2}
                       typo={typo}
                     />
                     <MiniStat
@@ -261,7 +267,7 @@ export default function ScreenMiTurno() {
                       display: 'flex', alignItems: 'center', gap: 8,
                     }}>
                       <span style={{ fontSize: 14 }}>&#x26A0;</span>
-                      <span style={{ ...typo.caption, color: TOKENS.colors.error, fontWeight: 600 }}>
+                      <span style={{ ...typo.caption, color: UI.colors.error, fontWeight: 600 }}>
                         Temperatura {saltData.brine_temp}°C — debe ser {tempThr}°C o menor para extraer
                       </span>
                     </div>
@@ -271,8 +277,8 @@ export default function ScreenMiTurno() {
               })() : (
                 <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                   <MiniStat label="Producciones" value={cycles.length} typo={typo} />
-                  <MiniStat label="Producido" value={`${shift.total_kg_produced?.toFixed(0) || '0'} kg`} accent={TOKENS.colors.blue2} typo={typo} />
-                  <MiniStat label="Empacado" value={`${totalKgPacked.toFixed(0)} kg`} accent={TOKENS.colors.success} typo={typo} />
+                  <MiniStat label="Producido" value={`${shift.total_kg_produced?.toFixed(0) || '0'} kg`} accent={UI.colors.blue2} typo={typo} />
+                  <MiniStat label="Empacado" value={`${totalKgPacked.toFixed(0)} kg`} accent={UI.colors.success} typo={typo} />
                 </div>
               )}
             </div>
@@ -312,7 +318,7 @@ export default function ScreenMiTurno() {
             )}
 
             {/* Acciones */}
-            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 12 }}>ACCIONES</p>
+            <p style={{ ...typo.overline, color: UI.colors.textLow, marginTop: 20, marginBottom: 12 }}>ACCIONES</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {ACTIONS.map(action => (
                 <ActionCard
@@ -327,7 +333,7 @@ export default function ScreenMiTurno() {
             {/* Últimos ciclos */}
             {cycles.length > 0 && (
               <>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 24, marginBottom: 12 }}>ÚLTIMAS PRODUCCIONES</p>
+                <p style={{ ...typo.overline, color: UI.colors.textLow, marginTop: 24, marginBottom: 12 }}>ÚLTIMAS PRODUCCIONES</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {cycles.slice(-3).reverse().map((c, i) => (
                     <CycleRow key={c.id || i} cycle={c} typo={typo} />
@@ -348,11 +354,11 @@ function MiniStat({ label, value, accent, typo }) {
   return (
     <div style={{
       flex: 1, minWidth: 0, borderRadius: TOKENS.radius.md,
-      padding: '10px', background: TOKENS.glass.panelSoft,
-      border: `1px solid ${TOKENS.colors.border}`,
+      padding: '10px', background: TOKENS_LIGHT.glass.panelSoft,
+      border: `1px solid ${TOKENS_LIGHT.colors.border}`,
     }}>
-      <div style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginBottom: 3 }}>{label}</div>
-      <div style={{ fontSize: typo.h2.fontSize - 2, fontWeight: 700, color: accent || TOKENS.colors.text, letterSpacing: '-0.02em' }}>
+      <div style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: typo.h2.fontSize - 2, fontWeight: 700, color: accent || TOKENS_LIGHT.colors.text, letterSpacing: '-0.02em' }}>
         {value}
       </div>
     </div>
@@ -370,7 +376,7 @@ function ActionCard({ action, typo, onClick }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 14,
         padding: '14px 16px', borderRadius: TOKENS.radius.lg,
-        background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+        background: TOKENS_LIGHT.glass.panel, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
         boxShadow: pressed ? 'none' : TOKENS.shadow.soft,
         transform: pressed ? 'scale(0.98)' : 'scale(1)',
         transition: `transform ${TOKENS.motion.fast}, box-shadow ${TOKENS.motion.fast}`,
@@ -386,10 +392,10 @@ function ActionCard({ action, typo, onClick }) {
         {getActionIcon(action.iconKey)}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>{action.label}</p>
-        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{action.desc}</p>
+        <p style={{ ...typo.title, color: TOKENS_LIGHT.colors.text, margin: 0 }}>{action.label}</p>
+        <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginTop: 2 }}>{action.desc}</p>
       </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS_LIGHT.colors.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M9 18l6-6-6-6"/>
       </svg>
     </button>
@@ -447,10 +453,10 @@ function getActionIcon(iconKey) {
 }
 
 const CYCLE_STATES = {
-  freezing:   { label: 'Congelando', color: TOKENS.colors.blue2 },
-  defrosting: { label: 'Deshielando', color: TOKENS.colors.warning },
-  dumped:     { label: 'Completado', color: TOKENS.colors.success },
-  cancelled:  { label: 'Cancelado', color: TOKENS.colors.error },
+  freezing:   { label: 'Congelando', color: TOKENS_LIGHT.colors.blue2 },
+  defrosting: { label: 'Deshielando', color: TOKENS_LIGHT.colors.warning },
+  dumped:     { label: 'Completado', color: TOKENS_LIGHT.colors.success },
+  cancelled:  { label: 'Cancelado', color: TOKENS_LIGHT.colors.error },
 }
 
 function CycleRow({ cycle, typo }) {
@@ -460,7 +466,7 @@ function CycleRow({ cycle, typo }) {
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
       padding: '12px 14px', borderRadius: TOKENS.radius.md,
-      background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+      background: TOKENS_LIGHT.colors.surfaceSoft, border: `1px solid ${TOKENS_LIGHT.colors.border}`,
     }}>
       <div style={{
         width: 32, height: 32, borderRadius: '50%',
@@ -471,10 +477,10 @@ function CycleRow({ cycle, typo }) {
         {cycle.cycle_number || '#'}
       </div>
       <div style={{ flex: 1 }}>
-        <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600 }}>
+        <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textSoft, margin: 0, fontWeight: 600 }}>
           Prod. {cycle.cycle_number} &middot; {timeStr}
         </p>
-        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
+        <p style={{ ...typo.caption, color: TOKENS_LIGHT.colors.textMuted, margin: 0, marginTop: 2 }}>
           {cycle.kg_dumped ? `${cycle.kg_dumped} kg` : 'En proceso'}
         </p>
       </div>
