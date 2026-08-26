@@ -124,6 +124,26 @@ export default defineConfig(({ command, mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api-odoo/, '/api')
         },
+        // Replica en dev la regla de vercel.json ("/odoo-api/pwa-admin/:path*" ->
+        // "/api/pwa-admin") — en produccion esa ruta pasa por api/pwa-admin.js,
+        // que inyecta el header Api-Key (ODOO_PWA_SERVICE_API_KEY) server-side.
+        // El proxy plano de abajo (/odoo-api generico) no sabe hacer eso, asi
+        // que sin esta regla especifica /pwa-admin/* siempre llega a Odoo sin
+        // credencial de servicio y todo cae a modo solo-lectura. La clave se
+        // inyecta aqui, en el proceso Node del dev server — nunca llega al
+        // navegador ni al bundle del cliente.
+        '/odoo-api/pwa-admin': {
+          target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/odoo-api/, ''),
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              if (env.ODOO_PWA_SERVICE_API_KEY) {
+                proxyReq.setHeader('Api-Key', env.ODOO_PWA_SERVICE_API_KEY)
+              }
+            })
+          }
+        },
         '/odoo-api': {
           target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
           changeOrigin: true,

@@ -325,6 +325,7 @@ export default function AdminRequisicionForm() {
   // se resuelve aquí, no en AdminContext, para no disparar esta llamada en
   // otras pantallas admin (POS, gastos) que también usan AdminProvider.
   const [operatingScope, setOperatingScope] = useState({ enabled: false, scopes: [], defaultPlazaId: null })
+  const [operatingScopeReady, setOperatingScopeReady] = useState(false)
   const [operatingPlazaId, setOperatingPlazaId] = useState(null)
   const [operatingCompanyId, setOperatingCompanyId] = useState(null)
   const operatingScopeGroups = useMemo(
@@ -338,7 +339,11 @@ export default function AdminRequisicionForm() {
 
   useEffect(() => {
     let alive = true
-    bootOperatingScope(session).then(scope => { if (alive) setOperatingScope(scope) })
+    bootOperatingScope(session).then(scope => {
+      if (!alive) return
+      setOperatingScope(scope)
+      setOperatingScopeReady(true)
+    })
     return () => { alive = false }
   }, [session])
 
@@ -537,15 +542,21 @@ export default function AdminRequisicionForm() {
               }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: TOKENS.colors.blue3 }} />
                 <span style={{ fontSize: 12, color: TOKENS.colors.textSoft }}>
-                  Se creará como <strong style={{ color: TOKENS.colors.text }}>borrador</strong> en {resolvedCompanyLabel}
-                  {sucursal && <> · {sucursal}</>}
-                  {BACKEND_CAPS.requisitionApproval && (
-                    <> · montos &gt; {fmt(BACKEND_CAPS.requisitionApprovalThreshold)} requieren aprobación</>
+                  {!operatingScopeReady ? (
+                    'Cargando empresa…'
+                  ) : (
+                    <>
+                      Se creará como <strong style={{ color: TOKENS.colors.text }}>borrador</strong> en {resolvedCompanyLabel}
+                      {sucursal && <> · {sucursal}</>}
+                      {BACKEND_CAPS.requisitionApproval && (
+                        <> · montos &gt; {fmt(BACKEND_CAPS.requisitionApprovalThreshold)} requieren aprobación</>
+                      )}
+                    </>
                   )}
                 </span>
               </div>
 
-              {operatingScope.enabled && (
+              {operatingScopeReady && operatingScope.enabled && (
                 <div style={{
                   padding: 14, borderRadius: TOKENS.radius.md,
                   background: TOKENS.colors.surfaceSoft,
