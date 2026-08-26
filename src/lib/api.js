@@ -4185,6 +4185,25 @@ async function directProduction(method, path, body) {
     })
   }
 
+  // ── Operator Close: cierre individual entregado a supervision ─────────────
+  // CONTRATO CANONICO (Odoo controller real):
+  //   POST /api/production/shift/operator-close
+  //   Request:  { shift_id, role, employee_id?, closed_at? }
+  //   Response: { ok, closed?, employee_id?, error? }
+  // El controller espera cuerpo JSON plano. Si cae a odooJson() envía envelope
+  // JSON-RPC y backend no resuelve correctamente al empleado autorizado.
+  if (cleanPath === '/api/production/shift/operator-close' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    const employeeId = Number(body?.employee_id || getEmployeeId() || 0)
+    if (!shiftId) return { ok: false, error: 'shift_id requerido' }
+    return odooHttp('POST', '/api/production/shift/operator-close', {}, {
+      shift_id: shiftId,
+      role: body?.role || undefined,
+      employee_id: employeeId || undefined,
+      closed_at: body?.closed_at || undefined,
+    })
+  }
+
   // ── Opening State: snapshot de lo que recibe el turno entrante ─────────────
   // CONTRATO CANONICO (Odoo controller real):
   //   POST /api/production/shift/opening-state
