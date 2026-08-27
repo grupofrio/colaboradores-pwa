@@ -129,6 +129,19 @@ export function isEntregasNavigationVisible(capabilities = {}) {
   return capabilityAllowed(capabilities, 'delivery.transfer.gdl')
 }
 
+function hasEntregasRole(session = {}) {
+  return getEffectiveJobKeys(session).includes('almacenista_entregas')
+}
+
+function canAccessEntregasModule(session, capabilities = {}) {
+  if (validateContract(capabilities).ok) {
+    return capabilityAllowed(capabilities, 'delivery.transfer.gdl')
+  }
+  // Fallback operacional: si el contrato de capabilities no cargó o vino
+  // inválido, no le quitamos el módulo al rol canónico de Entregas.
+  return hasEntregasRole(session)
+}
+
 // Ancho del rail según viewport (AppShell reserva exactamente este espacio).
 export function railWidthFor(width) {
   if (!Number.isFinite(width) || width < DESKTOP_MIN) return 0
@@ -220,7 +233,7 @@ export function isModuleAccessibleForSession(module, session, attendanceManagerI
   if (module.accessPolicy) return resolveAccessPolicy(module.accessPolicy, session)
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
   if (module.id === 'almacen_entregas') {
-    return isEntregasNavigationVisible(capabilities || BACKEND_CAPS)
+    return canAccessEntregasModule(session, capabilities || BACKEND_CAPS)
   }
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
 }
@@ -283,7 +296,7 @@ export function getModuleEntryDecisionForSession(module, session, attendanceMana
   }
   const caps = capabilities || BACKEND_CAPS
   if (module?.id === 'almacen_entregas') {
-    return isEntregasNavigationVisible(caps)
+    return canAccessEntregasModule(session, caps)
       ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
       : { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
