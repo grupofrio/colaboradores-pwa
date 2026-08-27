@@ -1,8 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { createScrap } from '../src/modules/entregas/entregasService.js'
+
+const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
+const SCREEN_MERMA_PATH = path.join(TEST_DIR, '..', 'src', 'modules', 'entregas', 'ScreenMerma.jsx')
 
 const originalLocalStorage = globalThis.localStorage
 const originalFetch = globalThis.fetch
@@ -107,7 +112,7 @@ test('createScrap sends only human intent from entregas service while BFF fills 
 })
 
 test('ScreenMerma calls createScrap with human intent only', () => {
-  const source = fs.readFileSync('C:/development/Grupo-Frio/colaboradores-pwa/src/modules/entregas/ScreenMerma.jsx', 'utf8')
+  const source = fs.readFileSync(SCREEN_MERMA_PATH, 'utf8')
   const start = source.indexOf('const result = await createScrap(')
   assert.notEqual(start, -1, 'debe existir la llamada createScrap en ScreenMerma')
 
