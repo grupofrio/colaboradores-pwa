@@ -8,6 +8,7 @@ import { isSharedLightSurfaceSession } from "../theme/sharedLightSurface.js";
 import { MOBILE_NAV_HEIGHT, DESKTOP_MIN } from "../lib/navModel";
 import { publishedScopeSurface } from "../lib/capabilityContract.js";
 import { BACKEND_CAPS } from "../modules/admin/adminService.js";
+import { resolveProfileEmployeeData } from "./profileFallback.js";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -720,14 +721,22 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
     apiGet("/pwa-employee-profile")
       .then(res => {
         if (cancelled) return;
-        if (res.success && res.data) {
-          setEmployee(mapOdooEmployee(res.data));
-        }
+        setEmployee(resolveProfileEmployeeData({
+          session,
+          response: res,
+          mapApiEmployee: mapOdooEmployee,
+        }));
         setIsLoading(false);
       })
-      .catch(() => { if (!cancelled) setIsLoading(false); });
+      .catch(() => {
+        if (cancelled) return;
+        // `Yo` no debe quedar en blanco si falla hr.employee: degradamos al
+        // snapshot de sesion ya autenticado mientras el backend se recompone.
+        setEmployee(resolveProfileEmployeeData({ session }));
+        setIsLoading(false);
+      });
     return () => { cancelled = true; };
-  }, []);
+  }, [session]);
 
   const handlePhoneEdit = () => {
     if (!employee) return;
@@ -849,7 +858,7 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
             <div style={{ fontSize:28 }}>📡</div>
             <div style={{ fontSize:14, fontWeight:500, color:TOKENS.colors.textMuted }}>No se pudo cargar el perfil</div>
-            <button onClick={()=>{ setIsLoading(true); apiGet("/pwa-employee-profile").then(r=>{ if(r.success&&r.data) setEmployee(mapOdooEmployee(r.data)); setIsLoading(false); }).catch(()=>setIsLoading(false)); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:SKIN.cta, color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
+            <button onClick={()=>{ setIsLoading(true); apiGet("/pwa-employee-profile").then(r=>{ setEmployee(resolveProfileEmployeeData({ session, response: r, mapApiEmployee: mapOdooEmployee })); setIsLoading(false); }).catch(()=>{ setEmployee(resolveProfileEmployeeData({ session })); setIsLoading(false); }); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:SKIN.cta, color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
           </div>
         ) : (
           <>

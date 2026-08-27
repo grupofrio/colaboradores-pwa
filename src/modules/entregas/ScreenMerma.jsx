@@ -140,14 +140,12 @@ export default function ScreenMerma() {
       // y se mostraba "Merma registrada correctamente" en verde sin que
       // stock.scrap se hubiera creado en Odoo. Mismo patrón que ya
       // arreglamos en mostrador (PR #21) y devoluciones (PR #22).
-      const result = await createScrap(
-        warehouseId,
-        employeeId,
-        selectedProduct.product_id,
+      const result = await createScrap({
+        productId: selectedProduct.product_id,
         qty,
-        selectedReason.id,
-        notes.trim() || undefined
-      )
+        reasonId: selectedReason.id,
+        notes: notes.trim() || undefined,
+      })
 
       if (result && result.ok === false) {
         // Log estructurado con contexto mínimo para diagnóstico en campo.
@@ -167,7 +165,8 @@ export default function ScreenMerma() {
         return
       }
 
-      // Voice feedback best-effort: dispara fire-and-forget a W122 si hubo voz previa.
+      // Voice feedback best-effort: telemetría auxiliar para W122.
+      // No participa en la autoridad operativa del evento de merma.
       if (voiceContext?.trace_id) {
         sendVoiceFeedback({
           trace_id: voiceContext.trace_id,

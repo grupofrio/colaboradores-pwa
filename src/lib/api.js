@@ -7565,6 +7565,11 @@ async function directEntregas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-entregas/scrap-create' && method === 'POST') {
+    // Compat temporal: el payload visible del frontend ya solo manda la
+    // intención humana mínima { product_id, scrap_qty, reason_id, notes }.
+    // Mientras el controller siga aceptando contexto explícito, el BFF lo
+    // resuelve desde la sesión actual para que el cliente no sea autoridad
+    // de employee_id/warehouse_id.
     return odooJson('/gf/logistics/api/employee/warehouse_scrap/create', {
       warehouse_id: body?.warehouse_id || warehouseId,
       employee_id: body?.employee_id || getEmployeeId() || 0,

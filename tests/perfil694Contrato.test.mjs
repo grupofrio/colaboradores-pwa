@@ -485,9 +485,9 @@ test('cambio de identidad cierra el singleton antes del fetch de la ficha nueva'
   assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
   assert.equal(
     getModuleEntryDecisionForSession(entregas, MARISOL, undefined, BACKEND_CAPS).type,
-    'denied',
+    'direct',
   )
-  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'home')
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'allow')
 
   applyCapabilities(marisolContract(), MARISOL)
   assert.equal(
@@ -507,6 +507,23 @@ test('cambio de identidad cierra el singleton antes del fetch de la ficha nueva'
   assert.match(app, /syncCapabilitiesIdentity\(/)
   const home = src('../src/screens/ScreenHome.jsx')
   assert.match(home, /getModuleEntryDecisionForSession\(mod, session, undefined, BACKEND_CAPS\)/)
+})
+
+test('almacenista_entregas conserva acceso por rol si el contrato de capabilities no está listo', () => {
+  invalidateCashShiftCapabilities()
+  const entregas = getModuleById('almacen_entregas')
+
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+  assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
+  assert.equal(
+    getModuleEntryDecisionForSession(entregas, MARISOL, undefined, BACKEND_CAPS).type,
+    'direct',
+  )
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'allow')
+  assert.equal(
+    getModuleEntryDecisionForSession(entregas, OTHER, undefined, BACKEND_CAPS).type,
+    'denied',
+  )
 })
 
 test('selector Admin se resincroniza al cambiar identidad y no inventa multiempresa', () => {

@@ -517,18 +517,15 @@ export async function getScrapReasons() {
  * validates scrap location exists, validates immediately (action_validate).
  * Origin format: PWA-ENTREGAS/{employee}/{date}
  *
- * @param {number} warehouseId
- * @param {number} employeeId
- * @param {number} productId
- * @param {number} qty
- * @param {number} reasonId - id de gf.production.scrap.reason
- * @param {string} [notes]
+ * @param {Object} params
+ * @param {number} params.productId
+ * @param {number} params.qty
+ * @param {number} params.reasonId - id de gf.production.scrap.reason
+ * @param {string} [params.notes]
  * @returns {Promise<Object>} { success, scrap_id, scrap_name, product, qty, state }
  */
-export async function createScrap(warehouseId, employeeId, productId, qty, reasonId, notes) {
+export async function createScrap({ productId, qty, reasonId, notes } = {}) {
   return api('POST', '/pwa-entregas/scrap-create', {
-    warehouse_id: warehouseId,
-    employee_id: employeeId,
     product_id: productId,
     scrap_qty: qty,
     reason_id: reasonId,
