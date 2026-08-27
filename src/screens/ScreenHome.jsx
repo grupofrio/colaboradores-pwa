@@ -4,6 +4,7 @@ import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
 import { getHomeModulesForSession, getModuleEntryDecisionForSession } from '../lib/navModel'
 import { BACKEND_CAPS } from '../modules/admin/adminService'
+import { useCapabilitiesRevision } from '../modules/admin/useCapabilitiesRevision'
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
 import { upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
@@ -260,6 +261,7 @@ export default function ScreenHome() {
   const typo = useMemo(() => getTypo(sw), [sw])
   const isBypass = session?._bypass === true
   const [rolePromptModule, setRolePromptModule] = useState(null)
+  const capsRevision = useCapabilitiesRevision()
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -270,9 +272,10 @@ export default function ScreenHome() {
   // Módulos visibles para esta sesión: roles x_job_key, Tower por tower_status
   // autoritativo y políticas propias (M2/M3) vía ACCESS_POLICY_RESOLVERS.
   // Home conserva el orden histórico del registry.
-  const modules = useMemo(() =>
-    getHomeModulesForSession(session),
-  [session])
+  const modules = useMemo(() => {
+    void capsRevision
+    return getHomeModulesForSession(session)
+  }, [session, capsRevision])
 
   const firstName = session?.name?.split(' ')[0] ?? 'Colaborador'
   const companyLabel = COMPANY_LABELS[session?.company_id] ?? session?.company ?? ''

@@ -2,6 +2,8 @@ import test, { after, afterEach, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'vite'
+import { CATALOG, CONTRACT_VERSION } from '../src/lib/capabilityContract.js'
+import { ODOO_UNAVAILABLE_MESSAGE } from '../src/lib/odooAvailability.js'
 
 const originalFetch = globalThis.fetch
 const originalLocalStorage = globalThis.localStorage
@@ -418,7 +420,9 @@ test('AdminProvider reinicia readiness y estado cash al cambiar identidad de ses
   assert.match(adminContextSource, /buildSessionIdentity\(session\)\.sessionKey/)
   assert.match(adminContextSource, /setCapsReady\(false\)/)
   assert.match(adminContextSource, /bootCapabilities\(session\)/)
-  assert.match(adminContextSource, /invalidateCashShiftCapabilities\(\)/)
+  assert.match(adminContextSource, /useCapabilitiesRevision/)
+  assert.match(adminContextSource, /retryCapabilities/)
+  assert.doesNotMatch(adminContextSource, /invalidateCashShiftCapabilities\(\)/)
   assert.match(adminContextSource, /\[[^\]]*sessionIdentity[^\]]*employeeToken[^\]]*\]/)
 })
 
@@ -875,3 +879,109 @@ test('AdminGastosForm no construye employee_id controlado por la UI', async () =
   ))
   assert.doesNotMatch(source, /employee_id\s*:/)
 })
+
+function deniedCap(code = 'not_granted', mode = null) {
+  return {
+    allowed: false,
+    mode,
+    scopes: { company_ids: [], plaza_ids: [], warehouse_ids: [], analytic_ids: [] },
+    limit: null,
+    currency: null,
+    deny: { code, reason: code },
+  }
+}
+
+function allowedCap(mode, warehouseId = 94) {
+  return {
+    allowed: true,
+    mode,
+    scopes: {
+      company_ids: [34],
+      plaza_ids: [11],
+      warehouse_ids: [warehouseId],
+      analytic_ids: [818],
+    },
+    limit: null,
+    currency: null,
+    deny: null,
+  }
+}
+
+function recoveryContract() {
+  const capabilities = Object.fromEntries(CATALOG.map((name) => [name, deniedCap()]))
+  capabilities['delivery.transfer.gdl'] = allowedCap('confirm')
+  capabilities['delivery.return.gdl'] = allowedCap('capture')
+  capabilities['liquidation.read.gdl'] = allowedCap('read')
+  capabilities['liquidation.print.gdl'] = allowedCap('read')
+  capabilities['pos.read'] = allowedCap('read')
+  return {
+    contract_version: CONTRACT_VERSION,
+    effective_job_keys: ['almacenista_entregas', 'auxiliar_admin'],
+    published_scope: {
+      company_id: 34,
+      company_label: 'GLACIEM',
+      plaza_id: 11,
+      plaza_label: 'GUADALAJARA',
+      warehouse_id: 94,
+      warehouse_label: 'CEDIS GDL',
+      analytic_id: 818,
+      city_code: 'GDL',
+      from_actor: true,
+    },
+    capabilities,
+    requisitionApproval: false,
+  }
+}
+
+test('503 de capabilities no inventa $0 y el reintento restaura el contrato', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  const html = '<html><title>Odoo.sh | Platform Error — Service Unavailable</title></html>'
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 503,
+    async text() { return html },
+  })
+
+  const closed = await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.getOdooServiceState().status, 'unavailable')
+  assert.equal(adminServiceModule.getOdooServiceState().message, ODOO_UNAVAILABLE_MESSAGE)
+  assert.equal(closed.published_scope, null)
+  assert.equal(closed.capabilities['delivery.transfer.gdl'].allowed, false)
+
+  const dash = await adminServiceModule.getDashboardData({ warehouseId: 94, companyId: 34 })
+  assert.equal(dash.odooUnavailable, true)
+  assert.equal(dash.kpis.ventasHoy.available, false)
+  assert.equal(dash.kpis.ventasHoy.total, null)
+  assert.notEqual(dash.kpis.ventasHoy.total, 0)
+
+  globalThis.fetch = async () => createJsonResponse(200, { ok: true, data: recoveryContract() })
+  const restored = await adminServiceModule.retryCapabilities()
+  assert.equal(adminServiceModule.getOdooServiceState().status, 'ok')
+  assert.equal(restored.published_scope.warehouse_id, 94)
+  assert.equal(restored.published_scope.company_id, 34)
+  assert.equal(restored.capabilities['delivery.transfer.gdl'].allowed, true)
+  assert.equal(restored.capabilities['pos.read'].allowed, true)
+  assert.equal(restored.capabilities['liquidation.read.gdl'].allowed, true)
+})
+
+test('cambio de empleado durante el reintento no hereda el contrato anterior', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    session_token: 'session-a',
+    gf_employee_token: 'token-a',
+    api_key: 'api-key',
+    employee_id: 738,
+  }))
+  globalThis.fetch = async () => createJsonResponse(200, { ok: true, data: recoveryContract() })
+  await adminServiceModule.bootCapabilities({
+    session_token: 'session-a',
+    gf_employee_token: 'token-a',
+    employee_id: 738,
+  }, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope.warehouse_id, 94)
+
+  adminServiceModule.syncCapabilitiesIdentity('738:token-a', '694:token-b')
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope, null)
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['delivery.transfer.gdl'].allowed, false)
+})
+

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { getTodayExpenses, getTodayMpTransfers, getTodaySales } from '../api'
+import { isOdooUnavailableError, ODOO_UNAVAILABLE_MESSAGE } from '../../../lib/odooAvailability'
 import { buildModuleActivityFeed, resolveActivityFeedScope } from '../activityFeedModel'
 
 const POLL_MS = 30_000
@@ -16,29 +17,49 @@ function normalizeList(payload) {
 }
 
 export default function ActivityFeed({ moduleId = 'hub', variant = 'sidebar' }) {
-  const { warehouseId, companyId } = useAdmin()
+  const { warehouseId, companyId, capsRevision, odooUnavailable } = useAdmin()
   const navigate = useNavigate()
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [lastFetch, setLastFetch] = useState(null)
+  const [feedUnavailable, setFeedUnavailable] = useState(false)
   const embedded = variant === 'embedded'
 
   useEffect(() => {
     let alive = true
 
+    async function settle(promise) {
+      try {
+        return { ok: true, value: await promise }
+      } catch (error) {
+        return { ok: false, error }
+      }
+    }
+
     async function load() {
       try {
+        if (odooUnavailable) {
+          if (!alive) return
+          setFeedUnavailable(true)
+          setEvents([])
+          setLoading(false)
+          return
+        }
         const scope = resolveActivityFeedScope(moduleId)
-        const [salesRaw, expensesRaw, transfersRaw] = await Promise.all([
-          scope.sales ? getTodaySales({ warehouseId, companyId }).catch(() => []) : Promise.resolve([]),
-          scope.expenses ? getTodayExpenses({ companyId, warehouseId }).catch(() => []) : Promise.resolve([]),
-          scope.transfers ? getTodayMpTransfers({ companyId, warehouseId }).catch(() => []) : Promise.resolve([]),
+        const [salesSettled, expensesSettled, transfersSettled] = await Promise.all([
+          scope.sales ? settle(getTodaySales({ warehouseId, companyId })) : Promise.resolve({ ok: true, value: [] }),
+          scope.expenses ? settle(getTodayExpenses({ companyId, warehouseId })) : Promise.resolve({ ok: true, value: [] }),
+          scope.transfers ? settle(getTodayMpTransfers({ companyId, warehouseId })) : Promise.resolve({ ok: true, value: [] }),
         ])
         if (!alive) return
-        setEvents(buildModuleActivityFeed(moduleId, {
-          sales: normalizeList(salesRaw),
-          expenses: normalizeList(expensesRaw),
-          transfers: normalizeList(transfersRaw),
+        const down = [salesSettled, expensesSettled, transfersSettled].some((row) => (
+          !row.ok && isOdooUnavailableError(row.error)
+        ))
+        setFeedUnavailable(down)
+        setEvents(down ? [] : buildModuleActivityFeed(moduleId, {
+          sales: salesSettled.ok ? normalizeList(salesSettled.value) : [],
+          expenses: expensesSettled.ok ? normalizeList(expensesSettled.value) : [],
+          transfers: transfersSettled.ok ? normalizeList(transfersSettled.value) : [],
         }))
         setLastFetch(new Date())
       } catch {
@@ -51,7 +72,7 @@ export default function ActivityFeed({ moduleId = 'hub', variant = 'sidebar' }) 
     load()
     const id = setInterval(load, POLL_MS)
     return () => { alive = false; clearInterval(id) }
-  }, [warehouseId, companyId, moduleId])
+  }, [warehouseId, companyId, moduleId, capsRevision, odooUnavailable])
 
   const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -97,6 +118,15 @@ export default function ActivityFeed({ moduleId = 'hub', variant = 'sidebar' }) 
             borderTop: '2px solid #2B8FE0', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }} />
+        </div>
+      ) : feedUnavailable ? (
+        <div style={{
+          padding: '20px 14px', borderRadius: TOKENS.radius.md, textAlign: 'center',
+          background: TOKENS.colors.surfaceSoft, border: `1px dashed ${TOKENS.colors.border}`,
+        }}>
+          <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, margin: 0 }}>
+            {ODOO_UNAVAILABLE_MESSAGE}
+          </p>
         </div>
       ) : events.length === 0 ? (
         <div style={{

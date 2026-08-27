@@ -9,11 +9,12 @@ import { getTypo } from '../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { useSession } from '../../App'
 import { getAuthorizationJobKeys } from '../../lib/roleContext'
-import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible } from '../../lib/navModel.js'
-import { getTodaySales, getTodayExpenses } from './api'
+import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible, isLiquidationNavigationVisible, isPosNavigationVisible } from '../../lib/navModel.js'
+import { getDashboardData } from './adminService'
 import { logScreenError } from '../shared/logScreenError'
 import { AdminProvider, useAdmin } from './AdminContext'
 import { BACKEND_CAPS } from './adminService.js'
+import { ODOO_UNAVAILABLE_MESSAGE } from '../../lib/odooAvailability'
 import AdminShell from './components/AdminShell'
 import HubV2 from './components/HubV2'
 
@@ -42,13 +43,14 @@ export default function ScreenAdminPanel() {
 // ── Vista mobile legacy (fallback) ──────────────────────────────────────────
 function MobileAdminHub() {
   const { session } = useSession()
-  const { capsReady } = useAdmin()
+  const { capsReady, capsRevision, odooUnavailable, odooMessage, retryOdoo } = useAdmin()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
-  const [salesCount, setSalesCount] = useState(0)
-  const [expensesCount, setExpensesCount] = useState(0)
+  const [salesCount, setSalesCount] = useState(null)
+  const [expensesCount, setExpensesCount] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [mobileOdooDown, setMobileOdooDown] = useState(false)
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -62,26 +64,24 @@ function MobileAdminHub() {
     let alive = true
     async function loadData() {
       if (!warehouseId) {
-        setSalesCount(0)
-        setExpensesCount(0)
+        setSalesCount(null)
+        setExpensesCount(null)
         setLoading(false)
         return
       }
       setLoading(true)
       try {
-        const [sales, expenses] = await Promise.all([
-          getTodaySales(warehouseId).catch((e) => { logScreenError('ScreenAdminPanel', 'getTodaySales', e); return [] }),
-          getTodayExpenses().catch((e) => { logScreenError('ScreenAdminPanel', 'getTodayExpenses', e); return [] }),
-        ])
+        const dash = await getDashboardData({ warehouseId, companyId: session?.company_id })
         if (!alive) return
-        setSalesCount(Array.isArray(sales) ? sales.length : 0)
-        setExpensesCount(Array.isArray(expenses) ? expenses.length : 0)
+        setMobileOdooDown(Boolean(dash.odooUnavailable))
+        setSalesCount(dash.kpis?.ventasHoy?.available === false ? null : dash.kpis?.ventasHoy?.count)
+        setExpensesCount(dash.kpis?.gastosHoy?.available === false ? null : dash.kpis?.gastosHoy?.count)
       } catch (e) { logScreenError('ScreenAdminPanel', 'loadData', e) }
       finally { if (alive) setLoading(false) }
     }
     loadData()
     return () => { alive = false }
-  }, [warehouseId])
+  }, [warehouseId, capsRevision, session?.company_id])
 
   const effectiveRoles = getAuthorizationJobKeys(session)
   const ACTIONS = [
@@ -90,6 +90,7 @@ function MobileAdminHub() {
     { id: 'historial_gastos', label: 'Historial de Gastos',desc: 'Consultar gastos',            route: '/admin/gastos-historial', color: TOKENS.colors.blue3 },
     { id: 'historial_cargas', label: 'Historial de Cargas',desc: 'Cargas y recargas por camioneta', route: '/admin/historial-cargas', color: TOKENS.colors.blue2 },
     { id: 'requisiciones',    label: 'Requisiciones',      desc: 'Solicitudes de compra',       route: '/admin/requisiciones',    color: TOKENS.colors.blue2 },
+    { id: 'liquidaciones',    label: 'Liquidaciones',      desc: 'Cortes de ruta del día',      route: '/admin/liquidaciones',    color: TOKENS.colors.blue3 },
     { id: 'cierre',           label: 'Cortes de caja',     desc: 'Turnos, arqueo y cortes',      route: '/admin/cierre',           color: TOKENS.colors.blue3 },
     { id: 'traspaso_mp',      label: 'TRASPASO MATERIA PRIMA', desc: 'Enviar material a rolito o PT', route: '/admin/traspaso-materia-prima', color: TOKENS.colors.blue2, roles: ['auxiliar_admin', 'gerente_sucursal'] },
     // Validar materiales / Validar bolsas eliminados (2026-04-25) —
@@ -99,6 +100,8 @@ function MobileAdminHub() {
     (!action.roles || action.roles.some((role) => effectiveRoles.includes(role)))
     && (action.id !== 'cierre' || (capsReady && isCashShiftNavigationVisible(BACKEND_CAPS)))
     && (action.id !== 'traspaso_mp' || (capsReady && isTraspasoMpNavigationVisible(BACKEND_CAPS)))
+    && (action.id !== 'pos' || (capsReady && isPosNavigationVisible(BACKEND_CAPS)))
+    && (action.id !== 'liquidaciones' || (capsReady && isLiquidationNavigationVisible(effectiveRoles, BACKEND_CAPS)))
   ))
 
   return (
@@ -127,6 +130,33 @@ function MobileAdminHub() {
           </button>
           <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Administración Sucursal</span>
         </div>
+
+        {(odooUnavailable || mobileOdooDown) && (
+          <div
+            role="status"
+            data-testid="mobile-admin-odoo-unavailable"
+            style={{
+              marginTop: 12, padding: '12px 14px', borderRadius: TOKENS.radius.md,
+              background: 'rgba(245,158,11,0.12)', border: `1px solid ${TOKENS.colors.warning}40`,
+              color: TOKENS.colors.warning, fontSize: 12, fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            }}
+          >
+            <span>{odooMessage || ODOO_UNAVAILABLE_MESSAGE}</span>
+            <button
+              type="button"
+              onClick={() => retryOdoo?.()}
+              style={{
+                minHeight: 44, minWidth: 44, padding: '8px 12px',
+                borderRadius: TOKENS.radius.sm, border: `1px solid ${TOKENS.colors.warning}60`,
+                background: TOKENS.colors.surface, color: TOKENS.colors.text,
+                fontSize: 12, fontWeight: 700,
+              }}
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>

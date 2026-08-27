@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { getDashboardData } from '../adminService'
+import { ODOO_UNAVAILABLE_MESSAGE } from '../../../lib/odooAvailability'
 import { isPosBreakdownSession } from '../angyPosSalesBreakdown'
 import ActivityFeed from './ActivityFeed'
 import AngyPosProductBreakdown from './AngyPosProductBreakdown'
@@ -15,7 +16,7 @@ const POLL_MS = 60_000
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
 export default function HubV2() {
-  const { warehouseId, companyId, companyLabel, employeeId } = useAdmin()
+  const { warehouseId, companyId, companyLabel, employeeId, capsRevision, odooUnavailable, odooMessage, retryOdoo } = useAdmin()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
@@ -42,7 +43,7 @@ export default function HubV2() {
     load()
     const id = setInterval(load, POLL_MS)
     return () => { alive = false; clearInterval(id) }
-  }, [warehouseId, companyId])
+  }, [warehouseId, companyId, capsRevision])
 
   const kpis = useMemo(() => {
     const k = data?.kpis || {}
@@ -96,6 +97,34 @@ export default function HubV2() {
           color: TOKENS.colors.error, fontSize: 12, fontWeight: 600,
         }}>
           {err}
+        </div>
+      )}
+
+      {(odooUnavailable || data?.odooUnavailable) && (
+        <div
+          role="status"
+          data-testid="hub-odoo-unavailable"
+          style={{
+            padding: '12px 16px', borderRadius: TOKENS.radius.md, marginBottom: 18,
+            background: TOKENS.colors.warningSoft || 'rgba(245,158,11,0.12)',
+            border: `1px solid ${TOKENS.colors.warning}40`,
+            color: TOKENS.colors.warning, fontSize: 12, fontWeight: 600,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          }}
+        >
+          <span>{odooMessage || data?.odooMessage || ODOO_UNAVAILABLE_MESSAGE}</span>
+          <button
+            type="button"
+            onClick={() => retryOdoo?.()}
+            style={{
+              minHeight: 44, minWidth: 44, padding: '8px 12px',
+              borderRadius: TOKENS.radius.sm, border: `1px solid ${TOKENS.colors.warning}60`,
+              background: TOKENS.colors.surface, color: TOKENS.colors.text,
+              fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            Reintentar
+          </button>
         </div>
       )}
 

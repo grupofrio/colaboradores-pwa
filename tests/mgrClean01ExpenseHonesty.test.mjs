@@ -178,11 +178,12 @@ test('Gerente RO: pure gerente with writes OFF', () => {
 test('Hub caja is not ventas alias (available:false honesty)', () => {
   const hub = readFileSync(join(root, 'src/modules/admin/components/HubV2.jsx'), 'utf8')
   const svc = readFileSync(join(root, 'src/modules/admin/adminService.js'), 'utf8')
+  const availability = readFileSync(join(root, 'src/lib/odooAvailability.js'), 'utf8')
   assert.match(svc, /cash_shift_hub_source_unavailable/)
   assert.match(svc, /liquidaciones_hub_source_unavailable/)
   assert.match(svc, /requisitions_hub_source_unavailable/)
   assert.match(svc, /materia_prima_hub_source_unavailable/)
-  assert.match(svc, /available:\s*false/)
+  assert.match(availability, /available:\s*false/)
   assert.match(hub, /sin fuente de caja/)
   assert.match(hub, /data-origin=\{k\.unavailable \? 'hub-kpi-unavailable' : 'hub-kpi'\}/)
   assert.match(hub, /fmtOrDash/)

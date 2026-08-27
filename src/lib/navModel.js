@@ -127,6 +127,7 @@ export function isPosNavigationVisible(capabilities = {}) {
 export function isEntregasNavigationVisible(capabilities = {}) {
   if (!validateContract(capabilities).ok) return false
   return capabilityAllowed(capabilities, 'delivery.transfer.gdl')
+    || capabilityAllowed(capabilities, 'delivery.transfer.iguala')
 }
 
 // Ancho del rail según viewport (AppShell reserva exactamente este espacio).
