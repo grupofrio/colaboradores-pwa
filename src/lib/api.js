@@ -72,6 +72,12 @@ import {
   shouldBackfillShiftChecklistLink,
 } from '../modules/produccion/checklistContext.js'
 import { sumRolitoLocationStock } from '../modules/produccion/rolitoBagMath.js'
+import {
+  folioFromFindTicketPath,
+  normalizeDispatchTicketResult,
+  normalizeFindTicketResult,
+  normalizePendingTicketsResult,
+} from '../modules/entregas/dispatchTicketTransport.js'
 import { normalizeChecklistPhotoValue } from '../modules/shared/checklistPhoto.js'
 import { normalizeWriteResponse, WRITE_PHASE } from '../modules/supervisor-ventas/v2/normalizeWriteResponse.js'
 import {
@@ -1674,23 +1680,11 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/find-ticket' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
-    const folio = String(query.get('folio') || '').trim()
+    const folio = folioFromFindTicketPath(path)
     if (!folio) return null
-    const result = await readModelSorted('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'payment_method', 'x_studio_mtodo_de_pago'],
-      domain: [['name', 'ilike', folio]],
-      sort_column: 'id',
-      sort_desc: true,
-      limit: 1,
-      sudo: 1,
-    })
-    const row = pickFirstResponse(result)
-    return row ? normalizeSaleOrder({
-      ...row,
-      customer: row.partner_id?.[1] || '',
-      total: Number(row.amount_total || 0),
-    }) : null
+    return normalizeFindTicketResult(
+      await odooHttp('GET', `/pwa-admin/find-ticket?folio=${encodeURIComponent(folio)}`),
+    )
   }
 
   if (cleanPath === '/pwa-admin/sale-detail' && method === 'GET') {
@@ -1717,34 +1711,13 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
-    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
-    const domain = [['state', 'in', ['sale', 'done']]]
-    if (reqWarehouseId) domain.push(['warehouse_id', '=', reqWarehouseId])
-    const result = await readModelSorted('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'payment_method', 'x_studio_mtodo_de_pago'],
-      domain,
-      sort_column: 'date_order',
-      sort_desc: true,
-      limit: 100,
-      sudo: 1,
-    })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name,
-      customer: row.partner_id?.[1] || '',
-      total: Number(row.amount_total || 0),
-      state: row.state || 'sale',
-      date_order: row.date_order || null,
-      warehouse_id: row.warehouse_id?.[0] || reqWarehouseId || 0,
-    }))
+    return normalizePendingTicketsResult(await odooHttp('GET', '/pwa-admin/pending-tickets'))
   }
 
   if (cleanPath === '/pwa-admin/dispatch-ticket' && method === 'POST') {
-    const result = await odooJson('/public_api/sale_order/validate_deliveries', {
-      sale_order_id: Number(body?.order_id || 0),
-    })
-    return result
+    return normalizeDispatchTicketResult(await odooJson('/pwa-admin/dispatch-ticket', {
+      order_id: Number(body?.order_id || 0),
+    }))
   }
 
   // ── Analytic accounts (Odoo 18 — account.analytic.account) ──────────────
@@ -3447,7 +3420,7 @@ async function directProduction(method, path, body) {
       throw new ApiError(msg, { status: 200, code: 'packing_save_failed' })
     }
     const entry = entryId !== raw?.id ? { ...raw, id: entryId } : raw
-    if (shiftId) addLocalPackingEntry(shiftId, entry)
+    if (shiftId) addLocalPackingEntry(shiftId, entry, getEmployeeId())
     return entry
   }
 
@@ -3465,11 +3438,11 @@ async function directProduction(method, path, body) {
       const odooEntries = pickListResponse(result)
       if (odooEntries.length > 0) {
         // Odoo tiene datos: actualizar cache local y retornar
-        saveLocalPackingEntries(shiftId, odooEntries)
+        saveLocalPackingEntries(shiftId, odooEntries, getEmployeeId())
         return odooEntries
       }
       // Odoo devolvio vacio: usar cache local como fallback
-      const localEntries = getLocalPackingEntries(shiftId)
+      const localEntries = getLocalPackingEntries(shiftId, getEmployeeId())
       return localEntries.length > 0 ? localEntries : odooEntries
     }
 
@@ -7397,7 +7370,8 @@ async function directEntregas(method, path, body) {
     const pickingRows = pickListResponse(await readModelSorted('stock.picking', {
       fields: ['id', 'name', 'state', 'create_date', 'scheduled_date', 'date_done',
         'location_id', 'location_dest_id', 'create_uid', 'gf_route_plan_id',
-        'gf_route_id', 'gf_route_load_kind', 'origin'],
+        'gf_route_id', 'gf_route_load_kind', 'origin',
+        'x_pwa_load_employee_id', 'x_pwa_load_user_id'],
       domain: [
         ['location_id', '=', sourceLocationId],
         ['location_dest_id', 'in', mobileLocationIds],
@@ -7452,7 +7426,12 @@ async function directEntregas(method, path, body) {
         location_dest_id: picking.location_dest_id || null,
         mobile_location_id: picking.location_dest_id || null,
         mobile_location_name: Array.isArray(picking.location_dest_id) ? picking.location_dest_id[1] : '',
-        registered_by_id: picking.create_uid || null,
+        x_pwa_load_employee_id: picking.x_pwa_load_employee_id || null,
+        x_pwa_load_user_id: picking.x_pwa_load_user_id || null,
+        registered_by_id: picking.x_pwa_load_employee_id || picking.create_uid || null,
+        registered_by_name: Array.isArray(picking.x_pwa_load_employee_id)
+          ? picking.x_pwa_load_employee_id[1]
+          : '',
         route_id: picking.gf_route_id || route?.id || null,
         route_plan_id: picking.gf_route_plan_id || null,
         driver_employee_id: driverRef || null,

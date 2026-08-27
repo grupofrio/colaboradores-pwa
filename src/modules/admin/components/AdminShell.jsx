@@ -14,7 +14,7 @@ import { BRAND_TOKENS as TOKENS } from '../../../theme/brandTokens'
 import { useAdmin } from '../AdminContext'
 import { useSession } from '../../../App'
 import { getEffectiveJobKeys } from '../../../lib/roleContext'
-import { isCashShiftNavigationVisible } from '../../../lib/navModel.js'
+import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible } from '../../../lib/navModel.js'
 import { BACKEND_CAPS } from '../adminService.js'
 import {
   filterAdminNavForGerentePilot,
@@ -35,6 +35,7 @@ export function navItemsForRole(role, capabilities = {}) {
   return NAV_ITEMS.filter((item) => (
     item.roles.includes(role)
     && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
+    && (item.id !== 'traspaso-mp' || isTraspasoMpNavigationVisible(capabilities))
   ))
 }
 
@@ -43,6 +44,7 @@ export function navItemsForRoles(roles = [], capabilities = {}) {
   return NAV_ITEMS.filter((item) => (
     item.roles.some((role) => roles.includes(role))
     && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
+    && (item.id !== 'traspaso-mp' || isTraspasoMpNavigationVisible(capabilities))
   ))
 }
 

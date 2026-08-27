@@ -82,7 +82,7 @@ test('packing-create treats packing_entry_id as success even when backend ok fla
   assert.equal(result.packing_entry_id, 456)
   assert.equal(result.qty_bags, 12)
 
-  const localStore = JSON.parse(globalThis.localStorage.getItem('gfsc.packing_local.v2') || '{}')
+  const localStore = JSON.parse(globalThis.localStorage.getItem('gfsc.packing_local.v3.730') || '{}')
   assert.equal(localStore['88'].entries.length, 1)
   assert.equal(localStore['88'].entries[0].id, 456)
 })
@@ -148,7 +148,7 @@ test('packing-create unwraps jsonrpc result envelope from Odoo pack endpoint', a
   assert.equal(result.qty_bags, 1)
   assert.equal(result.total_kg, 5.5)
 
-  const localStore = JSON.parse(globalThis.localStorage.getItem('gfsc.packing_local.v2') || '{}')
+  const localStore = JSON.parse(globalThis.localStorage.getItem('gfsc.packing_local.v3.730') || '{}')
   assert.equal(localStore['103'].entries.length, 1)
   assert.equal(localStore['103'].entries[0].id, 495)
 })

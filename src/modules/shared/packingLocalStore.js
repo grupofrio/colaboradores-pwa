@@ -1,20 +1,26 @@
 // packingLocalStore.js
-// Cache local de packing entries por turno.
+// Cache local de packing entries por turno, namespaced por empleado.
 // Fuente de verdad: Odoo. Este store actua como fallback y respaldo
 // para que el conteo no se pierda si Odoo devuelve vacio temporalmente.
 //
 // Estructura: { [shiftId]: { entries: [...], savedAt: ISO string } }
 // Se mantienen los ultimos MAX_SHIFTS turnos; los mas viejos se purgan.
 
-const STORAGE_KEY = 'gfsc.packing_local.v2'
+import {
+  EMPLOYEE_SCOPED_KEYS,
+  readEmployeeScopedJson,
+  writeEmployeeScopedJson,
+} from '../../lib/employeeScopedStorage.js'
+
 const MAX_SHIFTS = 5
 
-function readStore() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} }
+function readStore(employeeId) {
+  const store = readEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.packing, employeeId, {})
+  return store && typeof store === 'object' && !Array.isArray(store) ? store : {}
 }
 
-function writeStore(data) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch { /* cuota llena - falla silenciosa */ }
+function writeStore(employeeId, data) {
+  writeEmployeeScopedJson(EMPLOYEE_SCOPED_KEYS.packing, employeeId, data)
 }
 
 function pruneOldShifts(store) {
@@ -28,53 +34,60 @@ function pruneOldShifts(store) {
 /**
  * Lee las entradas locales de empaque para un turno.
  * @param {number} shiftId
+ * @param {number} employeeId
  * @returns {Array}
  */
-export function getLocalPackingEntries(shiftId) {
-  if (!shiftId) return []
-  return readStore()[String(shiftId)]?.entries || []
+export function getLocalPackingEntries(shiftId, employeeId) {
+  if (!shiftId || !employeeId) return []
+  return readStore(employeeId)[String(shiftId)]?.entries || []
 }
 
 /**
  * Sobreescribe el cache local con los datos que vinieron de Odoo.
- * Llamar despues de un fetch exitoso con resultados.
  * @param {number} shiftId
  * @param {Array} entries
+ * @param {number} employeeId
  */
-export function saveLocalPackingEntries(shiftId, entries) {
-  if (!shiftId || !Array.isArray(entries)) return
-  const store = pruneOldShifts(readStore())
-  store[String(shiftId)] = { entries, savedAt: new Date().toISOString() }
-  writeStore(store)
+export function saveLocalPackingEntries(shiftId, entries, employeeId) {
+  if (!shiftId || !employeeId || !Array.isArray(entries)) return
+  const store = pruneOldShifts(readStore(employeeId))
+  store[String(shiftId)] = {
+    entries,
+    savedAt: new Date().toISOString(),
+    employee_id: Number(employeeId),
+  }
+  writeStore(employeeId, store)
 }
 
 /**
  * Agrega o actualiza una entrada individual al cache.
- * Llamar inmediatamente despues de un packing-create exitoso.
  * @param {number} shiftId
- * @param {object} entry  — objeto con al menos { id, ... }
+ * @param {object} entry
+ * @param {number} employeeId
  */
-export function addLocalPackingEntry(shiftId, entry) {
-  if (!shiftId || !entry?.id) return
-  const existing = getLocalPackingEntries(shiftId).filter(e => e.id !== entry.id)
-  saveLocalPackingEntries(shiftId, [...existing, entry])
+export function addLocalPackingEntry(shiftId, entry, employeeId) {
+  if (!shiftId || !employeeId || !entry?.id) return
+  const existing = getLocalPackingEntries(shiftId, employeeId).filter(e => e.id !== entry.id)
+  saveLocalPackingEntries(shiftId, [...existing, { ...entry, employee_id: Number(employeeId) }], employeeId)
 }
 
 /**
  * Total de kg empacados segun el cache local.
  * @param {number} shiftId
+ * @param {number} employeeId
  * @returns {number}
  */
-export function getLocalPackingTotalKg(shiftId) {
-  return getLocalPackingEntries(shiftId).reduce((sum, e) => sum + (Number(e.total_kg) || 0), 0)
+export function getLocalPackingTotalKg(shiftId, employeeId) {
+  return getLocalPackingEntries(shiftId, employeeId).reduce((sum, e) => sum + (Number(e.total_kg) || 0), 0)
 }
 
 /**
  * Timestamp de la ultima sincronizacion con Odoo.
  * @param {number} shiftId
+ * @param {number} employeeId
  * @returns {string|null}
  */
-export function getLocalPackingSavedAt(shiftId) {
-  if (!shiftId) return null
-  return readStore()[String(shiftId)]?.savedAt || null
+export function getLocalPackingSavedAt(shiftId, employeeId) {
+  if (!shiftId || !employeeId) return null
+  return readStore(employeeId)[String(shiftId)]?.savedAt || null
 }

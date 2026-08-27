@@ -81,6 +81,7 @@ test('normalizeVanLoadHistoryItems keeps loads and refills grouped by picking', 
       mobileLocationName: '',
       registeredById: 8,
       registeredByName: 'Almacen Uno',
+      technicalUserName: '',
       routePlanId: null,
       routePlanName: '',
       totalQty: 24,
@@ -104,6 +105,7 @@ test('normalizeVanLoadHistoryItems keeps loads and refills grouped by picking', 
       mobileLocationName: '',
       registeredById: null,
       registeredByName: '',
+      technicalUserName: '',
       routePlanId: null,
       routePlanName: '',
       totalQty: 6,
@@ -136,4 +138,26 @@ test('groupVanLoadHistoryByVan aggregates totals per van and summary', () => {
     totalVans: 2,
     totalQty: 29,
   })
+})
+
+test('historial muestra ficha del empleado sin res.users, no Public user', () => {
+  const [item] = normalizeVanLoadHistoryItems([
+    {
+      id: 900,
+      name: 'WH/OUT/0900',
+      state: 'assigned',
+      create_date: '2026-08-26 15:00:00',
+      create_uid: [29, 'Public user'],
+      x_pwa_load_employee_id: [694, 'Marisol Entregas'],
+      x_pwa_load_user_id: [29, 'Public user'],
+      load_employee_barcode: '694',
+      lines: [{ product_id: 10, qty: 2 }],
+    },
+  ])
+  assert.equal(item.registeredById, 694)
+  assert.match(item.registeredByName, /Marisol Entregas/)
+  assert.match(item.registeredByName, /ficha 694/)
+  assert.notEqual(item.registeredByName.toLowerCase(), 'public user')
+  assert.doesNotMatch(item.registeredByName, /^Public user$/i)
+  assert.equal(item.technicalUserName, 'Public user')
 })

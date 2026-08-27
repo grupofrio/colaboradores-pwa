@@ -107,21 +107,25 @@ export const BACKEND_CAPS = {
   cashShiftReopen: false,
   cashShiftPrint: false,
 
+  // Traspaso MP: fail-closed until GET /pwa-admin/capabilities says true.
+  traspasoMp: false,
+
   // Piloto Gerente Iguala: fail-closed until GET /pwa-admin/capabilities confirms ON.
   gerenteWritesEnabled: false,
 }
 
-const CASH_SHIFT_CAPABILITY_KEYS = Object.freeze([
+const FAIL_CLOSED_CAPABILITY_KEYS = Object.freeze([
   'cashShiftRead',
   'cashShiftManage',
   'cashShiftAuthorize',
   'cashShiftPendingDetail',
   'cashShiftReopen',
   'cashShiftPrint',
+  'traspasoMp',
 ])
 
-function resetCashShiftCapabilities() {
-  for (const key of CASH_SHIFT_CAPABILITY_KEYS) BACKEND_CAPS[key] = false
+function resetFailClosedCapabilities() {
+  for (const key of FAIL_CLOSED_CAPABILITY_KEYS) BACKEND_CAPS[key] = false
 }
 
 let capabilityRequestGeneration = 0
@@ -147,14 +151,14 @@ function isCurrentCapabilityRequest(generation, snapshot) {
 
 export function invalidateCashShiftCapabilities() {
   capabilityRequestGeneration += 1
-  resetCashShiftCapabilities()
+  resetFailClosedCapabilities()
   return BACKEND_CAPS
 }
 
 /** Aplica en runtime la respuesta de GET /pwa-admin/capabilities.
  *  Si el backend no conoce un flag, se mantiene el default local. */
 export function applyCapabilities(caps, session = null) {
-  resetCashShiftCapabilities()
+  resetFailClosedCapabilities()
   const safeCaps = clampGerentePilotWriteCapabilities(session || readSessionRaw(), caps)
   if (!safeCaps || typeof safeCaps !== 'object') return BACKEND_CAPS
   for (const key of Object.keys(BACKEND_CAPS)) {
@@ -169,11 +173,15 @@ export function applyCapabilities(caps, session = null) {
       if (Number.isFinite(n)) BACKEND_CAPS[key] = n
     } else if (currentType === 'string') {
       BACKEND_CAPS[key] = String(incoming)
-    } else if (CASH_SHIFT_CAPABILITY_KEYS.includes(key)) {
+    } else if (FAIL_CLOSED_CAPABILITY_KEYS.includes(key)) {
       BACKEND_CAPS[key] = incoming === true
     } else {
       BACKEND_CAPS[key] = Boolean(incoming)
     }
+  }
+  const runtimeAllowed = safeCaps.runtime_capabilities?.allowed
+  if (Array.isArray(runtimeAllowed) && runtimeAllowed.includes('traspaso_mp')) {
+    BACKEND_CAPS.traspasoMp = true
   }
   return BACKEND_CAPS
 }
@@ -184,7 +192,7 @@ export async function bootCapabilities(session = null) {
   const generation = ++capabilityRequestGeneration
   // Cerrar permisos sensibles antes de esperar la respuesta remota; así una
   // sesión nueva/stale nunca hereda temporalmente permisos del empleado previo.
-  resetCashShiftCapabilities()
+  resetFailClosedCapabilities()
   // Fail-closed for pure gerente_sucursal while capabilities are in-flight.
   applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
   if (!snapshot.employeeToken) return BACKEND_CAPS
@@ -197,7 +205,7 @@ export async function bootCapabilities(session = null) {
   } catch {
     // Los permisos de cortes y escrituras Gerente nunca sobreviven error HTTP.
     if (isCurrentCapabilityRequest(generation, snapshot)) {
-      resetCashShiftCapabilities()
+      resetFailClosedCapabilities()
       applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
     }
     return BACKEND_CAPS
@@ -358,10 +366,29 @@ export async function getDashboardData({ warehouseId, companyId }) {
       available: false,
       reason: 'cash_shift_hub_source_unavailable',
     },
-    liquidaciones:  { count: 0, total: 0, pendingBackend: !BACKEND_CAPS.liquidaciones, available: !BACKEND_CAPS.liquidaciones ? false : true },
-    requisiciones:  { count: 0, total: 0, pendingBackend: false, available: true },
-    materiaPrima:   { count: 0, total: 0, pendingBackend: !BACKEND_CAPS.materiaPrima, available: !BACKEND_CAPS.materiaPrima ? false : true },
-    alertas:        { count: 0, available: true },
+    liquidaciones: {
+      count: null,
+      total: null,
+      available: false,
+      reason: 'liquidaciones_hub_source_unavailable',
+    },
+    requisiciones: {
+      count: null,
+      total: null,
+      available: false,
+      reason: 'requisitions_hub_source_unavailable',
+    },
+    materiaPrima: {
+      count: null,
+      total: null,
+      available: false,
+      reason: 'materia_prima_hub_source_unavailable',
+    },
+    alertas: {
+      count: null,
+      available: false,
+      reason: 'alerts_hub_source_unavailable',
+    },
   }
 
   return { sales, expenses, kpis, expenseEnvelope }

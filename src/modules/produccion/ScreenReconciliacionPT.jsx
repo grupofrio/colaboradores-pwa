@@ -70,7 +70,7 @@ export default function ScreenReconciliacionPT() {
       const [invRes, reasonRes, transferRes] = await Promise.allSettled([
         getInventoryCanonical(warehouseId),
         getScrapReasons(),
-        getTodayTransfers(warehouseId),
+        getTodayTransfers(warehouseId, employeeId),
       ])
 
       if (invRes.status === 'rejected') logScreenError('ScreenReconciliacionPT', 'getInventoryCanonical', invRes.reason)

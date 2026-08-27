@@ -251,7 +251,7 @@ export default function ScreenRecepcion() {
   const receiptGroups = useMemo(() => groupByLine(receiptNorm), [receiptNorm])
 
   const hasPending = postingNorm.length + receiptNorm.length > 0
-  const todayReceptions = getTodayReceptionsLocal()
+  const todayReceptions = getTodayReceptionsLocal(employeeId)
 
   function startCapture(row) {
     if (blockedByHandover) {

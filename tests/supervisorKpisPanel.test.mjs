@@ -323,12 +323,16 @@ test('el panel v2 NO reintrodujo el mock ni el iframe', () => {
   }
 })
 
-test('los demás roles conservan su pantalla (rama por rol intacta)', () => {
+test('los demás roles no ven cifras simuladas cuando Metabase no está', () => {
   const src = PANTALLA()
   assert.match(src, /isBrandLightSession\(getSession\(\)\)/)
   assert.match(src, /<PanelKpisSupervisor \/>/)
-  assert.match(src, /function MockMetabaseDashboard/, 'el mock sigue para otros roles')
+  assert.doesNotMatch(src, /function MockMetabaseDashboard/)
+  assert.match(src, /function KpisUnavailable/)
+  assert.match(src, /data-origin="kpis-unavailable"/)
   assert.match(src, /<MetabaseFrame /)
+  assert.doesNotMatch(src, /82%/)
+  assert.doesNotMatch(src, /14 visitas/)
 })
 
 test('estados honestos: error ofrece reintentar, vacío no', () => {

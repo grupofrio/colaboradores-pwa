@@ -689,7 +689,7 @@ Lectura/edición de perfil. `pwa-logout` es fire-and-forget hacia `/gf/logistics
 | Campo | Valor |
 |-------|-------|
 | Backend | Odoo (módulo `gf_metabase_embed`, **`installable: False` hoy**) |
-| Estado | **Stub backend.** Frontend degrada a `MockMetabaseDashboard` en [`ScreenKPIs.jsx`](../src/screens/ScreenKPIs.jsx) si la respuesta es `{success:false}` o 401. |
+| Estado | **Stub backend.** Si `/pwa-metabase-token` no entrega `embed_url`, [`ScreenKPIs.jsx`](../src/screens/ScreenKPIs.jsx) muestra `KpisUnavailable` (`data-origin="kpis-unavailable"`). No se pintan cifras simuladas. |
 | Caller | `ScreenKPIs.jsx:296` |
 | Gap relacionado | G001 (P1) |
 
@@ -711,7 +711,11 @@ Lista completa (≈40 endpoints) en [`src/modules/admin/api.js`](../src/modules/
 | `/pwa-admin/requisition-approve`, `/reject` | POST | `gerente_sucursal`, `direccion_general` | Cambia approval_state |
 | `/pwa-admin/torre/*` | varios | `operador_torres` (revisión central de requisiciones) | Confirma/edita PO |
 | `/pwa-admin/liquidaciones/*` | varios | `gerente_sucursal` (validación final) | Liquidación de jefes de ruta |
-| `/pwa-admin/traspaso-mp/iguala-stock` | GET | `auxiliar_admin`, `gerente_sucursal` | Hardcoded para Fabricación-Iguala |
+| `/pwa-admin/traspaso-mp/iguala-stock` | GET | Capacidad servidor `traspasoMp` + scope de planta configurado | Inventario MP. Plaza/almacén salen de `ir.config_parameter`; sin config → 403. |
+| `/pwa-admin/traspaso-mp/iguala-transfer` | POST | Misma capacidad/scope | Crea `gf.production.material.issue`. Actor = empleado del token; `issued_by` del payload se ignora. |
+| `/pwa-admin/find-ticket` | GET | Token + capacidad despacho (`dispatch.job_keys`) + almacén operativo | Lectura. El dominio incluye `warehouse_id` desde la búsqueda exacta y la parcial. |
+| `/pwa-admin/pending-tickets` | GET | Token + capacidad despacho + almacén operativo | Lectura. Scope = almacén del empleado, no el query. |
+| `/pwa-admin/dispatch-ticket` | POST | Token + capacidad despacho + almacén coincidente | Lock de fila + `validate_all_deliveries`. Actor empleado ≠ usuario técnico. |
 
 Para gasto general, el comprobante se sube primero a `/pwa/evidence/upload` con
 `context: "expense"`, sin `linked_model` ni `linked_id`. El `attachment_id`
@@ -1208,7 +1212,7 @@ Para reactivar, según comentarios y BACKEND_TODO:
 | Variable | `VITE_METABASE_URL` |
 | Integración | Iframe embed con token JWT firmado por Odoo (módulo `gf_metabase_embed`). |
 | Estado backend | **STUB** (`installable: False`). |
-| Comportamiento frontend | [`ScreenKPIs.jsx:296`](../src/screens/ScreenKPIs.jsx) llama `/pwa-metabase-token`; si la respuesta es `{success:false}` o 401 (endpoint marcado como "optional" en `lib/api.js`), degrada a `MockMetabaseDashboard` sin disparar logout. Parche del 2026-04-18. |
+| Comportamiento frontend | [`ScreenKPIs.jsx`](../src/screens/ScreenKPIs.jsx) llama `/pwa-metabase-token`; si no hay `embed_url` o 401 (endpoint "optional" en `lib/api.js`), renderiza `KpisUnavailable` sin cifras simuladas y sin disparar logout. |
 | Gap | G001 (P1) |
 
 ### 9.6 Voice-to-Form (PoC Fase 0)
@@ -1474,11 +1478,17 @@ Tomadas de la lectura del código real, no de un linter genérico.
 - **Decisión.** Servicios `tareasService` y `notasService` exportan `IS_STUB=true` y persisten en `localStorage`. Cuando backend exista, cambiar `IS_STUB=false` y descomentar `api()` calls — la firma no cambia.
 - **Consecuencias.** UI estable. **Riesgo:** datos no sincronizan entre dispositivos, banner visible "modo temporal" — gap G006 (P1).
 
-### ADR-07 — Fallback `MockMetabaseDashboard` para no romper KPIs
+### ADR-07 — KPIs no disponibles sin cifras simuladas
 
-- **Contexto.** Módulo `gf_metabase_embed` no instalable en Odoo. Antes del parche, 401 disparaba logout y trababa a los gerentes.
-- **Decisión.** Endpoint `/pwa-metabase-token` marcado como "optional" en `lib/api.js` (un 401 no dispara `gf:session-expired`). Frontend renderiza `MockMetabaseDashboard` con datos inventados visiblemente identificados.
-- **Consecuencias.** App estable. Gerentes ven mock en lugar de KPIs reales — gap G001 (P1).
+- **Contexto.** Módulo `gf_metabase_embed` no instalable en Odoo. Antes del parche, 401 disparaba logout y trababa a los gerentes. El fallback posterior (`MockMetabaseDashboard`) pintaba números inventados.
+- **Decisión.** Endpoint `/pwa-metabase-token` marcado como "optional" en `lib/api.js` (un 401 no dispara `gf:session-expired`). Frontend renderiza `KpisUnavailable` (`data-origin="kpis-unavailable"`) cuando no hay `embed_url`. El hub Admin marca caja/liquidaciones/requisiciones/MP/alertas con `available:false` si no hay fuente real.
+- **Consecuencias.** App estable. Nadie ve un mock como dato productivo — gap G001 (P1) sigue siendo "sin dashboard", no "dashboard falso".
+
+### ADR-09 — Token de empleado en Odoo, no solo en Vercel
+
+- **Contexto.** `vercel.json` enruta `/odoo-api/pwa-admin/*` a `/api/pwa-admin`. El proxy exige que exista `X-GF-Employee-Token` e inyecta la API key. Presencia del encabezado no es autenticación: Odoo alcanzable por otra ruta saltaría el borde.
+- **Decisión.** Cada ruta `/pwa-admin/*` en `gf_pwa_admin` pasa por `_safe_http` / `_safe_json` (o un resolver de actor equivalente) que valida el token, resuelve `hr.employee` y aplica capacidad/scope. Inventario y contrato: `gf_pwa_admin/docs/PWA_ADMIN_AUTH.md` en el repo `gf`.
+- **Consecuencias.** 401 si falta/es inválida la identidad; 403 si la identidad es válida sin autoridad. El usuario técnico de la API key no sustituye al empleado.
 
 ### ADR-08 — Autorización en `gf_saleops` derivada de token autenticado, no de payload
 
@@ -1497,9 +1507,9 @@ Una entrada por trampa: síntoma → causa → fix.
 
 ### G15.1 — `pwa-metabase-token` devuelve `{success:false}`
 
-- **Síntoma:** Pantalla de KPIs muestra "Mock Dashboard" con datos sintéticos.
+- **Síntoma:** Pantalla de KPIs muestra "KPIs no disponibles" (`data-origin="kpis-unavailable"`), sin cifras.
 - **Causa:** Módulo Odoo `gf_metabase_embed` con `installable: False` (BACKEND_TODO #0). El endpoint existe pero no resuelve un dashboard real.
-- **Fix:** Backend debe instalar el módulo y configurar `metabase.secret_key`, `metabase.site_url` y `metabase.dashboard.<rol>` en `ir.config_parameter`.
+- **Fix:** Backend debe instalar el módulo y configurar `metabase.secret_key`, `metabase.site_url` y `metabase.dashboard.<rol>` en `ir.config_parameter`. No reintroducir un mock numérico.
 
 ### G15.2 — Workflows n8n no se re-registran después de update
 
@@ -1642,6 +1652,7 @@ Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_s
 
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
+| 2026-08-26 | Codex (Fase A perfil 694 — contención) | ADR-07 deja de pintar mock de KPIs. Nuevo ADR-09: Odoo valida el token en `/pwa-admin/*` además del proxy Vercel. §7.4 Traspaso MP y despacho de tickets dejan de usar IDs hardcoded / fail-open. Estado local PT/packing namespaced por empleado. |
 | 2026-07-29 | Codex (cierre móvil sin foto) | §6.6 preserva evidencia histórica, permite cierre/recierre nuevo sin foto y documenta al responsable por token de empleado sin exigir `res.users`. §7.4 separa comprobantes de gastos/Legacy. §12.4 actualiza el rollout backend-first para `gf_pwa_admin` 18.0.2.2.1 con checker normal y renovación de sesión PWA. |
 | 2026-08-15 | Codex (Fase 1 captura de gasto) | §7.4 documenta el catálogo de artículos Fase 0, la resolución contable exclusivamente servidor-side y la evidencia de gasto ligada de forma atómica. |
 | 2026-07-28 | Codex (cortes POS por turno) | §6.6 documenta alcance autoritativo, periodos manuales, snapshots, evidencia, idempotencia, concurrencia e invariantes. §7.4 agrega endpoints/capacidades Noche-Día y separa Legacy. §12.4 fija el orden de upgrade backend-first y rollback antes/después de activación. El manual por rol añade la operación completa de Angy. |

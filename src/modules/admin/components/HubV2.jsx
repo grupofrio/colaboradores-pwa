@@ -64,9 +64,9 @@ export default function HubV2() {
       { id: 'caja',      label: 'Caja del día',     value: fmtOrDash(k.caja),          sub: subOrDash(k.caja, 'movimientos'), tone: TOKENS.colors.success, unavailable: k.caja?.available === false },
       { id: 'ventas',    label: 'Venta mostrador',  value: fmtOrDash(k.ventasHoy),     sub: subOrDash(k.ventasHoy, 'tickets'), tone: TOKENS.colors.blue3 },
       { id: 'gastos',    label: 'Gastos',           value: fmtOrDash(k.gastosHoy),     sub: subOrDash(k.gastosHoy, 'registros'), tone: TOKENS.colors.warning, unavailable: k.gastosHoy?.available === false },
-      { id: 'liquid',    label: 'Liquidaciones',    value: k.liquidaciones?.pendingBackend ? '—' : fmt(k.liquidaciones?.total), sub: k.liquidaciones?.pendingBackend ? 'pendiente backend' : `${k.liquidaciones?.count || 0}`, tone: TOKENS.colors.textMuted, pending: k.liquidaciones?.pendingBackend },
-      { id: 'req',       label: 'Requisiciones',    value: `${k.requisiciones?.count || 0}`, sub: 'activas',                    tone: TOKENS.colors.blue2 },
-      { id: 'alertas',   label: 'Alertas',          value: `${k.alertas?.count || 0}`,  sub: 'sin resolver',                    tone: TOKENS.colors.error },
+      { id: 'liquid',    label: 'Liquidaciones',    value: fmtOrDash(k.liquidaciones), sub: subOrDash(k.liquidaciones, 'pendientes'), tone: TOKENS.colors.textMuted, unavailable: k.liquidaciones?.available === false },
+      { id: 'req',       label: 'Requisiciones',    value: fmtOrDash(k.requisiciones), sub: subOrDash(k.requisiciones, 'activas'), tone: TOKENS.colors.blue2, unavailable: k.requisiciones?.available === false },
+      { id: 'alertas',   label: 'Alertas',          value: k.alertas?.available === false ? '—' : `${k.alertas?.count || 0}`,  sub: k.alertas?.available === false ? 'no disponible' : 'sin resolver', tone: TOKENS.colors.error, unavailable: k.alertas?.available === false },
     ]
   }, [data])
 
@@ -106,7 +106,11 @@ export default function HubV2() {
         gap: 12, marginBottom: 28,
       }}>
         {kpis.map(k => (
-          <div key={k.id} style={{
+          <div
+            key={k.id}
+            data-testid={`hub-kpi-${k.id}`}
+            data-origin={k.unavailable ? 'hub-kpi-unavailable' : 'hub-kpi'}
+            style={{
             padding: '16px 18px', borderRadius: TOKENS.radius.lg,
             background: TOKENS.glass.panel,
             border: `1px solid ${TOKENS.colors.border}`,
