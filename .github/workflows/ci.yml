@@ -3,7 +3,11 @@ name: CI
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ main ]
+    # Stacked Fase B PRs target the Fase A containment branch, not main.
+    # Keep main so production PRs still run. Do not retarget those PRs.
+    branches:
+      - main
+      - cursor/sec-01-fase-a-contencion-aa7f
   push:
     branches: [ main ]
 
