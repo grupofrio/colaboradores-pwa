@@ -6,6 +6,8 @@ import { runLogout } from "../lib/logout";
 import { BRAND_TOKENS } from "../theme/brandTokens";
 import { isSharedLightSurfaceSession } from "../theme/sharedLightSurface.js";
 import { MOBILE_NAV_HEIGHT, DESKTOP_MIN } from "../lib/navModel";
+import { publishedScopeSurface } from "../lib/capabilityContract.js";
+import { BACKEND_CAPS } from "../modules/admin/adminService.js";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -790,6 +792,11 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
     });
   };
 
+  const surface = publishedScopeSurface(BACKEND_CAPS)
+  const published = surface.scope
+  const sucursalLabel = published?.plaza_label || (surface.state === "loading" ? "Cargando…" : "No disponible")
+  const empresaLabel = published?.company_label || (surface.state === "loading" ? "Cargando…" : "No disponible")
+
   const infoRows = employee ? [
     {
       label: "Puesto",
@@ -803,12 +810,12 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
     },
     {
       label: "Sucursal",
-      value: employee.work_location_id[1],
+      value: sucursalLabel,
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
     },
     {
       label: "Empresa",
-      value: employee.company_id[1],
+      value: empresaLabel,
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
     },
     {

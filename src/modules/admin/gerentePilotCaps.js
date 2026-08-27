@@ -1,5 +1,6 @@
 // Pure helpers: Gerente Iguala pilot keeps Admin read-only while
 // `gf_salesops.gerente_writes.enabled` is OFF.
+import { getEffectiveJobKeys } from '../../lib/roleContext.js'
 
 const CASH_SHIFT_CAPABILITY_KEYS = Object.freeze([
   'cashShiftRead',
@@ -71,11 +72,11 @@ export function resolveGerentePilotCapabilities(session, capabilities = {}, caps
 }
 
 export function isGerenteSucursalPilotSession(session) {
-  const role = String(session?.role || '').trim()
-  if (role !== 'gerente_sucursal') return false
-  const extras = Array.isArray(session?.additional_job_keys) ? session.additional_job_keys : []
-  // Dual-role auxiliar keeps legacy Admin write UX; pure gerente stays read-only.
-  return !extras.map((k) => String(k || '').trim()).includes('auxiliar_admin')
+  const keys = getEffectiveJobKeys(session)
+  if (keys[0] !== 'gerente_sucursal') return false
+  // Dual-role auxiliar keeps legacy Admin write UX; additional gerente never
+  // turns a non-gerente primary into the Iguala write pilot.
+  return !keys.includes('auxiliar_admin')
 }
 
 /** Fail-closed write clamp for the Iguala Gerente pilot. */

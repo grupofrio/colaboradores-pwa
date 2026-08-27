@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
 import { getHomeModulesForSession, getModuleEntryDecisionForSession } from '../lib/navModel'
+import { BACKEND_CAPS } from '../modules/admin/adminService'
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
 import { upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
@@ -284,7 +285,7 @@ export default function ScreenHome() {
   const T = lightHome ? BRAND_TOKENS : TOKENS
 
   function handleModule(mod) {
-    const decision = getModuleEntryDecisionForSession(mod, session)
+    const decision = getModuleEntryDecisionForSession(mod, session, undefined, BACKEND_CAPS)
     if (decision.type === 'denied') return
     if (decision.type === 'choose') {
       setRolePromptModule({ module: mod, compatibleRoles: decision.compatibleRoles })

@@ -24,7 +24,7 @@ export const NAV_ITEMS = [
   { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.MIXED },
   { id: 'cierre',       label: 'Cortes de caja',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.MIXED },
   // ── Restringidos a gerente / dirección ──────────────────────────────────
-  { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.MIXED },
+  { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.MIXED },
   { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.READ },
   { id: 'traspaso-mp',  label: 'Traspaso MP',      route: '/admin/traspaso-materia-prima', roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live', access: ADMIN_NAV_ACCESS.WRITE },
   // Validar materiales / Validar bolsas: ELIMINADO (2026-04-25).

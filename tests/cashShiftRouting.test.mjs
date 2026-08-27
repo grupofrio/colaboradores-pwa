@@ -43,9 +43,15 @@ test('manage takes precedence and authorizer-only never becomes general manageme
 })
 
 test('admin desktop and mobile navigation use the same server capability gate and label', () => {
-  // CLEAN-02: label lives in shared adminNavItems.js; shell still gates by capability.
+  // CLEAN-02: label lives in shared adminNavItems.js; menu+deep-link gate lives
+  // in adminRouteAccess.js (AdminShell reuses navItemsForRoles).
   assert.match(navItemsSource, /label:\s*['"]Cortes de caja['"]/)
-  assert.match(shellSource, /isCashShiftNavigationVisible/)
+  assert.match(shellSource, /navItemsForRoles/)
+  const accessSource = readFileSync(
+    new URL('../src/modules/admin/adminRouteAccess.js', import.meta.url),
+    'utf8',
+  )
+  assert.match(accessSource, /isCashShiftNavigationVisible/)
   assert.match(hubSource, /label:\s*['"]Cortes de caja['"]/)
   assert.match(hubSource, /isCashShiftNavigationVisible/)
   assert.doesNotMatch(shellSource, /allow_manage_pos_cash_shifts|allow_authorize_cash_closing|is_direccion_general/)

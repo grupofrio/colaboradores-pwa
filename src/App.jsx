@@ -1,6 +1,6 @@
 import { lazy, Suspense, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ToastProvider } from './components/Toast'
 import AppShell from './components/AppShell'
 import { normalizeSessionRoleContext } from './lib/roleContext'
@@ -18,7 +18,7 @@ import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext
 import { isValidAuthenticatedSession } from './lib/session'
 import { isModuleVisibleForSession, getModuleRouteDecisionForSession } from './lib/navModel'
 import { adminRouteAllows } from './modules/admin/adminRouteAccess'
-import { BACKEND_CAPS } from './modules/admin/adminService'
+import { BACKEND_CAPS, bootCapabilities, syncCapabilitiesIdentity } from './modules/admin/adminService'
 import { resolveGerentePilotCapabilities } from './modules/admin/gerentePilotCaps'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
@@ -309,7 +309,7 @@ function AdminSubRoute({ path, children }) {
 // AUTORITATIVO tower_status servido por Odoo, allowlist dura).
 function ModuleRoleRoute({ moduleId, children }) {
   const { session } = useSession()
-  const decision = getModuleRouteDecisionForSession(moduleId, session)
+  const decision = getModuleRouteDecisionForSession(moduleId, session, undefined, BACKEND_CAPS)
   if (decision === 'login') return <Navigate to="/login" replace />
   if (decision !== 'allow') return <Navigate to="/" replace />
   return children
@@ -403,8 +403,24 @@ function AttendanceRoute({ children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   const module = getModuleById('asistencias')
-  if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
+  if (!module || !isModuleVisibleForSession(module, session, undefined, BACKEND_CAPS)) return <Navigate to="/" replace />
   return children
+}
+
+function CapabilityBootstrap() {
+  const { session } = useSession()
+  const identity = isValidAuthenticatedSession(session)
+    ? `${session.employee_id}:${session.odoo_employee_token || session.gf_employee_token || ''}`
+    : ''
+  useEffect(() => {
+    if (!identity) return undefined
+    let cancelled = false
+    bootCapabilities(session).catch(() => {
+      if (cancelled) return
+    })
+    return () => { cancelled = true }
+  }, [identity, session])
+  return null
 }
 
 function TalentRhBootstrap() {
@@ -459,7 +475,7 @@ function VentasIgualaRoute({ children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   const module = getModuleById('ventas_iguala')
-  if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
+  if (!module || !isModuleVisibleForSession(module, session, undefined, BACKEND_CAPS)) return <Navigate to="/" replace />
   return children
 }
 
@@ -682,6 +698,11 @@ export default function App() {
   // nonce estable en la inicialización (una sola vez; el efecto de persistencia la
   // guarda ya con el nonce).
   const [session, setSession] = useState(() => withScopeNonce(getStoredSession()))
+  const identityKey = isValidAuthenticatedSession(session)
+    ? `${session.employee_id}:${session.odoo_employee_token || session.gf_employee_token || ''}`
+    : ''
+  const capsIdentityRef = useRef(identityKey)
+  capsIdentityRef.current = syncCapabilitiesIdentity(capsIdentityRef.current, identityKey)
 
   useEffect(() => {
     if (session) {
@@ -783,6 +804,10 @@ export default function App() {
     // pueden arrancar en el mismo commit del login y algunos clientes aún leen
     // la sesión durable como fallback.
     try { localStorage.setItem('gf_session', JSON.stringify(next)) } catch {}
+    syncCapabilitiesIdentity(
+      `${prevEmpId || ''}:${session?.odoo_employee_token || session?.gf_employee_token || ''}`,
+      `${nextEmpId || ''}:${next?.odoo_employee_token || next?.gf_employee_token || ''}`,
+    )
     setSession(next)
     // Si entra otro empleado distinto al que estaba (raro, pero pasa cuando
     // el mismo navegador cambia de usuario), forzamos reload despues de
@@ -807,6 +832,7 @@ export default function App() {
 
   return (
     <SessionContext.Provider value={{ session, login, logout, updateSession }}>
+      <CapabilityBootstrap />
       <TalentRhBootstrap />
       <ToastProvider>
       <BrowserRouter>

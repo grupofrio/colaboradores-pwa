@@ -55,9 +55,10 @@ test('normalizeSessionRoleContext accepts legacy additional_roles as fallback in
   )
 })
 
-test('normalizeSessionRoleContext derives plaza from CEDIS delivery warehouses', () => {
-  assert.equal(normalizeSessionRoleContext({ warehouse_id: 98 }).plaza_id, 'CDMX')
-  assert.equal(normalizeSessionRoleContext({ warehouse_id: 94 }).plaza_id, 'GUADALAJARA')
+test('normalizeSessionRoleContext does not derive plaza from warehouse IDs', () => {
+  assert.equal(normalizeSessionRoleContext({ warehouse_id: 98 }).plaza_id, null)
+  assert.equal(normalizeSessionRoleContext({ warehouse_id: 94 }).plaza_id, null)
+  assert.equal(normalizeSessionRoleContext({ warehouse_id: 76, plaza_id: 'guadalajara' }).plaza_id, 'GUADALAJARA')
 })
 
 test('getModulesForRoles returns one module card per module across effective roles', () => {

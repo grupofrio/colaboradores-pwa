@@ -13,7 +13,7 @@ test('attendance route: direct access uses the same canonical session-aware poli
   const block = app.slice(start, start + 650)
   assert.match(block, /isValidAuthenticatedSession\(session\)/)
   assert.match(block, /getModuleById\('asistencias'\)/)
-  assert.match(block, /isModuleVisibleForSession\(module, session\)/)
+  assert.match(block, /isModuleVisibleForSession\(module, session, undefined, BACKEND_CAPS\)/)
   assert.match(block, /<Navigate to="\/login" replace \/>/)
   assert.match(block, /<Navigate to="\/" replace \/>/)
 })

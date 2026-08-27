@@ -2568,26 +2568,13 @@ async function directAdmin(method, path, body) {
     }
   }
 
-  // Actualizar líneas de una requisición (price_unit + analytic_distribution)
+  // Actualizar líneas de una requisición: transporte mínimo al endpoint documental.
+  // Identidad y scope los resuelve el token en Odoo. Fase B deniega la escritura.
   if (cleanPath === '/pwa-admin/torre/requisition-update' && method === 'POST') {
-    const lines = Array.isArray(body?.lines) ? body.lines : []
-    for (const line of lines) {
-      if (!line.id) continue
-      const dict = {}
-      if (line.price_unit !== undefined && line.price_unit !== null) dict.price_unit = Number(line.price_unit)
-      if (line.analytic_distribution !== undefined) dict.analytic_distribution = line.analytic_distribution || false
-      if (Object.keys(dict).length) {
-        await createUpdate({
-          model: 'purchase.order.line',
-          method: 'update',
-          ids: [Number(line.id)],
-          dict,
-          sudo: 1,
-          app: 'pwa_colaboradores',
-        })
-      }
-    }
-    return { ok: true, data: { updated: lines.length } }
+    return odooHttp('POST', '/pwa-admin/torre/requisition-update', {}, {
+      id: Number(body?.id || 0),
+      lines: Array.isArray(body?.lines) ? body.lines : [],
+    })
   }
 
   // Confirmar requisición → convierte a purchase.order confirmado

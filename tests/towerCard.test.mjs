@@ -160,7 +160,7 @@ test('módulo NORMAL: getModuleEntryDecisionForSession delega en la lógica por 
 
 test('ScreenHome.handleModule usa la decisión session-aware (no la de solo-x_job_key)', () => {
   const home = readFileSync(new URL('../src/screens/ScreenHome.jsx', import.meta.url), 'utf8')
-  assert.match(home, /getModuleEntryDecisionForSession\(mod, session\)/, 'el clic usa la fuente session-aware')
+  assert.match(home, /getModuleEntryDecisionForSession\(mod, session/, 'el clic usa la fuente session-aware')
   assert.ok(!/getModuleEntryDecision\(mod, session\)/.test(home), 'el clic ya no se autoriza por x_job_key directo')
 })
 

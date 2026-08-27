@@ -197,7 +197,7 @@ test('mobile and desktop POS still expose sales only through flow.salesRoute', (
   const actionMatches = posSource.match(/\{flow\.salesRoute && \(/g) || []
 
   assert.equal(actionMatches.length, 2, 'una acción en desktop y otra en mobile')
-  assert.ok(posSource.indexOf('flow.salesRoute') < posSource.indexOf('<AdminPosForm flow={flow} />'))
+  assert.ok(posSource.indexOf('flow.salesRoute') < posSource.indexOf('<AdminPosForm'))
   assert.match(posSource, /navigate\(flow\.salesRoute\)/)
   const adminFlow = flowSource.match(/export const ADMIN_POS_FLOW = Object\.freeze\(\{[\s\S]*?\n\}\)/)
   assert.ok(adminFlow)

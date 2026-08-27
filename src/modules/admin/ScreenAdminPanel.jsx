@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { getTypo } from '../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { useSession } from '../../App'
-import { getEffectiveJobKeys } from '../../lib/roleContext'
+import { getAuthorizationJobKeys } from '../../lib/roleContext'
 import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible } from '../../lib/navModel.js'
 import { getTodaySales, getTodayExpenses } from './api'
 import { logScreenError } from '../shared/logScreenError'
@@ -83,7 +83,7 @@ function MobileAdminHub() {
     return () => { alive = false }
   }, [warehouseId])
 
-  const effectiveRoles = getEffectiveJobKeys(session)
+  const effectiveRoles = getAuthorizationJobKeys(session)
   const ACTIONS = [
     { id: 'pos',              label: 'POS Mostrador',      desc: 'Punto de venta mostrador',   route: '/admin/pos',              color: TOKENS.colors.success, badge: salesCount || null },
     { id: 'gastos',           label: 'Gastos',             desc: 'Registrar gastos del día',   route: '/admin/gastos',           color: TOKENS.colors.warning, badge: expensesCount || null },

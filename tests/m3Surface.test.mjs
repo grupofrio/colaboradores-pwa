@@ -92,7 +92,7 @@ test('ScreenHome usa la fuente session-aware para tarjetas Y clic', () => {
   // registry + showOnHome), no getVisibleModulesForSession — la autorización
   // no ordena ni filtra por superficie (fix de Sebastián d7c2bb8).
   assert.match(homeSrc, /getHomeModulesForSession\(session\)/)
-  assert.match(homeSrc, /getModuleEntryDecisionForSession\(mod, session\)/)
+  assert.match(homeSrc, /getModuleEntryDecisionForSession\(mod, session/)
   assert.ok(!/getModulesForRoles\(getEffectiveJobKeys/.test(homeSrc))
 })
 
