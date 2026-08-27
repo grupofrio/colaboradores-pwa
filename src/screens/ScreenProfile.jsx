@@ -7,7 +7,9 @@ import { BRAND_TOKENS } from "../theme/brandTokens";
 import { isSharedLightSurfaceSession } from "../theme/sharedLightSurface.js";
 import { MOBILE_NAV_HEIGHT, DESKTOP_MIN } from "../lib/navModel";
 import { publishedScopeSurface } from "../lib/capabilityContract.js";
-import { BACKEND_CAPS } from "../modules/admin/adminService.js";
+import { BACKEND_CAPS, getOdooServiceState } from "../modules/admin/adminService.js";
+import { useCapabilitiesRevision } from "../modules/admin/useCapabilitiesRevision.js";
+import { ODOO_INCOMPATIBLE_MESSAGE, ODOO_UNAVAILABLE_MESSAGE } from "../lib/odooAvailability.js";
 import { resolveProfileEmployeeData } from "./profileFallback.js";
 
 /* ============================================================================
@@ -679,6 +681,7 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
   const [winH, setWinH] = useState(window.innerHeight);
   const navigate = useNavigate();
   const { logout, session } = useSession();
+  useCapabilitiesRevision();
   // `Yo` comparte exactamente el mismo selector de superficie clara que Home/Nav.
   const light = isSharedLightSurfaceSession(session);
   const theme = useMemo(
@@ -803,8 +806,14 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
 
   const surface = publishedScopeSurface(BACKEND_CAPS)
   const published = surface.scope
-  const sucursalLabel = published?.plaza_label || (surface.state === "loading" ? "Cargando…" : "No disponible")
-  const empresaLabel = published?.company_label || (surface.state === "loading" ? "Cargando…" : "No disponible")
+  const odoo = getOdooServiceState()
+  const scopeFallback = odoo.status === "unavailable"
+    ? (odoo.message || ODOO_UNAVAILABLE_MESSAGE)
+    : odoo.status === "incompatible"
+      ? (odoo.message || ODOO_INCOMPATIBLE_MESSAGE)
+    : (surface.state === "loading" ? "Cargando…" : "No disponible")
+  const sucursalLabel = published?.plaza_label || scopeFallback
+  const empresaLabel = published?.company_label || scopeFallback
 
   const infoRows = employee ? [
     {

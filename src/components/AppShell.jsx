@@ -31,6 +31,7 @@ import { useSession } from '../App'
 import AppNav from './AppNav'
 import { isNavHiddenForPath, railWidthFor, DESKTOP_MIN, MOBILE_NAV_HEIGHT } from '../lib/navModel'
 import { isValidAuthenticatedSession } from '../lib/session'
+import OdooUnavailableBanner from './OdooUnavailableBanner'
 
 export default function AppShell() {
   const { session } = useSession()
@@ -56,6 +57,7 @@ export default function AppShell() {
         transition: 'padding 120ms ease',
       }}
     >
+      {isValidAuthenticatedSession(session) ? <OdooUnavailableBanner /> : null}
       <Outlet />
       {showNav && !isDesktop && (
         <div

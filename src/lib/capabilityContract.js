@@ -7,6 +7,8 @@ export const CATALOG = Object.freeze([
   'materials.issue.iguala',
   'delivery.transfer.gdl',
   'delivery.return.gdl',
+  'delivery.transfer.iguala',
+  'delivery.return.iguala',
   'liquidation.read.gdl',
   'liquidation.print.gdl',
   'liquidation.receive_cash.gdl',
@@ -66,6 +68,14 @@ export const CAPABILITY_SURFACES = Object.freeze({
     endpoint: '/pwa-admin/dispatch-ticket',
   }),
   'delivery.return.gdl': Object.freeze({
+    route: '/entregas/devoluciones',
+    endpoint: '/pwa-admin/dispatch-ticket',
+  }),
+  'delivery.transfer.iguala': Object.freeze({
+    route: '/entregas',
+    endpoint: '/pwa-admin/dispatch-ticket',
+  }),
+  'delivery.return.iguala': Object.freeze({
     route: '/entregas/devoluciones',
     endpoint: '/pwa-admin/dispatch-ticket',
   }),

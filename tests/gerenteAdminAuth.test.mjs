@@ -33,7 +33,7 @@ test('Admin hub boot hits token-authenticated today-sales (not a second login)',
   const panel = read('src/modules/admin/ScreenAdminPanel.jsx')
   const hub = read('src/modules/admin/components/HubV2.jsx')
   const api = read('src/modules/admin/api.js')
-  assert.match(panel, /getTodaySales/)
+  assert.match(panel, /getDashboardData/)
   assert.match(hub, /getDashboardData/)
   assert.match(api, /\/pwa-admin\/today-sales/)
   assert.doesNotMatch(panel, /employee-sign-in/)

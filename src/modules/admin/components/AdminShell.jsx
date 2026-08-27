@@ -40,7 +40,7 @@ export default function AdminShell({
   hideNavigation = false,
 }) {
   const navigate = useNavigate()
-  const { employeeName, capsReady } = useAdmin()
+  const { employeeName, capsReady, capsRevision } = useAdmin()
   const { session } = useSession()
   const sucursal = publishedScope(BACKEND_CAPS)?.plaza_label || ''
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
@@ -53,8 +53,11 @@ export default function AdminShell({
   const showActivityFeed = !hideNavigation && !hideActivityFeed && sw >= 1366
 
   const effectiveCaps = useMemo(
-    () => resolveGerentePilotCapabilities(session, BACKEND_CAPS, capsReady),
-    [capsReady, session],
+    () => {
+      void capsRevision
+      return resolveGerentePilotCapabilities(session, BACKEND_CAPS, capsReady)
+    },
+    [capsReady, capsRevision, session],
   )
 
   // Filtrar módulos según rol del usuario + piloto Gerente read-only.

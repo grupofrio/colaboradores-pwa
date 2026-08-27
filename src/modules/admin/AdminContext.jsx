@@ -13,8 +13,10 @@ import { publishedScope, validateContract } from '../../lib/capabilityContract.j
 import {
   BACKEND_CAPS,
   bootCapabilities,
-  invalidateCashShiftCapabilities,
+  getOdooServiceState,
+  retryCapabilities,
 } from './adminService'
+import { useCapabilitiesRevision } from './useCapabilitiesRevision'
 import { resetCashShiftRequestRegistry } from './cashShiftService'
 import {
   adminCompaniesFromPublishedScope,
@@ -33,6 +35,8 @@ export function useAdmin() {
 
 export function AdminProvider({ children }) {
   const { session } = useSession()
+  const capsRevision = useCapabilitiesRevision()
+  const odoo = getOdooServiceState()
 
   const contractOk = validateContract(BACKEND_CAPS).ok
   const published = contractOk ? publishedScope(BACKEND_CAPS) : null
@@ -71,7 +75,6 @@ export function AdminProvider({ children }) {
     bootCapabilities(session).finally(() => { if (alive) setCapsReady(true) })
     return () => {
       alive = false
-      invalidateCashShiftCapabilities()
       resetCashShiftRequestRegistry()
     }
   }, [session, sessionIdentity, employeeToken])
@@ -94,9 +97,13 @@ export function AdminProvider({ children }) {
     employeeId,
     employeeName,
     capsReady,
+    capsRevision,
     sessionIdentity,
     scopeState: !capsReady ? 'loading' : (published ? 'ready' : 'unavailable'),
-  }), [companyId, companyLabel, availableCompanies, setCompanyId, sucursal, warehouseId, employeeId, employeeName, capsReady, sessionIdentity, published])
+    odooUnavailable: odoo.status === 'unavailable' || odoo.status === 'incompatible',
+    odooMessage: odoo.message || '',
+    retryOdoo: () => retryCapabilities(session),
+  }), [companyId, companyLabel, availableCompanies, setCompanyId, sucursal, warehouseId, employeeId, employeeName, capsReady, capsRevision, sessionIdentity, published, odoo.status, odoo.message, session])
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>
 }
