@@ -28,7 +28,8 @@ import { readAttendanceAccess } from '../modules/asistencias/access.js'
 import { readTalentRhAccess } from '../modules/talento/access.js'
 import { readConfiguredVentasIgualaAccessForSession } from '../modules/ventas-iguala/access.js'
 import { hasSupervisorCopilotCapability } from '../modules/supervisor-ventas/v2/sessionProjection.js'
-import { capabilityAllowed, ownCatalogEntry } from './capabilityContract.js'
+import { capabilityAllowed, ownCatalogEntry, validateContract } from './capabilityContract.js'
+import { BACKEND_CAPS } from '../modules/admin/adminService.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
 // Cada módulo con `accessPolicy` resuelve su visibilidad con SU contrato, no con
@@ -109,16 +110,23 @@ export function isCashShiftNavigationVisible(capabilities = {}) {
 }
 
 export function isTraspasoMpNavigationVisible(capabilities = {}) {
-  if (capabilityAllowed(capabilities, 'materials.issue.iguala')) return true
-  return ownCapabilityTrue(capabilities, 'traspasoMp')
+  if (!validateContract(capabilities).ok) return false
+  return capabilityAllowed(capabilities, 'materials.issue.iguala')
 }
 
 export function isLiquidationNavigationVisible(roles = [], capabilities = {}) {
-  const entry = ownCatalogEntry(capabilities, 'liquidation.read.gdl')
-  if (entry) return entry.allowed === true
-  // Compatibilidad temporal: sin contrato v2, mando histórico.
-  const list = Array.isArray(roles) ? roles : []
-  return list.some((role) => role === 'gerente_sucursal' || role === 'direccion_general')
+  if (!validateContract(capabilities).ok) return false
+  return ownCatalogEntry(capabilities, 'liquidation.read.gdl')?.allowed === true
+}
+
+export function isPosNavigationVisible(capabilities = {}) {
+  if (!validateContract(capabilities).ok) return false
+  return capabilityAllowed(capabilities, 'pos.read')
+}
+
+export function isEntregasNavigationVisible(capabilities = {}) {
+  if (!validateContract(capabilities).ok) return false
+  return capabilityAllowed(capabilities, 'delivery.transfer.gdl')
 }
 
 // Ancho del rail según viewport (AppShell reserva exactamente este espacio).
@@ -203,7 +211,7 @@ function navPriorityOf(module) {
 // ── Autorización de ruta (SIN metadata de superficie) ────────────────────────
 // Decide SOLO si la sesión puede entrar al módulo. No mira showInNav/showOnHome:
 // un módulo puede ser accesible por URL aunque una superficie lo oculte.
-export function isModuleAccessibleForSession(module, session, attendanceManagerIdsRaw) {
+export function isModuleAccessibleForSession(module, session, attendanceManagerIdsRaw, capabilities) {
   if (!module) return false
   if (!isValidAuthenticatedSession(session)) return false
   if (module.accessPolicy === 'attendance_manager') {
@@ -211,34 +219,38 @@ export function isModuleAccessibleForSession(module, session, attendanceManagerI
   }
   if (module.accessPolicy) return resolveAccessPolicy(module.accessPolicy, session)
   if (module.towerGated) return readAuthoritativeTowerStatus(session) != null
+  if (module.id === 'almacen_entregas') {
+    return isEntregasNavigationVisible(capabilities || BACKEND_CAPS)
+  }
   return isModuleVisibleForRoles(module, getEffectiveJobKeys(session))
 }
 
-export function getModuleRouteDecisionForSession(moduleId, session, attendanceManagerIdsRaw) {
+export function getModuleRouteDecisionForSession(moduleId, session, attendanceManagerIdsRaw, capabilities) {
   if (!isValidAuthenticatedSession(session)) return 'login'
   const module = getModuleById(moduleId)
   if (!module) return 'home'
-  if (!isModuleAccessibleForSession(module, session, attendanceManagerIdsRaw)) return 'home'
+  if (!isModuleAccessibleForSession(module, session, attendanceManagerIdsRaw, capabilities)) return 'home'
   return 'allow'
 }
 
 // ── Visibilidad SESSION-AWARE (tarjeta + nav) ────────────────────────────────
 // Superficie primero; la autorización la decide isModuleAccessibleForSession.
-export function isModuleVisibleForSession(module, session, attendanceManagerIdsRaw) {
+export function isModuleVisibleForSession(module, session, attendanceManagerIdsRaw, capabilities) {
   if (!module) return false
   if (module.showInNav === false && module.showOnHome === false) return false
-  return isModuleAccessibleForSession(module, session, attendanceManagerIdsRaw)
+  return isModuleAccessibleForSession(module, session, attendanceManagerIdsRaw, capabilities)
 }
 
 // Módulos visibles para la sesión en el orden canónico del registry.
 // La AUTORIZACIÓN no reordena ni filtra por superficie: cada superficie aplica
 // después su propia metadata (fix de Sebastián d7c2bb8, conservado).
-export function getVisibleModulesForSession(session = null) {
+export function getVisibleModulesForSession(session = null, attendanceManagerIdsRaw, capabilities) {
   if (!isValidAuthenticatedSession(session)) return []
   const seen = new Set()
+  const caps = capabilities || BACKEND_CAPS
   return MODULES
     .filter((module) => {
-      if (seen.has(module.id) || !isModuleVisibleForSession(module, session)) return false
+      if (seen.has(module.id) || !isModuleVisibleForSession(module, session, attendanceManagerIdsRaw, caps)) return false
       seen.add(module.id)
       return true
     })

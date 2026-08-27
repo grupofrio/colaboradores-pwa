@@ -2,7 +2,7 @@
 // Access/roles come from NAV_ITEMS (same contract as AdminShell + AdminSubRoute).
 import { NAV_ITEMS } from '../../admin/adminNavItems.js'
 import { filterAdminNavForGerentePilot } from '../../admin/gerentePilotCaps.js'
-import { isCashShiftNavigationVisible } from '../../../lib/navModel.js'
+import { isCashShiftNavigationVisible, isLiquidationNavigationVisible } from '../../../lib/navModel.js'
 
 /** Copy/glyph overlays (access/roles stay on NAV_ITEMS). */
 export const GERENTE_ADMIN_LAUNCHER_COPY = Object.freeze({
@@ -21,6 +21,7 @@ export function buildGerenteAdminLauncherItems(session, capabilities = {}) {
   const base = NAV_ITEMS
     .filter((item) => LAUNCHER_IDS.includes(item.id) && roleOk(item))
     .filter((item) => item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
+    .filter((item) => item.id !== 'liquidaciones' || isLiquidationNavigationVisible(['gerente_sucursal'], capabilities))
     .map((item) => ({
       ...item,
       ...GERENTE_ADMIN_LAUNCHER_COPY[item.id],

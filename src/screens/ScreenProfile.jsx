@@ -6,7 +6,7 @@ import { runLogout } from "../lib/logout";
 import { BRAND_TOKENS } from "../theme/brandTokens";
 import { isGerenteBrandSurface } from "../theme/gerenteBrandSurface.js";
 import { MOBILE_NAV_HEIGHT, DESKTOP_MIN } from "../lib/navModel";
-import { publishedScope } from "../lib/capabilityContract.js";
+import { publishedScopeSurface } from "../lib/capabilityContract.js";
 import { BACKEND_CAPS } from "../modules/admin/adminService.js";
 
 /* ============================================================================
@@ -793,9 +793,10 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
     });
   };
 
-  const published = publishedScope(BACKEND_CAPS);
-  const sucursalLabel = published?.plaza_label || (Array.isArray(employee.work_location_id) ? employee.work_location_id[1] : "") || "";
-  const empresaLabel = published?.company_label || (Array.isArray(employee.company_id) ? employee.company_id[1] : "") || "";
+  const surface = publishedScopeSurface(BACKEND_CAPS)
+  const published = surface.scope
+  const sucursalLabel = published?.plaza_label || (surface.state === "loading" ? "Cargando…" : "No disponible")
+  const empresaLabel = published?.company_label || (surface.state === "loading" ? "Cargando…" : "No disponible")
 
   const infoRows = employee ? [
     {

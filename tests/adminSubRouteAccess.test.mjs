@@ -40,7 +40,7 @@ const CAPS_WRITES_OFF = { gerenteWritesEnabled: false, cashShiftRead: true }
 const CAPS_WRITES_ON = { gerenteWritesEnabled: true, cashShiftRead: true, cashShiftManage: true }
 
 const RESTRINGIDAS = ['/admin/gastos/aprobar', '/admin/liquidaciones', '/admin/materia-prima']
-const COMPARTIDAS = ['/admin', '/admin/pos', '/admin/gastos', '/admin/requisiciones']
+const COMPARTIDAS = ['/admin', '/admin/gastos', '/admin/requisiciones']
 const WRITE_ROUTES = NAV_ITEMS.filter((i) => i.access === ADMIN_NAV_ACCESS.WRITE).map((i) => i.route)
 
 // ── AdminSubRoute / deep-link ────────────────────────────────────────────────
@@ -110,7 +110,7 @@ test('nested admin routes: ticket MIXED allowed under RO; write extras denied', 
   assert.equal(adminRoutePolicy('/admin/materiales/validar')?.access, ADMIN_NAV_ACCESS.WRITE)
 })
 
-test('traspaso-mp: sin capability → DENIED; con traspasoMp → PASS (menú ≡ deep-link)', () => {
+test('traspaso-mp: sin contrato v2 → DENIED; con materials.issue.iguala → PASS (menú ≡ deep-link)', () => {
   const aux = { role: 'auxiliar_admin', employee_id: 694 }
   const route = '/admin/traspaso-materia-prima'
   assert.equal(
@@ -119,12 +119,9 @@ test('traspaso-mp: sin capability → DENIED; con traspasoMp → PASS (menú ≡
     'caps vacías / no cargadas fallan cerrado',
   )
   assert.equal(
-    adminRouteAllows(route, ['auxiliar_admin'], { session: aux, capabilities: { traspasoMp: false } }),
-    false,
-  )
-  assert.equal(
     adminRouteAllows(route, ['auxiliar_admin'], { session: aux, capabilities: { traspasoMp: true } }),
-    true,
+    false,
+    'flag plano no abre Traspaso MP',
   )
 })
 

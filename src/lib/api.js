@@ -2561,7 +2561,7 @@ async function directAdmin(method, path, body) {
   // Actualizar líneas de una requisición: transporte mínimo al endpoint documental.
   // Identidad y scope los resuelve el token en Odoo. Fase B deniega la escritura.
   if (cleanPath === '/pwa-admin/torre/requisition-update' && method === 'POST') {
-    return odooJson('/pwa-admin/torre/requisition-update', {
+    return odooHttp('POST', '/pwa-admin/torre/requisition-update', {}, {
       id: Number(body?.id || 0),
       lines: Array.isArray(body?.lines) ? body.lines : [],
     })

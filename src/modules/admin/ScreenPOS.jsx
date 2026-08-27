@@ -94,7 +94,11 @@ export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
             </button>
           </div>
         )}
-        <AdminPosForm flow={flow} />
+        <AdminPosForm
+          flow={flow}
+          warehouseId={flow.posScope === 'day' ? warehouseId : undefined}
+          companyId={flow.posScope === 'day' ? session?.company_id : undefined}
+        />
       </AdminShell>
     </AdminProvider>
   )

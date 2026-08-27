@@ -79,7 +79,7 @@ test('módulo desconocido: fail-closed a home aunque la sesión sea válida', ()
 // ── App.jsx: cableado real de guards (text-scan) ────────────────────────────
 test('ModuleRoleRoute existe y aplica getModuleRouteDecisionForSession', () => {
   assert.match(appSrc, /function ModuleRoleRoute\(\{ moduleId, children \}\)/)
-  assert.match(appSrc, /getModuleRouteDecisionForSession\(moduleId, session\)/)
+  assert.match(appSrc, /getModuleRouteDecisionForSession\(moduleId, session, undefined, BACKEND_CAPS\)/)
   assert.match(appSrc, /decision === 'login'/)
   assert.match(appSrc, /decision !== 'allow'/)
 })

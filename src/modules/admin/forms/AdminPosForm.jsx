@@ -48,9 +48,11 @@ export const POS_THRESHOLDS = {
   DIRECTOR_AUTH: 50000,
 }
 
-export default function AdminPosForm({ flow = ADMIN_POS_FLOW }) {
+export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: warehouseIdProp, companyId: companyIdProp }) {
   const navigate = useNavigate()
-  const { companyId, companyLabel, warehouseId, sucursal } = useAdmin()
+  const { companyId: adminCompanyId, companyLabel, warehouseId: adminWarehouseId, sucursal } = useAdmin()
+  const warehouseId = warehouseIdProp || adminWarehouseId
+  const companyId = companyIdProp || adminCompanyId
   const defaultCustomerName = flow.defaultCustomerName || 'VENTA PUBLICO'
 
   const [products, setProducts] = useState([])

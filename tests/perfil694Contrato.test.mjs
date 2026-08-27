@@ -1,15 +1,18 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
   CATALOG,
+  CAPABILITY_SURFACES,
   CONTRACT_VERSION,
   capabilityAllowed,
   capabilityDeny,
   emptyCatalog,
   publishedScope,
+  publishedScopeSurface,
   validateContract,
 } from '../src/lib/capabilityContract.js'
 import {
@@ -17,7 +20,10 @@ import {
   getEffectiveJobKeys,
 } from '../src/lib/roleContext.js'
 import {
+  getModuleRouteDecisionForSession,
+  isEntregasNavigationVisible,
   isLiquidationNavigationVisible,
+  isPosNavigationVisible,
   isTraspasoMpNavigationVisible,
 } from '../src/lib/navModel.js'
 import {
@@ -27,14 +33,19 @@ import {
 import {
   applyCapabilities,
   BACKEND_CAPS,
+  invalidateCashShiftCapabilities,
 } from '../src/modules/admin/adminService.js'
 import {
+  adminCompaniesFromPublishedScope,
   nextAdminCompanyId,
   sessionUntouchedByAdminCompany,
+  syncAdminCompanyForIdentity,
 } from '../src/modules/admin/adminLocalCompany.js'
 import { isGerentePilotReadOnly } from '../src/modules/admin/gerentePilotCaps.js'
+import { voicePlazaHintFromWarehouse, voicePlazaHintNeverAuthorizes } from '../src/lib/voicePlazaMetadata.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
+const srcRoot = fileURLToPath(new URL('../src', import.meta.url))
 
 const MARISOL = {
   employee_id: 694,
@@ -45,6 +56,18 @@ const MARISOL = {
   plaza_id: 'GUADALAJARA',
   employee_has_user: false,
   odoo_employee_token: 'token-694',
+  session_token: 'h.p.s',
+}
+
+const OTHER = {
+  employee_id: 738,
+  role: 'auxiliar_admin',
+  additional_job_keys: [],
+  company_id: 1,
+  warehouse_id: 89,
+  plaza_id: 'IGUALA',
+  odoo_employee_token: 'token-738',
+  session_token: 'h.p.s',
 }
 
 const GDL_SCOPES = {
@@ -52,6 +75,13 @@ const GDL_SCOPES = {
   plaza_ids: [12],
   warehouse_ids: [94],
   analytic_ids: [12],
+}
+
+const IGU_SCOPES = {
+  company_ids: [1],
+  plaza_ids: [8],
+  warehouse_ids: [89],
+  analytic_ids: [8],
 }
 
 function denied(code, mode = null) {
@@ -77,7 +107,7 @@ function allowed(mode, scopes = GDL_SCOPES) {
 }
 
 function marisolCatalog(overrides = {}) {
-  const catalog = {
+  return {
     'materials.issue.iguala': denied('not_granted'),
     'delivery.transfer.gdl': allowed('confirm'),
     'delivery.return.gdl': allowed('capture'),
@@ -98,7 +128,6 @@ function marisolCatalog(overrides = {}) {
     'payroll.csc.capture': denied('phase_not_enabled', 'capture'),
     ...overrides,
   }
-  return catalog
 }
 
 function marisolContract(overrides = {}) {
@@ -126,11 +155,47 @@ function marisolContract(overrides = {}) {
   }
 }
 
+function otherContract() {
+  return {
+    contract_version: CONTRACT_VERSION,
+    effective_job_keys: ['auxiliar_admin'],
+    published_scope: {
+      company_id: 1,
+      company_label: 'IGUALA',
+      plaza_id: 8,
+      plaza_label: 'IGUALA',
+      warehouse_id: 89,
+      warehouse_label: 'CEDIS IGU',
+      analytic_id: 8,
+      from_actor: false,
+    },
+    capabilities: marisolCatalog({
+      'delivery.transfer.gdl': denied('cross_plaza'),
+      'delivery.return.gdl': denied('cross_plaza'),
+      'liquidation.read.gdl': denied('cross_plaza'),
+      'liquidation.print.gdl': denied('cross_plaza'),
+      'pos.read': allowed('read', IGU_SCOPES),
+      'materials.issue.iguala': allowed('confirm', IGU_SCOPES),
+    }),
+    requisitionApproval: false,
+  }
+}
+
 function decision(route, session, capabilities) {
   const keys = getAuthorizationJobKeys(session)
   const menu = navItemsForRoles(keys, capabilities).some((item) => item.route === route)
   const deep = adminRouteAllows(route, keys, { session, capabilities })
   return { menu, deep }
+}
+
+function walkJs(dir) {
+  const out = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...walkJs(path))
+    else if (/\.(js|jsx)$/.test(entry.name)) out.push(path)
+  }
+  return out
 }
 
 test('1. ficha 694 resuelve los cuatro job keys efectivos', () => {
@@ -190,6 +255,7 @@ test('5. sin token, token vacio, contrato invalido o scope ambiguo: fail-closed'
   assert.equal(BACKEND_CAPS.contract_version, '')
   assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
   assert.equal(publishedScope(BACKEND_CAPS), null)
+  assert.equal(publishedScopeSurface(BACKEND_CAPS).state, 'unavailable')
 
   const ambiguous = marisolContract({
     published_scope: null,
@@ -205,31 +271,65 @@ test('5. sin token, token vacio, contrato invalido o scope ambiguo: fail-closed'
   assert.equal(isLiquidationNavigationVisible(getEffectiveJobKeys(MARISOL), ambiguous), false)
 })
 
-test('6. menu y deep link producen la misma decision', () => {
-  const allowedCaps = marisolContract()
-  const deniedCaps = marisolContract({
-    capabilities: marisolCatalog({
-      'liquidation.read.gdl': denied('not_granted'),
-      'materials.issue.iguala': denied('not_granted'),
-    }),
-  })
-  for (const route of ['/admin/liquidaciones', '/admin/traspaso-materia-prima', '/admin/pos']) {
-    const open = decision(route, MARISOL, allowedCaps)
-    assert.equal(open.menu, open.deep, `${route} allowed menu≠deep`)
-    const closed = decision(route, MARISOL, deniedCaps)
-    assert.equal(closed.menu, closed.deep, `${route} denied menu≠deep`)
+test('6. cada modulo: true y false, UI = deep link = endpoint', () => {
+  const on = marisolContract()
+  const cases = [
+    {
+      key: 'liquidation.read.gdl',
+      route: '/admin/liquidaciones',
+      menu: (caps) => isLiquidationNavigationVisible(getAuthorizationJobKeys(MARISOL), caps),
+    },
+    {
+      key: 'pos.read',
+      route: '/admin/pos',
+      menu: (caps) => isPosNavigationVisible(caps),
+    },
+    {
+      key: 'materials.issue.iguala',
+      route: '/admin/traspaso-materia-prima',
+      menu: (caps) => isTraspasoMpNavigationVisible(caps),
+    },
+  ]
+
+  for (const item of cases) {
+    const surface = CAPABILITY_SURFACES[item.key]
+    assert.equal(surface.route, item.route, item.key)
+    assert.ok(surface.endpoint.startsWith('/pwa-admin/'), item.key)
+
+    const allowedCaps = marisolContract({
+      capabilities: marisolCatalog({
+        [item.key]: allowed(item.key === 'materials.issue.iguala' ? 'confirm' : 'read'),
+      }),
+    })
+    const deniedCaps = marisolContract({
+      capabilities: marisolCatalog({ [item.key]: denied('not_granted') }),
+    })
+
+    const open = decision(item.route, MARISOL, allowedCaps)
+    const closed = decision(item.route, MARISOL, deniedCaps)
+    assert.equal(item.menu(allowedCaps), true, `${item.key} menu true`)
+    assert.equal(item.menu(deniedCaps), false, `${item.key} menu false`)
+    assert.equal(open.menu, true, `${item.key} nav true`)
+    assert.equal(open.deep, true, `${item.key} deep true`)
+    assert.equal(closed.menu, false, `${item.key} nav false`)
+    assert.equal(closed.deep, false, `${item.key} deep false`)
+    assert.equal(capabilityAllowed(allowedCaps, item.key), true)
+    assert.equal(capabilityAllowed(deniedCaps, item.key), false)
   }
-  const liqOn = decision('/admin/liquidaciones', MARISOL, allowedCaps)
-  const liqOff = decision('/admin/liquidaciones', MARISOL, deniedCaps)
-  assert.equal(liqOn.menu, true)
-  assert.equal(liqOff.menu, false)
-  assert.equal(
-    isTraspasoMpNavigationVisible(deniedCaps),
-    adminRouteAllows('/admin/traspaso-materia-prima', getAuthorizationJobKeys(MARISOL), {
-      session: MARISOL,
-      capabilities: deniedCaps,
-    }),
-  )
+
+  const entregasOn = marisolContract()
+  const entregasOff = marisolContract({
+    capabilities: marisolCatalog({ 'delivery.transfer.gdl': denied('not_granted') }),
+  })
+  assert.equal(isEntregasNavigationVisible(entregasOn), true)
+  assert.equal(isEntregasNavigationVisible(entregasOff), false)
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, entregasOn), 'allow')
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, entregasOff), 'home')
+  assert.equal(CAPABILITY_SURFACES['delivery.transfer.gdl'].endpoint, '/pwa-admin/dispatch-ticket')
+  assert.equal(CAPABILITY_SURFACES['delivery.return.gdl'].endpoint, '/pwa-admin/dispatch-ticket')
+  assert.equal(CAPABILITY_SURFACES['liquidation.receive_cash.gdl'].endpoint, '/pwa-admin/liquidaciones/receive-cash')
+  assert.equal(capabilityAllowed(on, 'liquidation.receive_cash.gdl'), false)
+  assert.equal(capabilityAllowed(on, 'pos.operate'), false)
 })
 
 test('7. gerente_sucursal adicional no evade el clamp ni concede permisos', () => {
@@ -263,7 +363,7 @@ test('7. gerente_sucursal adicional no evade el clamp ni concede permisos', () =
   }), false)
 })
 
-test('8. Liquidaciones: capacidad falsa oculta, verdadera muestra, sin fijar oculto permanente', () => {
+test('8. Liquidaciones: capacidad falsa oculta, verdadera muestra, mutaciones cerradas', () => {
   const off = marisolContract({
     capabilities: marisolCatalog({ 'liquidation.read.gdl': denied('not_granted') }),
   })
@@ -277,24 +377,24 @@ test('8. Liquidaciones: capacidad falsa oculta, verdadera muestra, sin fijar ocu
   assert.equal(onDecision.deep, true)
   assert.equal(capabilityAllowed(on, 'liquidation.receive_cash.gdl'), false)
   assert.equal(capabilityAllowed(on, 'liquidation.validate.gdl'), false)
+  assert.equal(capabilityAllowed(on, 'liquidation.authorize_discrepancy.gdl'), false)
+  assert.equal(CAPABILITY_SURFACES['liquidation.validate.gdl'].endpoint, '/pwa-admin/liquidaciones/validate')
 })
 
 test('9. selector local de Admin no modifica la sesion global ni Entregas', () => {
   const session = { ...MARISOL }
   const frozen = JSON.stringify(session)
-  const companies = [
-    { id: 34, name: 'GLACIEM' },
-    { id: 35, name: 'Fabricación' },
-    { id: 36, name: 'Vía Ágil' },
-  ]
-  const next = nextAdminCompanyId(companies, 34, 35)
-  assert.equal(next, 35)
+  const companies = adminCompaniesFromPublishedScope({ company_id: 34, company_label: 'GLACIEM' })
+  assert.equal(companies.length, 1)
+  assert.equal(nextAdminCompanyId(companies, 34, 35), 34)
   assert.equal(JSON.stringify(sessionUntouchedByAdminCompany(session)), frozen)
   assert.equal(session.company_id, 34)
   assert.equal(session.warehouse_id, 94)
 
   const adminCtx = src('../src/modules/admin/AdminContext.jsx')
   assert.doesNotMatch(adminCtx, /updateSession\(\{\s*company_id/)
+  assert.doesNotMatch(adminCtx, /getCompaniesForSucursal/)
+  assert.doesNotMatch(adminCtx, /softWarehouse/)
   assert.match(adminCtx, /nextAdminCompanyId/)
   const selector = src('../src/modules/admin/components/CompanySelector.jsx')
   assert.match(selector, /estado del módulo Admin/)
@@ -312,23 +412,91 @@ test('contrato invalido y catalogo incompleto se rechazan', () => {
   }
 })
 
-test('no quedan fuentes divergentes de effectiveRoles.js', () => {
+test('no quedan fuentes divergentes ni IDs fijos de plaza en autorizacion', () => {
   assert.equal(existsSync(fileURLToPath(new URL('../src/lib/effectiveRoles.js', import.meta.url))), false)
   const roleContext = src('../src/lib/roleContext.js')
   assert.match(roleContext, /export function getEffectiveJobKeys/)
   assert.match(roleContext, /export function getAuthorizationJobKeys/)
+  assert.doesNotMatch(roleContext, /PLAZA_BY_WAREHOUSE/)
   const api = src('../src/lib/api.js')
   const updateBlock = api.slice(
     api.indexOf("/pwa-admin/torre/requisition-update"),
     api.indexOf("/pwa-admin/torre/requisition-confirm"),
   )
-  assert.match(updateBlock, /odooJson\('\/pwa-admin\/torre\/requisition-update'/)
+  assert.match(updateBlock, /odooHttp\('POST', '\/pwa-admin\/torre\/requisition-update'/)
+  assert.doesNotMatch(updateBlock, /odooJson\('\/pwa-admin\/torre\/requisition-update'/)
   assert.doesNotMatch(updateBlock, /createUpdate/)
   assert.doesNotMatch(updateBlock, /sudo:\s*1/)
   assert.doesNotMatch(updateBlock, /employee_id/)
   assert.doesNotMatch(updateBlock, /company_id/)
-  const contractSrc = src('../src/lib/capabilityContract.js')
-  assert.doesNotMatch(contractSrc, /warehouse_id === 76/)
-  assert.doesNotMatch(contractSrc, /warehouse_id === 89/)
-  assert.doesNotMatch(contractSrc, /warehouse_id === 94/)
+
+  const authFiles = walkJs(srcRoot).filter((path) => !path.endsWith('voicePlazaMetadata.js'))
+  for (const path of authFiles) {
+    const text = readFileSync(path, 'utf8')
+    assert.equal(text.includes('PLAZA_BY_WAREHOUSE'), false, path)
+    assert.doesNotMatch(text, /94:\s*'GUADALAJARA'/, path)
+    assert.doesNotMatch(text, /76:\s*'IGUALA'/, path)
+    assert.doesNotMatch(text, /89:\s*'IGUALA'/, path)
+  }
+  assert.equal(voicePlazaHintFromWarehouse(94), 'GUADALAJARA')
+  assert.equal(voicePlazaHintNeverAuthorizes(), true)
+  assert.equal(isEntregasNavigationVisible({ warehouse_id: 94 }), false)
+  assert.equal(isPosNavigationVisible({ warehouse_id: 94, pos: true }), false)
+})
+
+test('738 → 694 y 694 → otra ficha no dejan remanentes en BACKEND_CAPS', () => {
+  applyCapabilities(otherContract(), OTHER)
+  assert.equal(BACKEND_CAPS.published_scope.warehouse_id, 89)
+  assert.equal(BACKEND_CAPS.published_scope.company_id, 1)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'materials.issue.iguala'), true)
+
+  applyCapabilities(marisolContract(), MARISOL)
+  assert.equal(BACKEND_CAPS.published_scope.warehouse_id, 94)
+  assert.equal(BACKEND_CAPS.published_scope.company_id, 34)
+  assert.equal(BACKEND_CAPS.published_scope.plaza_label, 'GUADALAJARA')
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'materials.issue.iguala'), false)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), true)
+  assert.equal(BACKEND_CAPS.effective_job_keys[0], 'almacenista_entregas')
+
+  applyCapabilities(otherContract(), OTHER)
+  assert.equal(BACKEND_CAPS.published_scope.warehouse_id, 89)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+  assert.notEqual(BACKEND_CAPS.published_scope.company_id, 34)
+
+  invalidateCashShiftCapabilities()
+  assert.equal(BACKEND_CAPS.published_scope, null)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+})
+
+test('selector Admin se resincroniza al cambiar identidad y no inventa multiempresa', () => {
+  const published694 = publishedScope(marisolContract())
+  const published738 = publishedScope(otherContract())
+  const afterSwitch = syncAdminCompanyForIdentity({
+    previousIdentity: '738',
+    nextIdentity: '694',
+    published: published694,
+    currentCompanyId: 1,
+  })
+  assert.equal(afterSwitch, 34)
+  const back = syncAdminCompanyForIdentity({
+    previousIdentity: '694',
+    nextIdentity: '738',
+    published: published738,
+    currentCompanyId: 34,
+  })
+  assert.equal(back, 1)
+  assert.deepEqual(adminCompaniesFromPublishedScope(published694).map((row) => row.id), [34])
+  assert.equal(adminCompaniesFromPublishedScope(null).length, 0)
+})
+
+test('perfil v2 no usa work_location_id ni company_id heredados', () => {
+  const profile = src('../src/screens/ScreenProfile.jsx')
+  assert.match(profile, /publishedScopeSurface\(BACKEND_CAPS\)/)
+  assert.doesNotMatch(profile, /employee\.work_location_id/)
+  assert.doesNotMatch(profile, /employee\.company_id\[1\]/)
+  assert.match(profile, /Cargando/)
+  assert.match(profile, /No disponible/)
+  assert.equal(publishedScopeSurface({ capabilities: null }).state, 'loading')
+  assert.equal(publishedScopeSurface({ capabilities: emptyCatalog() }).state, 'unavailable')
+  assert.equal(publishedScopeSurface(marisolContract()).state, 'ready')
 })

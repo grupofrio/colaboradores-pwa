@@ -171,7 +171,7 @@ test('App.jsx has a dedicated Ventas Iguala guard using the registered module po
   assert.match(guard, /isValidAuthenticatedSession\(session\)/)
   assert.match(guard, /Navigate to="\/login" replace/)
   assert.match(guard, /getModuleById\('ventas_iguala'\)/)
-  assert.match(guard, /isModuleVisibleForSession\(module, session\)/)
+  assert.match(guard, /isModuleVisibleForSession\(module, session, undefined, BACKEND_CAPS\)/)
   assert.match(guard, /Navigate to="\/" replace/)
   assert.match(appSrc, /<Route path="\/ventas-iguala" element=\{\s*<VentasIgualaRoute><ScreenVentasIguala \/><\/VentasIgualaRoute>\s*\} \/>/)
 })

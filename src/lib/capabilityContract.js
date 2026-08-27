@@ -25,6 +25,101 @@ export const CATALOG = Object.freeze([
 ])
 
 const MODES = new Set(['read', 'capture', 'approve', 'confirm', 'release'])
+const SCOPE_LIST_KEYS = Object.freeze(['company_ids', 'plaza_ids', 'warehouse_ids', 'analytic_ids'])
+
+export const CAPABILITY_SURFACES = Object.freeze({
+  'liquidation.read.gdl': Object.freeze({
+    route: '/admin/liquidaciones',
+    endpoint: '/pwa-admin/liquidaciones/pending',
+  }),
+  'liquidation.print.gdl': Object.freeze({
+    route: '/admin/liquidaciones',
+    endpoint: '/pwa-admin/liquidaciones/detail',
+  }),
+  'liquidation.receive_cash.gdl': Object.freeze({
+    route: '/admin/liquidaciones',
+    endpoint: '/pwa-admin/liquidaciones/receive-cash',
+  }),
+  'liquidation.validate.gdl': Object.freeze({
+    route: '/admin/liquidaciones',
+    endpoint: '/pwa-admin/liquidaciones/validate',
+  }),
+  'liquidation.authorize_discrepancy.gdl': Object.freeze({
+    route: '/admin/liquidaciones',
+    endpoint: '/pwa-admin/liquidaciones/authorize-discrepancy',
+  }),
+  'pos.read': Object.freeze({
+    route: '/admin/pos',
+    endpoint: '/pwa-admin/pos-products',
+  }),
+  'pos.operate': Object.freeze({
+    route: '/admin/pos',
+    endpoint: '/pwa-admin/sale-create',
+  }),
+  'delivery.transfer.gdl': Object.freeze({
+    route: '/entregas',
+    endpoint: '/pwa-admin/dispatch-ticket',
+  }),
+  'delivery.return.gdl': Object.freeze({
+    route: '/entregas/devoluciones',
+    endpoint: '/pwa-admin/dispatch-ticket',
+  }),
+  'materials.issue.iguala': Object.freeze({
+    route: '/admin/traspaso-materia-prima',
+    endpoint: '/pwa-admin/traspaso-mp/iguala-stock',
+  }),
+  'buyer.confirm': Object.freeze({
+    route: '/torre',
+    endpoint: '/pwa-admin/torre/requisition-update',
+  }),
+})
+
+function ownValue(object, key) {
+  if (!object || typeof object !== 'object' || Array.isArray(object)) return undefined
+  const descriptor = Object.getOwnPropertyDescriptor(object, key)
+  if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) return undefined
+  return descriptor.value
+}
+
+function isExactBoolean(value) {
+  return value === true || value === false
+}
+
+function isValidIdList(value) {
+  if (!Array.isArray(value)) return false
+  const seen = new Set()
+  for (const item of value) {
+    if (!Number.isInteger(item) || item <= 0) return false
+    if (seen.has(item)) return false
+    seen.add(item)
+  }
+  return true
+}
+
+function isValidScopes(scopes, { requireOperational = false } = {}) {
+  if (!scopes || typeof scopes !== 'object' || Array.isArray(scopes)) return false
+  const keys = Object.keys(scopes)
+  if (keys.length !== SCOPE_LIST_KEYS.length) return false
+  for (const key of SCOPE_LIST_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(scopes, key)) return false
+    if (!isValidIdList(ownValue(scopes, key))) return false
+  }
+  if (requireOperational) {
+    const companies = ownValue(scopes, 'company_ids') || []
+    const warehouses = ownValue(scopes, 'warehouse_ids') || []
+    if (!companies.length || !warehouses.length) return false
+  }
+  return true
+}
+
+function isValidLimitCurrency(entry) {
+  const limit = ownValue(entry, 'limit')
+  const currency = ownValue(entry, 'currency')
+  if (limit == null) return currency == null
+  if (typeof limit === 'boolean') return false
+  if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) return false
+  return typeof currency === 'string' && Boolean(currency.trim())
+}
 
 export function emptyCatalog(code = 'invalid_contract') {
   return Object.fromEntries(CATALOG.map((name) => [name, {
@@ -41,35 +136,58 @@ export function validateContract(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return { ok: false, contract: null }
   }
-  if (payload.contract_version !== CONTRACT_VERSION) {
+  if (ownValue(payload, 'contract_version') !== CONTRACT_VERSION) {
     return { ok: false, contract: null }
   }
-  const caps = payload.capabilities
+  const caps = ownValue(payload, 'capabilities')
   if (!caps || typeof caps !== 'object' || Array.isArray(caps)) {
     return { ok: false, contract: null }
   }
   for (const name of CATALOG) {
-    const entry = Object.getOwnPropertyDescriptor(caps, name)?.value
+    const entry = ownValue(caps, name)
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       return { ok: false, contract: null }
     }
-    if (entry.allowed === true) {
-      if (!MODES.has(entry.mode)) return { ok: false, contract: null }
-    } else if (!entry.deny || typeof entry.deny !== 'object' || !entry.deny.code) {
+    const allowed = ownValue(entry, 'allowed')
+    if (!isExactBoolean(allowed)) return { ok: false, contract: null }
+    if (!isValidLimitCurrency(entry)) return { ok: false, contract: null }
+    if (allowed === true) {
+      if (ownValue(entry, 'deny') != null) return { ok: false, contract: null }
+      if (!MODES.has(ownValue(entry, 'mode'))) return { ok: false, contract: null }
+      if (!isValidScopes(ownValue(entry, 'scopes'), { requireOperational: true })) {
+        return { ok: false, contract: null }
+      }
+    } else {
+      const deny = ownValue(entry, 'deny')
+      if (!deny || typeof deny !== 'object' || Array.isArray(deny) || !ownValue(deny, 'code')) {
+        return { ok: false, contract: null }
+      }
+      if (!isValidScopes(ownValue(entry, 'scopes'), { requireOperational: false })) {
+        return { ok: false, contract: null }
+      }
+      const scopes = ownValue(entry, 'scopes') || {}
+      if (SCOPE_LIST_KEYS.some((key) => (ownValue(scopes, key) || []).length)) {
+        return { ok: false, contract: null }
+      }
+    }
+  }
+  const published = ownValue(payload, 'published_scope')
+  if (published != null) {
+    if (typeof published !== 'object' || Array.isArray(published)) {
       return { ok: false, contract: null }
     }
+    const companyId = ownValue(published, 'company_id')
+    const warehouseId = ownValue(published, 'warehouse_id')
+    if (!Number.isInteger(companyId) || companyId <= 0) return { ok: false, contract: null }
+    if (!Number.isInteger(warehouseId) || warehouseId <= 0) return { ok: false, contract: null }
   }
   return { ok: true, contract: payload }
 }
 
 export function ownCatalogEntry(capabilities, key) {
-  const catalog = capabilities?.capabilities
-  if (!catalog || typeof catalog !== 'object' || Array.isArray(catalog)) return null
-  const descriptor = Object.getOwnPropertyDescriptor(catalog, key)
-  if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) return null
-  const entry = descriptor.value
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null
-  return entry
+  const parsed = validateContract(capabilities)
+  if (!parsed.ok) return null
+  return ownValue(parsed.contract.capabilities, key) || null
 }
 
 export function capabilityAllowed(capabilities, key) {
@@ -84,23 +202,38 @@ export function capabilityDeny(capabilities, key) {
 }
 
 export function publishedScope(capabilities) {
-  const scope = capabilities?.published_scope
+  const parsed = validateContract(capabilities)
+  if (!parsed.ok) return null
+  const scope = ownValue(parsed.contract, 'published_scope')
   if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return null
-  const companyId = Number(scope.company_id || 0)
-  const warehouseId = Number(scope.warehouse_id || 0)
-  if (!companyId || !warehouseId) return null
+  const companyId = ownValue(scope, 'company_id')
+  const warehouseId = ownValue(scope, 'warehouse_id')
+  if (!Number.isInteger(companyId) || companyId <= 0) return null
+  if (!Number.isInteger(warehouseId) || warehouseId <= 0) return null
+  const plazaId = ownValue(scope, 'plaza_id')
+  const analyticId = ownValue(scope, 'analytic_id')
   return {
     company_id: companyId,
-    company_label: String(scope.company_label || '').trim(),
-    plaza_id: Number(scope.plaza_id || 0) || null,
-    plaza_label: String(scope.plaza_label || '').trim(),
+    company_label: String(ownValue(scope, 'company_label') || '').trim(),
+    plaza_id: Number.isInteger(plazaId) && plazaId > 0 ? plazaId : null,
+    plaza_label: String(ownValue(scope, 'plaza_label') || '').trim(),
     warehouse_id: warehouseId,
-    warehouse_label: String(scope.warehouse_label || '').trim(),
-    analytic_id: Number(scope.analytic_id || 0) || null,
-    from_actor: scope.from_actor === true,
+    warehouse_label: String(ownValue(scope, 'warehouse_label') || '').trim(),
+    analytic_id: Number.isInteger(analyticId) && analyticId > 0 ? analyticId : null,
+    city_code: String(ownValue(scope, 'city_code') || '').trim().toUpperCase(),
+    from_actor: ownValue(scope, 'from_actor') === true,
   }
 }
 
 export function failClosedDecision(reason = 'invalid_contract') {
   return { allowed: false, deny: { code: reason, reason: 'Fail-closed.' } }
+}
+
+export function publishedScopeSurface(payload) {
+  if (!payload || ownValue(payload, 'capabilities') == null) {
+    return { state: 'loading', scope: null }
+  }
+  const scope = publishedScope(payload)
+  if (!scope) return { state: 'unavailable', scope: null }
+  return { state: 'ready', scope }
 }

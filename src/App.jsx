@@ -17,7 +17,7 @@ import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext
 import { isValidAuthenticatedSession } from './lib/session'
 import { isModuleVisibleForSession, getModuleRouteDecisionForSession } from './lib/navModel'
 import { adminRouteAllows } from './modules/admin/adminRouteAccess'
-import { BACKEND_CAPS } from './modules/admin/adminService'
+import { BACKEND_CAPS, bootCapabilities } from './modules/admin/adminService'
 import { resolveGerentePilotCapabilities } from './modules/admin/gerentePilotCaps'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
@@ -308,7 +308,7 @@ function AdminSubRoute({ path, children }) {
 // AUTORITATIVO tower_status servido por Odoo, allowlist dura).
 function ModuleRoleRoute({ moduleId, children }) {
   const { session } = useSession()
-  const decision = getModuleRouteDecisionForSession(moduleId, session)
+  const decision = getModuleRouteDecisionForSession(moduleId, session, undefined, BACKEND_CAPS)
   if (decision === 'login') return <Navigate to="/login" replace />
   if (decision !== 'allow') return <Navigate to="/" replace />
   return children
@@ -402,8 +402,24 @@ function AttendanceRoute({ children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   const module = getModuleById('asistencias')
-  if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
+  if (!module || !isModuleVisibleForSession(module, session, undefined, BACKEND_CAPS)) return <Navigate to="/" replace />
   return children
+}
+
+function CapabilityBootstrap() {
+  const { session } = useSession()
+  const identity = isValidAuthenticatedSession(session)
+    ? `${session.employee_id}:${session.odoo_employee_token || session.gf_employee_token || ''}`
+    : ''
+  useEffect(() => {
+    if (!identity) return undefined
+    let cancelled = false
+    bootCapabilities(session).catch(() => {
+      if (cancelled) return
+    })
+    return () => { cancelled = true }
+  }, [identity, session])
+  return null
 }
 
 function TalentRhBootstrap() {
@@ -458,7 +474,7 @@ function VentasIgualaRoute({ children }) {
   const { session } = useSession()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   const module = getModuleById('ventas_iguala')
-  if (!module || !isModuleVisibleForSession(module, session)) return <Navigate to="/" replace />
+  if (!module || !isModuleVisibleForSession(module, session, undefined, BACKEND_CAPS)) return <Navigate to="/" replace />
   return children
 }
 
@@ -807,6 +823,7 @@ export default function App() {
 
   return (
     <SessionContext.Provider value={{ session, login, logout, updateSession }}>
+      <CapabilityBootstrap />
       <TalentRhBootstrap />
       <ToastProvider>
       <BrowserRouter>

@@ -17,7 +17,7 @@ import {
   isGerentePilotReadOnly,
 } from './gerentePilotCaps.js'
 import { authorizationJobKeysFrom } from '../../lib/roleContext.js'
-import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible, isLiquidationNavigationVisible } from '../../lib/navModel.js'
+import { isCashShiftNavigationVisible, isTraspasoMpNavigationVisible, isLiquidationNavigationVisible, isPosNavigationVisible } from '../../lib/navModel.js'
 
 /** Ruta absoluta → roles autorizados, derivado de NAV_ITEMS. */
 export const ADMIN_ROUTE_ROLES = Object.freeze(
@@ -109,6 +109,10 @@ export function adminRouteAllows(route, effectiveRoles = [], ctx = {}) {
     return false
   }
 
+  if (policy.navId === 'pos' && !isPosNavigationVisible(capabilities)) {
+    return false
+  }
+
   // Paridad con filterAdminNavForGerentePilot: WRITE oculto bajo piloto RO.
   if (session && isGerentePilotReadOnly(session, capabilities)) {
     if (policy.access === ADMIN_NAV_ACCESS.WRITE) return false
@@ -136,5 +140,6 @@ export function navItemsForRoles(roles = [], capabilities = {}) {
     && (item.id !== 'cierre' || isCashShiftNavigationVisible(capabilities))
     && (item.id !== 'traspaso-mp' || isTraspasoMpNavigationVisible(capabilities))
     && (item.id !== 'liquidaciones' || isLiquidationNavigationVisible(authRoles, capabilities))
+    && (item.id !== 'pos' || isPosNavigationVisible(capabilities))
   ))
 }
