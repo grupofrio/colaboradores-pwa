@@ -21,7 +21,7 @@ const TOKENS_LIGHT = BRAND_TOKENS_LIGHT
 
 const STATES = {
   draft:       { label: 'Pendiente',   color: TOKENS_LIGHT.colors.textMuted },
-  in_progress: { label: 'En progreso', color: TOKENS_LIGHT.colors.blue2 },
+  in_progress: { label: 'En progreso', color: TOKENS_LIGHT.colors.blue3 },
   closed:      { label: 'Cerrado',     color: TOKENS_LIGHT.colors.success },
   audited:     { label: 'Auditado',    color: TOKENS_LIGHT.colors.success },
 }
@@ -103,6 +103,7 @@ export default function ScreenMiTurno() {
   const totalKgPacked = packing.reduce((sum, p) => sum + (p.total_kg || 0), 0)
   const stateInfo = STATES[shift?.state] || STATES.draft
   const closeState = shift?.id ? getOperatorCloseState(shift, activeRole, shift) : null
+  const shiftBadgeStyle = getShiftBadgeStyle(stateInfo)
 
   if (!loading && !error && closeState?.effectively_closed) {
     return <ScreenTurnoEntregado shift={shift} role={activeRole} closeState={closeState} />
@@ -191,19 +192,25 @@ export default function ScreenMiTurno() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <p style={{ ...typo.overline, color: 'rgba(255,255,255,0.82)', marginBottom: 6 }}>TURNO ACTIVO</p>
+                  <p style={{ ...typo.overline, color: 'rgba(255,255,255,0.88)', marginBottom: 6 }}>TURNO ACTIVO</p>
                   <p style={{ ...typo.h2, color: UI.colors.onPrimary, margin: 0 }}>
                     {shift.name || `Turno ${shift.shift_code}`}
                   </p>
-                  <p style={{ ...typo.caption, color: UI.colors.onPrimary, opacity: 0.86, marginTop: 4 }}>
+                  <p style={{ ...typo.caption, color: 'rgba(255,255,255,0.92)', marginTop: 4 }}>
                     {shift.date} &middot; {TURNO_LABELS[shift.shift_code] || `Turno ${shift.shift_code}`}
                   </p>
                 </div>
                 <div style={{
-                  padding: '4px 10px', borderRadius: TOKENS.radius.pill,
-                  background: `${stateInfo.color}18`, border: `1px solid ${stateInfo.color}40`,
+                  padding: '7px 12px',
+                  minWidth: 88,
+                  borderRadius: TOKENS.radius.pill,
+                  background: shiftBadgeStyle.background,
+                  border: `1px solid ${shiftBadgeStyle.border}`,
+                  boxShadow: shiftBadgeStyle.shadow,
+                  textAlign: 'center',
+                  backdropFilter: 'blur(8px)',
                 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: stateInfo.color }}>{stateInfo.label}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: shiftBadgeStyle.color, letterSpacing: '-0.01em' }}>{stateInfo.label}</span>
                 </div>
               </div>
 
@@ -363,6 +370,24 @@ function MiniStat({ label, value, accent, typo }) {
       </div>
     </div>
   )
+}
+
+function getShiftBadgeStyle(stateInfo) {
+  if (stateInfo?.label === 'En progreso') {
+    return {
+      color: TOKENS_LIGHT.colors.blue3,
+      background: 'rgba(255,255,255,0.24)',
+      border: 'rgba(255,255,255,0.34)',
+      shadow: 'inset 0 1px 0 rgba(255,255,255,0.18)',
+    }
+  }
+
+  return {
+    color: stateInfo?.color || TOKENS_LIGHT.colors.textMuted,
+    background: 'rgba(255,255,255,0.18)',
+    border: 'rgba(255,255,255,0.28)',
+    shadow: 'none',
+  }
 }
 
 function ActionCard({ action, typo, onClick }) {

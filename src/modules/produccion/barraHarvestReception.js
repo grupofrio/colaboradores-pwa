@@ -126,6 +126,26 @@ export function buildPtReceptionFromHarvest({ slot = {}, tank = {}, scrapBars = 
   }
 }
 
+export function resolveNextReadySlot({ tank = {}, nextReadyId = null, slots = [] } = {}) {
+  const slotList = Array.isArray(slots) ? slots : []
+  const normalizedNextName = String(tank?.next_slot_name || '').trim().toUpperCase()
+  if (normalizedNextName) {
+    const byName = slotList.find((slot) => String(slot?.name || '').trim().toUpperCase() === normalizedNextName)
+    if (byName) return byName
+  }
+
+  const normalizedNextId = Number(nextReadyId || 0)
+  if (normalizedNextId) {
+    const byId = slotList.find((slot) => Number(slot?.id || 0) === normalizedNextId)
+    if (byId) return byId
+  }
+
+  const readySlots = slotList
+    .filter((slot) => slot?.state === 'ready' && slot?.ready_since)
+    .sort((a, b) => String(a.ready_since).localeCompare(String(b.ready_since)))
+  return readySlots[0] || null
+}
+
 function normalizeHarvestedProduct(productId, productName, source) {
   const normalizedId = Number(productId || 0)
   if (!normalizedId) return null

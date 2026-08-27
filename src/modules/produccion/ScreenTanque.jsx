@@ -19,7 +19,7 @@ import { getTypo } from '../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { listSlots, reportIncident, INCIDENT_TYPES } from './barraService'
 import { getMyShift, harvestWithPtReception } from './api'
-import { buildPtReceptionFromHarvest, resolveBarHarvestQuantities, resolveHarvestShiftId } from './barraHarvestReception'
+import { buildPtReceptionFromHarvest, resolveBarHarvestQuantities, resolveHarvestShiftId, resolveNextReadySlot } from './barraHarvestReception'
 import VoiceInputButton from '../shared/voice/VoiceInputButton'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 import { matchByFuzzyName } from '../shared/voice/voiceMatchers'
@@ -135,6 +135,11 @@ export default function ScreenTanque() {
     return c
   }, [slots])
 
+  const nextReadySlot = useMemo(
+    () => resolveNextReadySlot({ tank, nextReadyId, slots }),
+    [tank, nextReadyId, slots],
+  )
+
   function openHarvest(slot) {
     if (!slot || slot.state !== 'ready') return
     setHarvestSlot(slot)
@@ -247,9 +252,6 @@ export default function ScreenTanque() {
         source_product_id: ptReceptionPreview?.source_product_id || harvestSlot?.product_id || 0,
         qty_reported: ptReceptionPreview?.qty_reported || 0,
         scrap_bars: harvestQuantities?.scrapBars || 0,
-        scrap_kg: harvestQuantities?.scrapKg || 0,
-        line_id: tank?.line_id || 0,
-        machine_id: tank?.id || machineId || 0,
       })
 
       if (result?.ok === false && result?.harvest?.ok) {
@@ -527,8 +529,8 @@ export default function ScreenTanque() {
             </div>
 
             {/* Siguiente a cosechar */}
-            {nextReadyId && (() => {
-              const s = slots.find(x => x.id === nextReadyId)
+            {nextReadySlot && (() => {
+              const s = nextReadySlot
               if (!s) return null
               return (
                 <button onClick={() => openHarvest(s)} style={{
@@ -605,7 +607,7 @@ export default function ScreenTanque() {
                         const slot = gridLayout.byName[`${col}${rowNum}`]
                         if (!slot) return <div key={col} />
                         const meta = stateMeta(slot.state)
-                        const isNext = slot.id === nextReadyId
+                        const isNext = slot.id === nextReadySlot?.id
                         const clickable = slot.state === 'ready'
                         return (
                           <button

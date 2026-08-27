@@ -8,6 +8,7 @@ import {
   resolveHarvestProduct,
   resolvePackedProductFromHarvest,
   resolveHarvestShiftId,
+  resolveNextReadySlot,
 } from '../src/modules/produccion/barraHarvestReception.js'
 
 test('resolveHarvestProduct prefers slot product over tank product when canister product exists', () => {
@@ -215,4 +216,32 @@ test('resolveHarvestShiftId returns 0 when neither active nor slot shift availab
     }),
     0,
   )
+})
+
+test('resolveNextReadySlot prefers backend next_slot_name over stale nextReadyId', () => {
+  const slot = resolveNextReadySlot({
+    tank: { next_slot_name: 'A8' },
+    nextReadyId: 99,
+    slots: [
+      { id: 99, name: 'A9', state: 'ready', ready_since: '2026-08-20 08:00:00' },
+      { id: 98, name: 'A8', state: 'ready', ready_since: '2026-08-20 09:00:00' },
+    ],
+  })
+
+  assert.equal(slot?.name, 'A8')
+  assert.equal(slot?.id, 98)
+})
+
+test('resolveNextReadySlot falls back to nextReadyId when backend next_slot_name is missing', () => {
+  const slot = resolveNextReadySlot({
+    tank: {},
+    nextReadyId: 99,
+    slots: [
+      { id: 99, name: 'A9', state: 'ready', ready_since: '2026-08-20 08:00:00' },
+      { id: 98, name: 'A8', state: 'ready', ready_since: '2026-08-20 09:00:00' },
+    ],
+  })
+
+  assert.equal(slot?.name, 'A9')
+  assert.equal(slot?.id, 99)
 })

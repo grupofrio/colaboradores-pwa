@@ -108,13 +108,13 @@ test('harvest with mermada bars uses canonical backend harvest endpoint atomical
   assert.equal(harvestCall.payload.slot_id, 33)
   assert.equal(harvestCall.payload.shift_id, 55)
   assert.equal(harvestCall.payload.temperatura, -10.5)
-  assert.equal(harvestCall.payload.operator_id, 730)
+  assert.equal(harvestCall.payload.operator_id, undefined)
   assert.equal(harvestCall.payload.product_id, 900)
   assert.equal(harvestCall.payload.source_product_id, 900)
   assert.equal(harvestCall.payload.scrap_bars, 2)
   assert.equal(harvestCall.payload.scrap_reason_id, undefined)
-  assert.equal(harvestCall.payload.line_id, 1)
-  assert.equal(harvestCall.payload.machine_id, 9)
+  assert.equal(harvestCall.payload.line_id, undefined)
+  assert.equal(harvestCall.payload.machine_id, undefined)
   assert.equal(harvestCall.payload.scrap_source_location_id, 1085)
   assert.equal(harvestCall.payload.scrap_dest_location_id, 1173)
 
@@ -177,9 +177,65 @@ test('harvest with pt reception sends plain harvest to canonical backend endpoin
   assert.equal(harvestCall.payload.product_id, 900)
   assert.equal(harvestCall.payload.source_product_id, 900)
   assert.equal(harvestCall.payload.scrap_bars, 0)
+  assert.equal(harvestCall.payload.operator_id, undefined)
+  assert.equal(harvestCall.payload.line_id, undefined)
+  assert.equal(harvestCall.payload.machine_id, undefined)
   assert.equal(calls.some((call) => call.payload?.params?.model === 'x_ice.brine.slot'), false)
   assert.equal(result.ok, true)
   assert.equal(result.pt_reception.data.packing_entry_id, 91)
+})
+
+test('harvest with pt reception ignores legacy authority fields for barra scrap context', async () => {
+  setSession({ employee_id: 880 })
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+
+    if (url === '/odoo-api/api/ice/slot/harvest') {
+      return createJsonResponse(200, {
+        ok: true,
+        data: {
+          slot_id: 41,
+          packing_entry_id: 109,
+          qty_units: 5,
+          scrap: {
+            scrap_id: 88,
+            move_id: 650,
+            qty_bars: 3,
+          },
+        },
+      })
+    }
+
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  await api('POST', '/pwa-prod/harvest-with-pt-reception', {
+    slot_id: 41,
+    shift_id: 77,
+    temperature: -12,
+    operator_id: 999,
+    line_id: 44,
+    machine_id: 55,
+    reason_id: 6,
+    slot: { id: 41, name: 'B4', product_id: 910, product_name: 'MP Barra QA' },
+    tank: { id: 12, display_name: 'Tanque QA', line_id: 7, bars_per_basket: 8, kg_per_bar: 60 },
+    line_type: 'barra',
+    product_id: 910,
+    source_product_id: 910,
+    qty_reported: 5,
+    scrap_bars: 3,
+  })
+
+  const harvestCall = calls.find((call) => call.url === '/odoo-api/api/ice/slot/harvest')
+  assert.ok(harvestCall)
+  assert.equal(harvestCall.payload.operator_id, undefined)
+  assert.equal(harvestCall.payload.line_id, undefined)
+  assert.equal(harvestCall.payload.machine_id, undefined)
+  assert.equal(harvestCall.payload.scrap_reason_id, 6)
+  assert.equal(harvestCall.payload.scrap_bars, 3)
 })
 
 test('harvest with pt reception does not call legacy slot harvest when canonical endpoint rejects', async () => {
