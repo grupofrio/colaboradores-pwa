@@ -314,7 +314,7 @@ export default function ScreenMiTurno() {
                   <p style={{ ...typo.overline, color: '#22c55e', margin: 0 }}>
                     {tankData.ready_slots_count} CANASTILLA{tankData.ready_slots_count > 1 ? 'S' : ''} LISTA{tankData.ready_slots_count > 1 ? 'S' : ''}
                   </p>
-                  <p style={{ ...typo.body, color: 'white', margin: 0, marginTop: 2, fontWeight: 600 }}>
+                  <p style={{ ...typo.body, color: UI.colors.onPrimary, margin: 0, marginTop: 2, fontWeight: 600 }}>
                     Ir al tanque a extraer
                   </p>
                 </div>
@@ -377,7 +377,7 @@ function getShiftBadgeStyle(stateInfo) {
     return {
       color: TOKENS_LIGHT.colors.blue3,
       background: 'rgba(255,255,255,0.24)',
-      border: 'rgba(255,255,255,0.34)',
+      border: 'rgba(255,255,255,0.24)',
       shadow: 'inset 0 1px 0 rgba(255,255,255,0.18)',
     }
   }
