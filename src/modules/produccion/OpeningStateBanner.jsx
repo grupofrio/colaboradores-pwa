@@ -19,6 +19,7 @@ import { TOKENS } from '../../tokens'
 import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
 import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getOpeningState } from './api'
+import { extractOpeningStateSnapshot } from './openingState'
 
 // Componente compartido, pero SOLO lo montan ScreenMiTurno.jsx y
 // ScreenTurnoRolito.jsx, ambos exclusivos de las rutas registro_produccion
@@ -55,16 +56,6 @@ function hasKpisData(kpis) {
   return kpis && (kpis.produced_kg || kpis.packed_kg || kpis.scrap_kg)
 }
 
-// ── Extraer snapshot del response JSONRPC ───────────────────────────────────
-function extractSnapshot(res) {
-  // Odoo JSONRPC: { jsonrpc, result: { ok, data: {...} } }
-  if (res?.result?.data) return res.result.data
-  // Directo: { ok, data: {...} }
-  if (res?.data && typeof res.data === 'object' && !Array.isArray(res.data)) return res.data
-  // Ya es el snapshot
-  return res
-}
-
 export default function OpeningStateBanner({ shiftId, typo }) {
   const { session } = useSession()
   // Invariante de tests/brandTokensScope: superficie compartida por operador_rolito/operador_barra/auxiliar_produccion (ruta exclusiva de esos roles), adopta el tema claro incondicionalmente.
@@ -87,7 +78,7 @@ export default function OpeningStateBanner({ shiftId, typo }) {
     setLoading(true)
     try {
       const res = await getOpeningState(shiftId)
-      const snap = extractSnapshot(res)
+      const snap = extractOpeningStateSnapshot(res)
       // Solo mostrar si hay datos heredados reales
       if (snap && (hasPTData(snap.pt) || hasMaterialsData(snap.materials) || hasOpsData(snap.operations) || hasKpisData(snap.kpis))) {
         setData(snap)

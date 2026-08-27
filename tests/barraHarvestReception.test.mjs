@@ -218,13 +218,13 @@ test('resolveHarvestShiftId returns 0 when neither active nor slot shift availab
   )
 })
 
-test('resolveNextReadySlot prefers backend next_slot_name over stale nextReadyId', () => {
+test('resolveNextReadySlot ignores stale machine next-slot hints and derives next slot from live ready slots', () => {
   const slot = resolveNextReadySlot({
-    tank: { next_slot_name: 'A8' },
+    tank: { next_slot_name: 'A9' },
     nextReadyId: 99,
     slots: [
       { id: 99, name: 'A9', state: 'ready', ready_since: '2026-08-20 08:00:00' },
-      { id: 98, name: 'A8', state: 'ready', ready_since: '2026-08-20 09:00:00' },
+      { id: 98, name: 'A8', state: 'ready', ready_since: '2026-08-20 07:00:00' },
     ],
   })
 
@@ -232,13 +232,13 @@ test('resolveNextReadySlot prefers backend next_slot_name over stale nextReadyId
   assert.equal(slot?.id, 98)
 })
 
-test('resolveNextReadySlot falls back to nextReadyId when backend next_slot_name is missing', () => {
+test('resolveNextReadySlot falls back to nextReadyId when live slots cannot determine the next slot', () => {
   const slot = resolveNextReadySlot({
     tank: {},
     nextReadyId: 99,
     slots: [
-      { id: 99, name: 'A9', state: 'ready', ready_since: '2026-08-20 08:00:00' },
-      { id: 98, name: 'A8', state: 'ready', ready_since: '2026-08-20 09:00:00' },
+      { id: 99, name: 'A9', state: 'ready', ready_since: null },
+      { id: 98, name: 'A8', state: 'freezing', ready_since: null },
     ],
   })
 

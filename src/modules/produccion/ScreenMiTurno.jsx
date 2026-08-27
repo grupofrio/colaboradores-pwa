@@ -6,13 +6,14 @@ import { BRAND_TOKENS as BRAND_TOKENS_LIGHT } from '../../theme/brandTokens'
 import { isBrandLightSession } from '../../theme/useBrandPalette'
 import { getModuleById } from '../registry'
 import { resolveModuleContextRole } from '../../lib/roleContext'
-import { getMyShift, getCycles, getPackingEntries } from './api'
+import { getMyShift, getCycles, getOpeningState, getPackingEntries } from './api'
 import { getSaltLevel, listTanks, MACHINE_ID_BARRA } from './barraService'
 import { getMiTurnoActions } from './miTurnoActions'
 import { fmtTime } from './rolitoService'
 import OpeningStateBanner from './OpeningStateBanner'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from '../shared/operatorTurnCloseStore'
 import ScreenTurnoEntregado from './ScreenTurnoEntregado'
+import { extractOpeningStateSnapshot, resolveOpeningReadySlotCount } from './openingState'
 
 // V2: Rolito users get redirected to the new guided hub
 import ScreenTurnoRolito from './ScreenTurnoRolito'
@@ -47,6 +48,7 @@ export default function ScreenMiTurno() {
   const [error, setError] = useState('')
   const [saltData, setSaltData] = useState(null) // Barra: salt level from machine
   const [tankData, setTankData] = useState(null) // Barra: tank summary (ready count, temp, etc.)
+  const [openingState, setOpeningState] = useState(null)
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -81,6 +83,7 @@ export default function ScreenMiTurno() {
       if (s?.id) {
         const promises = [getCycles(s.id), getPackingEntries(s.id)]
         if (isBarras) {
+          promises.push(getOpeningState(s.id).catch(() => null))
           promises.push(getSaltLevel(MACHINE_ID_BARRA).catch(() => null))
           promises.push(listTanks().catch(() => ({ tanks: [] })))
         }
@@ -88,10 +91,14 @@ export default function ScreenMiTurno() {
         setCycles(results[0] || [])
         setPacking(results[1] || [])
         if (isBarras) {
-          if (results[2]) setSaltData(results[2])
-          const tanksRes = results[3]
+          const openingSnapshot = results[2] ? extractOpeningStateSnapshot(results[2]) : null
+          setOpeningState(openingSnapshot)
+          if (results[3]) setSaltData(results[3])
+          const tanksRes = results[4]
           if (tanksRes?.tanks?.length) setTankData(tanksRes.tanks[0])
         }
+      } else {
+        setOpeningState(null)
       }
     } catch (e) {
       setError(e.message === 'no_session' ? 'Sesion expirada' : 'No se pudo cargar el turno')
@@ -104,6 +111,7 @@ export default function ScreenMiTurno() {
   const stateInfo = STATES[shift?.state] || STATES.draft
   const closeState = shift?.id ? getOperatorCloseState(shift, activeRole, shift) : null
   const shiftBadgeStyle = getShiftBadgeStyle(stateInfo)
+  const readySlotsCount = resolveOpeningReadySlotCount({ openingState, tankData })
 
   if (!loading && !error && closeState?.effectively_closed) {
     return <ScreenTurnoEntregado shift={shift} role={activeRole} closeState={closeState} />
@@ -111,7 +119,7 @@ export default function ScreenMiTurno() {
 
   const ACTIONS = getMiTurnoActions({
     isBarras,
-    readySlotsCount: tankData?.ready_slots_count || 0,
+    readySlotsCount,
   })
 
   return (
@@ -228,8 +236,8 @@ export default function ScreenMiTurno() {
                   <div style={{ display: 'flex', gap: 8 }}>
                     <MiniStat
                       label="Canastillas listas"
-                      value={tankData?.ready_slots_count ?? '—'}
-                      accent={(tankData?.ready_slots_count || 0) > 0 ? UI.colors.success : UI.colors.textMuted}
+                      value={readySlotsCount}
+                      accent={readySlotsCount > 0 ? UI.colors.success : UI.colors.textMuted}
                       typo={typo}
                     />
                     <MiniStat
@@ -294,16 +302,16 @@ export default function ScreenMiTurno() {
             <OpeningStateBanner shiftId={shift.id} typo={typo} />
 
             {/* Barra: CTA principal — ir al tanque */}
-            {isBarras && tankData && (tankData.ready_slots_count || 0) > 0 && (
+            {isBarras && tankData && readySlotsCount > 0 && (
               <button onClick={() => navigate(`/produccion/tanque/${tankData.id}`)} style={{
                 marginTop: 12, padding: 14, borderRadius: TOKENS.radius.lg, textAlign: 'left',
-                background: 'linear-gradient(90deg, rgba(34,197,94,0.18), rgba(34,197,94,0.06))',
-                border: '1px solid rgba(34,197,94,0.35)',
+                background: 'linear-gradient(90deg, rgba(34,197,94,0.22), rgba(34,197,94,0.12))',
+                border: '1px solid rgba(34,197,94,0.42)',
                 display: 'flex', alignItems: 'center', gap: 12, width: '100%',
               }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: TOKENS.radius.md,
-                  background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.30)',
+                  background: 'rgba(34,197,94,0.18)', border: '1px solid rgba(34,197,94,0.36)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -311,14 +319,14 @@ export default function ScreenMiTurno() {
                   </svg>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <p style={{ ...typo.overline, color: '#22c55e', margin: 0 }}>
-                    {tankData.ready_slots_count} CANASTILLA{tankData.ready_slots_count > 1 ? 'S' : ''} LISTA{tankData.ready_slots_count > 1 ? 'S' : ''}
+                  <p style={{ ...typo.overline, color: '#166534', margin: 0, fontWeight: 800 }}>
+                    {readySlotsCount} CANASTILLA{readySlotsCount > 1 ? 'S' : ''} LISTA{readySlotsCount > 1 ? 'S' : ''}
                   </p>
-                  <p style={{ ...typo.body, color: UI.colors.onPrimary, margin: 0, marginTop: 2, fontWeight: 600 }}>
+                  <p style={{ ...typo.body, color: '#14532d', margin: 0, marginTop: 2, fontWeight: 700 }}>
                     Ir al tanque a extraer
                   </p>
                 </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(34,197,94,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 18l6-6-6-6"/>
                 </svg>
               </button>
