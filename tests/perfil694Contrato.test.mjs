@@ -21,6 +21,7 @@ import {
 } from '../src/lib/roleContext.js'
 import {
   getModuleRouteDecisionForSession,
+  getModuleEntryDecisionForSession,
   isEntregasNavigationVisible,
   isLiquidationNavigationVisible,
   isPosNavigationVisible,
@@ -34,6 +35,7 @@ import {
   applyCapabilities,
   BACKEND_CAPS,
   invalidateCashShiftCapabilities,
+  syncCapabilitiesIdentity,
 } from '../src/modules/admin/adminService.js'
 import {
   adminCompaniesFromPublishedScope,
@@ -43,6 +45,7 @@ import {
 } from '../src/modules/admin/adminLocalCompany.js'
 import { isGerentePilotReadOnly } from '../src/modules/admin/gerentePilotCaps.js'
 import { voicePlazaHintFromWarehouse, voicePlazaHintNeverAuthorizes } from '../src/lib/voicePlazaMetadata.js'
+import { getModuleById } from '../src/modules/registry.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const srcRoot = fileURLToPath(new URL('../src', import.meta.url))
@@ -147,6 +150,7 @@ function marisolContract(overrides = {}) {
       warehouse_id: 94,
       warehouse_label: 'CEDIS GDL',
       analytic_id: 12,
+      city_code: 'GDL',
       from_actor: false,
     },
     capabilities: marisolCatalog(),
@@ -167,6 +171,7 @@ function otherContract() {
       warehouse_id: 89,
       warehouse_label: 'CEDIS IGU',
       analytic_id: 8,
+      city_code: 'IGU',
       from_actor: false,
     },
     capabilities: marisolCatalog({
@@ -259,11 +264,9 @@ test('5. sin token, token vacio, contrato invalido o scope ambiguo: fail-closed'
 
   const ambiguous = marisolContract({
     published_scope: null,
-    capabilities: marisolCatalog({
-      'delivery.transfer.gdl': denied('scope_ambiguous'),
-      'liquidation.read.gdl': denied('scope_ambiguous'),
-      'pos.read': denied('scope_ambiguous'),
-    }),
+    capabilities: marisolCatalog(
+      Object.fromEntries(CATALOG.map((name) => [name, denied('scope_ambiguous')])),
+    ),
   })
   assert.equal(validateContract(ambiguous).ok, true)
   assert.equal(capabilityAllowed(ambiguous, 'delivery.transfer.gdl'), false)
@@ -466,6 +469,44 @@ test('738 → 694 y 694 → otra ficha no dejan remanentes en BACKEND_CAPS', () 
   invalidateCashShiftCapabilities()
   assert.equal(BACKEND_CAPS.published_scope, null)
   assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+})
+
+test('cambio de identidad cierra el singleton antes del fetch de la ficha nueva', () => {
+  const entregas = getModuleById('almacen_entregas')
+  applyCapabilities(otherContract(), OTHER)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'materials.issue.iguala'), true)
+  assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
+
+  const closedKey = syncCapabilitiesIdentity('738:token-a', '694:token-b')
+  assert.equal(closedKey, '694:token-b')
+  assert.equal(BACKEND_CAPS.published_scope, null)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'materials.issue.iguala'), false)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+  assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
+  assert.equal(
+    getModuleEntryDecisionForSession(entregas, MARISOL, undefined, BACKEND_CAPS).type,
+    'denied',
+  )
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'home')
+
+  applyCapabilities(marisolContract(), MARISOL)
+  assert.equal(
+    getModuleEntryDecisionForSession(entregas, MARISOL, undefined, BACKEND_CAPS).type,
+    'direct',
+  )
+
+  syncCapabilitiesIdentity('694:token-b', '738:token-c')
+  assert.equal(
+    getModuleEntryDecisionForSession(entregas, OTHER, undefined, BACKEND_CAPS).type,
+    'denied',
+  )
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+
+  const app = src('../src/App.jsx')
+  assert.match(app, /syncCapabilitiesIdentity\(capsIdentityRef\.current, identityKey\)/)
+  assert.match(app, /syncCapabilitiesIdentity\(/)
+  const home = src('../src/screens/ScreenHome.jsx')
+  assert.match(home, /getModuleEntryDecisionForSession\(mod, session, undefined, BACKEND_CAPS\)/)
 })
 
 test('selector Admin se resincroniza al cambiar identidad y no inventa multiempresa', () => {

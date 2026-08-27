@@ -18,7 +18,13 @@ function contract(overrides = {}) {
   return {
     contract_version: CONTRACT_VERSION,
     capabilities: { ...emptyCatalog('not_granted'), ...overrides },
-    published_scope: { company_id: 34, warehouse_id: 89 },
+    published_scope: {
+      company_id: 34,
+      warehouse_id: 89,
+      plaza_id: 1,
+      analytic_id: 1,
+      city_code: 'IGU',
+    },
   }
 }
 

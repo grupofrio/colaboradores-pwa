@@ -26,6 +26,11 @@ export const CATALOG = Object.freeze([
 
 const MODES = new Set(['read', 'capture', 'approve', 'confirm', 'release'])
 const SCOPE_LIST_KEYS = Object.freeze(['company_ids', 'plaza_ids', 'warehouse_ids', 'analytic_ids'])
+export const PLAZA_REQUIRED_CAPABILITIES = Object.freeze(new Set([
+  ...CATALOG.filter((name) => name.endsWith('.gdl') || name.endsWith('.iguala')),
+  'pos.read',
+  'buyer.read',
+]))
 
 export const CAPABILITY_SURFACES = Object.freeze({
   'liquidation.read.gdl': Object.freeze({
@@ -96,7 +101,7 @@ function isValidIdList(value) {
   return true
 }
 
-function isValidScopes(scopes, { requireOperational = false } = {}) {
+function isValidScopes(scopes, { requireOperational = false, requirePlaza = false } = {}) {
   if (!scopes || typeof scopes !== 'object' || Array.isArray(scopes)) return false
   const keys = Object.keys(scopes)
   if (keys.length !== SCOPE_LIST_KEYS.length) return false
@@ -108,8 +113,23 @@ function isValidScopes(scopes, { requireOperational = false } = {}) {
     const companies = ownValue(scopes, 'company_ids') || []
     const warehouses = ownValue(scopes, 'warehouse_ids') || []
     if (!companies.length || !warehouses.length) return false
+    if (requirePlaza && !(ownValue(scopes, 'plaza_ids') || []).length) return false
   }
   return true
+}
+
+function isValidMode(mode) {
+  return mode == null || MODES.has(mode)
+}
+
+function isCompletePublishedScope(published) {
+  if (!published || typeof published !== 'object' || Array.isArray(published)) return false
+  for (const key of ['company_id', 'warehouse_id', 'plaza_id', 'analytic_id']) {
+    const value = ownValue(published, key)
+    if (!Number.isInteger(value) || value <= 0) return false
+  }
+  const city = ownValue(published, 'city_code')
+  return typeof city === 'string' && Boolean(city.trim())
 }
 
 function isValidLimitCurrency(entry) {
@@ -154,7 +174,10 @@ export function validateContract(payload) {
     if (allowed === true) {
       if (ownValue(entry, 'deny') != null) return { ok: false, contract: null }
       if (!MODES.has(ownValue(entry, 'mode'))) return { ok: false, contract: null }
-      if (!isValidScopes(ownValue(entry, 'scopes'), { requireOperational: true })) {
+      if (!isValidScopes(ownValue(entry, 'scopes'), {
+        requireOperational: true,
+        requirePlaza: PLAZA_REQUIRED_CAPABILITIES.has(name),
+      })) {
         return { ok: false, contract: null }
       }
     } else {
@@ -162,6 +185,7 @@ export function validateContract(payload) {
       if (!deny || typeof deny !== 'object' || Array.isArray(deny) || !ownValue(deny, 'code')) {
         return { ok: false, contract: null }
       }
+      if (!isValidMode(ownValue(entry, 'mode'))) return { ok: false, contract: null }
       if (!isValidScopes(ownValue(entry, 'scopes'), { requireOperational: false })) {
         return { ok: false, contract: null }
       }
@@ -172,15 +196,12 @@ export function validateContract(payload) {
     }
   }
   const published = ownValue(payload, 'published_scope')
-  if (published != null) {
-    if (typeof published !== 'object' || Array.isArray(published)) {
-      return { ok: false, contract: null }
-    }
-    const companyId = ownValue(published, 'company_id')
-    const warehouseId = ownValue(published, 'warehouse_id')
-    if (!Number.isInteger(companyId) || companyId <= 0) return { ok: false, contract: null }
-    if (!Number.isInteger(warehouseId) || warehouseId <= 0) return { ok: false, contract: null }
+  const anyAllowed = CATALOG.some((name) => ownValue(ownValue(caps, name), 'allowed') === true)
+  if (published == null) {
+    if (anyAllowed) return { ok: false, contract: null }
+    return { ok: true, contract: payload }
   }
+  if (!isCompletePublishedScope(published)) return { ok: false, contract: null }
   return { ok: true, contract: payload }
 }
 

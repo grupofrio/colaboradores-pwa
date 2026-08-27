@@ -196,6 +196,14 @@ export function invalidateCashShiftCapabilities() {
   return BACKEND_CAPS
 }
 
+/** Cierra el singleton en el mismo tick que cambia la identidad.
+ *  No espera al cleanup de un useEffect. */
+export function syncCapabilitiesIdentity(previousKey, nextKey) {
+  if (previousKey === nextKey) return nextKey
+  invalidateCashShiftCapabilities()
+  return nextKey
+}
+
 /** Aplica en runtime la respuesta de GET /pwa-admin/capabilities.
  *  Si el backend no conoce un flag, se mantiene el default local. */
 export function applyCapabilities(caps, session = null) {

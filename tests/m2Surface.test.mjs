@@ -102,7 +102,7 @@ test('módulos normales: delegación intacta a la lógica por rol (sin bypass)',
 
 test('ScreenHome usa la fuente session-aware para tarjetas Y clic', () => {
   assert.match(homeSrc, /getHomeModulesForSession\(session\)/)
-  assert.match(homeSrc, /getModuleEntryDecisionForSession\(mod, session\)/)
+  assert.match(homeSrc, /getModuleEntryDecisionForSession\(mod, session/)
   assert.ok(!/getModulesForRoles\(getEffectiveJobKeys/.test(homeSrc), 'ya no usa la fuente solo-roles')
 })
 

@@ -265,7 +265,7 @@ export function getHomeModulesForSession(session = null) {
 // visibilidad: módulos accessPolicy entran/deniegan por su contrato (navegan
 // directo, sin role-context); el resto delega en la lógica por rol.
 // El route guard (App.jsx) sigue siendo la autoridad final.
-export function getModuleEntryDecisionForSession(module, session, attendanceManagerIdsRaw) {
+export function getModuleEntryDecisionForSession(module, session, attendanceManagerIdsRaw, capabilities) {
   if (!isValidAuthenticatedSession(session)) {
     return { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }
@@ -278,6 +278,12 @@ export function getModuleEntryDecisionForSession(module, session, attendanceMana
   // sin role-context. Una política desconocida falla cerrada.
   if (module?.accessPolicy) {
     return resolveAccessPolicy(module.accessPolicy, session)
+      ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
+      : { type: 'denied', compatibleRoles: [], selectedRole: '' }
+  }
+  const caps = capabilities || BACKEND_CAPS
+  if (module?.id === 'almacen_entregas') {
+    return isEntregasNavigationVisible(caps)
       ? { type: 'direct', compatibleRoles: [], selectedRole: '' }
       : { type: 'denied', compatibleRoles: [], selectedRole: '' }
   }

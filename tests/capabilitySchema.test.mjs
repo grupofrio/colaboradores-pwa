@@ -44,7 +44,13 @@ function validContract(overrides = {}) {
   return {
     contract_version: CONTRACT_VERSION,
     effective_job_keys: ['almacenista_entregas'],
-    published_scope: { company_id: 34, warehouse_id: 94 },
+    published_scope: {
+      company_id: 34,
+      warehouse_id: 94,
+      plaza_id: 12,
+      analytic_id: 12,
+      city_code: 'GDL',
+    },
     capabilities,
     ...overrides,
   }
@@ -145,4 +151,32 @@ test('limite sin moneda se rechaza; published_scope solo si el contrato valida',
   assert.equal(validateContract(contract).ok, false)
   assert.equal(publishedScope({ contract_version: '1.0', published_scope: { company_id: 34, warehouse_id: 94 } }), null)
   assert.ok(publishedScope(validContract()))
+})
+
+test('mode denegado fuera del vocabulario se rechaza', () => {
+  const contract = validContract()
+  contract.capabilities['materials.issue.iguala'] = {
+    ...denied(),
+    mode: 'write',
+  }
+  assert.equal(validateContract(contract).ok, false)
+})
+
+test('capacidad .gdl permitida sin plaza se rechaza', () => {
+  const contract = validContract()
+  contract.capabilities['delivery.transfer.gdl'] = {
+    ...allowed(),
+    scopes: { company_ids: [34], plaza_ids: [], warehouse_ids: [94], analytic_ids: [12] },
+  }
+  assert.equal(validateContract(contract).ok, false)
+})
+
+test('published_scope incompleto o ausente con capacidades permitidas se rechaza', () => {
+  const incomplete = validContract()
+  incomplete.published_scope = { company_id: 34, warehouse_id: 94 }
+  assert.equal(validateContract(incomplete).ok, false)
+  const missing = validContract()
+  missing.published_scope = null
+  assert.equal(validateContract(missing).ok, false)
+  assert.equal(publishedScope(incomplete), null)
 })
