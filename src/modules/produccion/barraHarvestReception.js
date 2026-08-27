@@ -128,10 +128,24 @@ export function buildPtReceptionFromHarvest({ slot = {}, tank = {}, scrapBars = 
 
 export function resolveNextReadySlot({ tank = {}, nextReadyId = null, slots = [] } = {}) {
   const slotList = Array.isArray(slots) ? slots : []
-  const normalizedNextName = String(tank?.next_slot_name || '').trim().toUpperCase()
-  if (normalizedNextName) {
-    const byName = slotList.find((slot) => String(slot?.name || '').trim().toUpperCase() === normalizedNextName)
-    if (byName) return byName
+  const readySlots = slotList
+    .filter((slot) => slot?.state === 'ready')
+    .sort((a, b) => {
+      const aReadySince = String(a?.ready_since || '')
+      const bReadySince = String(b?.ready_since || '')
+      if (aReadySince && bReadySince) return aReadySince.localeCompare(bReadySince)
+      if (aReadySince) return -1
+      if (bReadySince) return 1
+
+      const aReadyHours = Number(a?.time_in_ready_hours || 0)
+      const bReadyHours = Number(b?.time_in_ready_hours || 0)
+      if (aReadyHours !== bReadyHours) return bReadyHours - aReadyHours
+
+      return String(a?.name || '').localeCompare(String(b?.name || ''))
+    })
+
+  if (readySlots.length > 0) {
+    return readySlots[0]
   }
 
   const normalizedNextId = Number(nextReadyId || 0)
@@ -139,11 +153,7 @@ export function resolveNextReadySlot({ tank = {}, nextReadyId = null, slots = []
     const byId = slotList.find((slot) => Number(slot?.id || 0) === normalizedNextId)
     if (byId) return byId
   }
-
-  const readySlots = slotList
-    .filter((slot) => slot?.state === 'ready' && slot?.ready_since)
-    .sort((a, b) => String(a.ready_since).localeCompare(String(b.ready_since)))
-  return readySlots[0] || null
+  return null
 }
 
 function normalizeHarvestedProduct(productId, productName, source) {
