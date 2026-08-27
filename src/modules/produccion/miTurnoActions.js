@@ -39,7 +39,7 @@ export function getMiTurnoActions({ isBarras = false, readySlotsCount = 0 } = {}
       label: 'Inspección',
       desc: 'Checklist HACCP',
       route: '/produccion/checklist',
-      color: TOKENS.colors.textMuted,
+      color: TOKENS.colors.blue,
       iconKey: 'checklist',
     },
     {

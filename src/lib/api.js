@@ -4010,7 +4010,6 @@ async function directProduction(method, path, body) {
   if (cleanPath === '/pwa-prod/harvest-with-pt-reception' && method === 'POST') {
     const slotId = Number(body?.slot_id || 0)
     const shiftId = Number(body?.shift_id || 0)
-    const operatorId = getEmployeeId() || Number(body?.operator_id || 0)
     const temperature = Number(body?.temperature || 0)
     const slot = body?.slot || {}
     const tank = body?.tank || {}
@@ -4049,16 +4048,16 @@ async function directProduction(method, path, body) {
     }
 
     try {
+      // Backend canonico de Barra resuelve actor, linea y maquina server-side
+      // a partir de la sesion y el slot/tanque. Este puente no debe reenviar
+      // esos campos como autoridad aunque vengan desde la UI.
       const harvestEnvelope = await odooHttp('POST', '/api/ice/slot/harvest', {}, {
         slot_id: slotId,
         shift_id: harvestShiftId,
         temperatura: temperature,
-        operator_id: operatorId || undefined,
         line_type: String(body?.line_type || 'barra').trim() || 'barra',
         product_id: Number(body?.product_id || receptionPayload.product_id || 0),
         source_product_id: sourceProductId || undefined,
-        line_id: Number(body?.line_id || tank?.line_id || 0) || undefined,
-        machine_id: Number(body?.machine_id || tank?.id || 0) || undefined,
         scrap_bars: quantities.scrapBars,
         scrap_reason_id: Number(body?.scrap_reason_id || body?.reason_id || 0) || undefined,
         scrap_source_location_id: Number(body?.scrap_source_location_id || IGUALA_PRODUCTION_LOCATION_ID),
