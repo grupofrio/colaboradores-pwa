@@ -24,6 +24,7 @@ import {
   getModuleEntryDecisionForSession,
   getHomeModulesForSession,
   isEntregasNavigationVisible,
+  isEntregasPlaceholderVisible,
   isLiquidationNavigationVisible,
   isPosNavigationVisible,
   isTraspasoMpNavigationVisible,
@@ -613,6 +614,7 @@ test('cambio de identidad cierra el singleton antes del fetch de la ficha nueva'
     'denied',
   )
   assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'home')
+  assert.equal(isEntregasPlaceholderVisible(MARISOL, BACKEND_CAPS), true)
 
   applyCapabilities(marisolContract(), MARISOL)
   assert.equal(
@@ -636,6 +638,30 @@ test('cambio de identidad cierra el singleton antes del fetch de la ficha nueva'
   assert.match(app, /syncCapabilitiesIdentity\(/)
   const home = src('../src/screens/ScreenHome.jsx')
   assert.match(home, /getModuleEntryDecisionForSession\(mod, session, undefined, BACKEND_CAPS\)/)
+})
+
+test('almacenista_entregas no abre Entregas por rol si el contrato no está listo', () => {
+  invalidateCashShiftCapabilities()
+  const entregas = getModuleById('almacen_entregas')
+
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+  assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
+  assert.equal(isEntregasPlaceholderVisible(MARISOL, BACKEND_CAPS), true)
+  assert.equal(
+    getModuleEntryDecisionForSession(entregas, MARISOL, undefined, BACKEND_CAPS).type,
+    'denied',
+  )
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'home')
+  assert.equal(
+    getModuleEntryDecisionForSession(entregas, OTHER, undefined, BACKEND_CAPS).type,
+    'denied',
+  )
+  const nav = src('../src/lib/navModel.js')
+  assert.doesNotMatch(nav, /Fallback operacional/)
+  assert.doesNotMatch(nav, /canAccessEntregasModule/)
+  assert.match(nav, /delivery\.transfer\.iguala/)
+  const home = src('../src/screens/ScreenHome.jsx')
+  assert.match(home, /isEntregasPlaceholderVisible/)
 })
 
 test('selector Admin se resincroniza al cambiar identidad y no inventa multiempresa', () => {
@@ -667,6 +693,8 @@ test('perfil v2 no usa work_location_id ni company_id heredados', () => {
   assert.match(profile, /Cargando/)
   assert.match(profile, /No disponible/)
   assert.match(profile, /ODOO_UNAVAILABLE_MESSAGE/)
+  assert.match(profile, /ODOO_INCOMPATIBLE_MESSAGE/)
+  assert.match(profile, /resolveProfileEmployeeData/)
   assert.equal(publishedScopeSurface({ capabilities: null }).state, 'loading')
   assert.equal(publishedScopeSurface({ capabilities: emptyCatalog() }).state, 'unavailable')
   assert.equal(publishedScopeSurface(marisolContract()).state, 'ready')

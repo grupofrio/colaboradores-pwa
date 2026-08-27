@@ -100,7 +100,7 @@ export function AdminProvider({ children }) {
     capsRevision,
     sessionIdentity,
     scopeState: !capsReady ? 'loading' : (published ? 'ready' : 'unavailable'),
-    odooUnavailable: odoo.status === 'unavailable',
+    odooUnavailable: odoo.status === 'unavailable' || odoo.status === 'incompatible',
     odooMessage: odoo.message || '',
     retryOdoo: () => retryCapabilities(session),
   }), [companyId, companyLabel, availableCompanies, setCompanyId, sucursal, warehouseId, employeeId, employeeName, capsReady, capsRevision, sessionIdentity, published, odoo.status, odoo.message, session])

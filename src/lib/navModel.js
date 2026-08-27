@@ -130,6 +130,11 @@ export function isEntregasNavigationVisible(capabilities = {}) {
     || capabilityAllowed(capabilities, 'delivery.transfer.iguala')
 }
 
+export function isEntregasPlaceholderVisible(session = {}, capabilities = {}) {
+  if (isEntregasNavigationVisible(capabilities)) return false
+  return getEffectiveJobKeys(session).includes('almacenista_entregas')
+}
+
 // Ancho del rail según viewport (AppShell reserva exactamente este espacio).
 export function railWidthFor(width) {
   if (!Number.isFinite(width) || width < DESKTOP_MIN) return 0

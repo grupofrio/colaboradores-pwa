@@ -2,6 +2,7 @@
 // never convert 503/HTML/timeout into $0 or "sin actividad".
 
 export const ODOO_UNAVAILABLE_MESSAGE = 'Servicio de Odoo temporalmente no disponible.'
+export const ODOO_INCOMPATIBLE_MESSAGE = 'El backend de Odoo requiere actualización para este catálogo.'
 export const AUTO_RETRY_DELAYS_MS = Object.freeze([1500, 4000, 8000])
 
 function asText(value) {

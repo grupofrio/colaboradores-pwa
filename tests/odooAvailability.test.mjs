@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   AUTO_RETRY_DELAYS_MS,
+  ODOO_INCOMPATIBLE_MESSAGE,
   ODOO_UNAVAILABLE_MESSAGE,
   isOdooUnavailableError,
   isOdooUnavailablePayload,
@@ -33,5 +34,6 @@ test('métrica indisponible no publica importes en cero', () => {
   assert.equal(metric.total, null)
   assert.equal(metric.reason, 'odoo_unavailable')
   assert.equal(ODOO_UNAVAILABLE_MESSAGE, 'Servicio de Odoo temporalmente no disponible.')
+  assert.equal(ODOO_INCOMPATIBLE_MESSAGE, 'El backend de Odoo requiere actualización para este catálogo.')
   assert.deepEqual([...AUTO_RETRY_DELAYS_MS], [1500, 4000, 8000])
 })

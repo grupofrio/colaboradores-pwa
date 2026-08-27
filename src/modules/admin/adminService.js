@@ -28,6 +28,7 @@ import {
 import { emptyCatalog, publishedScope, validateContract } from '../../lib/capabilityContract.js'
 import {
   AUTO_RETRY_DELAYS_MS,
+  ODOO_INCOMPATIBLE_MESSAGE,
   ODOO_UNAVAILABLE_MESSAGE,
   isOdooUnavailableError,
   isOdooUnavailablePayload,
@@ -311,6 +312,14 @@ export async function bootCapabilities(session = null, { autoRetry = true } = {}
       } else {
         const caps = res?.data || res
         const applied = applyCapabilities(caps, session || readSessionRaw())
+        if (!validateContract(caps).ok) {
+          setOdooServiceState({
+            status: 'incompatible',
+            message: ODOO_INCOMPATIBLE_MESSAGE,
+          })
+          notifyCapabilitiesChanged()
+          return applied
+        }
         setOdooServiceState({ status: 'ok', message: '' })
         notifyCapabilitiesChanged()
         return applied
@@ -321,7 +330,7 @@ export async function bootCapabilities(session = null, { autoRetry = true } = {}
         if (isCurrentCapabilityRequest(generation, snapshot)) {
           resetFailClosedCapabilities()
           applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
-          setOdooServiceState({ status: 'ok', message: '' })
+          setOdooServiceState({ status: 'unknown', message: '' })
           notifyCapabilitiesChanged()
         }
         return BACKEND_CAPS
@@ -457,21 +466,24 @@ function toList(res) {
  *  Usa filtros server-side si BACKEND_CAPS.serverSideCompanyFilter = true. */
 export async function getDashboardData({ warehouseId, companyId }) {
   const odoo = getOdooServiceState()
-  if (odoo.status === 'unavailable') {
+  if (odoo.status === 'unavailable' || odoo.status === 'incompatible') {
     return {
       sales: [],
       expenses: [],
       kpis: {
-        ventasHoy: unavailableMetric(),
-        gastosHoy: unavailableMetric(),
+        ventasHoy: unavailableMetric(odoo.status),
+        gastosHoy: unavailableMetric(odoo.status),
         caja: unavailableMetric('cash_shift_hub_source_unavailable'),
         liquidaciones: unavailableMetric('liquidaciones_hub_source_unavailable'),
         requisiciones: unavailableMetric('requisitions_hub_source_unavailable'),
         materiaPrima: unavailableMetric('materia_prima_hub_source_unavailable'),
         alertas: unavailableMetric('alerts_hub_source_unavailable'),
       },
-      odooUnavailable: true,
-      odooMessage: ODOO_UNAVAILABLE_MESSAGE,
+      odooUnavailable: odoo.status === 'unavailable',
+      odooIncompatible: odoo.status === 'incompatible',
+      odooMessage: odoo.message || (odoo.status === 'incompatible'
+        ? ODOO_INCOMPATIBLE_MESSAGE
+        : ODOO_UNAVAILABLE_MESSAGE),
     }
   }
 

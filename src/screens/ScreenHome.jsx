@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
-import { getHomeModulesForSession, getModuleEntryDecisionForSession } from '../lib/navModel'
+import { getHomeModulesForSession, getModuleEntryDecisionForSession, isEntregasPlaceholderVisible } from '../lib/navModel'
 import { BACKEND_CAPS } from '../modules/admin/adminService'
 import { useCapabilitiesRevision } from '../modules/admin/useCapabilitiesRevision'
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
@@ -496,6 +496,15 @@ export default function ScreenHome() {
               </FadeIn>
             ))}
           </div>
+          {isEntregasPlaceholderVisible(session, BACKEND_CAPS) && (
+            <p
+              role="status"
+              data-testid="entregas-placeholder"
+              className="mt-3 rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-sm font-medium text-white/70"
+            >
+              Entregas está en espera del contrato del backend. No se puede abrir hasta que Odoo publique un alcance válido.
+            </p>
+          )}
         </FadeIn>
 
         {/* Espacio extra al fondo */}

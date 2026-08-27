@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'vite'
 import { CATALOG, CONTRACT_VERSION } from '../src/lib/capabilityContract.js'
-import { ODOO_UNAVAILABLE_MESSAGE } from '../src/lib/odooAvailability.js'
+import { ODOO_INCOMPATIBLE_MESSAGE, ODOO_UNAVAILABLE_MESSAGE } from '../src/lib/odooAvailability.js'
 
 const originalFetch = globalThis.fetch
 const originalLocalStorage = globalThis.localStorage
@@ -962,6 +962,26 @@ test('503 de capabilities no inventa $0 y el reintento restaura el contrato', as
   assert.equal(restored.capabilities['delivery.transfer.gdl'].allowed, true)
   assert.equal(restored.capabilities['pos.read'].allowed, true)
   assert.equal(restored.capabilities['liquidation.read.gdl'].allowed, true)
+})
+
+test('HTTP 200 con catálogo incompleto no marca odooServiceState=ok', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  globalThis.fetch = async () => createJsonResponse(200, {
+    ok: true,
+    data: {
+      cashShiftRead: true,
+      contract_version: '1.0',
+    },
+  })
+  const caps = await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.getOdooServiceState().status, 'incompatible')
+  assert.equal(adminServiceModule.getOdooServiceState().message, ODOO_INCOMPATIBLE_MESSAGE)
+  assert.equal(caps.published_scope, null)
+  assert.equal(caps.capabilities['delivery.transfer.gdl'].allowed, false)
+  const dash = await adminServiceModule.getDashboardData({ warehouseId: 94, companyId: 34 })
+  assert.equal(dash.odooIncompatible, true)
+  assert.equal(dash.kpis.ventasHoy.total, null)
+  assert.notEqual(dash.kpis.ventasHoy.total, 0)
 })
 
 test('cambio de empleado durante el reintento no hereda el contrato anterior', async () => {
