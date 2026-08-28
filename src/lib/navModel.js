@@ -28,7 +28,13 @@ import { readAttendanceAccess } from '../modules/asistencias/access.js'
 import { readTalentRhAccess } from '../modules/talento/access.js'
 import { readConfiguredVentasIgualaAccessForSession } from '../modules/ventas-iguala/access.js'
 import { hasSupervisorCopilotCapability } from '../modules/supervisor-ventas/v2/sessionProjection.js'
-import { capabilityAllowed, ownCatalogEntry, validateContract } from './capabilityContract.js'
+import {
+  capabilityAllowed,
+  capabilityAllowedAny,
+  DELIVERY_TRANSFER_CAPABILITY_KEYS,
+  ownCatalogEntry,
+  validateContract,
+} from './capabilityContract.js'
 import { BACKEND_CAPS } from '../modules/admin/adminService.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
@@ -126,16 +132,13 @@ export function isPosNavigationVisible(capabilities = {}) {
 
 export function isEntregasNavigationVisible(capabilities = {}) {
   if (!validateContract(capabilities).ok) return false
-  return capabilityAllowed(capabilities, 'delivery.transfer')
-    || capabilityAllowed(capabilities, 'delivery.transfer.gdl')
-    || capabilityAllowed(capabilities, 'delivery.transfer.iguala')
+  return capabilityAllowedAny(capabilities, DELIVERY_TRANSFER_CAPABILITY_KEYS)
 }
 
 export function isEntregasPlaceholderVisible(session = {}, capabilities = {}) {
   if (isEntregasNavigationVisible(capabilities)) return false
   return getEffectiveJobKeys(session).includes('almacenista_entregas')
 }
-
 // Ancho del rail según viewport (AppShell reserva exactamente este espacio).
 export function railWidthFor(width) {
   if (!Number.isFinite(width) || width < DESKTOP_MIN) return 0

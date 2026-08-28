@@ -259,7 +259,10 @@ export function syncCapabilitiesIdentity(previousKey, nextKey) {
 export function applyCapabilities(caps, session = null) {
   resetFailClosedCapabilities()
   const safeCaps = clampGerentePilotWriteCapabilities(session || readSessionRaw(), caps)
-  if (!safeCaps || typeof safeCaps !== 'object') return BACKEND_CAPS
+  if (!safeCaps || typeof safeCaps !== 'object') {
+    notifyCapabilitiesChanged()
+    return BACKEND_CAPS
+  }
   for (const key of Object.keys(BACKEND_CAPS)) {
     if (CANONICAL_CONTRACT_KEYS.includes(key)) continue
     if (!Object.prototype.hasOwnProperty.call(safeCaps, key)) continue

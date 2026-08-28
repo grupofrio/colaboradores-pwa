@@ -675,9 +675,30 @@ test('almacenista_entregas no abre Entregas por rol si el contrato no está list
   const nav = src('../src/lib/navModel.js')
   assert.doesNotMatch(nav, /Fallback operacional/)
   assert.doesNotMatch(nav, /canAccessEntregasModule/)
-  assert.match(nav, /delivery\.transfer\.iguala/)
+  assert.match(nav, /DELIVERY_TRANSFER_CAPABILITY_KEYS/)
+  const contract = src('../src/lib/capabilityContract.js')
+  assert.match(contract, /delivery\.transfer\.iguala/)
   const home = src('../src/screens/ScreenHome.jsx')
   assert.match(home, /isEntregasPlaceholderVisible/)
+})
+
+test('entregas acepta alias canonico o de plaza aunque delivery.transfer.gdl venga denegado', () => {
+  const entregas = getModuleById('almacen_entregas')
+  const aliasOnly = marisolContract({
+    capabilities: {
+      ...marisolCatalog({ 'delivery.transfer.gdl': denied('legacy_alias_disabled') }),
+      'delivery.transfer': allowed('confirm'),
+      'delivery.transfer.iguala': allowed('confirm', IGU_SCOPES),
+    },
+  })
+
+  assert.equal(validateContract(aliasOnly).ok, true)
+  assert.equal(isEntregasNavigationVisible(aliasOnly), true)
+  assert.equal(
+    getModuleEntryDecisionForSession(entregas, MARISOL, undefined, aliasOnly).type,
+    'direct',
+  )
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, aliasOnly), 'allow')
 })
 
 test('selector Admin se resincroniza al cambiar identidad y no inventa multiempresa', () => {
