@@ -33,6 +33,7 @@ import {
 } from './posCustomers'
 import {
   ADMIN_POS_FLOW,
+  ADMIN_POS_CONSULT_ONLY_COPY,
   assertCanonicalPosOperateAllowed,
   buildPosTicketPath,
   canMutateCanonicalPos,
@@ -522,6 +523,9 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
             </button>
           )}
         </div>
+        {!canOperatePos && requiresCanonicalPosOperate(flow) ? (
+          <p role="status">{ADMIN_POS_CONSULT_ONLY_COPY}</p>
+        ) : null}
 
         {(defaultCustomerState.status === 'failed' ? defaultCustomerState.message : error) && (
           <div style={{ padding: '10px 14px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`, marginBottom: 12 }}>
@@ -742,7 +746,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
             </div>
 
             {!canOperatePos && requiresCanonicalPosOperate(flow) ? (
-              <p>El cobro no está habilitado. Puedes consultar el catálogo.</p>
+              <p role="status">{ADMIN_POS_CONSULT_ONLY_COPY}</p>
             ) : payConfirm ? (
               <div>
                 <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, textAlign: 'center', marginBottom: 8 }}>

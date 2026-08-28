@@ -14,6 +14,7 @@ import {
 import { adminRouteAllows } from '../src/modules/admin/adminRouteAccess.js'
 import {
   ADMIN_POS_FLOW,
+  ADMIN_POS_CONSULT_ONLY_COPY,
   DAY_POS_FLOW,
   NIGHT_POS_FLOW,
   assertCanonicalPosOperateAllowed,
@@ -181,4 +182,16 @@ test('AdminPosForm and ScreenPOS guard pos.operate immediately before createSale
   const nav = src('../src/lib/navModel.js')
   assert.match(nav, /capabilityAllowed\(capabilities, 'pos.read'\)/)
   assert.doesNotMatch(nav, /capabilityAllowed\(capabilities, 'pos.operate'\)/)
+})
+
+test('admin POS consult-only copy is shown when operate is closed', () => {
+  assert.match(ADMIN_POS_CONSULT_ONLY_COPY, /solo para consulta/i)
+  assert.match(ADMIN_POS_CONSULT_ONLY_COPY, /no están habilitados/i)
+  assert.doesNotMatch(ADMIN_POS_CONSULT_ONLY_COPY, /POS funcionando/)
+  const form = src('../src/modules/admin/forms/AdminPosForm.jsx')
+  const mobile = src('../src/modules/admin/ScreenPOS.jsx')
+  for (const slice of [form, mobile]) {
+    assert.match(slice, /ADMIN_POS_CONSULT_ONLY_COPY/)
+    assert.doesNotMatch(slice, /El cobro no está habilitado\. Puedes consultar el catálogo\./)
+  }
 })

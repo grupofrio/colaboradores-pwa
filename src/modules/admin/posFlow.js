@@ -162,6 +162,9 @@ export function canOpenPosPayment(cart = [], customer = {}, readiness) {
   return readiness?.loading === false && catalogCustomerId === customerId
 }
 
+export const ADMIN_POS_CONSULT_ONLY_COPY =
+  'POS disponible solo para consulta. El cobro y la creación de ventas no están habilitados.'
+
 const WRITE_CLOSED_HTTP = new Set([401, 403, 502, 503, 504])
 
 export function requiresCanonicalPosOperate(flow = ADMIN_POS_FLOW) {

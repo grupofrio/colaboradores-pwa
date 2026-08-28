@@ -34,6 +34,7 @@ import { logScreenError } from '../../shared/logScreenError'
 import { computePosSummary } from '../posPricing'
 import {
   ADMIN_POS_FLOW,
+  ADMIN_POS_CONSULT_ONLY_COPY,
   assertCanonicalPosOperateAllowed,
   buildPosTicketPath,
   canMutateCanonicalPos,
@@ -460,6 +461,9 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
         }}>
           POS
         </h1>
+        {!canOperatePos && requiresCanonicalPosOperate(flow) ? (
+          <p role="status">{ADMIN_POS_CONSULT_ONLY_COPY}</p>
+        ) : null}
       </div>
 
       {(defaultCustomerState.status === 'failed' ? defaultCustomerState.message : error) && (
@@ -915,8 +919,8 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
           </div>
 
           {!canOperatePos && requiresCanonicalPosOperate(flow) ? (
-            <p>
-              El cobro no está habilitado. Puedes consultar el catálogo.
+            <p role="status">
+              {ADMIN_POS_CONSULT_ONLY_COPY}
             </p>
           ) : payConfirm ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
