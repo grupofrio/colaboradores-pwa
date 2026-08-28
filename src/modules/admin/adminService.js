@@ -26,6 +26,7 @@ import {
   unwrapExpenseListEnvelope,
 } from './expenseListEnvelope.js'
 import { emptyCatalog, publishedScope, validateContract } from '../../lib/capabilityContract.js'
+import { notifyBackendCapabilitiesChanged } from './backendCapsStore.js'
 
 // ── Feature caps del backend ────────────────────────────────────────────────
 // Los defaults están en true porque `gf_pwa_admin` ya expone todos estos
@@ -193,6 +194,7 @@ function isCurrentCapabilityRequest(generation, snapshot) {
 export function invalidateCashShiftCapabilities() {
   capabilityRequestGeneration += 1
   resetFailClosedCapabilities()
+  notifyBackendCapabilitiesChanged()
   return BACKEND_CAPS
 }
 
@@ -209,7 +211,10 @@ export function syncCapabilitiesIdentity(previousKey, nextKey) {
 export function applyCapabilities(caps, session = null) {
   resetFailClosedCapabilities()
   const safeCaps = clampGerentePilotWriteCapabilities(session || readSessionRaw(), caps)
-  if (!safeCaps || typeof safeCaps !== 'object') return BACKEND_CAPS
+  if (!safeCaps || typeof safeCaps !== 'object') {
+    notifyBackendCapabilitiesChanged()
+    return BACKEND_CAPS
+  }
   for (const key of Object.keys(BACKEND_CAPS)) {
     if (CANONICAL_CONTRACT_KEYS.includes(key)) continue
     if (!Object.prototype.hasOwnProperty.call(safeCaps, key)) continue
@@ -236,6 +241,7 @@ export function applyCapabilities(caps, session = null) {
     BACKEND_CAPS.traspasoMp = true
   }
   applyCanonicalContract(safeCaps)
+  notifyBackendCapabilitiesChanged()
   return BACKEND_CAPS
 }
 

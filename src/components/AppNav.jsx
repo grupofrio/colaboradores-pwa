@@ -24,6 +24,7 @@ import {
   DESKTOP_MIN, RAIL_FULL_MIN, DESKTOP_RAIL_WIDTH, DESKTOP_RAIL_WIDTH_COMPACT,
 } from '../lib/navModel'
 import { isValidAuthenticatedSession } from '../lib/session'
+import { useBackendCapabilitiesSnapshot } from '../modules/admin/backendCapsStore'
 import {
   MORE_SHEET_HISTORY_KEY,
   consumeTransientHistoryEntry,
@@ -268,6 +269,7 @@ function DesktopRail({ nav, compact, onGo, t, light }) {
 /* ── AppNav ───────────────────────────────────────────────────────────────── */
 export default function AppNav() {
   const { session } = useSession()
+  useBackendCapabilitiesSnapshot()
   const light = isSharedLightSurfaceSession(session)
   const t = light ? BRAND_TOKENS : DARK_TOKENS
   const navigate = useNavigate()

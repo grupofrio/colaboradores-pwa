@@ -4,6 +4,7 @@ import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
 import { getHomeModulesForSession, getModuleEntryDecisionForSession } from '../lib/navModel'
 import { BACKEND_CAPS } from '../modules/admin/adminService'
+import { useBackendCapabilitiesSnapshot } from '../modules/admin/backendCapsStore'
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
 import { upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
@@ -255,6 +256,7 @@ function ModuleCard({ module, typo, onClick, light }) {
 ============================================================================ */
 export default function ScreenHome() {
   const { session, logout, updateSession } = useSession()
+  const backendCapsSnapshot = useBackendCapabilitiesSnapshot()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -272,7 +274,7 @@ export default function ScreenHome() {
   // Home conserva el orden histórico del registry.
   const modules = useMemo(() =>
     getHomeModulesForSession(session),
-  [session])
+  [session, backendCapsSnapshot])
 
   const firstName = session?.name?.split(' ')[0] ?? 'Colaborador'
   const companyLabel = COMPANY_LABELS[session?.company_id] ?? session?.company ?? ''

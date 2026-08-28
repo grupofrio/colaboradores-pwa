@@ -526,6 +526,25 @@ test('almacenista_entregas conserva acceso por rol si el contrato de capabilitie
   )
 })
 
+test('entregas acepta alias canonico o de plaza aunque delivery.transfer.gdl venga denegado', () => {
+  const entregas = getModuleById('almacen_entregas')
+  const aliasOnly = marisolContract({
+    capabilities: {
+      ...marisolCatalog({ 'delivery.transfer.gdl': denied('legacy_alias_disabled') }),
+      'delivery.transfer': allowed('confirm'),
+      'delivery.transfer.iguala': allowed('confirm', IGU_SCOPES),
+    },
+  })
+
+  assert.equal(validateContract(aliasOnly).ok, true)
+  assert.equal(isEntregasNavigationVisible(aliasOnly), true)
+  assert.equal(
+    getModuleEntryDecisionForSession(entregas, MARISOL, undefined, aliasOnly).type,
+    'direct',
+  )
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, aliasOnly), 'allow')
+})
+
 test('selector Admin se resincroniza al cambiar identidad y no inventa multiempresa', () => {
   const published694 = publishedScope(marisolContract())
   const published738 = publishedScope(otherContract())

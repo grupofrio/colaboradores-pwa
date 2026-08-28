@@ -28,7 +28,13 @@ import { readAttendanceAccess } from '../modules/asistencias/access.js'
 import { readTalentRhAccess } from '../modules/talento/access.js'
 import { readConfiguredVentasIgualaAccessForSession } from '../modules/ventas-iguala/access.js'
 import { hasSupervisorCopilotCapability } from '../modules/supervisor-ventas/v2/sessionProjection.js'
-import { capabilityAllowed, ownCatalogEntry, validateContract } from './capabilityContract.js'
+import {
+  capabilityAllowed,
+  capabilityAllowedAny,
+  DELIVERY_TRANSFER_CAPABILITY_KEYS,
+  ownCatalogEntry,
+  validateContract,
+} from './capabilityContract.js'
 import { BACKEND_CAPS } from '../modules/admin/adminService.js'
 
 // ── Registro de políticas de acceso por módulo ───────────────────────────────
@@ -126,7 +132,7 @@ export function isPosNavigationVisible(capabilities = {}) {
 
 export function isEntregasNavigationVisible(capabilities = {}) {
   if (!validateContract(capabilities).ok) return false
-  return capabilityAllowed(capabilities, 'delivery.transfer.gdl')
+  return capabilityAllowedAny(capabilities, DELIVERY_TRANSFER_CAPABILITY_KEYS)
 }
 
 function hasEntregasRole(session = {}) {
@@ -135,7 +141,7 @@ function hasEntregasRole(session = {}) {
 
 function canAccessEntregasModule(session, capabilities = {}) {
   if (validateContract(capabilities).ok) {
-    return capabilityAllowed(capabilities, 'delivery.transfer.gdl')
+    return capabilityAllowedAny(capabilities, DELIVERY_TRANSFER_CAPABILITY_KEYS)
   }
   // Fallback operacional: si el contrato de capabilities no cargó o vino
   // inválido, no le quitamos el módulo al rol canónico de Entregas.

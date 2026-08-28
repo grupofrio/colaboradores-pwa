@@ -79,6 +79,12 @@ export const CAPABILITY_SURFACES = Object.freeze({
   }),
 })
 
+export const DELIVERY_TRANSFER_CAPABILITY_KEYS = Object.freeze([
+  'delivery.transfer',
+  'delivery.transfer.gdl',
+  'delivery.transfer.iguala',
+])
+
 function ownValue(object, key) {
   if (!object || typeof object !== 'object' || Array.isArray(object)) return undefined
   const descriptor = Object.getOwnPropertyDescriptor(object, key)
@@ -213,6 +219,18 @@ export function ownCatalogEntry(capabilities, key) {
 
 export function capabilityAllowed(capabilities, key) {
   return ownCatalogEntry(capabilities, key)?.allowed === true
+}
+
+export function capabilityAllowedAny(capabilities, keys = []) {
+  const parsed = validateContract(capabilities)
+  if (!parsed.ok) return false
+  const catalog = parsed.contract.capabilities
+  for (const key of keys) {
+    const entry = ownValue(catalog, key)
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+    if (ownValue(entry, 'allowed') === true) return true
+  }
+  return false
 }
 
 export function capabilityDeny(capabilities, key) {

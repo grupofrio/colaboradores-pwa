@@ -19,6 +19,7 @@ import { isValidAuthenticatedSession } from './lib/session'
 import { isModuleVisibleForSession, getModuleRouteDecisionForSession } from './lib/navModel'
 import { adminRouteAllows } from './modules/admin/adminRouteAccess'
 import { BACKEND_CAPS, bootCapabilities, syncCapabilitiesIdentity } from './modules/admin/adminService'
+import { useBackendCapabilitiesSnapshot } from './modules/admin/backendCapsStore'
 import { resolveGerentePilotCapabilities } from './modules/admin/gerentePilotCaps'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
@@ -309,6 +310,7 @@ function AdminSubRoute({ path, children }) {
 // AUTORITATIVO tower_status servido por Odoo, allowlist dura).
 function ModuleRoleRoute({ moduleId, children }) {
   const { session } = useSession()
+  useBackendCapabilitiesSnapshot()
   const decision = getModuleRouteDecisionForSession(moduleId, session, undefined, BACKEND_CAPS)
   if (decision === 'login') return <Navigate to="/login" replace />
   if (decision !== 'allow') return <Navigate to="/" replace />
@@ -401,6 +403,7 @@ function NightPosRoute({ children }) {
 // Este gate cliente es UX; Odoo permanece como autoridad de cada petición.
 function AttendanceRoute({ children }) {
   const { session } = useSession()
+  useBackendCapabilitiesSnapshot()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
   const module = getModuleById('asistencias')
   if (!module || !isModuleVisibleForSession(module, session, undefined, BACKEND_CAPS)) return <Navigate to="/" replace />
