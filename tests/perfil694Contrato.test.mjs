@@ -138,6 +138,8 @@ function allowed(mode, scopes = GDL_SCOPES) {
 function marisolCatalog(overrides = {}) {
   return {
     'materials.issue.iguala': denied('not_granted'),
+    'delivery.transfer': allowed('confirm'),
+    'delivery.return': allowed('capture'),
     'delivery.transfer.gdl': allowed('confirm'),
     'delivery.return.gdl': allowed('capture'),
     'delivery.transfer.iguala': denied('cross_plaza'),
@@ -203,6 +205,8 @@ function otherContract() {
       from_actor: false,
     },
     capabilities: marisolCatalog({
+      'delivery.transfer': allowed('confirm', IGU_SCOPES),
+      'delivery.return': allowed('capture', IGU_SCOPES),
       'delivery.transfer.gdl': denied('cross_plaza'),
       'delivery.return.gdl': denied('cross_plaza'),
       'delivery.transfer.iguala': allowed('confirm', IGU_SCOPES),
@@ -232,6 +236,8 @@ function igualaEntregasContract() {
       from_actor: true,
     },
     capabilities: marisolCatalog({
+      'delivery.transfer': allowed('confirm', IGU_SCOPES),
+      'delivery.return': allowed('capture', IGU_SCOPES),
       'delivery.transfer.gdl': denied('cross_plaza'),
       'delivery.return.gdl': denied('cross_plaza'),
       'delivery.transfer.iguala': allowed('confirm', IGU_SCOPES),
@@ -250,6 +256,8 @@ function igualaNoJobContract() {
     ...igualaEntregasContract(),
     effective_job_keys: ['almacenista_pt'],
     capabilities: marisolCatalog({
+      'delivery.transfer': denied('not_granted'),
+      'delivery.return': denied('not_granted'),
       'delivery.transfer.gdl': denied('cross_plaza'),
       'delivery.return.gdl': denied('cross_plaza'),
       'delivery.transfer.iguala': denied('not_granted'),
@@ -398,12 +406,18 @@ test('6. cada modulo: true y false, UI = deep link = endpoint', () => {
 
   const entregasOn = marisolContract()
   const entregasOff = marisolContract({
-    capabilities: marisolCatalog({ 'delivery.transfer.gdl': denied('not_granted') }),
+    capabilities: marisolCatalog({
+      'delivery.transfer': denied('not_granted'),
+      'delivery.transfer.gdl': denied('not_granted'),
+      'delivery.transfer.iguala': denied('cross_plaza'),
+    }),
   })
   assert.equal(isEntregasNavigationVisible(entregasOn), true)
   assert.equal(isEntregasNavigationVisible(entregasOff), false)
   assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, entregasOn), 'allow')
   assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, entregasOff), 'home')
+  assert.equal(CAPABILITY_SURFACES['delivery.transfer'].endpoint, '/pwa-admin/dispatch-ticket')
+  assert.equal(CAPABILITY_SURFACES['delivery.return'].endpoint, '/pwa-admin/dispatch-ticket')
   assert.equal(CAPABILITY_SURFACES['delivery.transfer.gdl'].endpoint, '/pwa-admin/dispatch-ticket')
   assert.equal(CAPABILITY_SURFACES['delivery.return.gdl'].endpoint, '/pwa-admin/dispatch-ticket')
   assert.equal(CAPABILITY_SURFACES['delivery.transfer.iguala'].endpoint, '/pwa-admin/dispatch-ticket')
@@ -742,6 +756,13 @@ test('menús y deep links se refrescan al recuperar el contrato sin heredar iden
   assert.ok(getHomeModulesForSession(MARISOL).some((module) => module.id === 'almacen_entregas'))
 })
 
+test('AdminProvider no apaga capsReady si el contrato v2 ya es válido', () => {
+  const ctx = src('../src/modules/admin/AdminContext.jsx')
+  assert.match(ctx, /useState\(\(\) => validateContract\(BACKEND_CAPS\)\.ok\)/)
+  assert.match(ctx, /if \(!validateContract\(BACKEND_CAPS\)\.ok\) setCapsReady\(false\)/)
+  assert.doesNotMatch(ctx, /let alive = true\s+setCapsReady\(false\)/)
+})
+
 test('superficie 503: banner, reintento y cero importes falsos', () => {
   const home = src('../src/screens/ScreenHome.jsx')
   const app = src('../src/App.jsx')
@@ -761,10 +782,39 @@ test('superficie 503: banner, reintento y cero importes falsos', () => {
   assert.doesNotMatch(feed, /\.catch\(\(\) => \[\]\)/)
   assert.match(svc, /AUTO_RETRY_DELAYS_MS/)
   assert.match(svc, /isOdooUnavailablePayload/)
+  assert.match(svc, /preserveCurrent/)
+  assert.match(app, /admin-route-caps-loading/)
   const metric = unavailableMetric()
   assert.equal(metric.total, null)
   assert.equal(metric.available, false)
   assert.equal(ODOO_UNAVAILABLE_MESSAGE.includes('Odoo'), true)
   assert.equal(getOdooServiceState().status === 'unknown' || typeof getOdooServiceState().status === 'string', true)
+})
+
+test('contrato publicado GDL plaza 818 abre POS y Liquidaciones y no pide Iguala', () => {
+  invalidateCashShiftCapabilities()
+  const live = marisolContract({
+    published_scope: {
+      company_id: 34,
+      company_label: 'SOLUCIONES EN PRODUCCION GLACIEM',
+      plaza_id: 818,
+      plaza_label: '[GDL] Guadalajara',
+      warehouse_id: 94,
+      warehouse_label: 'CEDIS Guadalajara',
+      analytic_id: 818,
+      city_code: 'GDL',
+      from_actor: true,
+    },
+  })
+  assert.equal(validateContract(live).ok, true)
+  applyCapabilities(live, MARISOL)
+  const roles = getAuthorizationJobKeys(MARISOL)
+  assert.equal(isPosNavigationVisible(BACKEND_CAPS), true)
+  assert.equal(isLiquidationNavigationVisible(roles, BACKEND_CAPS), true)
+  assert.equal(adminRouteAllows('/admin/pos', roles, { session: MARISOL, capabilities: BACKEND_CAPS }), true)
+  assert.equal(adminRouteAllows('/admin/liquidaciones', roles, { session: MARISOL, capabilities: BACKEND_CAPS }), true)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.iguala'), false)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'materials.issue.iguala'), false)
+  assert.equal(isTraspasoMpNavigationVisible(BACKEND_CAPS), false)
 })
 

@@ -18,9 +18,10 @@ import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext
 import { isValidAuthenticatedSession } from './lib/session'
 import { isModuleVisibleForSession, getModuleRouteDecisionForSession } from './lib/navModel'
 import { adminRouteAllows } from './modules/admin/adminRouteAccess'
-import { BACKEND_CAPS, bootCapabilities, syncCapabilitiesIdentity } from './modules/admin/adminService'
+import { BACKEND_CAPS, bootCapabilities, syncCapabilitiesIdentity, getOdooServiceState } from './modules/admin/adminService'
 import { useCapabilitiesRevision } from './modules/admin/useCapabilitiesRevision'
 import { resolveGerentePilotCapabilities } from './modules/admin/gerentePilotCaps'
+import { validateContract } from './lib/capabilityContract.js'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
@@ -286,6 +287,15 @@ function AdminSubRoute({ path, children }) {
   const { session } = useSession()
   useCapabilitiesRevision()
   if (!isValidAuthenticatedSession(session)) return <Navigate to="/login" replace />
+  const odoo = getOdooServiceState()
+  const contractOk = validateContract(BACKEND_CAPS).ok
+  if (!contractOk && odoo.status === 'unknown') {
+    return (
+      <div role="status" data-testid="admin-route-caps-loading">
+        Cargando permisos de sucursal…
+      </div>
+    )
+  }
   // Fail-closed para writes: si caps aún no bootearon, gerenteWritesEnabled≠true
   // ⇒ RO ⇒ rutas WRITE denegadas (misma regla que el menú).
   const effectiveCaps = resolveGerentePilotCapabilities(session, BACKEND_CAPS, true)

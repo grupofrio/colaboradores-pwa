@@ -294,10 +294,17 @@ export function applyCapabilities(caps, session = null) {
 export async function bootCapabilities(session = null, { autoRetry = true } = {}) {
   const snapshot = capabilitySessionSnapshot(session)
   const generation = ++capabilityRequestGeneration
-  resetFailClosedCapabilities()
-  applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
-  setOdooServiceState({ status: 'unknown', message: '' })
-  notifyCapabilitiesChanged()
+  const preserveCurrent = Boolean(
+    snapshot.employeeToken
+    && validateContract(BACKEND_CAPS).ok
+    && isCurrentCapabilityRequest(generation, snapshot)
+  )
+  if (!preserveCurrent) {
+    resetFailClosedCapabilities()
+    applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
+    setOdooServiceState({ status: 'unknown', message: '' })
+    notifyCapabilitiesChanged()
+  }
   if (!snapshot.employeeToken) return BACKEND_CAPS
 
   const delays = autoRetry ? AUTO_RETRY_DELAYS_MS : []

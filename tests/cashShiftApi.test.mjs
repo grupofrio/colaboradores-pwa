@@ -1005,3 +1005,26 @@ test('cambio de empleado durante el reintento no hereda el contrato anterior', a
   assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['delivery.transfer.gdl'].allowed, false)
 })
 
+test('remount de la misma identidad no borra POS mientras reconsulta capabilities', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    session_token: 'session-token',
+    gf_employee_token: 'employee-token',
+    api_key: 'api-key',
+    employee_id: 694,
+  }))
+  globalThis.fetch = async () => createJsonResponse(200, { ok: true, data: recoveryContract() })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope.warehouse_id, 94)
+
+  const slow = deferred()
+  globalThis.fetch = async () => slow.promise
+  const pending = adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope.warehouse_id, 94)
+  slow.resolve(createJsonResponse(200, { ok: true, data: recoveryContract() }))
+  await pending
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+})
+
