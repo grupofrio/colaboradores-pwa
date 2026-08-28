@@ -8,7 +8,8 @@ import { getTypo } from '../../tokens'
 import { BRAND_TOKENS as TOKENS } from '../../theme/brandTokens'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { getPosCatalog, searchCustomers, getDefaultCustomer, createSaleOrder } from './api'
-import { AdminProvider } from './AdminContext'
+import { BACKEND_CAPS } from './adminService'
+import { AdminProvider, useAdmin } from './AdminContext'
 import AdminShell from './components/AdminShell'
 import AdminPosForm from './forms/AdminPosForm'
 import { logScreenError } from '../shared/logScreenError'
@@ -32,10 +33,13 @@ import {
 } from './posCustomers'
 import {
   ADMIN_POS_FLOW,
+  assertCanonicalPosOperateAllowed,
   buildPosTicketPath,
+  canMutateCanonicalPos,
   canOpenPosPayment,
   classifyPosSaleCreateError,
   normalizePosSaleResult,
+  requiresCanonicalPosOperate,
 } from './posFlow'
 
 export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
@@ -59,7 +63,13 @@ export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
     )
   }
 
-  if (sw < 1024) return <MobilePOS warehouseId={warehouseId} flow={flow} />
+  if (sw < 1024) {
+    return (
+      <AdminProvider>
+        <MobilePOS warehouseId={warehouseId} flow={flow} />
+      </AdminProvider>
+    )
+  }
 
   const standaloneDayBackProps = flow.standalone && flow.posScope === 'day'
     ? { backButtonLabel: 'Volver al inicio', backButtonSize: 44 }
@@ -106,6 +116,7 @@ export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
 
 function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const { session } = useSession()
+  const { capsReady, scopeState, odooUnavailable } = useAdmin()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -272,11 +283,26 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const { subtotal, total } = computePosSummary(cart)
   const defaultCustomerReady = flow.posScope !== 'day'
     || defaultCustomerState.status === 'ready'
-  const canOpenPayment = canOpenPosPayment(cart, customer, {
+  const canOperatePos = canMutateCanonicalPos({
+    flow,
+    contract: BACKEND_CAPS,
+    capsReady,
+    scopeState,
+    identityMatches: capsReady === true && scopeState === 'ready',
+    odooUnavailable,
+  })
+  const canOpenPayment = canOperatePos && canOpenPosPayment(cart, customer, {
     loading,
     catalogCustomerId,
     defaultCustomerReady,
   })
+
+  useEffect(() => {
+    if (!canOperatePos) {
+      setPayConfirm(null)
+      setCardRef('')
+    }
+  }, [canOperatePos])
 
   function openPayment(method) {
     if (!canOpenPayment) return
@@ -374,6 +400,11 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   // Payment
   async function confirmPay() {
     if (!payConfirm || cart.length === 0) return
+    if (requiresCanonicalPosOperate(flow) && !canOperatePos) {
+      setPayConfirm(null)
+      setError('El cobro del POS administrativo no está autorizado.')
+      return
+    }
     if (!hasValidPosCustomer(customer)) {
       setError('Selecciona un cliente antes de cobrar.')
       return
@@ -395,6 +426,14 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
     setSubmitting(true)
     setError('')
     try {
+      assertCanonicalPosOperateAllowed({
+        flow,
+        contract: BACKEND_CAPS,
+        capsReady,
+        scopeState,
+        identityMatches: capsReady === true && scopeState === 'ready',
+        odooUnavailable,
+      })
       const result = await createSaleOrder({
         warehouse_id: warehouseId,
         company_id: companyId,
@@ -702,7 +741,9 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
               <span style={{ ...typo.title, color: TOKENS.colors.text }}>{fmt(total)}</span>
             </div>
 
-            {payConfirm ? (
+            {!canOperatePos && requiresCanonicalPosOperate(flow) ? (
+              <p>El cobro no está habilitado. Puedes consultar el catálogo.</p>
+            ) : payConfirm ? (
               <div>
                 <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, textAlign: 'center', marginBottom: 8 }}>
                   Confirmar pago con {payConfirm === 'cash' ? 'Efectivo' : 'Terminal'}: {fmt(total)}

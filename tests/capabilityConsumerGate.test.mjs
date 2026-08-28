@@ -42,6 +42,8 @@ test('fixture GDL del productor es compatible y abre POS, Liquidaciones y Entreg
   assert.equal(GDL.published_scope.company_id, 34)
   assert.equal(GDL.published_scope.warehouse_id, 94)
   assert.equal(GDL.published_scope.city_code, 'GDL')
+  assert.equal(capabilityAllowed(GDL, 'pos.read'), true)
+  assert.equal(capabilityAllowed(GDL, 'pos.operate'), false)
   assert.equal(isPosNavigationVisible(GDL), true)
   assert.equal(isLiquidationNavigationVisible(GDL_SESSION.additional_job_keys, GDL), true)
   assert.equal(isEntregasNavigationVisible(GDL), true)

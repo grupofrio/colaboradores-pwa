@@ -303,6 +303,8 @@ test('2. GDL permitido solo segun capacidades publicadas', () => {
   assert.equal(capabilityAllowed(contract, 'delivery.transfer.gdl'), true)
   assert.equal(capabilityAllowed(contract, 'delivery.return.gdl'), true)
   assert.equal(capabilityAllowed(contract, 'pos.read'), true)
+  assert.equal(capabilityAllowed(contract, 'pos.operate'), false)
+  assert.equal(capabilityDeny(contract, 'pos.operate').code, 'phase_not_enabled')
   assert.equal(capabilityAllowed(contract, 'liquidation.read.gdl'), true)
   const scope = publishedScope(contract)
   assert.equal(scope.plaza_label, 'GUADALAJARA')
