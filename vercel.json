@@ -1,11 +1,11 @@
 {
   "rewrites": [
-    { "source": "/api-n8n/:path*", "destination": "https://n8n.grupofrio.mx/webhook/:path*" },
+    { "source": "/api-n8n/:path*", "destination": "/api/n8n-guard?path=:path" },
     { "source": "/api-odoo/employee-sign-in", "destination": "/api/employee-sign-in" },
-    { "source": "/api-odoo/:path*", "destination": "https://grupofrio-gf.odoo.com/api/:path*" },
+    { "source": "/api-odoo/:path*", "destination": "/api/odoo-origin?path=api/:path" },
     { "source": "/odoo-api/pwa-admin/:proxyPath*", "destination": "/api/pwa-admin?path=:proxyPath" },
     { "source": "/odoo-api/gf/salesops/:proxyPath*", "destination": "/api/salesops?path=gf/salesops/:proxyPath" },
-    { "source": "/odoo-api/:path*", "destination": "https://grupofrio-gf.odoo.com/:path*" },
+    { "source": "/odoo-api/:path*", "destination": "/api/odoo-origin?path=:path" },
     { "source": "/((?!api|assets|icons|manifest).*)", "destination": "/index.html" }
   ],
   "headers": [

@@ -1,4 +1,5 @@
-const ODOO_ORIGIN = 'https://grupofrio-gf.odoo.com'
+import { resolveOdooOrigin, StagingOriginError } from './_odooOrigin.js'
+
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 const PATH_SEGMENT = /^[A-Za-z0-9_-]+$/
 
@@ -61,6 +62,8 @@ export function buildSalesOpsRequest({
   salesOpsToken,
   authorization,
   accept,
+  odooOrigin,
+  env = process.env,
 }) {
   const normalizedEmployeeToken = String(employeeToken || '').trim()
   if (!normalizedEmployeeToken) {
@@ -81,9 +84,18 @@ export function buildSalesOpsRequest({
   if (normalizedAuthorization) headers.Authorization = normalizedAuthorization
 
   const normalizedQuery = String(query || '').replace(/^\?/, '')
+  let origin
+  try {
+    origin = odooOrigin || resolveOdooOrigin(env)
+  } catch (error) {
+    if (error instanceof StagingOriginError) {
+      throw new SalesOpsProxyError(error.message, error.status)
+    }
+    throw error
+  }
   return {
     method: normalizedMethod(method),
-    url: `${ODOO_ORIGIN}/${normalizedPath(path)}${normalizedQuery ? `?${normalizedQuery}` : ''}`,
+    url: `${origin}/${normalizedPath(path)}${normalizedQuery ? `?${normalizedQuery}` : ''}`,
     headers,
   }
 }

@@ -68,3 +68,9 @@ test('service worker stays self-destroying so a previous POS cache cannot keep I
   assert.match(vite, /selfDestroying:\s*true/)
   assert.equal(requiresCanonicalPosOperate(ADMIN_POS_FLOW), true)
 })
+
+test('preview/staging PWA cannot keep a silent production Odoo rewrite', () => {
+  const vercel = src('../vercel.json')
+  assert.doesNotMatch(vercel, /grupofrio-gf\.odoo\.com/)
+  assert.match(src('../src/App.jsx'), /StagingEnvironmentBanner/)
+})

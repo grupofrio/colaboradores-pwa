@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useState, useEffect, useRef } from 'react'
 import { ToastProvider } from './components/Toast'
 import AppShell from './components/AppShell'
+import StagingEnvironmentBanner from './components/StagingEnvironmentBanner'
 import { normalizeSessionRoleContext } from './lib/roleContext'
 import { SessionContext, useSessionContext } from './lib/sessionContext'
 import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervisor-ventas/v2/sessionScope'
@@ -846,6 +847,7 @@ export default function App() {
 
   return (
     <SessionContext.Provider value={{ session, login, logout, updateSession }}>
+      <StagingEnvironmentBanner />
       <CapabilityBootstrap />
       <TalentRhBootstrap />
       <ToastProvider>

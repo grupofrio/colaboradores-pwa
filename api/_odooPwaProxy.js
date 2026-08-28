@@ -1,4 +1,5 @@
-const ODOO_ORIGIN = 'https://grupofrio-gf.odoo.com'
+import { resolveOdooOrigin, StagingOriginError } from './_odooOrigin.js'
+
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 const PATH_SEGMENT = /^[A-Za-z0-9_-]+$/
 
@@ -28,6 +29,8 @@ export function buildOdooPwaRequest({
   query = '',
   employeeToken,
   serviceApiKey,
+  odooOrigin,
+  env = process.env,
 }) {
   const normalizedMethod = String(method || '').toUpperCase()
   if (!ALLOWED_METHODS.has(normalizedMethod)) {
@@ -44,11 +47,21 @@ export function buildOdooPwaRequest({
     throw new PwaProxyError('Servicio temporalmente no disponible.', 503)
   }
 
+  let origin
+  try {
+    origin = odooOrigin || resolveOdooOrigin(env)
+  } catch (error) {
+    if (error instanceof StagingOriginError) {
+      throw new PwaProxyError(error.message, error.status)
+    }
+    throw error
+  }
+
   const urlPath = normalizedPath(path)
   const normalizedQuery = String(query || '').replace(/^\?/, '')
   return {
     method: normalizedMethod,
-    url: `${ODOO_ORIGIN}/${urlPath}${normalizedQuery ? `?${normalizedQuery}` : ''}`,
+    url: `${origin}/${urlPath}${normalizedQuery ? `?${normalizedQuery}` : ''}`,
     headers: {
       Accept: 'application/json',
       'Api-Key': normalizedServiceApiKey,

@@ -111,6 +111,12 @@ export default defineConfig(({ command, mode }) => {
           || process.env.npm_package_version
           || 'dev',
       ),
+      __GF_PWA_RUNTIME__: JSON.stringify(
+        env.GF_PWA_RUNTIME
+        || env.VITE_GF_PWA_RUNTIME
+        || (process.env.VERCEL_ENV === 'preview' ? 'preview' : '')
+        || (String(process.env.VERCEL_PROJECT_NAME || '').toLowerCase().includes('staging') ? 'staging' : ''),
+      ),
     },
 
     server: {

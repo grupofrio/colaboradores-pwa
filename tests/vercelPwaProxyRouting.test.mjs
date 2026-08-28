@@ -38,4 +38,7 @@ test('SalesOps and login routes reach protected functions before generic Odoo re
   })
   assert.ok(salesOpsIndex >= 0 && salesOpsIndex < genericOdooIndex)
   assert.ok(loginIndex >= 0 && loginIndex < genericApiOdooIndex)
+  assert.equal(rewrites[genericOdooIndex].destination, '/api/odoo-origin?path=:path')
+  assert.equal(rewrites[genericApiOdooIndex].destination, '/api/odoo-origin?path=api/:path')
+  assert.ok(!JSON.stringify(config.rewrites).includes('grupofrio-gf.odoo.com'))
 })
