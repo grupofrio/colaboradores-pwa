@@ -756,6 +756,18 @@ test('menús y deep links se refrescan al recuperar el contrato sin heredar iden
   assert.ok(getHomeModulesForSession(MARISOL).some((module) => module.id === 'almacen_entregas'))
 })
 
+test('inventario CEDIS recarga cuando llega warehouse_id y no se congela en 0', () => {
+  const inventario = src('../src/modules/entregas/ScreenInventarioEntregas.jsx')
+  const operacion = src('../src/modules/entregas/ScreenOperacionDia.jsx')
+  const carga = src('../src/modules/entregas/ScreenCargaUnidades.jsx')
+  assert.match(inventario, /Stock físico CEDIS/)
+  assert.match(inventario, /\/pwa-entregas\/live-inventory\?warehouse_id=\$\{warehouseId\}/)
+  assert.match(inventario, /useEffect\(\(\) => \{ load\(\) \}, \[warehouseId\]\)/)
+  assert.doesNotMatch(inventario, /useEffect\(\(\) => \{ load\(\) \}, \[\]\)/)
+  assert.match(operacion, /Inventario PT/)
+  assert.match(carga, /PRODUCTOS CON EXISTENCIA EN ORIGEN/)
+})
+
 test('AdminProvider no apaga capsReady si el contrato v2 ya es válido', () => {
   const ctx = src('../src/modules/admin/AdminContext.jsx')
   assert.match(ctx, /useState\(\(\) => validateContract\(BACKEND_CAPS\)\.ok\)/)

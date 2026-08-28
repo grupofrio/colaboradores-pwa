@@ -3,6 +3,8 @@
 
 export const CONTRACT_VERSION = '2.0'
 
+// Keep in lockstep with gf_pwa_admin CATALOG. Expand here and deploy the PWA
+// before the backend starts publishing a new key.
 export const CATALOG = Object.freeze([
   'materials.issue.iguala',
   'delivery.transfer',

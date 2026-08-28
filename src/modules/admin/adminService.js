@@ -346,6 +346,9 @@ export async function bootCapabilities(session = null, { autoRetry = true } = {}
     if (attempt < delays.length) await delay(delays[attempt])
   }
 
+  // Confirmed outage (502/503/504 after retries): close the catalog.
+  // Same-identity remount may keep a previously validated read contract only
+  // while the refetch is in flight. Identity changes never preserve grants.
   if (isCurrentCapabilityRequest(generation, snapshot)) {
     resetFailClosedCapabilities()
     applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
