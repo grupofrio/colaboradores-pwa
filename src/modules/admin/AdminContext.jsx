@@ -56,7 +56,7 @@ export function AdminProvider({ children }) {
   const [companyId, setCompanyIdInternal] = useState(() => (
     availableCompanies[0]?.id || null
   ))
-  const [capsReady, setCapsReady] = useState(false)
+  const [capsReady, setCapsReady] = useState(() => validateContract(BACKEND_CAPS).ok)
 
   useEffect(() => {
     setCompanyIdInternal((current) => syncAdminCompanyForIdentity({
@@ -70,7 +70,7 @@ export function AdminProvider({ children }) {
 
   useEffect(() => {
     let alive = true
-    setCapsReady(false)
+    if (!validateContract(BACKEND_CAPS).ok) setCapsReady(false)
     resetCashShiftRequestRegistry(sessionIdentity)
     bootCapabilities(session).finally(() => { if (alive) setCapsReady(true) })
     return () => {

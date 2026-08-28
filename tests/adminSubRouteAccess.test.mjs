@@ -254,6 +254,15 @@ test('api.js POS Angelica scope ya no matchea por nombre', () => {
 
 // ── Metabase legacy ──────────────────────────────────────────────────────────
 
+test('AdminSubRoute espera unknown y no redirige /admin/pos ni /admin/liquidaciones', () => {
+  const app = src('../src/App.jsx')
+  assert.match(app, /admin-route-caps-loading/)
+  assert.match(app, /Cargando permisos de sucursal/)
+  assert.match(app, /!contractOk && odoo\.status === 'unknown'/)
+  assert.match(app, /path="pos" element=\{<AdminSubRoute path="\/admin\/pos"/)
+  assert.match(app, /path="liquidaciones" element=\{<AdminSubRoute path="\/admin\/liquidaciones"/)
+})
+
 test('Metabase CTA absent from Gerente hubs; legacy dashboard route is honesty-safe', () => {
   const legacyHub = src('../src/modules/gerente/ScreenGerente.jsx')
   assert.doesNotMatch(legacyHub, /id: 'dashboard'/)

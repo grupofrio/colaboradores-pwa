@@ -1005,3 +1005,137 @@ test('cambio de empleado durante el reintento no hereda el contrato anterior', a
   assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['delivery.transfer.gdl'].allowed, false)
 })
 
+test('remount de la misma identidad no borra POS mientras reconsulta capabilities', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    session_token: 'session-token',
+    gf_employee_token: 'employee-token',
+    api_key: 'api-key',
+    employee_id: 694,
+  }))
+  globalThis.fetch = async () => createJsonResponse(200, { ok: true, data: recoveryContract() })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope.warehouse_id, 94)
+
+  const slow = deferred()
+  globalThis.fetch = async () => slow.promise
+  const pending = adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope.warehouse_id, 94)
+  slow.resolve(createJsonResponse(200, { ok: true, data: recoveryContract() }))
+  await pending
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+})
+
+test('remount de la misma identidad reemplaza el contrato al completar el refetch', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    session_token: 'session-token',
+    gf_employee_token: 'employee-token',
+    api_key: 'api-key',
+    employee_id: 694,
+  }))
+  globalThis.fetch = async () => createJsonResponse(200, { ok: true, data: recoveryContract() })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+
+  const next = recoveryContract()
+  next.published_scope = { ...next.published_scope, warehouse_label: 'CEDIS Guadalajara' }
+  next.capabilities['pos.read'] = allowedCap('read')
+  next.capabilities['liquidation.read.gdl'] = {
+    allowed: false,
+    mode: null,
+    scopes: { company_ids: [], plaza_ids: [], warehouse_ids: [], analytic_ids: [] },
+    limit: null,
+    currency: null,
+    deny: { code: 'not_granted', reason: 'Capacidad no concedida.' },
+  }
+  globalThis.fetch = async () => createJsonResponse(200, { ok: true, data: next })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['liquidation.read.gdl'].allowed, false)
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope.warehouse_label, 'CEDIS Guadalajara')
+})
+
+test('respuesta tardía de la ficha anterior no se aplica a la nueva identidad', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    session_token: 'session-a',
+    gf_employee_token: 'token-a',
+    api_key: 'api-key',
+    employee_id: 738,
+  }))
+  const slow = deferred()
+  globalThis.fetch = async () => slow.promise
+  const pending = adminServiceModule.bootCapabilities({
+    session_token: 'session-a',
+    gf_employee_token: 'token-a',
+    employee_id: 738,
+  }, { autoRetry: false })
+
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    session_token: 'session-b',
+    gf_employee_token: 'token-b',
+    api_key: 'api-key',
+    employee_id: 1,
+  }))
+  adminServiceModule.syncCapabilitiesIdentity('738:token-a', '1:token-b')
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, false)
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope, null)
+
+  slow.resolve(createJsonResponse(200, { ok: true, data: recoveryContract() }))
+  await pending
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, false)
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['delivery.transfer.gdl'].allowed, false)
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope, null)
+})
+
+test('401 y 403 cierran el contrato; 503 posterior a un contrato válido también cierra', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  globalThis.localStorage.setItem('gf_session', JSON.stringify({
+    session_token: 'session-token',
+    gf_employee_token: 'employee-token',
+    api_key: 'api-key',
+    employee_id: 694,
+  }))
+  globalThis.fetch = async () => createJsonResponse(200, { ok: true, data: recoveryContract() })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+
+  globalThis.fetch = async () => createJsonResponse(401, { ok: false, message: 'unauthorized' })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, false)
+  assert.equal(adminServiceModule.BACKEND_CAPS.published_scope, null)
+
+  globalThis.fetch = async () => createJsonResponse(200, { ok: true, data: recoveryContract() })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  globalThis.fetch = async () => createJsonResponse(403, { ok: false, message: 'forbidden' })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, false)
+
+  globalThis.fetch = async () => createJsonResponse(200, { ok: true, data: recoveryContract() })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, true)
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 503,
+    async text() { return '<html>Odoo.sh Platform Error</html>' },
+  })
+  await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(adminServiceModule.getOdooServiceState().status, 'unavailable')
+  assert.equal(adminServiceModule.BACKEND_CAPS.capabilities['pos.read'].allowed, false)
+  const dash = await adminServiceModule.getDashboardData({ warehouseId: 94, companyId: 34 })
+  assert.equal(dash.odooUnavailable, true)
+  assert.equal(dash.kpis.ventasHoy.total, null)
+})
+
+test('sin token el contrato queda cerrado', async () => {
+  const { adminServiceModule } = await loadRuntime()
+  globalThis.localStorage.clear()
+  const closed = await adminServiceModule.bootCapabilities(null, { autoRetry: false })
+  assert.equal(closed.published_scope, null)
+  assert.equal(closed.capabilities['pos.read'].allowed, false)
+  assert.equal(closed.capabilities['liquidation.read.gdl'].allowed, false)
+})
+

@@ -551,7 +551,7 @@ export default function ScreenCargaUnidades() {
                           {cat?.loading ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 0', marginBottom: 8 }}>
                               <Spinner size={14} tokens={TOKENS} />
-                              <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Cargando productos del CEDIS...</span>
+                              <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Cargando productos con existencia en origen...</span>
                             </div>
                           ) : cat?.error ? (
                             <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '0 0 8px' }}>{cat.error}</p>
@@ -631,7 +631,7 @@ export default function ScreenCargaUnidades() {
                     {stockSummary && stockSummary.length > 0 && (
                       <>
                         <SectionLabel typo={typo} tokens={TOKENS}>
-                          DISPONIBILIDAD EN CEDIS
+                          PRODUCTOS CON EXISTENCIA EN ORIGEN
                           {van.cedis_location_name ? ` · ${van.cedis_location_name}` : ''}
                         </SectionLabel>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 4 }}>

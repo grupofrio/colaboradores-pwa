@@ -2,6 +2,7 @@ import {
   hasValidPosCustomer,
   toPositiveSafeIntegerId,
 } from './posCustomers.js'
+import { capabilityAllowed, validateContract } from '../../lib/capabilityContract.js'
 
 export const NIGHT_POS_CANCEL_REASONS = Object.freeze([
   Object.freeze({ code: 'duplicate', label: 'Duplicidad' }),
@@ -159,6 +160,43 @@ export function canOpenPosPayment(cart = [], customer = {}, readiness) {
   const customerId = toPositiveSafeIntegerId(customer.id)
   const catalogCustomerId = toPositiveSafeIntegerId(readiness?.catalogCustomerId)
   return readiness?.loading === false && catalogCustomerId === customerId
+}
+
+export const ADMIN_POS_CONSULT_ONLY_COPY =
+  'POS disponible solo para consulta. El cobro y la creación de ventas no están habilitados.'
+
+const WRITE_CLOSED_HTTP = new Set([401, 403, 502, 503, 504])
+
+export function requiresCanonicalPosOperate(flow = ADMIN_POS_FLOW) {
+  if (!flow || typeof flow !== 'object' || Array.isArray(flow)) return true
+  if (flow.posScope === 'day') return false
+  if (flow.standalone === true) return false
+  return true
+}
+
+export function canMutateCanonicalPos({
+  flow = ADMIN_POS_FLOW,
+  contract,
+  capsReady = false,
+  scopeState = 'loading',
+  identityMatches = false,
+  odooUnavailable = false,
+  httpStatus = null,
+} = {}) {
+  if (!requiresCanonicalPosOperate(flow)) return true
+  if (capsReady !== true || identityMatches !== true || odooUnavailable === true) return false
+  if (scopeState !== 'ready') return false
+  const status = Number(httpStatus)
+  if (Number.isFinite(status) && WRITE_CLOSED_HTTP.has(status)) return false
+  if (!validateContract(contract).ok) return false
+  return capabilityAllowed(contract, 'pos.operate') === true
+}
+
+export function assertCanonicalPosOperateAllowed(input) {
+  if (canMutateCanonicalPos(input)) return
+  const error = new Error('El cobro del POS administrativo no está autorizado.')
+  error.code = 'pos_operate_denied'
+  throw error
 }
 
 function responseLayers(response) {
