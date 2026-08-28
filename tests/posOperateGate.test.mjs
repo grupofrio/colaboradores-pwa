@@ -19,6 +19,8 @@ import {
   NIGHT_POS_FLOW,
   assertCanonicalPosOperateAllowed,
   canMutateCanonicalPos,
+  emptyPosCustomer,
+  posClientIdentityKey,
   requiresCanonicalPosOperate,
 } from '../src/modules/admin/posFlow.js'
 
@@ -182,6 +184,30 @@ test('AdminPosForm and ScreenPOS guard pos.operate immediately before createSale
   const nav = src('../src/lib/navModel.js')
   assert.match(nav, /capabilityAllowed\(capabilities, 'pos.read'\)/)
   assert.doesNotMatch(nav, /capabilityAllowed\(capabilities, 'pos.operate'\)/)
+})
+
+test('remount and identity change do not invent pos.operate', () => {
+  const operated = withOperateAllowed(GDL)
+  assert.equal(canMutateCanonicalPos({
+    flow: ADMIN_POS_FLOW,
+    contract: operated,
+    capsReady: true,
+    scopeState: 'ready',
+    identityMatches: false,
+  }), false)
+  assert.deepEqual(emptyPosCustomer(ADMIN_POS_FLOW).name, '')
+  assert.notEqual(
+    posClientIdentityKey({
+      flow: ADMIN_POS_FLOW,
+      sessionIdentity: '738',
+      warehouseId: 89,
+    }),
+    posClientIdentityKey({
+      flow: ADMIN_POS_FLOW,
+      sessionIdentity: '694',
+      warehouseId: 94,
+    }),
+  )
 })
 
 test('admin POS consult-only copy is shown when operate is closed', () => {

@@ -39,7 +39,9 @@ import {
   canMutateCanonicalPos,
   canOpenPosPayment,
   classifyPosSaleCreateError,
+  emptyPosCustomer,
   normalizePosSaleResult,
+  posClientIdentityKey,
   requiresCanonicalPosOperate,
 } from './posFlow'
 
@@ -117,12 +119,18 @@ export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
 
 function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const { session } = useSession()
-  const { capsReady, scopeState, odooUnavailable } = useAdmin()
+  const { capsReady, scopeState, odooUnavailable, sessionIdentity } = useAdmin()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const companyId = Number(session?.company_id || 0) || undefined
   const defaultCustomerName = flow.defaultCustomerName || 'VENTA PUBLICO'
+  const identityKey = posClientIdentityKey({
+    flow,
+    sessionIdentity,
+    companyId,
+    warehouseId,
+  })
 
   const [products, setProducts] = useState([])
   const [cart, setCart] = useState([])
@@ -132,12 +140,14 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const [error, setError] = useState('')
 
   // Customer
-  const [customer, setCustomer] = useState({ id: null, name: defaultCustomerName })
+  const [customer, setCustomer] = useState(() => emptyPosCustomer(flow))
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
   const [catalogCustomerId, setCatalogCustomerId] = useState(null)
   const catalogRequestSeq = useRef(0)
   const defaultCustomerRequestSeq = useRef(0)
   const manualCustomerSelectionSeq = useRef(0)
+  const identityKeyRef = useRef(identityKey)
+  identityKeyRef.current = identityKey
   const [defaultCustomerState, setDefaultCustomerState] = useState({
     status: flow.posScope === 'day' ? 'pending' : 'ready',
     message: '',
@@ -165,6 +175,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   }, [])
 
   const loadProducts = useCallback(async (selectedPartnerId) => {
+    const startedFor = identityKey
     const requestId = ++catalogRequestSeq.current
     const requestedCustomerId = toPositiveSafeIntegerId(selectedPartnerId) || null
     setPayConfirm(null)
@@ -179,7 +190,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         partnerId: selectedPartnerId || undefined,
         posScope: flow.posScope,
       })
-      if (requestId !== catalogRequestSeq.current) return false
+      if (requestId !== catalogRequestSeq.current || startedFor !== identityKeyRef.current) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
       setProducts(list)
       setPricelist({
@@ -190,28 +201,41 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
       setCatalogCustomerId(requestedCustomerId)
       return true
     } catch (e) {
-      if (requestId !== catalogRequestSeq.current) return false
+      if (requestId !== catalogRequestSeq.current || startedFor !== identityKeyRef.current) return false
       logScreenError('ScreenPOS', 'getPosCatalog', e)
       setError(flow.posScope === 'day' && e?.status === 403
         ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
         : (e?.message || 'Error cargando productos'))
       return false
     } finally {
-      if (requestId === catalogRequestSeq.current) setLoading(false)
+      if (requestId === catalogRequestSeq.current && startedFor === identityKeyRef.current) setLoading(false)
     }
-  }, [companyId, flow.posScope, warehouseId])
+  }, [companyId, flow.posScope, identityKey, warehouseId])
+
+  useEffect(() => {
+    catalogRequestSeq.current += 1
+    defaultCustomerRequestSeq.current += 1
+    customerSearchSeq.current += 1
+    manualCustomerSelectionSeq.current += 1
+    setProducts([])
+    setCart([])
+    setPricelist({ id: null, name: '' })
+    setCustomer(emptyPosCustomer(flow))
+    setCatalogCustomerId(null)
+    setCustomerResults([])
+    setCustomerQuery('')
+    setShowCustomerSearch(false)
+    setError('')
+    setPayConfirm(null)
+    setCardRef('')
+  }, [identityKey, flow])
 
   useEffect(() => {
     loadProducts(customer.id)
   }, [customer.id, loadProducts])
 
-  useEffect(() => {
-    setCart([])
-    setPayConfirm(null)
-    setCardRef('')
-  }, [companyId, warehouseId])
-
   const loadDefaultCustomer = useCallback(async () => {
+    const startedFor = identityKey
     const requestId = ++defaultCustomerRequestSeq.current
     const manualSelectionAtStart = manualCustomerSelectionSeq.current
     if (flow.posScope === 'day') {
@@ -222,7 +246,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         companyId,
         { posScope: flow.posScope },
       ))
-      if (requestId !== defaultCustomerRequestSeq.current) return
+      if (requestId !== defaultCustomerRequestSeq.current || startedFor !== identityKeyRef.current) return
       if (!c?.id) {
         if (flow.posScope === 'day') {
           setDefaultCustomerState({
@@ -236,10 +260,13 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         setDefaultCustomerState({ status: 'ready', message: '' })
       }
       if (manualSelectionAtStart === manualCustomerSelectionSeq.current) {
-        setCustomer({ id: c.id, name: c.name || defaultCustomerName })
+        setCustomer({
+          id: c.id,
+          name: c.name || (requiresCanonicalPosOperate(flow) ? '' : defaultCustomerName),
+        })
       }
     } catch (e) {
-      if (requestId !== defaultCustomerRequestSeq.current) return
+      if (requestId !== defaultCustomerRequestSeq.current || startedFor !== identityKeyRef.current) return
       logScreenError('ScreenPOS', 'getDefaultCustomer', e)
       setError(flow.posScope === 'day' && e?.status === 403
         ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
@@ -251,7 +278,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         })
       }
     }
-  }, [companyId, defaultCustomerName, flow.posScope])
+  }, [companyId, defaultCustomerName, flow, identityKey])
 
   useEffect(() => {
     loadDefaultCustomer()

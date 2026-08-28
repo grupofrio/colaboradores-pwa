@@ -154,7 +154,7 @@ function marisolCatalog(overrides = {}) {
     'buyer.approve': denied('phase_not_enabled', 'approve'),
     'buyer.confirm': denied('phase_not_enabled', 'confirm'),
     'pos.read': allowed('read'),
-    'pos.operate': denied('phase_not_enabled', 'capture'),
+    'pos.operate': denied('not_granted', 'capture'),
     'attendance.read': denied('phase_not_enabled', 'read'),
     'attendance.capture': denied('phase_not_enabled', 'capture'),
     'payroll.csc.read': denied('phase_not_enabled', 'read'),
@@ -304,7 +304,7 @@ test('2. GDL permitido solo segun capacidades publicadas', () => {
   assert.equal(capabilityAllowed(contract, 'delivery.return.gdl'), true)
   assert.equal(capabilityAllowed(contract, 'pos.read'), true)
   assert.equal(capabilityAllowed(contract, 'pos.operate'), false)
-  assert.equal(capabilityDeny(contract, 'pos.operate').code, 'phase_not_enabled')
+  assert.equal(capabilityDeny(contract, 'pos.operate').code, 'not_granted')
   assert.equal(capabilityAllowed(contract, 'liquidation.read.gdl'), true)
   const scope = publishedScope(contract)
   assert.equal(scope.plaza_label, 'GUADALAJARA')
