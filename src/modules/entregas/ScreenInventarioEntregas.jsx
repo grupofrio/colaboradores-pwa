@@ -35,8 +35,10 @@ export default function ScreenInventarioEntregas() {
   const [search, setSearch]   = useState('')
   const [filter, setFilter]   = useState('all')
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
-  useEffect(() => { load() }, [])
+  // Reload when the session publishes a warehouse; an empty first paint
+  // used to freeze the screen at 0 products.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load() cierra warehouseId
+  useEffect(() => { load() }, [warehouseId])
 
   async function load() {
     setLoading(true)
@@ -99,10 +101,10 @@ export default function ScreenInventarioEntregas() {
             </svg>
           </button>
           <div style={{ flex: 1 }}>
-            <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Inventario</span>
-            {data?.warehouse_name && (
-              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>{data.warehouse_name}</p>
-            )}
+            <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Stock físico CEDIS</span>
+            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
+              Quants de {data?.warehouse_name || 'almacén'} · on hand − reservado
+            </p>
           </div>
           <button onClick={load} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,

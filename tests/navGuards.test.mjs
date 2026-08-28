@@ -229,7 +229,7 @@ test('Admin hub embeds today activity in the main content instead of action card
   assert.match(hub, /import ActivityFeed from '\.\/ActivityFeed'/)
   assert.match(hub, /import \{ isPosBreakdownSession \} from '\.\.\/angyPosSalesBreakdown'/)
   assert.match(hub, /import AngyPosProductBreakdown from '\.\/AngyPosProductBreakdown'/)
-  assert.match(hub, /const \{ warehouseId, companyId, companyLabel, employeeId \} = useAdmin\(\)/)
+  assert.match(hub, /const \{ warehouseId, companyId, companyLabel, employeeId/)
   assert.match(hub, /const showPosBreakdown = isPosBreakdownSession\(\{ employee_id: employeeId \}\)/)
   assert.match(
     hub,

@@ -1,0 +1,415 @@
+{
+  "contract_version": "2.0",
+  "effective_job_keys": [
+    "almacenista_entregas",
+    "auxiliar_admin",
+    "comprador",
+    "operador_torres"
+  ],
+  "published_scope": {
+    "company_id": 34,
+    "company_label": "SOLUCIONES EN PRODUCCION GLACIEM",
+    "plaza_id": 818,
+    "plaza_label": "[GDL] Guadalajara",
+    "warehouse_id": 94,
+    "warehouse_label": "CEDIS Guadalajara",
+    "analytic_id": 818,
+    "city_code": "GDL",
+    "from_actor": true
+  },
+  "capabilities": {
+    "materials.issue.iguala": {
+      "allowed": false,
+      "mode": null,
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "not_granted",
+        "reason": "Capacidad no concedida."
+      }
+    },
+    "delivery.transfer": {
+      "allowed": true,
+      "mode": "confirm",
+      "scopes": {
+        "company_ids": [
+          34
+        ],
+        "plaza_ids": [
+          818
+        ],
+        "warehouse_ids": [
+          94
+        ],
+        "analytic_ids": [
+          818
+        ]
+      },
+      "limit": null,
+      "currency": null,
+      "deny": null
+    },
+    "delivery.return": {
+      "allowed": true,
+      "mode": "capture",
+      "scopes": {
+        "company_ids": [
+          34
+        ],
+        "plaza_ids": [
+          818
+        ],
+        "warehouse_ids": [
+          94
+        ],
+        "analytic_ids": [
+          818
+        ]
+      },
+      "limit": null,
+      "currency": null,
+      "deny": null
+    },
+    "delivery.transfer.gdl": {
+      "allowed": true,
+      "mode": "confirm",
+      "scopes": {
+        "company_ids": [
+          34
+        ],
+        "plaza_ids": [
+          818
+        ],
+        "warehouse_ids": [
+          94
+        ],
+        "analytic_ids": [
+          818
+        ]
+      },
+      "limit": null,
+      "currency": null,
+      "deny": null
+    },
+    "delivery.return.gdl": {
+      "allowed": true,
+      "mode": "capture",
+      "scopes": {
+        "company_ids": [
+          34
+        ],
+        "plaza_ids": [
+          818
+        ],
+        "warehouse_ids": [
+          94
+        ],
+        "analytic_ids": [
+          818
+        ]
+      },
+      "limit": null,
+      "currency": null,
+      "deny": null
+    },
+    "delivery.transfer.iguala": {
+      "allowed": false,
+      "mode": null,
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "cross_plaza",
+        "reason": "Plaza fuera del alcance autorizado."
+      }
+    },
+    "delivery.return.iguala": {
+      "allowed": false,
+      "mode": null,
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "cross_plaza",
+        "reason": "Plaza fuera del alcance autorizado."
+      }
+    },
+    "liquidation.read.gdl": {
+      "allowed": true,
+      "mode": "read",
+      "scopes": {
+        "company_ids": [
+          34
+        ],
+        "plaza_ids": [
+          818
+        ],
+        "warehouse_ids": [
+          94
+        ],
+        "analytic_ids": [
+          818
+        ]
+      },
+      "limit": null,
+      "currency": null,
+      "deny": null
+    },
+    "liquidation.print.gdl": {
+      "allowed": true,
+      "mode": "read",
+      "scopes": {
+        "company_ids": [
+          34
+        ],
+        "plaza_ids": [
+          818
+        ],
+        "warehouse_ids": [
+          94
+        ],
+        "analytic_ids": [
+          818
+        ]
+      },
+      "limit": null,
+      "currency": null,
+      "deny": null
+    },
+    "liquidation.receive_cash.gdl": {
+      "allowed": false,
+      "mode": "capture",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    },
+    "liquidation.validate.gdl": {
+      "allowed": false,
+      "mode": "confirm",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    },
+    "liquidation.authorize_discrepancy.gdl": {
+      "allowed": false,
+      "mode": "approve",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "not_granted",
+        "reason": "Capacidad no concedida."
+      }
+    },
+    "buyer.read": {
+      "allowed": true,
+      "mode": "read",
+      "scopes": {
+        "company_ids": [
+          34
+        ],
+        "plaza_ids": [
+          818
+        ],
+        "warehouse_ids": [
+          94
+        ],
+        "analytic_ids": [
+          818
+        ]
+      },
+      "limit": null,
+      "currency": null,
+      "deny": null
+    },
+    "buyer.capture": {
+      "allowed": false,
+      "mode": "capture",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    },
+    "buyer.approve": {
+      "allowed": false,
+      "mode": "approve",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    },
+    "buyer.confirm": {
+      "allowed": false,
+      "mode": "confirm",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    },
+    "pos.read": {
+      "allowed": true,
+      "mode": "read",
+      "scopes": {
+        "company_ids": [
+          34
+        ],
+        "plaza_ids": [
+          818
+        ],
+        "warehouse_ids": [
+          94
+        ],
+        "analytic_ids": [
+          818
+        ]
+      },
+      "limit": null,
+      "currency": null,
+      "deny": null
+    },
+    "pos.operate": {
+      "allowed": false,
+      "mode": "capture",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    },
+    "attendance.read": {
+      "allowed": false,
+      "mode": "read",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    },
+    "attendance.capture": {
+      "allowed": false,
+      "mode": "capture",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    },
+    "payroll.csc.read": {
+      "allowed": false,
+      "mode": "read",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    },
+    "payroll.csc.capture": {
+      "allowed": false,
+      "mode": "capture",
+      "scopes": {
+        "company_ids": [],
+        "plaza_ids": [],
+        "warehouse_ids": [],
+        "analytic_ids": []
+      },
+      "limit": null,
+      "currency": null,
+      "deny": {
+        "code": "phase_not_enabled",
+        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+      }
+    }
+  },
+  "requisitionApproval": false
+}

@@ -181,7 +181,7 @@ export default function ScreenOperacionDia() {
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderRadius: TOKENS.radius.md, overflow: 'hidden', border: `1px solid ${TOKENS.colors.border}` }}>
         {[
           { key: TABS.TICKETS, label: 'Tickets' },
-          { key: TABS.INVENTARIO, label: 'Inventario' },
+          { key: TABS.INVENTARIO, label: 'Inventario PT' },
         ].map(tab => {
           const active = activeTab === tab.key
           return (

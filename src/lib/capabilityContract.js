@@ -3,10 +3,16 @@
 
 export const CONTRACT_VERSION = '2.0'
 
+// Keep in lockstep with gf_pwa_admin CATALOG. Expand here and deploy the PWA
+// before the backend starts publishing a new key.
 export const CATALOG = Object.freeze([
   'materials.issue.iguala',
+  'delivery.transfer',
+  'delivery.return',
   'delivery.transfer.gdl',
   'delivery.return.gdl',
+  'delivery.transfer.iguala',
+  'delivery.return.iguala',
   'liquidation.read.gdl',
   'liquidation.print.gdl',
   'liquidation.receive_cash.gdl',
@@ -28,6 +34,8 @@ const MODES = new Set(['read', 'capture', 'approve', 'confirm', 'release'])
 const SCOPE_LIST_KEYS = Object.freeze(['company_ids', 'plaza_ids', 'warehouse_ids', 'analytic_ids'])
 export const PLAZA_REQUIRED_CAPABILITIES = Object.freeze(new Set([
   ...CATALOG.filter((name) => name.endsWith('.gdl') || name.endsWith('.iguala')),
+  'delivery.transfer',
+  'delivery.return',
   'pos.read',
   'buyer.read',
 ]))
@@ -61,11 +69,27 @@ export const CAPABILITY_SURFACES = Object.freeze({
     route: '/admin/pos',
     endpoint: '/pwa-admin/sale-create',
   }),
+  'delivery.transfer': Object.freeze({
+    route: '/entregas',
+    endpoint: '/pwa-admin/dispatch-ticket',
+  }),
+  'delivery.return': Object.freeze({
+    route: '/entregas/devoluciones',
+    endpoint: '/pwa-admin/dispatch-ticket',
+  }),
   'delivery.transfer.gdl': Object.freeze({
     route: '/entregas',
     endpoint: '/pwa-admin/dispatch-ticket',
   }),
   'delivery.return.gdl': Object.freeze({
+    route: '/entregas/devoluciones',
+    endpoint: '/pwa-admin/dispatch-ticket',
+  }),
+  'delivery.transfer.iguala': Object.freeze({
+    route: '/entregas',
+    endpoint: '/pwa-admin/dispatch-ticket',
+  }),
+  'delivery.return.iguala': Object.freeze({
     route: '/entregas/devoluciones',
     endpoint: '/pwa-admin/dispatch-ticket',
   }),

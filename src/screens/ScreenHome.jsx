@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
-import { getHomeModulesForSession, getModuleEntryDecisionForSession } from '../lib/navModel'
+import { getHomeModulesForSession, getModuleEntryDecisionForSession, isEntregasPlaceholderVisible } from '../lib/navModel'
 import { BACKEND_CAPS } from '../modules/admin/adminService'
-import { useBackendCapabilitiesSnapshot } from '../modules/admin/backendCapsStore'
+import { useCapabilitiesRevision } from '../modules/admin/useCapabilitiesRevision'
 import ModuleRolePrompt from '../components/ModuleRolePrompt'
 import { upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
@@ -256,12 +256,12 @@ function ModuleCard({ module, typo, onClick, light }) {
 ============================================================================ */
 export default function ScreenHome() {
   const { session, logout, updateSession } = useSession()
-  const backendCapsSnapshot = useBackendCapabilitiesSnapshot()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const isBypass = session?._bypass === true
   const [rolePromptModule, setRolePromptModule] = useState(null)
+  const capsRevision = useCapabilitiesRevision()
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -272,9 +272,10 @@ export default function ScreenHome() {
   // Módulos visibles para esta sesión: roles x_job_key, Tower por tower_status
   // autoritativo y políticas propias (M2/M3) vía ACCESS_POLICY_RESOLVERS.
   // Home conserva el orden histórico del registry.
-  const modules = useMemo(() =>
-    getHomeModulesForSession(session),
-  [session, backendCapsSnapshot])
+  const modules = useMemo(() => {
+    void capsRevision
+    return getHomeModulesForSession(session)
+  }, [session, capsRevision])
 
   const firstName = session?.name?.split(' ')[0] ?? 'Colaborador'
   const companyLabel = COMPANY_LABELS[session?.company_id] ?? session?.company ?? ''
@@ -495,6 +496,15 @@ export default function ScreenHome() {
               </FadeIn>
             ))}
           </div>
+          {isEntregasPlaceholderVisible(session, BACKEND_CAPS) && (
+            <p
+              role="status"
+              data-testid="entregas-placeholder"
+              className="mt-3 rounded-xl border border-white/15 bg-white/5 px-3 py-3 text-sm font-medium text-white/70"
+            >
+              Entregas está en espera del contrato del backend. No se puede abrir hasta que Odoo publique un alcance válido.
+            </p>
+          )}
         </FadeIn>
 
         {/* Espacio extra al fondo */}

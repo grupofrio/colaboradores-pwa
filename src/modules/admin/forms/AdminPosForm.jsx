@@ -13,6 +13,7 @@ import {
   getDefaultCustomer,
   createSaleOrder,
 } from '../api'
+import { BACKEND_CAPS } from '../adminService'
 import {
   addProductToCart,
   changeCartItemQty,
@@ -33,10 +34,14 @@ import { logScreenError } from '../../shared/logScreenError'
 import { computePosSummary } from '../posPricing'
 import {
   ADMIN_POS_FLOW,
+  ADMIN_POS_CONSULT_ONLY_COPY,
+  assertCanonicalPosOperateAllowed,
   buildPosTicketPath,
+  canMutateCanonicalPos,
   canOpenPosPayment,
   classifyPosSaleCreateError,
   normalizePosSaleResult,
+  requiresCanonicalPosOperate,
 } from '../posFlow'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -50,7 +55,7 @@ export const POS_THRESHOLDS = {
 
 export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: warehouseIdProp, companyId: companyIdProp }) {
   const navigate = useNavigate()
-  const { companyId: adminCompanyId, companyLabel, warehouseId: adminWarehouseId, sucursal } = useAdmin()
+  const { companyId: adminCompanyId, companyLabel, warehouseId: adminWarehouseId, sucursal, capsReady, scopeState, odooUnavailable } = useAdmin()
   const warehouseId = warehouseIdProp || adminWarehouseId
   const companyId = companyIdProp || adminCompanyId
   const defaultCustomerName = flow.defaultCustomerName || 'VENTA PUBLICO'
@@ -217,11 +222,26 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
   const { subtotal, total } = computePosSummary(cart)
   const defaultCustomerReady = flow.posScope !== 'day'
     || defaultCustomerState.status === 'ready'
-  const canOpenPayment = canOpenPosPayment(cart, customer, {
+  const canOperatePos = canMutateCanonicalPos({
+    flow,
+    contract: BACKEND_CAPS,
+    capsReady,
+    scopeState,
+    identityMatches: capsReady === true && scopeState === 'ready',
+    odooUnavailable,
+  })
+  const canOpenPayment = canOperatePos && canOpenPosPayment(cart, customer, {
     loading,
     catalogCustomerId,
     defaultCustomerReady,
   })
+
+  useEffect(() => {
+    if (!canOperatePos) {
+      setPayConfirm(null)
+      setCardRef('')
+    }
+  }, [canOperatePos])
 
   function openPayment(method) {
     if (!canOpenPayment) return
@@ -319,6 +339,11 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
 
   async function confirmPay() {
     if (!payConfirm || cart.length === 0) return
+    if (requiresCanonicalPosOperate(flow) && !canOperatePos) {
+      setPayConfirm(null)
+      setError('El cobro del POS administrativo no está autorizado.')
+      return
+    }
     if (!hasValidPosCustomer(customer)) {
       setError('Selecciona un cliente antes de cobrar.')
       return
@@ -345,6 +370,14 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
     setSubmitting(true)
     setError('')
     try {
+      assertCanonicalPosOperateAllowed({
+        flow,
+        contract: BACKEND_CAPS,
+        capsReady,
+        scopeState,
+        identityMatches: capsReady === true && scopeState === 'ready',
+        odooUnavailable,
+      })
       const result = await createSaleOrder({
         warehouse_id: warehouseId,
         company_id: companyId,
@@ -428,6 +461,9 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
         }}>
           POS
         </h1>
+        {!canOperatePos && requiresCanonicalPosOperate(flow) ? (
+          <p role="status">{ADMIN_POS_CONSULT_ONLY_COPY}</p>
+        ) : null}
       </div>
 
       {(defaultCustomerState.status === 'failed' ? defaultCustomerState.message : error) && (
@@ -882,7 +918,11 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
             </div>
           </div>
 
-          {payConfirm ? (
+          {!canOperatePos && requiresCanonicalPosOperate(flow) ? (
+            <p role="status">
+              {ADMIN_POS_CONSULT_ONLY_COPY}
+            </p>
+          ) : payConfirm ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <p style={{ fontSize: 11, color: TOKENS.colors.textSoft, textAlign: 'center', margin: 0 }}>
                 Confirmar pago con <strong>{payConfirm === 'cash' ? 'Efectivo' : 'Terminal'}</strong> — {fmt(total)}

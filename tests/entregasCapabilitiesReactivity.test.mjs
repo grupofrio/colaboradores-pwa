@@ -5,12 +5,9 @@ import { fileURLToPath } from 'node:url'
 
 import {
   applyCapabilities,
+  getCapabilitiesRevision,
   invalidateCashShiftCapabilities,
 } from '../src/modules/admin/adminService.js'
-import {
-  getBackendCapabilitiesSnapshot,
-  subscribeBackendCapabilities,
-} from '../src/modules/admin/backendCapsStore.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 
@@ -87,30 +84,25 @@ function allowed(mode) {
   }
 }
 
-test('backend caps store notifica invalidación e hidratación para evitar UI stale en Entregas', () => {
-  const seen = []
-  const unsubscribe = subscribeBackendCapabilities(() => {
-    seen.push(getBackendCapabilitiesSnapshot().revision)
-  })
-
-  const initial = getBackendCapabilitiesSnapshot().revision
+test('capability revision notifica invalidación e hidratación para evitar UI stale en Entregas', () => {
+  const initial = getCapabilitiesRevision()
   invalidateCashShiftCapabilities()
+  const afterInvalidate = getCapabilitiesRevision()
   applyCapabilities(VALID_CONTRACT, SESSION)
-  unsubscribe()
+  const afterApply = getCapabilitiesRevision()
 
-  assert.equal(seen.length >= 2, true)
-  assert.equal(seen[0] > initial, true)
-  assert.equal(seen.at(-1) > seen[0], true)
+  assert.equal(afterInvalidate > initial, true)
+  assert.equal(afterApply > afterInvalidate, true)
 })
 
-test('Home, navbar y ModuleRoleRoute se suscriben al snapshot reactivo de capabilities', () => {
+test('Home, navbar y ModuleRoleRoute se suscriben a la revisión reactiva de capabilities', () => {
   const home = src('../src/screens/ScreenHome.jsx')
   const nav = src('../src/components/AppNav.jsx')
   const app = src('../src/App.jsx')
 
-  assert.match(home, /useBackendCapabilitiesSnapshot/)
+  assert.match(home, /useCapabilitiesRevision/)
   assert.match(home, /getHomeModulesForSession\(session\)/)
-  assert.match(nav, /useBackendCapabilitiesSnapshot/)
-  assert.match(app, /useBackendCapabilitiesSnapshot/)
+  assert.match(nav, /useCapabilitiesRevision/)
+  assert.match(app, /useCapabilitiesRevision/)
   assert.match(app, /function ModuleRoleRoute\(\{ moduleId, children \}\)/)
 })

@@ -26,7 +26,14 @@ import {
   unwrapExpenseListEnvelope,
 } from './expenseListEnvelope.js'
 import { emptyCatalog, publishedScope, validateContract } from '../../lib/capabilityContract.js'
-import { notifyBackendCapabilitiesChanged } from './backendCapsStore.js'
+import {
+  AUTO_RETRY_DELAYS_MS,
+  ODOO_INCOMPATIBLE_MESSAGE,
+  ODOO_UNAVAILABLE_MESSAGE,
+  isOdooUnavailableError,
+  isOdooUnavailablePayload,
+  unavailableMetric,
+} from '../../lib/odooAvailability.js'
 
 // ── Feature caps del backend ────────────────────────────────────────────────
 // Los defaults están en true porque `gf_pwa_admin` ya expone todos estos
@@ -171,6 +178,46 @@ function resetFailClosedCapabilities() {
 }
 
 let capabilityRequestGeneration = 0
+let capabilitiesRevision = 0
+const CAPABILITIES_EVENT = 'gf:capabilities-changed'
+let odooServiceState = { status: 'unknown', message: '' }
+
+function notifyCapabilitiesChanged() {
+  capabilitiesRevision += 1
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return
+  try {
+    window.dispatchEvent(new CustomEvent(CAPABILITIES_EVENT, {
+      detail: { revision: capabilitiesRevision },
+    }))
+  } catch { /* noop */ }
+}
+
+export function getCapabilitiesRevision() {
+  return capabilitiesRevision
+}
+
+export function subscribeCapabilitiesChanged(listener) {
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+    return () => {}
+  }
+  window.addEventListener(CAPABILITIES_EVENT, listener)
+  return () => window.removeEventListener(CAPABILITIES_EVENT, listener)
+}
+
+export function getOdooServiceState() {
+  return { status: odooServiceState.status, message: odooServiceState.message }
+}
+
+function setOdooServiceState(next) {
+  odooServiceState = {
+    status: next.status || 'unknown',
+    message: next.message || '',
+  }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 function employeeToken(session) {
   return String(session?.odoo_employee_token || session?.gf_employee_token || '')
@@ -194,7 +241,8 @@ function isCurrentCapabilityRequest(generation, snapshot) {
 export function invalidateCashShiftCapabilities() {
   capabilityRequestGeneration += 1
   resetFailClosedCapabilities()
-  notifyBackendCapabilitiesChanged()
+  setOdooServiceState({ status: 'unknown', message: '' })
+  notifyCapabilitiesChanged()
   return BACKEND_CAPS
 }
 
@@ -212,7 +260,7 @@ export function applyCapabilities(caps, session = null) {
   resetFailClosedCapabilities()
   const safeCaps = clampGerentePilotWriteCapabilities(session || readSessionRaw(), caps)
   if (!safeCaps || typeof safeCaps !== 'object') {
-    notifyBackendCapabilitiesChanged()
+    notifyCapabilitiesChanged()
     return BACKEND_CAPS
   }
   for (const key of Object.keys(BACKEND_CAPS)) {
@@ -241,34 +289,83 @@ export function applyCapabilities(caps, session = null) {
     BACKEND_CAPS.traspasoMp = true
   }
   applyCanonicalContract(safeCaps)
-  notifyBackendCapabilitiesChanged()
+  notifyCapabilitiesChanged()
   return BACKEND_CAPS
 }
 
 /** Lectura autenticada vinculada a una generación e identidad de sesión. */
-export async function bootCapabilities(session = null) {
+export async function bootCapabilities(session = null, { autoRetry = true } = {}) {
   const snapshot = capabilitySessionSnapshot(session)
   const generation = ++capabilityRequestGeneration
-  // Cerrar permisos sensibles antes de esperar la respuesta remota; así una
-  // sesión nueva/stale nunca hereda temporalmente permisos del empleado previo.
-  resetFailClosedCapabilities()
-  // Fail-closed for pure gerente_sucursal while capabilities are in-flight.
-  applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
-  if (!snapshot.employeeToken) return BACKEND_CAPS
-  try {
-    const res = await apiGetCapabilities()
-    if (!isCurrentCapabilityRequest(generation, snapshot)) return BACKEND_CAPS
-    // El módulo devuelve { ok: true, data: {...} } o el dict plano
-    const caps = res?.data || res
-    return applyCapabilities(caps, session || readSessionRaw())
-  } catch {
-    // Los permisos de cortes y escrituras Gerente nunca sobreviven error HTTP.
-    if (isCurrentCapabilityRequest(generation, snapshot)) {
-      resetFailClosedCapabilities()
-      applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
-    }
-    return BACKEND_CAPS
+  const preserveCurrent = Boolean(
+    snapshot.employeeToken
+    && validateContract(BACKEND_CAPS).ok
+    && isCurrentCapabilityRequest(generation, snapshot)
+  )
+  if (!preserveCurrent) {
+    resetFailClosedCapabilities()
+    applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
+    setOdooServiceState({ status: 'unknown', message: '' })
+    notifyCapabilitiesChanged()
   }
+  if (!snapshot.employeeToken) return BACKEND_CAPS
+
+  const delays = autoRetry ? AUTO_RETRY_DELAYS_MS : []
+  let lastError = null
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    if (!isCurrentCapabilityRequest(generation, snapshot)) return BACKEND_CAPS
+    try {
+      const res = await apiGetCapabilities()
+      if (!isCurrentCapabilityRequest(generation, snapshot)) return BACKEND_CAPS
+      if (isOdooUnavailablePayload(res)) {
+        lastError = { status: 503, code: 'odoo_unavailable', message: ODOO_UNAVAILABLE_MESSAGE }
+      } else {
+        const caps = res?.data || res
+        const applied = applyCapabilities(caps, session || readSessionRaw())
+        if (!validateContract(caps).ok) {
+          setOdooServiceState({
+            status: 'incompatible',
+            message: ODOO_INCOMPATIBLE_MESSAGE,
+          })
+          notifyCapabilitiesChanged()
+          return applied
+        }
+        setOdooServiceState({ status: 'ok', message: '' })
+        notifyCapabilitiesChanged()
+        return applied
+      }
+    } catch (error) {
+      lastError = error
+      if (!isOdooUnavailableError(error)) {
+        if (isCurrentCapabilityRequest(generation, snapshot)) {
+          resetFailClosedCapabilities()
+          applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
+          setOdooServiceState({ status: 'unknown', message: '' })
+          notifyCapabilitiesChanged()
+        }
+        return BACKEND_CAPS
+      }
+    }
+    if (attempt < delays.length) await delay(delays[attempt])
+  }
+
+  // Confirmed outage (502/503/504 after retries): close the catalog.
+  // Same-identity remount may keep a previously validated read contract only
+  // while the refetch is in flight. Identity changes never preserve grants.
+  if (isCurrentCapabilityRequest(generation, snapshot)) {
+    resetFailClosedCapabilities()
+    applyCapabilities({ gerenteWritesEnabled: false }, session || readSessionRaw())
+    setOdooServiceState({
+      status: 'unavailable',
+      message: ODOO_UNAVAILABLE_MESSAGE,
+    })
+    notifyCapabilitiesChanged()
+  }
+  return BACKEND_CAPS
+}
+
+export function retryCapabilities(session = null) {
+  return bootCapabilities(session, { autoRetry: false })
 }
 
 // ── Operating scope (Plaza × Empresa para actores multi-compañía v2) ────────
@@ -381,6 +478,28 @@ function toList(res) {
 /** Trae los datos del dashboard del día filtrados por razón social.
  *  Usa filtros server-side si BACKEND_CAPS.serverSideCompanyFilter = true. */
 export async function getDashboardData({ warehouseId, companyId }) {
+  const odoo = getOdooServiceState()
+  if (odoo.status === 'unavailable' || odoo.status === 'incompatible') {
+    return {
+      sales: [],
+      expenses: [],
+      kpis: {
+        ventasHoy: unavailableMetric(odoo.status),
+        gastosHoy: unavailableMetric(odoo.status),
+        caja: unavailableMetric('cash_shift_hub_source_unavailable'),
+        liquidaciones: unavailableMetric('liquidaciones_hub_source_unavailable'),
+        requisiciones: unavailableMetric('requisitions_hub_source_unavailable'),
+        materiaPrima: unavailableMetric('materia_prima_hub_source_unavailable'),
+        alertas: unavailableMetric('alerts_hub_source_unavailable'),
+      },
+      odooUnavailable: odoo.status === 'unavailable',
+      odooIncompatible: odoo.status === 'incompatible',
+      odooMessage: odoo.message || (odoo.status === 'incompatible'
+        ? ODOO_INCOMPATIBLE_MESSAGE
+        : ODOO_UNAVAILABLE_MESSAGE),
+    }
+  }
+
   const salesArgs = BACKEND_CAPS.serverSideCompanyFilter
     ? { warehouseId, companyId }
     : { warehouseId }
@@ -388,16 +507,31 @@ export async function getDashboardData({ warehouseId, companyId }) {
     ? { companyId, warehouseId }
     : {}
 
-  const [salesRaw, expensesRaw] = await Promise.all([
-    getTodaySales(salesArgs).catch(() => []),
-    getTodayExpenses(expensesArgs).catch(() => []),
+  const [salesSettled, expensesSettled] = await Promise.all([
+    getTodaySales(salesArgs)
+      .then((value) => ({ ok: true, value }))
+      .catch((error) => ({ ok: false, error })),
+    getTodayExpenses(expensesArgs)
+      .then((value) => ({ ok: true, value }))
+      .catch((error) => ({ ok: false, error })),
   ])
 
-  // Safety-net: aún aplicamos filterByCompany por si el endpoint es legacy.
-  // toList extrae el array real: today-sales devuelve { data: { items/orders } }
-  // (objeto, no array), por lo que unwrap por sí solo dejaba las tarjetas en $0.
-  const sales = filterByCompany(toList(salesRaw), companyId)
-  const expenseEnvelope = unwrapExpenseListEnvelope(expensesRaw)
+  const salesOdooDown = (!salesSettled.ok && isOdooUnavailableError(salesSettled.error))
+    || (salesSettled.ok && isOdooUnavailablePayload(salesSettled.value))
+  const expensesOdooDown = (!expensesSettled.ok && isOdooUnavailableError(expensesSettled.error))
+    || (expensesSettled.ok && isOdooUnavailablePayload(expensesSettled.value))
+  const salesUnavailable = !salesSettled.ok || salesOdooDown
+  const sales = salesUnavailable
+    ? []
+    : filterByCompany(toList(salesSettled.value), companyId)
+  const expenseEnvelope = expensesSettled.ok && !expensesOdooDown
+    ? unwrapExpenseListEnvelope(expensesSettled.value)
+    : {
+      status: 'unavailable',
+      items: [],
+      meta: {},
+      reason: expensesOdooDown ? 'odoo_unavailable' : 'expenses_unavailable',
+    }
   const expenses = expenseEnvelope.status === 'error' || expenseEnvelope.status === 'unavailable'
     ? []
     : filterByCompany(expenseEnvelope.items, companyId)
@@ -406,51 +540,36 @@ export async function getDashboardData({ warehouseId, companyId }) {
   const gastosTotal = sumAmount(expenses, 'total_amount')
 
   const kpis = {
-    ventasHoy: {
-      count: sales.length,
-      total: ventasTotal,
-      available: true,
-    },
-    gastosHoy: {
-      count: expensesAvailable ? expenses.length : null,
-      total: expensesAvailable ? gastosTotal : null,
-      available: expensesAvailable,
-      reason: expensesAvailable ? null : (expenseEnvelope.reason || 'expenses_unavailable'),
-    },
-    // MGR-RES-005: "Caja del día" must NOT alias mostrador sales. No canonical
-    // cash-shift total is wired into this hub yet → honesty: available:false.
-    caja: {
-      count: null,
-      total: null,
-      available: false,
-      reason: 'cash_shift_hub_source_unavailable',
-    },
-    liquidaciones: {
-      count: null,
-      total: null,
-      available: false,
-      reason: 'liquidaciones_hub_source_unavailable',
-    },
-    requisiciones: {
-      count: null,
-      total: null,
-      available: false,
-      reason: 'requisitions_hub_source_unavailable',
-    },
-    materiaPrima: {
-      count: null,
-      total: null,
-      available: false,
-      reason: 'materia_prima_hub_source_unavailable',
-    },
-    alertas: {
-      count: null,
-      available: false,
-      reason: 'alerts_hub_source_unavailable',
-    },
+    ventasHoy: salesUnavailable
+      ? unavailableMetric(salesOdooDown ? 'odoo_unavailable' : 'sales_unavailable')
+      : {
+        count: sales.length,
+        total: ventasTotal,
+        available: true,
+      },
+    gastosHoy: expensesAvailable
+      ? {
+        count: expenses.length,
+        total: gastosTotal,
+        available: true,
+        reason: null,
+      }
+      : unavailableMetric(expenseEnvelope.reason || 'expenses_unavailable'),
+    caja: unavailableMetric('cash_shift_hub_source_unavailable'),
+    liquidaciones: unavailableMetric('liquidaciones_hub_source_unavailable'),
+    requisiciones: unavailableMetric('requisitions_hub_source_unavailable'),
+    materiaPrima: unavailableMetric('materia_prima_hub_source_unavailable'),
+    alertas: unavailableMetric('alerts_hub_source_unavailable'),
   }
 
-  return { sales, expenses, kpis, expenseEnvelope }
+  return {
+    sales,
+    expenses,
+    kpis,
+    expenseEnvelope,
+    odooUnavailable: salesOdooDown || expensesOdooDown,
+    odooMessage: (salesOdooDown || expensesOdooDown) ? ODOO_UNAVAILABLE_MESSAGE : '',
+  }
 }
 
 /** Construye un feed cronológico unificado (ventas + gastos). */

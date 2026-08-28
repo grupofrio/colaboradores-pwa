@@ -22,7 +22,9 @@ import {
 import {
   getModuleRouteDecisionForSession,
   getModuleEntryDecisionForSession,
+  getHomeModulesForSession,
   isEntregasNavigationVisible,
+  isEntregasPlaceholderVisible,
   isLiquidationNavigationVisible,
   isPosNavigationVisible,
   isTraspasoMpNavigationVisible,
@@ -34,9 +36,11 @@ import {
 import {
   applyCapabilities,
   BACKEND_CAPS,
+  getOdooServiceState,
   invalidateCashShiftCapabilities,
   syncCapabilitiesIdentity,
 } from '../src/modules/admin/adminService.js'
+import { ODOO_UNAVAILABLE_MESSAGE, unavailableMetric } from '../src/lib/odooAvailability.js'
 import {
   adminCompaniesFromPublishedScope,
   nextAdminCompanyId,
@@ -70,6 +74,28 @@ const OTHER = {
   warehouse_id: 89,
   plaza_id: 'IGUALA',
   odoo_employee_token: 'token-738',
+  session_token: 'h.p.s',
+}
+
+const IGUALA_ENTREGAS = {
+  employee_id: 24,
+  role: 'almacenista_entregas',
+  additional_job_keys: [],
+  company_id: 1,
+  warehouse_id: 89,
+  plaza_id: 'IGUALA',
+  odoo_employee_token: 'token-igu-entregas',
+  session_token: 'h.p.s',
+}
+
+const IGUALA_NO_JOB = {
+  employee_id: 23,
+  role: 'almacenista_pt',
+  additional_job_keys: [],
+  company_id: 1,
+  warehouse_id: 89,
+  plaza_id: 'IGUALA',
+  odoo_employee_token: 'token-igu-pt',
   session_token: 'h.p.s',
 }
 
@@ -112,8 +138,12 @@ function allowed(mode, scopes = GDL_SCOPES) {
 function marisolCatalog(overrides = {}) {
   return {
     'materials.issue.iguala': denied('not_granted'),
+    'delivery.transfer': allowed('confirm'),
+    'delivery.return': allowed('capture'),
     'delivery.transfer.gdl': allowed('confirm'),
     'delivery.return.gdl': allowed('capture'),
+    'delivery.transfer.iguala': denied('cross_plaza'),
+    'delivery.return.iguala': denied('cross_plaza'),
     'liquidation.read.gdl': allowed('read'),
     'liquidation.print.gdl': allowed('read'),
     'liquidation.receive_cash.gdl': denied('phase_not_enabled', 'capture'),
@@ -175,14 +205,68 @@ function otherContract() {
       from_actor: false,
     },
     capabilities: marisolCatalog({
+      'delivery.transfer': allowed('confirm', IGU_SCOPES),
+      'delivery.return': allowed('capture', IGU_SCOPES),
       'delivery.transfer.gdl': denied('cross_plaza'),
       'delivery.return.gdl': denied('cross_plaza'),
+      'delivery.transfer.iguala': allowed('confirm', IGU_SCOPES),
+      'delivery.return.iguala': allowed('capture', IGU_SCOPES),
       'liquidation.read.gdl': denied('cross_plaza'),
       'liquidation.print.gdl': denied('cross_plaza'),
       'pos.read': allowed('read', IGU_SCOPES),
       'materials.issue.iguala': allowed('confirm', IGU_SCOPES),
     }),
     requisitionApproval: false,
+  }
+}
+
+function igualaEntregasContract() {
+  return {
+    contract_version: CONTRACT_VERSION,
+    effective_job_keys: ['almacenista_entregas'],
+    published_scope: {
+      company_id: 1,
+      company_label: 'IGUALA',
+      plaza_id: 8,
+      plaza_label: 'IGUALA',
+      warehouse_id: 89,
+      warehouse_label: 'CEDIS IGU',
+      analytic_id: 8,
+      city_code: 'IGU',
+      from_actor: true,
+    },
+    capabilities: marisolCatalog({
+      'delivery.transfer': allowed('confirm', IGU_SCOPES),
+      'delivery.return': allowed('capture', IGU_SCOPES),
+      'delivery.transfer.gdl': denied('cross_plaza'),
+      'delivery.return.gdl': denied('cross_plaza'),
+      'delivery.transfer.iguala': allowed('confirm', IGU_SCOPES),
+      'delivery.return.iguala': allowed('capture', IGU_SCOPES),
+      'liquidation.read.gdl': denied('cross_plaza'),
+      'liquidation.print.gdl': denied('cross_plaza'),
+      'pos.read': denied('not_granted'),
+      'materials.issue.iguala': denied('not_granted'),
+    }),
+    requisitionApproval: false,
+  }
+}
+
+function igualaNoJobContract() {
+  return {
+    ...igualaEntregasContract(),
+    effective_job_keys: ['almacenista_pt'],
+    capabilities: marisolCatalog({
+      'delivery.transfer': denied('not_granted'),
+      'delivery.return': denied('not_granted'),
+      'delivery.transfer.gdl': denied('cross_plaza'),
+      'delivery.return.gdl': denied('cross_plaza'),
+      'delivery.transfer.iguala': denied('not_granted'),
+      'delivery.return.iguala': denied('not_granted'),
+      'liquidation.read.gdl': denied('not_granted'),
+      'liquidation.print.gdl': denied('not_granted'),
+      'pos.read': denied('not_granted'),
+      'materials.issue.iguala': denied('not_granted'),
+    }),
   }
 }
 
@@ -219,6 +303,8 @@ test('2. GDL permitido solo segun capacidades publicadas', () => {
   assert.equal(capabilityAllowed(contract, 'delivery.transfer.gdl'), true)
   assert.equal(capabilityAllowed(contract, 'delivery.return.gdl'), true)
   assert.equal(capabilityAllowed(contract, 'pos.read'), true)
+  assert.equal(capabilityAllowed(contract, 'pos.operate'), false)
+  assert.equal(capabilityDeny(contract, 'pos.operate').code, 'phase_not_enabled')
   assert.equal(capabilityAllowed(contract, 'liquidation.read.gdl'), true)
   const scope = publishedScope(contract)
   assert.equal(scope.plaza_label, 'GUADALAJARA')
@@ -322,14 +408,22 @@ test('6. cada modulo: true y false, UI = deep link = endpoint', () => {
 
   const entregasOn = marisolContract()
   const entregasOff = marisolContract({
-    capabilities: marisolCatalog({ 'delivery.transfer.gdl': denied('not_granted') }),
+    capabilities: marisolCatalog({
+      'delivery.transfer': denied('not_granted'),
+      'delivery.transfer.gdl': denied('not_granted'),
+      'delivery.transfer.iguala': denied('cross_plaza'),
+    }),
   })
   assert.equal(isEntregasNavigationVisible(entregasOn), true)
   assert.equal(isEntregasNavigationVisible(entregasOff), false)
   assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, entregasOn), 'allow')
   assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, entregasOff), 'home')
+  assert.equal(CAPABILITY_SURFACES['delivery.transfer'].endpoint, '/pwa-admin/dispatch-ticket')
+  assert.equal(CAPABILITY_SURFACES['delivery.return'].endpoint, '/pwa-admin/dispatch-ticket')
   assert.equal(CAPABILITY_SURFACES['delivery.transfer.gdl'].endpoint, '/pwa-admin/dispatch-ticket')
   assert.equal(CAPABILITY_SURFACES['delivery.return.gdl'].endpoint, '/pwa-admin/dispatch-ticket')
+  assert.equal(CAPABILITY_SURFACES['delivery.transfer.iguala'].endpoint, '/pwa-admin/dispatch-ticket')
+  assert.equal(CAPABILITY_SURFACES['delivery.return.iguala'].endpoint, '/pwa-admin/dispatch-ticket')
   assert.equal(CAPABILITY_SURFACES['liquidation.receive_cash.gdl'].endpoint, '/pwa-admin/liquidaciones/receive-cash')
   assert.equal(capabilityAllowed(on, 'liquidation.receive_cash.gdl'), false)
   assert.equal(capabilityAllowed(on, 'pos.operate'), false)
@@ -447,6 +541,50 @@ test('no quedan fuentes divergentes ni IDs fijos de plaza en autorizacion', () =
   assert.equal(isPosNavigationVisible({ warehouse_id: 94, pos: true }), false)
 })
 
+test('Entregas Iguala y GDL respetan la plaza publicada y fallan cerrados', () => {
+  invalidateCashShiftCapabilities()
+  const igu = igualaEntregasContract()
+  const gdl = marisolContract()
+  const noJob = igualaNoJobContract()
+  const entregas = getModuleById('almacen_entregas')
+
+  assert.equal(validateContract(igu).ok, true)
+  assert.equal(capabilityAllowed(igu, 'delivery.transfer.iguala'), true)
+  assert.equal(capabilityAllowed(igu, 'delivery.transfer.gdl'), false)
+  assert.equal(isEntregasNavigationVisible(igu), true)
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', IGUALA_ENTREGAS, undefined, igu), 'allow')
+  assert.equal(getModuleEntryDecisionForSession(entregas, IGUALA_ENTREGAS, undefined, igu).type, 'direct')
+
+  assert.equal(capabilityAllowed(gdl, 'delivery.transfer.gdl'), true)
+  assert.equal(capabilityAllowed(gdl, 'delivery.transfer.iguala'), false)
+  assert.equal(isEntregasNavigationVisible(gdl), true)
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, gdl), 'allow')
+
+  assert.equal(isEntregasNavigationVisible(noJob), false)
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', IGUALA_NO_JOB, undefined, noJob), 'home')
+  assert.equal(getModuleEntryDecisionForSession(entregas, IGUALA_NO_JOB, undefined, noJob).type, 'denied')
+
+  assert.equal(capabilityAllowed(gdl, 'delivery.transfer.iguala'), false)
+  assert.equal(capabilityAllowed(igu, 'delivery.transfer.gdl'), false)
+  assert.equal(getModuleRouteDecisionForSession(
+    'almacen_entregas',
+    { ...MARISOL, warehouse_id: 89, plaza_id: 'IGUALA' },
+    undefined,
+    gdl,
+  ), 'allow')
+  assert.equal(getModuleRouteDecisionForSession(
+    'almacen_entregas',
+    { ...IGUALA_ENTREGAS, warehouse_id: 94, plaza_id: 'GUADALAJARA' },
+    undefined,
+    igu,
+  ), 'allow')
+
+  assert.equal(isEntregasNavigationVisible(null), false)
+  assert.equal(isEntregasNavigationVisible({}), false)
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, {}), 'home')
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, undefined), 'home')
+})
+
 test('738 → 694 y 694 → otra ficha no dejan remanentes en BACKEND_CAPS', () => {
   applyCapabilities(otherContract(), OTHER)
   assert.equal(BACKEND_CAPS.published_scope.warehouse_id, 89)
@@ -464,6 +602,7 @@ test('738 → 694 y 694 → otra ficha no dejan remanentes en BACKEND_CAPS', () 
   applyCapabilities(otherContract(), OTHER)
   assert.equal(BACKEND_CAPS.published_scope.warehouse_id, 89)
   assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.iguala'), true)
   assert.notEqual(BACKEND_CAPS.published_scope.company_id, 34)
 
   invalidateCashShiftCapabilities()
@@ -475,25 +614,31 @@ test('cambio de identidad cierra el singleton antes del fetch de la ficha nueva'
   const entregas = getModuleById('almacen_entregas')
   applyCapabilities(otherContract(), OTHER)
   assert.equal(capabilityAllowed(BACKEND_CAPS, 'materials.issue.iguala'), true)
-  assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.iguala'), true)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+  assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), true)
 
   const closedKey = syncCapabilitiesIdentity('738:token-a', '694:token-b')
   assert.equal(closedKey, '694:token-b')
   assert.equal(BACKEND_CAPS.published_scope, null)
   assert.equal(capabilityAllowed(BACKEND_CAPS, 'materials.issue.iguala'), false)
   assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.iguala'), false)
   assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
   assert.equal(
     getModuleEntryDecisionForSession(entregas, MARISOL, undefined, BACKEND_CAPS).type,
-    'direct',
+    'denied',
   )
-  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'allow')
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'home')
+  assert.equal(isEntregasPlaceholderVisible(MARISOL, BACKEND_CAPS), true)
 
   applyCapabilities(marisolContract(), MARISOL)
   assert.equal(
     getModuleEntryDecisionForSession(entregas, MARISOL, undefined, BACKEND_CAPS).type,
     'direct',
   )
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), true)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.iguala'), false)
 
   syncCapabilitiesIdentity('694:token-b', '738:token-c')
   assert.equal(
@@ -501,6 +646,8 @@ test('cambio de identidad cierra el singleton antes del fetch de la ficha nueva'
     'denied',
   )
   assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.iguala'), false)
+  assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
 
   const app = src('../src/App.jsx')
   assert.match(app, /syncCapabilitiesIdentity\(capsIdentityRef\.current, identityKey\)/)
@@ -509,21 +656,30 @@ test('cambio de identidad cierra el singleton antes del fetch de la ficha nueva'
   assert.match(home, /getModuleEntryDecisionForSession\(mod, session, undefined, BACKEND_CAPS\)/)
 })
 
-test('almacenista_entregas conserva acceso por rol si el contrato de capabilities no está listo', () => {
+test('almacenista_entregas no abre Entregas por rol si el contrato no está listo', () => {
   invalidateCashShiftCapabilities()
   const entregas = getModuleById('almacen_entregas')
 
   assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), false)
   assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
+  assert.equal(isEntregasPlaceholderVisible(MARISOL, BACKEND_CAPS), true)
   assert.equal(
     getModuleEntryDecisionForSession(entregas, MARISOL, undefined, BACKEND_CAPS).type,
-    'direct',
+    'denied',
   )
-  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'allow')
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'home')
   assert.equal(
     getModuleEntryDecisionForSession(entregas, OTHER, undefined, BACKEND_CAPS).type,
     'denied',
   )
+  const nav = src('../src/lib/navModel.js')
+  assert.doesNotMatch(nav, /Fallback operacional/)
+  assert.doesNotMatch(nav, /canAccessEntregasModule/)
+  assert.match(nav, /DELIVERY_TRANSFER_CAPABILITY_KEYS/)
+  const contract = src('../src/lib/capabilityContract.js')
+  assert.match(contract, /delivery\.transfer\.iguala/)
+  const home = src('../src/screens/ScreenHome.jsx')
+  assert.match(home, /isEntregasPlaceholderVisible/)
 })
 
 test('entregas acepta alias canonico o de plaza aunque delivery.transfer.gdl venga denegado', () => {
@@ -573,7 +729,127 @@ test('perfil v2 no usa work_location_id ni company_id heredados', () => {
   assert.doesNotMatch(profile, /employee\.company_id\[1\]/)
   assert.match(profile, /Cargando/)
   assert.match(profile, /No disponible/)
+  assert.match(profile, /ODOO_UNAVAILABLE_MESSAGE/)
+  assert.match(profile, /ODOO_INCOMPATIBLE_MESSAGE/)
+  assert.match(profile, /resolveProfileEmployeeData/)
   assert.equal(publishedScopeSurface({ capabilities: null }).state, 'loading')
   assert.equal(publishedScopeSurface({ capabilities: emptyCatalog() }).state, 'unavailable')
   assert.equal(publishedScopeSurface(marisolContract()).state, 'ready')
 })
+
+test('Marisol/GDL: Home muestra Entregas y Admin abre POS y Liquidaciones', () => {
+  invalidateCashShiftCapabilities()
+  applyCapabilities(marisolContract(), MARISOL)
+  const homeIds = getHomeModulesForSession(MARISOL).map((module) => module.id)
+  assert.ok(homeIds.includes('almacen_entregas'))
+  const roles = getAuthorizationJobKeys(MARISOL)
+  assert.equal(isPosNavigationVisible(BACKEND_CAPS), true)
+  assert.equal(isLiquidationNavigationVisible(roles, BACKEND_CAPS), true)
+  assert.equal(adminRouteAllows('/admin/pos', roles, { session: MARISOL, capabilities: BACKEND_CAPS }), true)
+  assert.equal(adminRouteAllows('/admin/liquidaciones', roles, { session: MARISOL, capabilities: BACKEND_CAPS }), true)
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', MARISOL, undefined, BACKEND_CAPS), 'allow')
+})
+
+test('Iguala Entregas muestra tarjeta y ruta; contrato denegado las cierra', () => {
+  invalidateCashShiftCapabilities()
+  applyCapabilities(igualaEntregasContract(), IGUALA_ENTREGAS)
+  const homeIds = getHomeModulesForSession(IGUALA_ENTREGAS).map((module) => module.id)
+  assert.ok(homeIds.includes('almacen_entregas'))
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', IGUALA_ENTREGAS, undefined, BACKEND_CAPS), 'allow')
+
+  applyCapabilities(igualaNoJobContract(), IGUALA_NO_JOB)
+  assert.equal(getHomeModulesForSession(IGUALA_NO_JOB).some((module) => module.id === 'almacen_entregas'), false)
+  assert.equal(getModuleRouteDecisionForSession('almacen_entregas', IGUALA_NO_JOB, undefined, BACKEND_CAPS), 'home')
+  assert.equal(adminRouteAllows('/admin/pos', getAuthorizationJobKeys(IGUALA_NO_JOB), {
+    session: IGUALA_NO_JOB,
+    capabilities: BACKEND_CAPS,
+  }), false)
+})
+
+test('menús y deep links se refrescan al recuperar el contrato sin heredar identidad', () => {
+  invalidateCashShiftCapabilities()
+  applyCapabilities(otherContract(), OTHER)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.iguala'), true)
+  syncCapabilitiesIdentity('738:token-a', '694:token-b')
+  assert.equal(isEntregasNavigationVisible(BACKEND_CAPS), false)
+  assert.equal(BACKEND_CAPS.published_scope, null)
+  applyCapabilities(marisolContract(), MARISOL)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.gdl'), true)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.iguala'), false)
+  assert.ok(getHomeModulesForSession(MARISOL).some((module) => module.id === 'almacen_entregas'))
+})
+
+test('inventario CEDIS recarga cuando llega warehouse_id y no se congela en 0', () => {
+  const inventario = src('../src/modules/entregas/ScreenInventarioEntregas.jsx')
+  const operacion = src('../src/modules/entregas/ScreenOperacionDia.jsx')
+  const carga = src('../src/modules/entregas/ScreenCargaUnidades.jsx')
+  assert.match(inventario, /Stock físico CEDIS/)
+  assert.match(inventario, /\/pwa-entregas\/live-inventory\?warehouse_id=\$\{warehouseId\}/)
+  assert.match(inventario, /useEffect\(\(\) => \{ load\(\) \}, \[warehouseId\]\)/)
+  assert.doesNotMatch(inventario, /useEffect\(\(\) => \{ load\(\) \}, \[\]\)/)
+  assert.match(operacion, /Inventario PT/)
+  assert.match(carga, /PRODUCTOS CON EXISTENCIA EN ORIGEN/)
+})
+
+test('AdminProvider no apaga capsReady si el contrato v2 ya es válido', () => {
+  const ctx = src('../src/modules/admin/AdminContext.jsx')
+  assert.match(ctx, /useState\(\(\) => validateContract\(BACKEND_CAPS\)\.ok\)/)
+  assert.match(ctx, /if \(!validateContract\(BACKEND_CAPS\)\.ok\) setCapsReady\(false\)/)
+  assert.doesNotMatch(ctx, /let alive = true\s+setCapsReady\(false\)/)
+})
+
+test('superficie 503: banner, reintento y cero importes falsos', () => {
+  const home = src('../src/screens/ScreenHome.jsx')
+  const app = src('../src/App.jsx')
+  const shell = src('../src/components/AppShell.jsx')
+  const hub = src('../src/modules/admin/components/HubV2.jsx')
+  const admin = src('../src/modules/admin/ScreenAdminPanel.jsx')
+  const feed = src('../src/modules/admin/components/ActivityFeed.jsx')
+  const svc = src('../src/modules/admin/adminService.js')
+  assert.match(home, /capsRevision/)
+  assert.match(app, /useCapabilitiesRevision/)
+  assert.match(shell, /OdooUnavailableBanner/)
+  assert.match(hub, /ODOO_UNAVAILABLE_MESSAGE/)
+  assert.match(hub, /retryOdoo/)
+  assert.match(admin, /getDashboardData/)
+  assert.doesNotMatch(admin, /getTodaySales\(warehouseId\)\.catch/)
+  assert.match(feed, /ODOO_UNAVAILABLE_MESSAGE/)
+  assert.doesNotMatch(feed, /\.catch\(\(\) => \[\]\)/)
+  assert.match(svc, /AUTO_RETRY_DELAYS_MS/)
+  assert.match(svc, /isOdooUnavailablePayload/)
+  assert.match(svc, /preserveCurrent/)
+  assert.match(app, /admin-route-caps-loading/)
+  const metric = unavailableMetric()
+  assert.equal(metric.total, null)
+  assert.equal(metric.available, false)
+  assert.equal(ODOO_UNAVAILABLE_MESSAGE.includes('Odoo'), true)
+  assert.equal(getOdooServiceState().status === 'unknown' || typeof getOdooServiceState().status === 'string', true)
+})
+
+test('contrato publicado GDL plaza 818 abre POS y Liquidaciones y no pide Iguala', () => {
+  invalidateCashShiftCapabilities()
+  const live = marisolContract({
+    published_scope: {
+      company_id: 34,
+      company_label: 'SOLUCIONES EN PRODUCCION GLACIEM',
+      plaza_id: 818,
+      plaza_label: '[GDL] Guadalajara',
+      warehouse_id: 94,
+      warehouse_label: 'CEDIS Guadalajara',
+      analytic_id: 818,
+      city_code: 'GDL',
+      from_actor: true,
+    },
+  })
+  assert.equal(validateContract(live).ok, true)
+  applyCapabilities(live, MARISOL)
+  const roles = getAuthorizationJobKeys(MARISOL)
+  assert.equal(isPosNavigationVisible(BACKEND_CAPS), true)
+  assert.equal(isLiquidationNavigationVisible(roles, BACKEND_CAPS), true)
+  assert.equal(adminRouteAllows('/admin/pos', roles, { session: MARISOL, capabilities: BACKEND_CAPS }), true)
+  assert.equal(adminRouteAllows('/admin/liquidaciones', roles, { session: MARISOL, capabilities: BACKEND_CAPS }), true)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'delivery.transfer.iguala'), false)
+  assert.equal(capabilityAllowed(BACKEND_CAPS, 'materials.issue.iguala'), false)
+  assert.equal(isTraspasoMpNavigationVisible(BACKEND_CAPS), false)
+})
+
