@@ -61,6 +61,10 @@ export function normalizePosCatalogResponse(payload) {
   return {
     pricelist_id: pricelist.id,
     pricelist_name: String(data?.pricelist_name || pricelist.name || '').trim(),
+    company_id: Number(data?.company_id || 0) || null,
+    warehouse_id: Number(data?.warehouse_id || 0) || null,
+    stock_location_id: Number(data?.stock_location_id || 0) || null,
+    stock_location_name: String(data?.stock_location_name || '').trim(),
     products: normalizePosProductsResponse(payload),
   }
 }

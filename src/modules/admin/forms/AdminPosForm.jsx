@@ -19,6 +19,7 @@ import {
   changeCartItemQty,
   getDisplayStock,
   getProductPrice,
+  nextCartQtyWouldExceedStock,
   repriceCartFromCatalog,
   stockLabel,
 } from '../posCart'
@@ -77,6 +78,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
   const [cart, setCart] = useState([])
   const [customer, setCustomer] = useState(() => emptyPosCustomer(flow))
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
+  const [catalogLocationName, setCatalogLocationName] = useState('')
   const [catalogCustomerId, setCatalogCustomerId] = useState(null)
   const catalogRequestSeq = useRef(0)
   const defaultCustomerRequestSeq = useRef(0)
@@ -133,6 +135,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
         id: catalog?.pricelist_id || null,
         name: catalog?.pricelist_name || '',
       })
+      setCatalogLocationName(catalog?.stock_location_name || '')
       setCart((prev) => repriceCartFromCatalog(prev, list))
       setCatalogCustomerId(requestedCustomerId)
       return true
@@ -155,6 +158,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
     setProducts([])
     setCart([])
     setPricelist({ id: null, name: '' })
+    setCatalogLocationName('')
     setCustomer(emptyPosCustomer(flow))
     setCatalogCustomerId(null)
     setCustomerResults([])
@@ -232,12 +236,16 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
 
   function addToCart(product) {
     resetPaymentContext()
-    setCart((prev) => addProductToCart(prev, product))
+    setCart((prev) => addProductToCart(prev, product, {
+      enforceAvailableStock: requiresCanonicalPosOperate(flow),
+    }))
   }
 
   function updateQty(productId, delta) {
     resetPaymentContext()
-    setCart((prev) => changeCartItemQty(prev, productId, delta))
+    setCart((prev) => changeCartItemQty(prev, productId, delta, {
+      enforceAvailableStock: requiresCanonicalPosOperate(flow),
+    }))
   }
 
   function removeItem(productId) {
@@ -433,6 +441,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
       const orderId = saleResult.orderId
       const ticketPath = buildPosTicketPath(flow, orderId)
       if (ticketPath) {
+        await loadCatalog(customer.id)
         toast.success('Venta registrada')
         navigate(ticketPath, { state: { order_id: orderId } })
       } else {
@@ -477,6 +486,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
           margin: 0,
         }}>
           VENTA MOSTRADOR · {companyLabel.toUpperCase()}
+          {catalogLocationName ? ` · ${catalogLocationName}` : ''}
         </p>
         <h1 style={{
           fontSize: 26,
@@ -571,6 +581,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
                   <button
                     key={p.id}
                     type="button"
+                    disabled={requiresCanonicalPosOperate(flow) && nextCartQtyWouldExceedStock(cart, p)}
                     onClick={() => addToCart(p)}
                     style={{
                       padding: '12px 12px 10px',

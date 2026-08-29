@@ -56,6 +56,7 @@ test('ScreenPOS and AdminPosForm reset catalog, customer, cart and late requests
     assert.match(slice, /defaultCustomerRequestSeq\.current \+= 1/)
     assert.match(slice, /setProducts\(\[\]\)/)
     assert.match(slice, /setPricelist\(\{ id: null, name: '' \}\)/)
+    assert.match(slice, /setCatalogLocationName\(''\)/)
     assert.match(slice, /setCart\(\[\]\)/)
     assert.doesNotMatch(slice, /setCustomer\(\{ id: null, name: defaultCustomerName \}\)/)
     assert.match(slice, /requiresCanonicalPosOperate\(flow\) \? '' : defaultCustomerName/)

@@ -20,6 +20,7 @@ import {
   changeCartItemQty,
   getDisplayStock,
   getProductPrice,
+  nextCartQtyWouldExceedStock,
   repriceCartFromCatalog,
   stockLabel,
 } from './posCart'
@@ -142,6 +143,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   // Customer
   const [customer, setCustomer] = useState(() => emptyPosCustomer(flow))
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
+  const [catalogLocationName, setCatalogLocationName] = useState('')
   const [catalogCustomerId, setCatalogCustomerId] = useState(null)
   const catalogRequestSeq = useRef(0)
   const defaultCustomerRequestSeq = useRef(0)
@@ -197,6 +199,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         id: catalog?.pricelist_id || null,
         name: catalog?.pricelist_name || '',
       })
+      setCatalogLocationName(catalog?.stock_location_name || '')
       setCart((prev) => repriceCartFromCatalog(prev, list))
       setCatalogCustomerId(requestedCustomerId)
       return true
@@ -220,6 +223,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
     setProducts([])
     setCart([])
     setPricelist({ id: null, name: '' })
+    setCatalogLocationName('')
     setCustomer(emptyPosCustomer(flow))
     setCatalogCustomerId(null)
     setCustomerResults([])
@@ -295,12 +299,16 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   // Cart operations
   function addToCart(product) {
     resetPaymentContext()
-    setCart((prev) => addProductToCart(prev, product))
+    setCart((prev) => addProductToCart(prev, product, {
+      enforceAvailableStock: requiresCanonicalPosOperate(flow),
+    }))
   }
 
   function updateQty(productId, delta) {
     resetPaymentContext()
-    setCart((prev) => changeCartItemQty(prev, productId, delta))
+    setCart((prev) => changeCartItemQty(prev, productId, delta, {
+      enforceAvailableStock: requiresCanonicalPosOperate(flow),
+    }))
   }
 
   function removeItem(productId) {
@@ -486,6 +494,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
       const orderId = saleResult.orderId
       const ticketPath = buildPosTicketPath(flow, orderId)
       if (ticketPath) {
+        await loadProducts(customer.id)
         navigate(ticketPath, { state: { order_id: orderId } })
       } else {
         setError('Venta creada pero sin folio')
@@ -534,7 +543,10 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>{flow.title}</span>
+          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>
+            {flow.title}
+            {catalogLocationName ? ` · ${catalogLocationName}` : ''}
+          </span>
           {flow.salesRoute && (
             <button
               type="button"
@@ -588,7 +600,11 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
                 const stock = getDisplayStock(p)
                 const inCart = cart.find(c => c.product_id === p.id)
                 return (
-                  <button key={p.id} onClick={() => addToCart(p)}
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={requiresCanonicalPosOperate(flow) && nextCartQtyWouldExceedStock(cart, p)}
+                    onClick={() => addToCart(p)}
                     style={{
                       padding: '12px 10px', borderRadius: TOKENS.radius.md,
                       background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
