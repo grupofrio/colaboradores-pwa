@@ -46,6 +46,16 @@ test('preview and staging runtimes fail closed without an isolated staging origi
   assert.equal(resolveOdooOrigin({}), 'https://grupofrio-gf.odoo.com')
 })
 
+test('resolveOdooOrigin strips trailing /odoo from copied Odoo.sh URLs', () => {
+  assert.equal(
+    resolveOdooOrigin({
+      VERCEL_ENV: 'preview',
+      ODOO_ORIGIN: 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com/odoo',
+    }),
+    'https://grupofrio-gf-staging280826-37133857.dev.odoo.com',
+  )
+})
+
 test('PWA proxy and login refuse production when preview isolation is required', () => {
   assert.throws(
     () => buildOdooPwaRequest({
