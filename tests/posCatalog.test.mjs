@@ -51,6 +51,16 @@ test('mergeProductsWithWarehouseStock preserves catalog and injects warehouse st
       sale_ok: true,
       available_in_pos: true,
     },
+    {
+      id: 12,
+      name: 'Oculto POS',
+      price: 50,
+      stock: 0,
+      barcode: '',
+      weight: 0,
+      sale_ok: true,
+      available_in_pos: false,
+    },
   ])
 })
 
