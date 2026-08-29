@@ -5,6 +5,7 @@ import {
   buildSalesOpsRequest,
   createSalesOpsProxyHandler,
   readSalesOpsToken,
+  salesOpsTokenProbe,
   SalesOpsProxyError,
 } from '../api/salesops.js'
 
@@ -118,6 +119,9 @@ test('readSalesOpsToken uses live env lookup and ignores blank or padded keys', 
   assert.equal(readSalesOpsToken({ GF_SALESOPS_TOKEN: `  ${serverToken}  ` }), serverToken)
   assert.equal(readSalesOpsToken({ 'GF_SALESOPS_TOKEN ': serverToken }), serverToken)
   assert.equal(readSalesOpsToken({ GF_SALESOPS_TOKE_DIAG: serverToken }), '')
+  assert.equal(salesOpsTokenProbe({}), 'undef')
+  assert.equal(salesOpsTokenProbe({ GF_SALESOPS_TOKEN: '' }), 'empty')
+  assert.equal(salesOpsTokenProbe({ GF_SALESOPS_TOKEN: serverToken }), 'set')
 })
 
 test('SalesOps proxy reads GF_SALESOPS_TOKEN from env at request time and ignores client X-GF-Token', async () => {
@@ -185,6 +189,7 @@ test('SalesOps proxy exposes configured=0/1 only on staging runtime', async () =
   }, missingRes)
   assert.equal(missingRes.statusCode, 503)
   assert.equal(missingRes.headers['x-gf-salesops-configured'], '0')
+  assert.equal(missingRes.headers['x-gf-salesops-probe'], 'undef')
 
   const present = createSalesOpsProxyHandler({
     env: {
@@ -206,6 +211,7 @@ test('SalesOps proxy exposes configured=0/1 only on staging runtime', async () =
   }, presentRes)
   assert.equal(presentRes.statusCode, 200)
   assert.equal(presentRes.headers['x-gf-salesops-configured'], '1')
+  assert.equal(presentRes.headers['x-gf-salesops-probe'], 'set')
 
   const productionLike = createSalesOpsProxyHandler({
     env: { GF_SALESOPS_TOKEN: serverToken },

@@ -1,4 +1,9 @@
+import { env as nodeEnv } from 'node:process'
+
 import { resolveOdooOrigin, StagingOriginError, mustIsolateFromProduction } from './_odooOrigin.js'
+
+// Static identifier so hosting include-lists keep this secret on the function.
+void process.env.GF_SALESOPS_TOKEN
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 const PATH_SEGMENT = /^[A-Za-z0-9_-]+$/
@@ -116,25 +121,30 @@ function sendJson(res, status, body) {
   res.status(status).send(JSON.stringify(body))
 }
 
-export function readSalesOpsToken(env = process.env) {
-  const source = env || {}
-  // Keep a static process.env.GF_SALESOPS_TOKEN read in the handler so
-  // hosting bundlers include the secret in the serverless runtime.
-  const fromStatic = source.GF_SALESOPS_TOKEN
-  if (fromStatic != null && String(fromStatic).trim()) {
-    return String(fromStatic).trim()
-  }
+export function readSalesOpsToken(env = nodeEnv) {
+  const source = env || nodeEnv || {}
+  const bracket = source['GF_SALESOPS_TOKEN']
+  if (bracket != null && String(bracket).trim()) return String(bracket).trim()
   for (const key of Object.keys(source)) {
     if (key.trim() === 'GF_SALESOPS_TOKEN') {
       return String(source[key] || '').trim()
     }
   }
-  return String(source['GF_SALESOPS_TOKEN'] || '').trim()
+  return ''
+}
+
+export function salesOpsTokenProbe(env = nodeEnv) {
+  const source = env || {}
+  const raw = source['GF_SALESOPS_TOKEN']
+  if (raw === undefined) return 'undef'
+  if (String(raw).trim() === '') return 'empty'
+  return 'set'
 }
 
 function maybeSetConfiguredHeader(res, env) {
   if (!mustIsolateFromProduction(env)) return
   res.setHeader('x-gf-salesops-configured', readSalesOpsToken(env) ? '1' : '0')
+  res.setHeader('x-gf-salesops-probe', salesOpsTokenProbe(env))
 }
 
 export function createSalesOpsProxyHandler({
@@ -143,10 +153,10 @@ export function createSalesOpsProxyHandler({
   env,
 } = {}) {
   return async function salesOpsProxyHandler(req, res) {
-    const runtimeEnv = env || process.env
+    const runtimeEnv = env || nodeEnv
     maybeSetConfiguredHeader(res, runtimeEnv)
     try {
-      const fromEnv = readSalesOpsToken(runtimeEnv) || String(process.env.GF_SALESOPS_TOKEN || '').trim()
+      const fromEnv = readSalesOpsToken(runtimeEnv)
       const forward = buildSalesOpsRequest({
         path: req.query?.path,
         method: req.method,
