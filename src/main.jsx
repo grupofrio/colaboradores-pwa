@@ -9,7 +9,7 @@ const buildId = typeof __APP_BUILD_ID__ === 'string' ? __APP_BUILD_ID__ : ''
 
 if (typeof globalThis.addEventListener === 'function') {
   globalThis.addEventListener('unhandledrejection', (event) => {
-    reloadOnceForStaleChunk(globalThis, event?.reason)
+    reloadOnceForStaleChunk(globalThis, event?.reason, { buildId })
   })
 }
 

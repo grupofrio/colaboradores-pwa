@@ -59,16 +59,35 @@ test('reloadOnceForStaleChunk reloads once on a leftover dynamic import hash', (
     location: { reload: () => { reloads += 1 } },
   }
   assert.equal(
-    reloadOnceForStaleChunk(runtime, new Error('Failed to fetch dynamically imported module: https://staging.example/assets/ScreenTicket-old.js')),
+    reloadOnceForStaleChunk(runtime, new Error('Failed to fetch dynamically imported module: https://staging.example/assets/ScreenTicket-old.js'), { buildId: 'build-a' }),
     true,
   )
   assert.equal(reloads, 1)
   assert.equal(
-    reloadOnceForStaleChunk(runtime, new Error('Failed to fetch dynamically imported module: https://staging.example/assets/ScreenTicket-old.js')),
+    reloadOnceForStaleChunk(runtime, new Error('Failed to fetch dynamically imported module: https://staging.example/assets/ScreenTicket-old.js'), { buildId: 'build-a' }),
     false,
   )
   assert.equal(reloads, 1)
-  assert.equal(reloadOnceForStaleChunk(runtime, new Error('No hay existencias suficientes')), false)
+  assert.equal(reloadOnceForStaleChunk(runtime, new Error('No hay existencias suficientes'), { buildId: 'build-a' }), false)
+})
+
+test('reloadOnceForStaleChunk matches ChunkLoadError without the word module', () => {
+  let reloads = 0
+  const store = new Map()
+  const runtime = {
+    sessionStorage: {
+      getItem: (key) => (store.has(key) ? store.get(key) : null),
+      setItem: (key, value) => { store.set(key, String(value)) },
+    },
+    location: { reload: () => { reloads += 1 } },
+  }
+  const err = new Error('Failed to fetch dynamically imported index-DREfNA8J.js')
+  err.name = 'ChunkLoadError'
+  assert.equal(reloadOnceForStaleChunk(runtime, err, { buildId: 'build-b' }), true)
+  assert.equal(reloads, 1)
+  assert.equal(reloadOnceForStaleChunk(runtime, err, { buildId: 'build-b' }), false)
+  assert.equal(reloadOnceForStaleChunk(runtime, err, { buildId: 'build-c' }), true)
+  assert.equal(reloads, 2)
 })
 
 test('vite PWA policy versions caches and never caches HTML or SaleOps', () => {

@@ -635,7 +635,7 @@ function PageLoader() {
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, reloading: false }
   }
   static getDerivedStateFromError(error) {
     return { hasError: true, error }
@@ -648,9 +648,18 @@ class ErrorBoundary extends Component {
         componentStack: info?.componentStack,
       }
     } catch { /* no-op */ }
-    reloadOnceForStaleChunk(globalThis, error)
+    if (reloadOnceForStaleChunk(
+      globalThis,
+      error,
+      { buildId: typeof __APP_BUILD_ID__ === 'string' ? __APP_BUILD_ID__ : '' },
+    )) {
+      this.setState({ reloading: true })
+    }
   }
   render() {
+    if (this.state.reloading) {
+      return <LoadingScreen />
+    }
     if (this.state.hasError) {
       const msg = this.state.error?.message || ''
       return (

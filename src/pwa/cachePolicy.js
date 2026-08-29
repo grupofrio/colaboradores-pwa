@@ -50,16 +50,28 @@ export async function takeControlOfServiceWorkers(runtime = globalThis) {
 }
 
 export function isStaleChunkError(error) {
+  const name = String(error?.name || '')
   const msg = String(error?.message || error || '')
-  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(msg)
+  return (
+    name === 'ChunkLoadError'
+    || /Failed to fetch dynamically imported(?: module)?/i.test(msg)
+    || /Importing a module script failed/i.test(msg)
+    || /error loading dynamically imported module/i.test(msg)
+    || /Loading chunk [\w.-]+ failed/i.test(msg)
+  )
 }
 
-export function reloadOnceForStaleChunk(runtime = globalThis, error) {
+export function reloadOnceForStaleChunk(runtime = globalThis, error, { buildId } = {}) {
   if (!isStaleChunkError(error)) return false
   const session = runtime?.sessionStorage
-  if (session?.getItem?.(STALE_CHUNK_RELOAD_KEY) === '1') return false
+  const stamp = String(
+    buildId
+    || (typeof runtime.__APP_BUILD_ID__ === 'string' ? runtime.__APP_BUILD_ID__ : '')
+    || '1',
+  )
+  if (session?.getItem?.(STALE_CHUNK_RELOAD_KEY) === stamp) return false
   try {
-    session?.setItem?.(STALE_CHUNK_RELOAD_KEY, '1')
+    session?.setItem?.(STALE_CHUNK_RELOAD_KEY, stamp)
   } catch {
     return false
   }
