@@ -26,7 +26,7 @@ function assertCatalogCoherenceContract(source, loaderName) {
   assert.match(loader, /const requestedCustomerId =/)
   assert.match(loader, /setCatalogCustomerId\(requestedCustomerId\)/)
   assert.ok(
-    (loader.match(/requestId !== catalogRequestSeq\.current/g) || []).length >= 2,
+    (loader.match(/shouldIgnoreLatePosCatalogResponse\(/g) || []).length >= 2,
     `${loaderName} must ignore stale success and error responses`,
   )
   assert.match(loader, /requestId === catalogRequestSeq\.current[\s\S]*setLoading\(false\)/)

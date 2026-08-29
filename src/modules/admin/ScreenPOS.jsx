@@ -45,6 +45,12 @@ import {
   posClientIdentityKey,
   requiresCanonicalPosOperate,
 } from './posFlow'
+import {
+  POS_CATALOG_UNAVAILABLE_COPY,
+  nextPosCatalogViewState,
+  posCatalogEmptyCopy,
+  shouldIgnoreLatePosCatalogResponse,
+} from './posCatalogSession.js'
 
 export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
   const { session } = useSession()
@@ -134,6 +140,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   })
 
   const [products, setProducts] = useState([])
+  const [catalogStatus, setCatalogStatus] = useState('loading')
   const [cart, setCart] = useState([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -176,6 +183,20 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
+  const catalogBlocked = requiresCanonicalPosOperate(flow)
+    && (odooUnavailable === true || capsReady !== true || scopeState !== 'ready')
+
+  const applyCatalogView = useCallback((event, payload) => {
+    const next = nextPosCatalogViewState(event, payload)
+    if (!next) return
+    setProducts(next.products)
+    setCatalogStatus(next.status)
+    if (next.status === 'unavailable') {
+      setError(next.error || POS_CATALOG_UNAVAILABLE_COPY)
+      setCart([])
+    }
+  }, [])
+
   const loadProducts = useCallback(async (selectedPartnerId) => {
     const startedFor = identityKey
     const requestId = ++catalogRequestSeq.current
@@ -183,6 +204,13 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
     setPayConfirm(null)
     setCardRef('')
     setCatalogCustomerId(null)
+    if (catalogBlocked) {
+      applyCatalogView('caps-unavailable')
+      setPricelist({ id: null, name: '' })
+      setLoading(false)
+      return false
+    }
+    applyCatalogView('load-start')
     setLoading(true)
     setError('')
     try {
@@ -192,9 +220,14 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         partnerId: selectedPartnerId || undefined,
         posScope: flow.posScope,
       })
-      if (requestId !== catalogRequestSeq.current || startedFor !== identityKeyRef.current) return false
+      if (shouldIgnoreLatePosCatalogResponse({
+        requestId,
+        currentRequestId: catalogRequestSeq.current,
+        startedFor,
+        currentIdentityKey: identityKeyRef.current,
+      })) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
-      setProducts(list)
+      applyCatalogView('load-success', { products: list })
       setPricelist({
         id: catalog?.pricelist_id || null,
         name: catalog?.pricelist_name || '',
@@ -204,16 +237,23 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
       setCatalogCustomerId(requestedCustomerId)
       return true
     } catch (e) {
-      if (requestId !== catalogRequestSeq.current || startedFor !== identityKeyRef.current) return false
+      if (shouldIgnoreLatePosCatalogResponse({
+        requestId,
+        currentRequestId: catalogRequestSeq.current,
+        startedFor,
+        currentIdentityKey: identityKeyRef.current,
+      })) return false
       logScreenError('ScreenPOS', 'getPosCatalog', e)
-      setError(flow.posScope === 'day' && e?.status === 403
-        ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
-        : (e?.message || 'Error cargando productos'))
+      applyCatalogView('load-failure', {
+        errorMessage: flow.posScope === 'day' && e?.status === 403
+          ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+          : (e?.message || POS_CATALOG_UNAVAILABLE_COPY),
+      })
       return false
     } finally {
       if (requestId === catalogRequestSeq.current && startedFor === identityKeyRef.current) setLoading(false)
     }
-  }, [companyId, flow.posScope, identityKey, warehouseId])
+  }, [applyCatalogView, catalogBlocked, companyId, flow.posScope, identityKey, warehouseId])
 
   useEffect(() => {
     catalogRequestSeq.current += 1
@@ -221,6 +261,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
     customerSearchSeq.current += 1
     manualCustomerSelectionSeq.current += 1
     setProducts([])
+    setCatalogStatus('loading')
     setCart([])
     setPricelist({ id: null, name: '' })
     setCatalogLocationName('')
@@ -631,7 +672,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
             </div>
 
             {filtered.length === 0 && (
-              <p style={{ ...typo.body, color: TOKENS.colors.textMuted, textAlign: 'center', padding: '20px 0' }}>No se encontraron productos</p>
+              <p role="status">{posCatalogEmptyCopy({ status: catalogStatus, productsLength: products.length })}</p>
             )}
 
             {/* Cart Section */}

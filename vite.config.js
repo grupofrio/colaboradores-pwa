@@ -3,6 +3,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath } from 'node:url'
+import { PWA_CACHE_ID } from './src/pwa/cachePolicy.js'
 
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -90,8 +91,21 @@ export default defineConfig(({ command, mode }) => {
           ]
         },
         workbox: {
+          cacheId: PWA_CACHE_ID,
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
+          clientsClaim: true,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          navigateFallback: null,
           runtimeCaching: [
+            {
+              urlPattern: ({ request }) => request.mode === 'navigate',
+              handler: 'NetworkOnly',
+            },
+            {
+              urlPattern: /\/odoo-api\//,
+              handler: 'NetworkOnly',
+            },
             {
               // Las llamadas a n8n NUNCA se cachean — siempre en vivo
               urlPattern: /^https:\/\/n8n\.grupofrio\.mx\//,

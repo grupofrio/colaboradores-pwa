@@ -46,6 +46,12 @@ import {
   posClientIdentityKey,
   requiresCanonicalPosOperate,
 } from '../posFlow'
+import {
+  POS_CATALOG_UNAVAILABLE_COPY,
+  nextPosCatalogViewState,
+  posCatalogEmptyCopy,
+  shouldIgnoreLatePosCatalogResponse,
+} from '../posCatalogSession.js'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -70,6 +76,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
   })
 
   const [products, setProducts] = useState([])
+  const [catalogStatus, setCatalogStatus] = useState('loading')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
@@ -104,6 +111,20 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
     setCardRef('')
   }
 
+  const catalogBlocked = requiresCanonicalPosOperate(flow)
+    && (odooUnavailable === true || capsReady !== true || scopeState !== 'ready')
+
+  const applyCatalogView = useCallback((event, payload) => {
+    const next = nextPosCatalogViewState(event, payload)
+    if (!next) return
+    setProducts(next.products)
+    setCatalogStatus(next.status)
+    if (next.status === 'unavailable') {
+      setError(next.error || POS_CATALOG_UNAVAILABLE_COPY)
+      setCart([])
+    }
+  }, [])
+
   const loadCatalog = useCallback(async (selectedPartnerId) => {
     const startedFor = identityKey
     const requestId = ++catalogRequestSeq.current
@@ -112,13 +133,21 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
     setCardRef('')
     setCatalogCustomerId(null)
     if (!warehouseId) {
-      setProducts([])
+      applyCatalogView('load-failure', {
+        errorMessage: 'Tu sesión no tiene almacén asignado. Vuelve a iniciar sesión.',
+      })
       setPricelist({ id: null, name: '' })
-      setError('Tu sesión no tiene almacén asignado. Vuelve a iniciar sesión.')
       setLoading(false)
       return
     }
+    if (catalogBlocked) {
+      applyCatalogView('caps-unavailable')
+      setPricelist({ id: null, name: '' })
+      setLoading(false)
+      return false
+    }
 
+    applyCatalogView('load-start')
     setLoading(true)
     setError('')
     try {
@@ -128,9 +157,14 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
         partnerId: selectedPartnerId || undefined,
         posScope: flow.posScope,
       })
-      if (requestId !== catalogRequestSeq.current || startedFor !== identityKeyRef.current) return false
+      if (shouldIgnoreLatePosCatalogResponse({
+        requestId,
+        currentRequestId: catalogRequestSeq.current,
+        startedFor,
+        currentIdentityKey: identityKeyRef.current,
+      })) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
-      setProducts(list)
+      applyCatalogView('load-success', { products: list })
       setPricelist({
         id: catalog?.pricelist_id || null,
         name: catalog?.pricelist_name || '',
@@ -140,15 +174,22 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
       setCatalogCustomerId(requestedCustomerId)
       return true
     } catch (e) {
-      if (requestId !== catalogRequestSeq.current || startedFor !== identityKeyRef.current) return false
-      setError(flow.posScope === 'day' && e?.status === 403
-        ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
-        : (e?.message || 'Error cargando productos'))
+      if (shouldIgnoreLatePosCatalogResponse({
+        requestId,
+        currentRequestId: catalogRequestSeq.current,
+        startedFor,
+        currentIdentityKey: identityKeyRef.current,
+      })) return false
+      applyCatalogView('load-failure', {
+        errorMessage: flow.posScope === 'day' && e?.status === 403
+          ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+          : (e?.message || POS_CATALOG_UNAVAILABLE_COPY),
+      })
       return false
     } finally {
       if (requestId === catalogRequestSeq.current && startedFor === identityKeyRef.current) setLoading(false)
     }
-  }, [companyId, flow.posScope, identityKey, warehouseId])
+  }, [applyCatalogView, catalogBlocked, companyId, flow.posScope, identityKey, warehouseId])
 
   useEffect(() => {
     catalogRequestSeq.current += 1
@@ -156,6 +197,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
     customerSearchSeq.current += 1
     manualCustomerSelectionSeq.current += 1
     setProducts([])
+    setCatalogStatus('loading')
     setCart([])
     setPricelist({ id: null, name: '' })
     setCatalogLocationName('')
@@ -562,7 +604,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
               border: `1px dashed ${TOKENS.colors.border}`,
             }}>
               <p style={{ fontSize: 13, color: TOKENS.colors.textMuted, margin: 0 }}>
-                {products.length === 0 ? 'Sin productos en este almacén' : 'Sin coincidencias'}
+                {posCatalogEmptyCopy({ status: catalogStatus, productsLength: products.length })}
               </p>
             </div>
           ) : (

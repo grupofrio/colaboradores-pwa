@@ -100,6 +100,8 @@ test('normalizePosCatalogResponse preserves products and pricelist metadata', ()
     warehouse_id: null,
     stock_location_id: null,
     stock_location_name: '',
+    assortment_enforced: false,
+    assortment_stamp: '',
     products: [{ id: 4, name: 'Bolsa de hielo' }],
   })
 })
@@ -119,6 +121,8 @@ test('normalizePosCatalogResponse maps Odoo many2one pricelist metadata', () => 
     warehouse_id: null,
     stock_location_id: null,
     stock_location_name: '',
+    assortment_enforced: false,
+    assortment_stamp: '',
     products: [{ id: 4, name: 'Bolsa de hielo' }],
   })
 })
@@ -138,6 +142,8 @@ test('normalizePosCatalogResponse maps nested pricelist metadata', () => {
     warehouse_id: null,
     stock_location_id: null,
     stock_location_name: '',
+    assortment_enforced: false,
+    assortment_stamp: '',
     products: [{ id: 5, name: 'Molido chico' }],
   })
 })

@@ -78,6 +78,28 @@ test('resetLegacyPwaState reloads once when buildId changes', async () => {
   assert.equal(store.get('gf_pwa_build_id'), 'sha-bbb')
 })
 
+test('resetLegacyPwaState asks waiting workers to skip waiting before unregister', async () => {
+  const messages = []
+  const updates = []
+  const fakeGlobal = {
+    navigator: {
+      serviceWorker: {
+        async getRegistrations() {
+          return [{
+            update: async () => { updates.push('sw') },
+            waiting: { postMessage: (payload) => { messages.push(payload) } },
+            unregister: async () => true,
+          }]
+        },
+      },
+    },
+    caches: { async keys() { return [] }, async delete() { return true } },
+  }
+  await resetLegacyPwaState(fakeGlobal)
+  assert.deepEqual(updates, ['sw'])
+  assert.deepEqual(messages, [{ type: 'SKIP_WAITING' }])
+})
+
 test('vercel.json forces no-store on HTML and service worker entrypoints', async () => {
   const { readFileSync } = await import('node:fs')
   const { fileURLToPath } = await import('node:url')

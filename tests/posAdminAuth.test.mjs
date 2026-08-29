@@ -786,6 +786,8 @@ test('admin catalog wrapper preserves authoritative backend products and priceli
     warehouse_id: 89,
     stock_location_id: null,
     stock_location_name: '',
+    assortment_enforced: false,
+    assortment_stamp: '',
     products: [{ id: 7, name: 'Bolsa hielo', price: 77.77, stock: 12 }],
   })
   assert.equal(calls[0].options.headers['X-GF-Employee-Token'], 'employee-token-test')
@@ -821,6 +823,8 @@ test('Hector catalog wrapper keeps the same authoritative product response contr
     warehouse_id: null,
     stock_location_id: null,
     stock_location_name: '',
+    assortment_enforced: false,
+    assortment_stamp: '',
     products: [{ id: 8, name: 'Hielo noche', price: 91.5, stock: 4 }],
   })
   assert.equal(calls.some((call) => call.url.includes('/get_records')), false)

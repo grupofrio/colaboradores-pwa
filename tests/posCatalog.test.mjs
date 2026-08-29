@@ -74,6 +74,8 @@ test('normalizePosCatalogResponse keeps backend catalog, location and free stock
       stock_location_name: 'CGDL/Existencias',
       pricelist_id: 83,
       pricelist_name: 'Predeterminado',
+      assortment_enforced: true,
+      assortment_stamp: 'KOLD-5',
       products: [
         {
           id: 750,
@@ -93,4 +95,6 @@ test('normalizePosCatalogResponse keeps backend catalog, location and free stock
   assert.equal(catalog.products.length, 1)
   assert.equal(catalog.products[0].id, 750)
   assert.equal(catalog.products[0].stock, 80)
+  assert.equal(catalog.assortment_enforced, true)
+  assert.equal(catalog.assortment_stamp, 'KOLD-5')
 })

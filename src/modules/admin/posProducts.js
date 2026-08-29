@@ -65,6 +65,8 @@ export function normalizePosCatalogResponse(payload) {
     warehouse_id: Number(data?.warehouse_id || 0) || null,
     stock_location_id: Number(data?.stock_location_id || 0) || null,
     stock_location_name: String(data?.stock_location_name || '').trim(),
+    assortment_enforced: Boolean(data?.assortment_enforced),
+    assortment_stamp: String(data?.assortment_stamp || '').trim(),
     products: normalizePosProductsResponse(payload),
   }
 }
