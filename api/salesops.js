@@ -1,4 +1,4 @@
-import { resolveOdooOrigin, StagingOriginError } from './_odooOrigin.js'
+import { resolveOdooOrigin, StagingOriginError, mustIsolateFromProduction } from './_odooOrigin.js'
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 const PATH_SEGMENT = /^[A-Za-z0-9_-]+$/
@@ -118,6 +118,12 @@ function sendJson(res, status, body) {
 
 export function readSalesOpsToken(env = process.env) {
   const source = env || {}
+  // Keep a static process.env.GF_SALESOPS_TOKEN read in the handler so
+  // hosting bundlers include the secret in the serverless runtime.
+  const fromStatic = source.GF_SALESOPS_TOKEN
+  if (fromStatic != null && String(fromStatic).trim()) {
+    return String(fromStatic).trim()
+  }
   for (const key of Object.keys(source)) {
     if (key.trim() === 'GF_SALESOPS_TOKEN') {
       return String(source[key] || '').trim()
@@ -126,20 +132,27 @@ export function readSalesOpsToken(env = process.env) {
   return String(source['GF_SALESOPS_TOKEN'] || '').trim()
 }
 
+function maybeSetConfiguredHeader(res, env) {
+  if (!mustIsolateFromProduction(env)) return
+  res.setHeader('x-gf-salesops-configured', readSalesOpsToken(env) ? '1' : '0')
+}
+
 export function createSalesOpsProxyHandler({
   fetchFn = globalThis.fetch,
   salesOpsToken,
   env,
 } = {}) {
   return async function salesOpsProxyHandler(req, res) {
+    const runtimeEnv = env || process.env
+    maybeSetConfiguredHeader(res, runtimeEnv)
     try {
-      const runtimeEnv = env || process.env
+      const fromEnv = readSalesOpsToken(runtimeEnv) || String(process.env.GF_SALESOPS_TOKEN || '').trim()
       const forward = buildSalesOpsRequest({
         path: req.query?.path,
         method: req.method,
         query: requestQuery(req.query),
         employeeToken: headerValue(req.headers, 'x-gf-employee-token'),
-        salesOpsToken: salesOpsToken === undefined ? readSalesOpsToken(runtimeEnv) : salesOpsToken,
+        salesOpsToken: salesOpsToken === undefined ? fromEnv : salesOpsToken,
         authorization: headerValue(req.headers, 'authorization'),
         accept: headerValue(req.headers, 'accept'),
         env: runtimeEnv,

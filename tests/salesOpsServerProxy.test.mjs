@@ -169,6 +169,61 @@ test('SalesOps proxy returns 503 when GF_SALESOPS_TOKEN is missing from env', as
   assert.match(String(res.body), /Servicio temporalmente no disponible/)
 })
 
+test('SalesOps proxy exposes configured=0/1 only on staging runtime', async () => {
+  const missing = createSalesOpsProxyHandler({
+    env: { GF_PWA_RUNTIME: 'staging' },
+    fetchFn: async () => {
+      throw new Error('upstream should not be called')
+    },
+  })
+  const missingRes = responseRecorder()
+  await missing({
+    method: 'POST',
+    query: { path: 'gf/salesops/warehouse/van_load/create_execute' },
+    headers: { 'x-gf-employee-token': employeeToken },
+    body: {},
+  }, missingRes)
+  assert.equal(missingRes.statusCode, 503)
+  assert.equal(missingRes.headers['x-gf-salesops-configured'], '0')
+
+  const present = createSalesOpsProxyHandler({
+    env: {
+      GF_PWA_RUNTIME: 'staging',
+      GF_SALESOPS_TOKEN: serverToken,
+      ODOO_ORIGIN: 'https://example-staging.dev.odoo.com',
+    },
+    fetchFn: async () => new Response('{}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  })
+  const presentRes = responseRecorder()
+  await present({
+    method: 'POST',
+    query: { path: 'gf/salesops/warehouse/van_load/create_execute' },
+    headers: { 'x-gf-employee-token': employeeToken },
+    body: {},
+  }, presentRes)
+  assert.equal(presentRes.statusCode, 200)
+  assert.equal(presentRes.headers['x-gf-salesops-configured'], '1')
+
+  const productionLike = createSalesOpsProxyHandler({
+    env: { GF_SALESOPS_TOKEN: serverToken },
+    fetchFn: async () => new Response('{}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  })
+  const productionRes = responseRecorder()
+  await productionLike({
+    method: 'POST',
+    query: { path: 'gf/salesops/warehouse/van_load/create_execute' },
+    headers: { 'x-gf-employee-token': employeeToken },
+    body: {},
+  }, productionRes)
+  assert.equal(productionRes.headers['x-gf-salesops-configured'], undefined)
+})
+
 test('SalesOps request builder rejects missing credentials, unsafe paths, and unsupported methods', () => {
   const valid = {
     path: ['gf', 'salesops', 'warehouse', 'van_load'],
