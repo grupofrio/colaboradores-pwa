@@ -6,6 +6,8 @@ const ALLOWED_PREFIXES = [
   'api/',
   'pwa-',
   'gf/',
+  'get_records',
+  'get_records_sorted',
 ]
 
 function headerValue(headers, name) {

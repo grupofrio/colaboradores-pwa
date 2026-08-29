@@ -12,6 +12,7 @@ import {
 } from '../api/_odooOrigin.js'
 import { buildOdooPwaRequest, PwaProxyError } from '../api/_odooPwaProxy.js'
 import { createEmployeeSignInProxyHandler } from '../api/employee-sign-in.js'
+import { createOdooOriginProxyHandler } from '../api/odoo-origin.js'
 import { shouldShowStagingBanner } from '../src/lib/stagingRuntime.js'
 
 const stagingHost = 'https://grupofrio-gf-staging10082026-example.dev.odoo.com'
@@ -94,6 +95,49 @@ test('login proxy returns 503 instead of calling production on preview', async (
   assert.equal(called, false)
   assert.equal(res.statusCode, 503)
   assert.match(String(res.body), /staging|producción|produccion/i)
+})
+
+test('generic get_records_sorted route is forwarded by the staging Odoo proxy', async () => {
+  const calls = []
+  const handler = createOdooOriginProxyHandler({
+    env: {
+      VERCEL_ENV: 'preview',
+      ODOO_ORIGIN: 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com',
+    },
+    fetchFn: async (url, options = {}) => {
+      calls.push({ url, options })
+      return new Response(JSON.stringify({ result: { response: [{ id: 89, code: 'CIGU' }] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    },
+  })
+  const res = {
+    headers: {},
+    statusCode: null,
+    body: null,
+    setHeader(name, value) { this.headers[name.toLowerCase()] = value },
+    status(code) { this.statusCode = code; return this },
+    send(body) { this.body = body; return this },
+  }
+  await handler({
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: 'Bearer session-token',
+      'x-gf-employee-token': 'employee-token',
+      'api-key': 'browser-api-key',
+    },
+    query: { path: 'get_records_sorted' },
+    body: { jsonrpc: '2.0', method: 'call', params: { model: 'stock.warehouse' }, id: 1 },
+  }, res)
+  assert.equal(res.statusCode, 200)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com/get_records_sorted')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer session-token')
+  assert.equal(calls[0].options.headers['X-GF-Employee-Token'], 'employee-token')
+  assert.equal(calls[0].options.headers['Api-Key'], 'browser-api-key')
 })
 
 test('vercel catch-alls no longer rewrite to production Odoo', () => {
