@@ -150,6 +150,13 @@ function maybeSetConfiguredHeader(res, env) {
   if (!mustIsolateFromProduction(env)) return
   res.setHeader('x-gf-salesops-configured', readSalesOpsToken(env) ? '1' : '0')
   res.setHeader('x-gf-salesops-probe', salesOpsTokenProbe(env))
+  const apiRaw = env && Object.prototype.hasOwnProperty.call(env, 'ODOO_PWA_SERVICE_API_KEY')
+    ? env.ODOO_PWA_SERVICE_API_KEY
+    : process.env.ODOO_PWA_SERVICE_API_KEY
+  res.setHeader(
+    'x-gf-pwa-key-probe',
+    apiRaw === undefined ? 'undef' : (String(apiRaw).trim() ? 'set' : 'empty'),
+  )
 }
 
 export function createSalesOpsProxyHandler({

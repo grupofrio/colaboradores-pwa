@@ -190,6 +190,7 @@ test('SalesOps proxy exposes configured=0/1 only on staging runtime', async () =
   assert.equal(missingRes.statusCode, 503)
   assert.equal(missingRes.headers['x-gf-salesops-configured'], '0')
   assert.equal(missingRes.headers['x-gf-salesops-probe'], 'undef')
+  assert.equal(missingRes.headers['x-gf-pwa-key-probe'], 'undef')
 
   const present = createSalesOpsProxyHandler({
     env: {
