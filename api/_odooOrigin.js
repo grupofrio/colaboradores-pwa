@@ -43,7 +43,10 @@ export function mustIsolateFromProduction(env = process.env) {
 }
 
 export function resolveOdooOrigin(env = process.env) {
-  const explicit = String(env.ODOO_ORIGIN || '').trim().replace(/\/$/, '')
+  const explicit = String(env.ODOO_ORIGIN || '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/odoo$/i, '')
   if (mustIsolateFromProduction(env)) {
     if (!isIsolatedStagingOdooOrigin(explicit)) {
       throw new StagingOriginError(
