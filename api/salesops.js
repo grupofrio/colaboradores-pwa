@@ -121,8 +121,10 @@ function sendJson(res, status, body) {
   res.status(status).send(JSON.stringify(body))
 }
 
-export function readSalesOpsToken(env = nodeEnv) {
-  const source = env || nodeEnv || {}
+export function readSalesOpsToken(env) {
+  const source = env || process.env || {}
+  const dotted = source.GF_SALESOPS_TOKEN
+  if (dotted != null && String(dotted).trim()) return String(dotted).trim()
   const bracket = source['GF_SALESOPS_TOKEN']
   if (bracket != null && String(bracket).trim()) return String(bracket).trim()
   for (const key of Object.keys(source)) {
@@ -130,14 +132,17 @@ export function readSalesOpsToken(env = nodeEnv) {
       return String(source[key] || '').trim()
     }
   }
-  return ''
+  if (env && env !== process.env && env !== nodeEnv) return ''
+  return String(process.env.GF_SALESOPS_TOKEN || nodeEnv['GF_SALESOPS_TOKEN'] || '').trim()
 }
 
-export function salesOpsTokenProbe(env = nodeEnv) {
-  const source = env || {}
-  const raw = source['GF_SALESOPS_TOKEN']
-  if (raw === undefined) return 'undef'
-  if (String(raw).trim() === '') return 'empty'
+export function salesOpsTokenProbe(env) {
+  const source = env || process.env || {}
+  const raw = source.GF_SALESOPS_TOKEN
+  const bracket = source['GF_SALESOPS_TOKEN']
+  const value = raw !== undefined ? raw : bracket
+  if (value === undefined) return 'undef'
+  if (String(value).trim() === '') return 'empty'
   return 'set'
 }
 
@@ -153,10 +158,12 @@ export function createSalesOpsProxyHandler({
   env,
 } = {}) {
   return async function salesOpsProxyHandler(req, res) {
-    const runtimeEnv = env || nodeEnv
+    const runtimeEnv = env || process.env
     maybeSetConfiguredHeader(res, runtimeEnv)
     try {
-      const fromEnv = readSalesOpsToken(runtimeEnv)
+      const fromEnv = salesOpsToken === undefined
+        ? (readSalesOpsToken(runtimeEnv) || String(process.env.GF_SALESOPS_TOKEN || '').trim())
+        : salesOpsToken
       const forward = buildSalesOpsRequest({
         path: req.query?.path,
         method: req.method,
