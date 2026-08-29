@@ -516,7 +516,6 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         company_id: companyId,
         ...(flow.posScope === undefined ? {} : { pos_scope: flow.posScope }),
         partner_id: customer.id,
-        pricelist_id: pricelist.id || undefined,
         payment_method: payConfirm,
         payment_reference: payConfirm === 'card' ? cardRef.trim() : undefined,
         lines: cart.map(c => ({ product_id: c.product_id, qty: c.qty, price_unit: c.price_unit })),

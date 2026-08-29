@@ -186,6 +186,15 @@ test('AdminPosForm and ScreenPOS guard pos.operate immediately before createSale
   assert.doesNotMatch(nav, /capabilityAllowed\(capabilities, 'pos.operate'\)/)
 })
 
+test('AdminPosForm and ScreenPOS do not send client pricelist_id on sale-create', () => {
+  const form = src('../src/modules/admin/forms/AdminPosForm.jsx')
+  const mobile = src('../src/modules/admin/ScreenPOS.jsx')
+  for (const slice of [form, mobile]) {
+    assert.match(slice, /createSaleOrder\(\{/)
+    assert.doesNotMatch(slice, /pricelist_id:\s*pricelist/)
+  }
+})
+
 test('remount and identity change do not invent pos.operate', () => {
   const operated = withOperateAllowed(GDL)
   assert.equal(canMutateCanonicalPos({

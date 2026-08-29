@@ -462,7 +462,6 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
         partner_id: customer.id,
         payment_method: payConfirm,
         payment_reference: payConfirm === 'card' ? cardRef.trim() : undefined,
-        pricelist_id: pricelist.id || undefined,
         lines: cart.map((c) => ({
           product_id: c.product_id,
           qty: c.qty,
