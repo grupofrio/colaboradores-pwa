@@ -2,8 +2,9 @@ import { env as nodeEnv } from 'node:process'
 
 import { resolveOdooOrigin, StagingOriginError, mustIsolateFromProduction } from './_odooOrigin.js'
 
-// Static identifier so hosting include-lists keep this secret on the function.
+// Static identifiers so hosting include-lists keep these secrets on the function.
 void process.env.GF_SALESOPS_TOKEN
+void process.env.GF_SALEOPS_TOKEN
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 const PATH_SEGMENT = /^[A-Za-z0-9_-]+$/
@@ -121,29 +122,49 @@ function sendJson(res, status, body) {
   res.status(status).send(JSON.stringify(body))
 }
 
-export function readSalesOpsToken(env) {
-  const source = env || process.env || {}
-  const dotted = source.GF_SALESOPS_TOKEN
-  if (dotted != null && String(dotted).trim()) return String(dotted).trim()
-  const bracket = source['GF_SALESOPS_TOKEN']
-  if (bracket != null && String(bracket).trim()) return String(bracket).trim()
-  for (const key of Object.keys(source)) {
-    if (key.trim() === 'GF_SALESOPS_TOKEN') {
-      return String(source[key] || '').trim()
+const SALESOPS_TOKEN_KEYS = ['GF_SALESOPS_TOKEN', 'GF_SALEOPS_TOKEN']
+
+function tokenFromSource(source, key) {
+  if (!source) return ''
+  const direct = source[key]
+  if (direct != null && String(direct).trim()) return String(direct).trim()
+  for (const name of Object.keys(source)) {
+    if (name.trim() === key) {
+      return String(source[name] || '').trim()
     }
   }
+  return ''
+}
+
+export function readSalesOpsToken(env) {
+  const source = env || process.env || {}
+  for (const key of SALESOPS_TOKEN_KEYS) {
+    const value = tokenFromSource(source, key)
+    if (value) return value
+  }
   if (env && env !== process.env && env !== nodeEnv) return ''
-  return String(process.env.GF_SALESOPS_TOKEN || nodeEnv['GF_SALESOPS_TOKEN'] || '').trim()
+  for (const key of SALESOPS_TOKEN_KEYS) {
+    const value = String(process.env[key] || nodeEnv[key] || '').trim()
+    if (value) return value
+  }
+  return ''
 }
 
 export function salesOpsTokenProbe(env) {
   const source = env || process.env || {}
-  const raw = source.GF_SALESOPS_TOKEN
-  const bracket = source['GF_SALESOPS_TOKEN']
-  const value = raw !== undefined ? raw : bracket
-  if (value === undefined) return 'undef'
-  if (String(value).trim() === '') return 'empty'
-  return 'set'
+  const canonical = source.GF_SALESOPS_TOKEN !== undefined
+    ? source.GF_SALESOPS_TOKEN
+    : source['GF_SALESOPS_TOKEN']
+  if (canonical !== undefined) {
+    return String(canonical).trim() ? 'set' : 'empty'
+  }
+  const typo = source.GF_SALEOPS_TOKEN !== undefined
+    ? source.GF_SALEOPS_TOKEN
+    : source['GF_SALEOPS_TOKEN']
+  if (typo !== undefined) {
+    return String(typo).trim() ? 'typo' : 'empty'
+  }
+  return 'undef'
 }
 
 function maybeSetConfiguredHeader(res, env) {

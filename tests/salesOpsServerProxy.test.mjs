@@ -118,10 +118,37 @@ test('readSalesOpsToken uses live env lookup and ignores blank or padded keys', 
   assert.equal(readSalesOpsToken({}), '')
   assert.equal(readSalesOpsToken({ GF_SALESOPS_TOKEN: `  ${serverToken}  ` }), serverToken)
   assert.equal(readSalesOpsToken({ 'GF_SALESOPS_TOKEN ': serverToken }), serverToken)
+  assert.equal(readSalesOpsToken({ GF_SALEOPS_TOKEN: serverToken }), serverToken)
   assert.equal(readSalesOpsToken({ GF_SALESOPS_TOKE_DIAG: serverToken }), '')
+  assert.equal(readSalesOpsToken({ GF_SALEOPS_TOKE_DIAG: serverToken }), '')
   assert.equal(salesOpsTokenProbe({}), 'undef')
   assert.equal(salesOpsTokenProbe({ GF_SALESOPS_TOKEN: '' }), 'empty')
   assert.equal(salesOpsTokenProbe({ GF_SALESOPS_TOKEN: serverToken }), 'set')
+  assert.equal(salesOpsTokenProbe({ GF_SALEOPS_TOKEN: serverToken }), 'typo')
+})
+
+test('SalesOps proxy accepts the misspelled GF_SALEOPS_TOKEN env name', async () => {
+  let forwarded = null
+  const handler = createSalesOpsProxyHandler({
+    env: { GF_SALEOPS_TOKEN: serverToken },
+    fetchFn: async (url, options) => {
+      forwarded = { url, options }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    },
+  })
+  const res = responseRecorder()
+  await handler({
+    method: 'POST',
+    query: { path: 'gf/salesops/warehouse/van_load/create_execute' },
+    headers: { 'x-gf-employee-token': employeeToken },
+    body: {},
+  }, res)
+  assert.equal(res.statusCode, 200)
+  assert.equal(forwarded.options.headers['X-GF-Token'], serverToken)
+  assert.equal(res.headers['x-gf-salesops-probe'], undefined)
 })
 
 test('SalesOps proxy reads GF_SALESOPS_TOKEN from env at request time and ignores client X-GF-Token', async () => {
