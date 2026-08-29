@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { buildSalesOpsRequest, createSalesOpsProxyHandler, SalesOpsProxyError } from '../api/salesops.js'
+import {
+  buildSalesOpsRequest,
+  createSalesOpsProxyHandler,
+  readSalesOpsToken,
+  SalesOpsProxyError,
+} from '../api/salesops.js'
 
 const employeeToken = 'employee-mobile-token'
 const serverToken = 'server-only-test-token'
@@ -106,6 +111,62 @@ test('SalesOps proxy fails closed when upstream reflects the server token', asyn
     assert.equal(res.headers['cache-control'], 'no-store')
     assert.doesNotMatch(String(res.body), new RegExp(serverToken))
   }
+})
+
+test('readSalesOpsToken uses live env lookup and ignores blank or padded keys', () => {
+  assert.equal(readSalesOpsToken({}), '')
+  assert.equal(readSalesOpsToken({ GF_SALESOPS_TOKEN: `  ${serverToken}  ` }), serverToken)
+  assert.equal(readSalesOpsToken({ 'GF_SALESOPS_TOKEN ': serverToken }), serverToken)
+  assert.equal(readSalesOpsToken({ GF_SALESOPS_TOKE_DIAG: serverToken }), '')
+})
+
+test('SalesOps proxy reads GF_SALESOPS_TOKEN from env at request time and ignores client X-GF-Token', async () => {
+  let forwarded = null
+  const handler = createSalesOpsProxyHandler({
+    env: { GF_SALESOPS_TOKEN: serverToken },
+    fetchFn: async (url, options) => {
+      forwarded = { url, options }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    },
+  })
+  const res = responseRecorder()
+
+  await handler({
+    method: 'POST',
+    query: { path: 'gf/salesops/warehouse/van_load/create_execute' },
+    headers: {
+      'x-gf-employee-token': employeeToken,
+      'x-gf-token': 'client-controlled-token',
+    },
+    body: { jsonrpc: '2.0', params: {} },
+  }, res)
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(forwarded.options.headers['X-GF-Token'], serverToken)
+  assert.equal(forwarded.options.headers['X-GF-Employee-Token'], employeeToken)
+})
+
+test('SalesOps proxy returns 503 when GF_SALESOPS_TOKEN is missing from env', async () => {
+  const handler = createSalesOpsProxyHandler({
+    env: {},
+    fetchFn: async () => {
+      throw new Error('upstream should not be called')
+    },
+  })
+  const res = responseRecorder()
+
+  await handler({
+    method: 'POST',
+    query: { path: 'gf/salesops/warehouse/van_load/create_execute' },
+    headers: { 'x-gf-employee-token': employeeToken },
+    body: {},
+  }, res)
+
+  assert.equal(res.statusCode, 503)
+  assert.match(String(res.body), /Servicio temporalmente no disponible/)
 })
 
 test('SalesOps request builder rejects missing credentials, unsafe paths, and unsupported methods', () => {

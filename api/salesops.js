@@ -116,20 +116,33 @@ function sendJson(res, status, body) {
   res.status(status).send(JSON.stringify(body))
 }
 
+export function readSalesOpsToken(env = process.env) {
+  const source = env || {}
+  for (const key of Object.keys(source)) {
+    if (key.trim() === 'GF_SALESOPS_TOKEN') {
+      return String(source[key] || '').trim()
+    }
+  }
+  return String(source['GF_SALESOPS_TOKEN'] || '').trim()
+}
+
 export function createSalesOpsProxyHandler({
   fetchFn = globalThis.fetch,
   salesOpsToken,
+  env,
 } = {}) {
   return async function salesOpsProxyHandler(req, res) {
     try {
+      const runtimeEnv = env || process.env
       const forward = buildSalesOpsRequest({
         path: req.query?.path,
         method: req.method,
         query: requestQuery(req.query),
         employeeToken: headerValue(req.headers, 'x-gf-employee-token'),
-        salesOpsToken: salesOpsToken === undefined ? process.env.GF_SALESOPS_TOKEN : salesOpsToken,
+        salesOpsToken: salesOpsToken === undefined ? readSalesOpsToken(runtimeEnv) : salesOpsToken,
         authorization: headerValue(req.headers, 'authorization'),
         accept: headerValue(req.headers, 'accept'),
+        env: runtimeEnv,
       })
       const body = bodyForRequest(req, forward.headers)
       const upstream = await fetchFn(forward.url, {
