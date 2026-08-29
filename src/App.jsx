@@ -23,6 +23,7 @@ import { BACKEND_CAPS, bootCapabilities, syncCapabilitiesIdentity, getOdooServic
 import { useCapabilitiesRevision } from './modules/admin/useCapabilitiesRevision'
 import { resolveGerentePilotCapabilities } from './modules/admin/gerentePilotCaps'
 import { validateContract } from './lib/capabilityContract.js'
+import { reloadOnceForStaleChunk } from './pwa/cachePolicy.js'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
@@ -647,6 +648,7 @@ class ErrorBoundary extends Component {
         componentStack: info?.componentStack,
       }
     } catch { /* no-op */ }
+    reloadOnceForStaleChunk(globalThis, error)
   }
   render() {
     if (this.state.hasError) {

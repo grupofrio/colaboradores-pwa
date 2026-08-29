@@ -7,6 +7,7 @@ import {
   PWA_CACHE_ID,
   activatePwaCaches,
   obsoleteCacheNames,
+  reloadOnceForStaleChunk,
 } from '../src/pwa/cachePolicy.js'
 
 test('obsoleteCacheNames keeps the current cache id and drops workbox leftovers', () => {
@@ -45,6 +46,29 @@ test('activatePwaCaches deletes obsolete caches and claims clients', async () =>
   assert.deepEqual(result.deleted, ['workbox-precache-v1', 'vite-runtime'])
   assert.equal(claimed, 1)
   assert.deepEqual(deleted, ['workbox-precache-v1', 'vite-runtime'])
+})
+
+test('reloadOnceForStaleChunk reloads once on a leftover dynamic import hash', () => {
+  let reloads = 0
+  const store = new Map()
+  const runtime = {
+    sessionStorage: {
+      getItem: (key) => (store.has(key) ? store.get(key) : null),
+      setItem: (key, value) => { store.set(key, String(value)) },
+    },
+    location: { reload: () => { reloads += 1 } },
+  }
+  assert.equal(
+    reloadOnceForStaleChunk(runtime, new Error('Failed to fetch dynamically imported module: https://staging.example/assets/ScreenTicket-old.js')),
+    true,
+  )
+  assert.equal(reloads, 1)
+  assert.equal(
+    reloadOnceForStaleChunk(runtime, new Error('Failed to fetch dynamically imported module: https://staging.example/assets/ScreenTicket-old.js')),
+    false,
+  )
+  assert.equal(reloads, 1)
+  assert.equal(reloadOnceForStaleChunk(runtime, new Error('No hay existencias suficientes')), false)
 })
 
 test('vite PWA policy versions caches and never caches HTML or SaleOps', () => {

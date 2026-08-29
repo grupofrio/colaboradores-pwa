@@ -1,6 +1,7 @@
 export const PWA_CACHE_PREFIX = 'gf-colaboradores-pwa'
-export const PWA_CACHE_VERSION = 'v2'
+export const PWA_CACHE_VERSION = 'v3'
 export const PWA_CACHE_ID = `${PWA_CACHE_PREFIX}-${PWA_CACHE_VERSION}`
+export const STALE_CHUNK_RELOAD_KEY = 'gf_pwa_stale_chunk_reload'
 
 export function isCurrentPwaCacheName(name, cacheId = PWA_CACHE_ID) {
   const value = String(name || '')
@@ -46,4 +47,25 @@ export async function takeControlOfServiceWorkers(runtime = globalThis) {
     }
   }))
   return registrations.length
+}
+
+export function isStaleChunkError(error) {
+  const msg = String(error?.message || error || '')
+  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(msg)
+}
+
+export function reloadOnceForStaleChunk(runtime = globalThis, error) {
+  if (!isStaleChunkError(error)) return false
+  const session = runtime?.sessionStorage
+  if (session?.getItem?.(STALE_CHUNK_RELOAD_KEY) === '1') return false
+  try {
+    session?.setItem?.(STALE_CHUNK_RELOAD_KEY, '1')
+  } catch {
+    return false
+  }
+  if (typeof runtime?.location?.reload === 'function') {
+    runtime.location.reload()
+    return true
+  }
+  return false
 }
