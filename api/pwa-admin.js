@@ -15,13 +15,20 @@ function nestedPathSegments(path) {
  * — which the PWA treats as logout.
  */
 export function buildPwaAdminProxyRequest(req = {}) {
+  const {
+    path,
+    // Vercel keeps the source wildcard beside the rewritten `path` query.
+    // It is routing metadata, not part of the Odoo endpoint contract.
+    proxyPath: _proxyPath,
+    ...forwardedQuery
+  } = req.query || {}
   return {
     method: req.method,
     headers: req.headers,
     body: req.body,
     query: {
-      ...(req.query || {}),
-      path: ['pwa-admin', ...nestedPathSegments(req.query?.path)],
+      ...forwardedQuery,
+      path: ['pwa-admin', ...nestedPathSegments(path ?? _proxyPath)],
     },
   }
 }
