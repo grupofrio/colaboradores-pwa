@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useState, useEffect, useRef } from 'react'
 import { ToastProvider } from './components/Toast'
 import AppShell from './components/AppShell'
+import StagingEnvironmentBanner from './components/StagingEnvironmentBanner'
 import { normalizeSessionRoleContext } from './lib/roleContext'
 import { SessionContext, useSessionContext } from './lib/sessionContext'
 import { buildSessionIdentity, ensureSessionScopeNonce } from './modules/supervisor-ventas/v2/sessionScope'
@@ -22,6 +23,7 @@ import { BACKEND_CAPS, bootCapabilities, syncCapabilitiesIdentity, getOdooServic
 import { useCapabilitiesRevision } from './modules/admin/useCapabilitiesRevision'
 import { resolveGerentePilotCapabilities } from './modules/admin/gerentePilotCaps'
 import { validateContract } from './lib/capabilityContract.js'
+import { reloadOnceForStaleChunk } from './pwa/cachePolicy.js'
 // E1-C.4 — gate de la superficie KOLD Tower por rol AUTORITATIVO (Odoo: session.employee.tower_status)
 import { readAuthoritativeTowerStatus } from './modules/torre/e1/loadTowerStatus'
 import { readM2Access } from './modules/planeacion/m2/access'
@@ -633,7 +635,7 @@ function PageLoader() {
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, reloading: false }
   }
   static getDerivedStateFromError(error) {
     return { hasError: true, error }
@@ -646,8 +648,18 @@ class ErrorBoundary extends Component {
         componentStack: info?.componentStack,
       }
     } catch { /* no-op */ }
+    if (reloadOnceForStaleChunk(
+      globalThis,
+      error,
+      { buildId: typeof __APP_BUILD_ID__ === 'string' ? __APP_BUILD_ID__ : '' },
+    )) {
+      this.setState({ reloading: true })
+    }
   }
   render() {
+    if (this.state.reloading) {
+      return <LoadingScreen />
+    }
     if (this.state.hasError) {
       const msg = this.state.error?.message || ''
       return (
@@ -846,6 +858,7 @@ export default function App() {
 
   return (
     <SessionContext.Provider value={{ session, login, logout, updateSession }}>
+      <StagingEnvironmentBanner />
       <CapabilityBootstrap />
       <TalentRhBootstrap />
       <ToastProvider>

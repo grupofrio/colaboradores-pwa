@@ -96,6 +96,12 @@ test('normalizePosCatalogResponse preserves products and pricelist metadata', ()
   assert.deepEqual(catalog, {
     pricelist_id: 88,
     pricelist_name: 'Cliente especial',
+    company_id: null,
+    warehouse_id: null,
+    stock_location_id: null,
+    stock_location_name: '',
+    assortment_enforced: false,
+    assortment_stamp: '',
     products: [{ id: 4, name: 'Bolsa de hielo' }],
   })
 })
@@ -111,6 +117,12 @@ test('normalizePosCatalogResponse maps Odoo many2one pricelist metadata', () => 
   assert.deepEqual(catalog, {
     pricelist_id: 88,
     pricelist_name: 'Lista cliente mayorista',
+    company_id: null,
+    warehouse_id: null,
+    stock_location_id: null,
+    stock_location_name: '',
+    assortment_enforced: false,
+    assortment_stamp: '',
     products: [{ id: 4, name: 'Bolsa de hielo' }],
   })
 })
@@ -126,6 +138,12 @@ test('normalizePosCatalogResponse maps nested pricelist metadata', () => {
   assert.deepEqual(catalog, {
     pricelist_id: 91,
     pricelist_name: 'Lista especial gerente',
+    company_id: null,
+    warehouse_id: null,
+    stock_location_id: null,
+    stock_location_name: '',
+    assortment_enforced: false,
+    assortment_stamp: '',
     products: [{ id: 5, name: 'Molido chico' }],
   })
 })

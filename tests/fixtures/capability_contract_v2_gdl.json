@@ -342,8 +342,8 @@
       "limit": null,
       "currency": null,
       "deny": {
-        "code": "phase_not_enabled",
-        "reason": "La operaci\u00f3n de esta fase a\u00fan no est\u00e1 habilitada."
+        "code": "not_granted",
+        "reason": "Capacidad no concedida."
       }
     },
     "attendance.read": {

@@ -12,9 +12,20 @@ export function getProductPrice(product) {
   )
 }
 
-export function addProductToCart(cart = [], product = {}) {
+export function nextCartQtyWouldExceedStock(cart = [], product = {}, extraQty = 1) {
   const stock = getDisplayStock(product)
   const existing = cart.find((item) => item.product_id === product.id)
+  const nextQty = (existing?.qty || 0) + extraQty
+  return stock <= 0 || nextQty > stock
+}
+
+export function addProductToCart(cart = [], product = {}, options = {}) {
+  const stock = getDisplayStock(product)
+  const existing = cart.find((item) => item.product_id === product.id)
+  const nextQty = (existing?.qty || 0) + 1
+  if (options.enforceAvailableStock && (stock <= 0 || nextQty > stock)) {
+    return cart
+  }
 
   if (existing) {
     return cart.map((item) =>
@@ -52,12 +63,15 @@ export function repriceCartFromCatalog(cart = [], products = []) {
   })
 }
 
-export function changeCartItemQty(cart = [], productId, delta) {
+export function changeCartItemQty(cart = [], productId, delta, options = {}) {
   return cart
     .map((item) => {
       if (item.product_id !== productId) return item
       const qty = item.qty + delta
       if (qty <= 0) return null
+      if (options.enforceAvailableStock && qty > Number(item.stock || 0)) {
+        return item
+      }
       return { ...item, qty }
     })
     .filter(Boolean)

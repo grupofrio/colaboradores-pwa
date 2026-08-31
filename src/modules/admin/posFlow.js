@@ -174,6 +174,25 @@ export function requiresCanonicalPosOperate(flow = ADMIN_POS_FLOW) {
   return true
 }
 
+export function posClientIdentityKey({
+  flow = ADMIN_POS_FLOW,
+  sessionIdentity = '',
+  companyId = null,
+  warehouseId = null,
+} = {}) {
+  const company = companyId || ''
+  const warehouse = warehouseId || ''
+  if (requiresCanonicalPosOperate(flow)) {
+    return ['admin-pos', sessionIdentity || '', company, warehouse].join('|')
+  }
+  return ['other-pos', flow?.posScope || '', company, warehouse].join('|')
+}
+
+export function emptyPosCustomer(flow = ADMIN_POS_FLOW) {
+  if (requiresCanonicalPosOperate(flow)) return { id: null, name: '' }
+  return { id: null, name: flow?.defaultCustomerName || 'VENTA PUBLICO' }
+}
+
 export function canMutateCanonicalPos({
   flow = ADMIN_POS_FLOW,
   contract,

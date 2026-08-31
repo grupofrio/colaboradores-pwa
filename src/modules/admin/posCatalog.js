@@ -11,8 +11,9 @@ export function buildWarehouseStockByProduct(quants = []) {
 }
 
 export function mergeProductsWithWarehouseStock(products = [], stockByProduct = {}) {
+  // The server catalog is authoritative. Do not drop rows just because the
+  // global available_in_pos flag is false (warehouse allowlist can include them).
   return products
-    .filter((row) => row.available_in_pos !== false)
     .map((row) => ({
       id: row.id,
       name: row.name,
