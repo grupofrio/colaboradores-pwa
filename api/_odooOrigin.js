@@ -3,6 +3,7 @@ const PRODUCTION_ODOO_HOSTS = new Set([
   'www.grupofrio.odoo.com',
   'grupofrio-gf.odoo.com',
 ])
+const STAGING_ODOO_HOST = /^grupofrio-gf-staging280826-\d+\.dev\.odoo\.com$/
 
 export class StagingOriginError extends Error {
   constructor(message = 'Backend staging no configurado.') {
@@ -24,10 +25,33 @@ export function isProductionOdooOrigin(origin) {
   return PRODUCTION_ODOO_HOSTS.has(hostnameOf(origin))
 }
 
-export function isIsolatedStagingOdooOrigin(origin) {
-  const host = hostnameOf(origin)
-  if (!host || isProductionOdooOrigin(origin)) return false
-  return host.endsWith('.dev.odoo.com') && host.includes('staging')
+function normalizeOdooOrigin(origin) {
+  return String(origin || '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/odoo$/i, '')
+}
+
+export function isIsolatedStagingOdooOrigin(origin, authorizedOrigin) {
+  const normalized = normalizeOdooOrigin(origin)
+  const authorized = normalizeOdooOrigin(authorizedOrigin)
+  if (!normalized || normalized !== authorized || isProductionOdooOrigin(normalized)) return false
+
+  try {
+    const url = new URL(normalized)
+    return (
+      url.protocol === 'https:'
+      && !url.username
+      && !url.password
+      && !url.port
+      && (url.pathname === '' || url.pathname === '/')
+      && !url.search
+      && !url.hash
+      && STAGING_ODOO_HOST.test(url.hostname.toLowerCase())
+    )
+  } catch {
+    return false
+  }
 }
 
 export function mustIsolateFromProduction(env = process.env) {
@@ -43,14 +67,12 @@ export function mustIsolateFromProduction(env = process.env) {
 }
 
 export function resolveOdooOrigin(env = process.env) {
-  const explicit = String(env.ODOO_ORIGIN || '')
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/odoo$/i, '')
+  const explicit = normalizeOdooOrigin(env.ODOO_ORIGIN)
   if (mustIsolateFromProduction(env)) {
-    if (!isIsolatedStagingOdooOrigin(explicit)) {
+    const authorized = normalizeOdooOrigin(env.GF_ALLOWED_ODOO_ORIGIN)
+    if (!isIsolatedStagingOdooOrigin(explicit, authorized)) {
       throw new StagingOriginError(
-        'Frontend staging/preview no puede usar el backend de producción.',
+        'Frontend staging/preview requiere el origen exacto autorizado de Odoo staging.',
       )
     }
     return explicit

@@ -223,7 +223,8 @@ test('SalesOps proxy exposes configured=0/1 only on staging runtime', async () =
     env: {
       GF_PWA_RUNTIME: 'staging',
       GF_SALESOPS_TOKEN: serverToken,
-      ODOO_ORIGIN: 'https://example-staging.dev.odoo.com',
+      ODOO_ORIGIN: 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com',
+      GF_ALLOWED_ODOO_ORIGIN: 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com',
     },
     fetchFn: async () => new Response('{}', {
       status: 200,

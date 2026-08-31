@@ -16,11 +16,13 @@ import { createOdooOriginProxyHandler } from '../api/odoo-origin.js'
 import { shouldShowStagingBanner } from '../src/lib/stagingRuntime.js'
 
 const stagingHost = 'https://grupofrio-gf-staging10082026-example.dev.odoo.com'
+const authorizedStagingHost = 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com'
 
 test('production Odoo hosts are recognized and rejected for staging isolation', () => {
   assert.equal(isProductionOdooOrigin('https://grupofrio-gf.odoo.com'), true)
   assert.equal(isProductionOdooOrigin('https://grupofrio.odoo.com'), true)
-  assert.equal(isIsolatedStagingOdooOrigin(stagingHost), true)
+  assert.equal(isIsolatedStagingOdooOrigin(stagingHost, stagingHost), false)
+  assert.equal(isIsolatedStagingOdooOrigin(authorizedStagingHost, authorizedStagingHost), true)
   assert.equal(isIsolatedStagingOdooOrigin('https://grupofrio-gf.odoo.com'), false)
 })
 
@@ -40,9 +42,25 @@ test('preview and staging runtimes fail closed without an isolated staging origi
     }),
     StagingOriginError,
   )
+  assert.throws(
+    () => resolveOdooOrigin({ VERCEL_ENV: 'preview', ODOO_ORIGIN: authorizedStagingHost }),
+    StagingOriginError,
+  )
+  assert.throws(
+    () => resolveOdooOrigin({
+      VERCEL_ENV: 'preview',
+      ODOO_ORIGIN: authorizedStagingHost,
+      GF_ALLOWED_ODOO_ORIGIN: 'https://grupofrio-gf-staging280826-99999999.dev.odoo.com',
+    }),
+    StagingOriginError,
+  )
   assert.equal(
-    resolveOdooOrigin({ VERCEL_ENV: 'preview', ODOO_ORIGIN: stagingHost }),
-    stagingHost,
+    resolveOdooOrigin({
+      VERCEL_ENV: 'preview',
+      ODOO_ORIGIN: authorizedStagingHost,
+      GF_ALLOWED_ODOO_ORIGIN: authorizedStagingHost,
+    }),
+    authorizedStagingHost,
   )
   assert.equal(resolveOdooOrigin({}), 'https://grupofrio-gf.odoo.com')
 })
@@ -52,6 +70,7 @@ test('resolveOdooOrigin strips trailing /odoo from copied Odoo.sh URLs', () => {
     resolveOdooOrigin({
       VERCEL_ENV: 'preview',
       ODOO_ORIGIN: 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com/odoo',
+      GF_ALLOWED_ODOO_ORIGIN: 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com',
     }),
     'https://grupofrio-gf-staging280826-37133857.dev.odoo.com',
   )
@@ -103,6 +122,7 @@ test('generic get_records_sorted route is forwarded by the staging Odoo proxy', 
     env: {
       VERCEL_ENV: 'preview',
       ODOO_ORIGIN: 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com',
+      GF_ALLOWED_ODOO_ORIGIN: 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com',
     },
     fetchFn: async (url, options = {}) => {
       calls.push({ url, options })
