@@ -2,10 +2,25 @@
 // Endpoints: /gf/salesops/supervisor/v2/notes/{list,create,delete}
 // Autoridad: X-GF-Employee-Token. No enviar author_id/company_id como autoridad.
 // subject_type=vendor → employee_id; subject_type=customer → partner_id (backend).
+//
+// V2 OFF rollback (canonical shared capability):
+// - Notas es capacidad compartida independiente del shell flag Supervisor V2.
+// - V2 OFF y V2 ON montan las mismas pantallas y el mismo contrato
+//   `/gf/salesops/supervisor/v2/notes/*` (no hay fallback localStorage / IS_STUB).
+// - Rollback del shell NO debe romper lecturas: las rutas /equipo/notas NO usan
+//   V2ExcludedRoute; este servicio siempre habla V2.
+// - Con `supervisor_writes` OFF el backend responde FEATURE_DISABLED: unwrap /
+//   list/create DEBEN lanzar (UI muestra error, nunca lista vacía exitosa).
 // ─────────────────────────────────────────────────────────────────────────────
-import { api, ApiError } from '../../lib/api.js'
+import { api as defaultApi, ApiError } from '../../lib/api.js'
 
 export const IS_STUB = false
+
+/** @internal test-only — inject api mock; pass null to restore. */
+let _api = defaultApi
+export function setNotesTransportForTests(fn) {
+  _api = typeof fn === 'function' ? fn : defaultApi
+}
 
 export const NOTES_V2 = Object.freeze({
   list: '/gf/salesops/supervisor/v2/notes/list',
@@ -46,7 +61,7 @@ function normalizeNote(n) {
 }
 
 async function postNotes(path, data) {
-  const raw = await api('POST', path, {
+  const raw = await _api('POST', path, {
     meta: { request_id: requestId('notes') },
     data: data || {},
   })

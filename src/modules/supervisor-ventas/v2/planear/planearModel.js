@@ -304,13 +304,17 @@ export function resourceOptions(items = [], planId = 0, currentId = 0) {
   const pid = Number(planId || 0)
   return (Array.isArray(items) ? items : []).map((it) => {
     const planIds = planIdsOfResource(it)
-    // Ocupado en OTRA ruta del día: cualquier plan distinto del actual.
-    const busyElsewhere = planIds.some((id) => id !== pid)
+    // Otras rutas del día (excluye el plan actual): reutilizable, solo se etiqueta.
+    const assignedPlanIds = planIds
+    const elsewhereCount = planIds.filter((id) => id !== pid).length
+    const busyElsewhere = elsewhereCount > 0
     return {
       id: it.id,
       name: it.name,
       capacity_kg: it.capacity_kg,
       busyElsewhere,
+      elsewhereCount,
+      assignedPlanIds,
       isCurrent: Number(it.id) === Number(currentId || 0),
     }
   })

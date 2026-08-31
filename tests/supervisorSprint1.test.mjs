@@ -134,17 +134,21 @@ test('P0: los recursos se leen de assigned_plan_ids (LISTA), no del singular', (
   assert.equal(derivePlanAssignment(resources, 9999).vehicle, null)
 })
 
-test('P0: no se puede doblar una unidad ocupada en otra ruta del día', () => {
+test('P0: recurso en otra ruta sigue marcado busyElsewhere (reuso selectable, no bloqueo UI)', () => {
   const items = [
     { id: 9, name: 'Isuzu', assigned_plan_ids: [6870] },   // este plan
-    { id: 8, name: 'Nissan', assigned_plan_ids: [6868] },  // OTRA ruta ⇒ bloqueada
+    { id: 8, name: 'Nissan', assigned_plan_ids: [6868] },  // OTRA ruta ⇒ etiquetada
     { id: 7, name: 'Libre', assigned_plan_ids: [] },
+    { id: 6, name: 'Multi', assigned_plan_ids: [6868, 6871] },
   ]
   const opts = resourceOptions(items, 6870, 9)
   assert.equal(opts.find((o) => o.id === 8).busyElsewhere, true, 'ocupada en otra ruta')
-  assert.equal(opts.find((o) => o.id === 9).busyElsewhere, false, 'la de ESTE plan no se bloquea')
+  assert.equal(opts.find((o) => o.id === 8).elsewhereCount, 1)
+  assert.equal(opts.find((o) => o.id === 9).busyElsewhere, false, 'la de ESTE plan no se marca elsewhere')
+  assert.equal(opts.find((o) => o.id === 9).elsewhereCount, 0)
   assert.equal(opts.find((o) => o.id === 7).busyElsewhere, false, 'libre')
   assert.equal(opts.find((o) => o.id === 9).isCurrent, true)
+  assert.equal(opts.find((o) => o.id === 6).elsewhereCount, 2, 'también en 2 rutas')
 })
 
 test('P0: publicar NO se pre-bloquea en el cliente (el alcance lo decide el servidor)', () => {

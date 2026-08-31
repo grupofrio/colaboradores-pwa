@@ -13,6 +13,7 @@ import {
   collectUnmappedPlans, unmappedAttentionLevel, buildSharedPlanIndex, sharedPlanLabel,
   uniquePublishedPlanCount, assignmentLabel, sortUnmappedPlans, unmappedDateLabel,
   buildSharedPlanIndexByDate, planIdsFromCell,
+  resolveTargetRouteId, assertSourcesZoneCompatible, MAX_OPERATIONAL_SOURCES,
 } from '../src/modules/supervisor-ventas/v2/planear/routesWeekModel.js'
 
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8')
@@ -472,4 +473,96 @@ test('wiring: alerta unmapped + copy operativo en Mis planes de mañana', () => 
   assert.match(m, /Unidad/)
   assert.match(m, /uniquePublishedPlanCount/)
   assert.match(m, /data-shared/)
+})
+
+// ── P1 multi-plan fail-closed: routeId + zone compatibility ──────────────────
+
+test('MAX_OPERATIONAL_SOURCES=2 contractual (aligned backend MAX_SOURCES)', () => {
+  assert.equal(MAX_OPERATIONAL_SOURCES, 2)
+  const model = src('modules/supervisor-ventas/v2/planear/routesWeekModel.js')
+  assert.match(model, /MAX_SOURCES\s*=\s*2|backend MAX_SOURCES/)
+})
+
+test('resolveTargetRouteId: 1 source / shared / none / conflict fail-closed', () => {
+  assert.deepEqual(resolveTargetRouteId([{ routeId: 7 }]), { routeId: 7, error: null })
+  assert.deepEqual(
+    resolveTargetRouteId([{ routeId: 7 }, { routeId: 7 }]),
+    { routeId: 7, error: null },
+  )
+  assert.deepEqual(resolveTargetRouteId([{ routeId: 0 }, {}]), { routeId: 0, error: null })
+  const conflict = resolveTargetRouteId([{ routeId: 7 }, { routeId: 9 }])
+  assert.equal(conflict.routeId, 0)
+  assert.match(conflict.error, /rutas distintas/i)
+  // Nunca silencioso first-find
+  const mis = src('modules/supervisor-ventas/v2/planear/MisRutasManana.jsx')
+  assert.doesNotMatch(mis, /sources\.find\(\(s\) => s\.routeId\)\?\.routeId/)
+  assert.match(mis, /resolveTargetRouteId/)
+})
+
+test('assertSourcesZoneCompatible: 1 source + 2 compatible OK', () => {
+  assert.equal(assertSourcesZoneCompatible([{ tipo: 'SP', id: 39, polygon: { id: 26 } }]).ok, true)
+  const compat = assertSourcesZoneCompatible([
+    { tipo: 'SP', id: 39, polygon: { id: 26 } },
+    { tipo: 'SP', id: 40, polygon: { id: 26 } },
+  ])
+  assert.equal(compat.ok, true)
+  assert.equal(compat.error, null)
+  const zone = zoneFromSources([
+    { tipo: 'SP', id: 39, polygon: { id: 26 } },
+    { tipo: 'SO', id: 15 },
+  ])
+  assert.equal(zone.subpolygonId, 39)
+  assert.equal(zone.polygonId, 26)
+  assert.equal(zone.segmentId, 15)
+  assert.equal(assertSourcesZoneCompatible([
+    { tipo: 'SP', id: 39, polygon: { id: 26 } },
+    { tipo: 'SO', id: 15 },
+  ]).ok, true)
+})
+
+test('assertSourcesZoneCompatible: polygon / sub-parent conflict fail-closed', () => {
+  const polyConflict = assertSourcesZoneCompatible([
+    { tipo: 'P', id: 26 },
+    { tipo: 'P', id: 27 },
+  ])
+  assert.equal(polyConflict.ok, false)
+  assert.match(polyConflict.error, /polígonos distintos/i)
+
+  const subConflict = assertSourcesZoneCompatible([
+    { tipo: 'SP', id: 39, polygon: { id: 26 } },
+    { tipo: 'SP', id: 40, polygon: { id: 27 } },
+  ])
+  assert.equal(subConflict.ok, false)
+
+  const segParentsConflict = assertSourcesZoneCompatible([
+    { tipo: 'SO', id: 15, polygon: { id: 26 } },
+    { tipo: 'SO', id: 16, polygon: { id: 27 } },
+  ])
+  assert.equal(segParentsConflict.ok, false)
+
+  // Segmentos sin padre conocido: OK (no inventar conflicto)
+  assert.equal(assertSourcesZoneCompatible([
+    { tipo: 'SO', id: 15 },
+    { tipo: 'SO', id: 16 },
+  ]).ok, true)
+})
+
+test('resolveArmarZone: no hibrida sources incompatibles', () => {
+  const bad = resolveArmarZone({ src: 'P:26,P:27' })
+  assert.equal(bad.polygonId, 0)
+  assert.equal(bad.subpolygonId, 0)
+  assert.match(bad.zoneError || '', /polígonos/i)
+  const good = resolveArmarZone({ src: 'SP:39@P:26,SP:40@P:26' })
+  assert.equal(good.polygonId, 26)
+  assert.ok(!good.zoneError)
+})
+
+test('wiring: MisRutasManana assert zona + routeId antes de goArmar; matriz setea selectError', () => {
+  const mis = src('modules/supervisor-ventas/v2/planear/MisRutasManana.jsx')
+  assert.match(mis, /assertSourcesZoneCompatible/)
+  assert.match(mis, /resolveTargetRouteId/)
+  assert.match(mis, /zoneCheck\.error/)
+  const m = src('modules/supervisor-ventas/v2/planear/RutasMananaMatriz.jsx')
+  assert.match(m, /setSelectError\(err\)/)
+  assert.match(m, /const err = onArmarSources\(selected\)/)
 })

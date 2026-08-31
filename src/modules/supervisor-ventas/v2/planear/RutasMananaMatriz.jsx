@@ -235,12 +235,14 @@ export default function RutasMananaMatriz({ onOpenRoute, onArmarSources }) {
   }
   const armarSelected = () => {
     if (!selected.length) return
-    if (onArmarSources) onArmarSources(selected)
-    else {
-      const first = selected[0]
-      const row = (state.data?.rows || []).find((r) => r.key === first.key)
-      if (row) open(row)
+    if (onArmarSources) {
+      const err = onArmarSources(selected)
+      if (err) setSelectError(err)
+      return
     }
+    const first = selected[0]
+    const row = (state.data?.rows || []).find((r) => r.key === first.key)
+    if (row) open(row)
   }
 
   const shell = (children) => (

@@ -8,7 +8,13 @@ import { useSearchParams } from 'react-router-dom'
 
 import RutasMananaMatriz from './RutasMananaMatriz'
 import PlanearMananaTab from './PlanearMananaTab'
-import { encodeSourcesParam, resolveArmarZone, zoneFromSources } from './routesWeekModel'
+import {
+  encodeSourcesParam,
+  resolveArmarZone,
+  zoneFromSources,
+  resolveTargetRouteId,
+  assertSourcesZoneCompatible,
+} from './routesWeekModel'
 
 export default function MisRutasManana() {
   const [params, setParams] = useSearchParams()
@@ -49,8 +55,12 @@ export default function MisRutasManana() {
     <RutasMananaMatriz
       onOpenRoute={(routeId, zone, rows) => goArmar(routeId, zone, rows)}
       onArmarSources={(sources) => {
-        const routeId = sources.find((s) => s.routeId)?.routeId || 0
-        goArmar(routeId, zoneFromSources(sources), sources)
+        const zoneCheck = assertSourcesZoneCompatible(sources)
+        if (zoneCheck.error) return zoneCheck.error
+        const resolved = resolveTargetRouteId(sources)
+        if (resolved.error) return resolved.error
+        goArmar(resolved.routeId, zoneFromSources(sources), sources)
+        return null
       }}
     />
   )

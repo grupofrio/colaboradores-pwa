@@ -252,9 +252,9 @@ function ResourceLists({ resources }) {
   )
 }
 
-// Un selector de recurso (unidad/chofer/vendedor). Marca los ocupados en otra
-// ruta del día como deshabilitados (no se puede doblar). AA: label + estado en
-// texto, no solo color.
+// Un selector de recurso (unidad/chofer/vendedor). Recursos ya en otra ruta del
+// día siguen seleccionables (reuso permitido); se etiquetan con cuántas otras
+// rutas los usan. AA: label + estado en texto, no solo color.
 function ResourcePickerRow({ label, testid, options, currentId, onChange, busy, withCapacity = false }) {
   return (
     <div style={{ marginBottom: 12 }}>
@@ -269,9 +269,12 @@ function ResourcePickerRow({ label, testid, options, currentId, onChange, busy, 
         <option value="">{currentId ? 'Cambiar…' : 'Sin asignar — elige…'}</option>
         {options.map((o) => {
           const cap = withCapacity && o.capacity_kg != null ? ` · ${capacityLabel(o.capacity_kg)}` : ''
-          const busyTag = o.busyElsewhere && !o.isCurrent ? ' — en otra ruta' : ''
+          const n = Number(o.elsewhereCount || 0)
+          const busyTag = n > 0 && !o.isCurrent
+            ? ` — también en ${n} ruta${n === 1 ? '' : 's'}`
+            : ''
           return (
-            <option key={o.id} value={o.id} disabled={o.busyElsewhere && !o.isCurrent}>
+            <option key={o.id} value={o.id}>
               {o.name}{cap}{busyTag}
             </option>
           )
@@ -326,7 +329,7 @@ function ResourcePicker({ resources, planId, assignment, coverage, onAssign, bus
       )}
       <div style={{ fontSize: 11, color: C.textLow, marginTop: 8, lineHeight: 1.5 }}>
         Reasignar aquí cambia la unidad/persona del plan (incluso a última hora). Un recurso
-        ya en otra ruta del día aparece deshabilitado para no doblarlo.
+        ya en otra ruta del día sigue seleccionable y se marca como «también en N rutas».
       </div>
     </Card>
   )

@@ -84,7 +84,7 @@ Datos extraídos del inventario realizado el 2026-04-27. Las columnas **Validado
 | `almacen-pt` | Almacenista PT | 12 | 75%–83% | parcial | parcial (5 unit tests) | G013 cerrado 2026-04-27; validación de inventario físico pendiente durante rollout de capacitación. Mitigación preventiva en G026 | Sebastián |
 | `entregas` | Almacenista Entregas | 9 | 82%–90% | **parcial — QA PASS para load-execute (PR #25, Héctor + Manuel), return picking (PR #24), live-inventory producto 760 (PR #27)** | parcial (1 unit test) | Pallet reject sin log de responsable (G019). Merma positiva con stock libre real pendiente de QA explícito. | Sebastián |
 | `ruta` | Jefe de Ruta, Auxiliar de Ruta (secundario) | 11 | 75%–85% | **parcial — `accept-load` validado en QA con carga por forecast 2026-04-26 (PR #25). Vehicle checklist backend validado e integrado en frontend (`/pwa-ruta/vehicle-checklist*`)** | no | Corte/liquidación persisten en localStorage (G016); tenancy split van + CEDIS resuelto en backend (no aplica al PWA) | Sebastián |
-| `supervisor-ventas` | Supervisor de Ventas | 12 | 78%–93% | **parcial — forecast-create QA PASS con Aida 2026-04-27 (forecast id=18, state=`draft`, analytic_account_id=820, channel `van`). `forecast-confirm` no fue ejecutado en ese QA.** | no | Tareas y notas en `IS_STUB` (localStorage) (G006) | Sebastián |
+| `supervisor-ventas` | Supervisor de Ventas | 12 | 78%–93% | **parcial — forecast-create QA PASS con Aida 2026-04-27 (forecast id=18, state=`draft`, analytic_account_id=820, channel `van`). `forecast-confirm` no fue ejecutado en ese QA.** | no | Tareas/Notas en contrato V2 live (`IS_STUB=false`); escrituras gated por `supervisor_writes` | Sebastián |
 | `torre` | Operador Torres (fuera de scope) | 2 | desconocido | desconocido | no | Validación requisiciones | Sebastián |
 | `transformaciones` | Transversal | 1 + helpers | desconocido | desconocido | sí (helpers) | — | Sebastián |
 | `screens/` (universales) | Todos | 6 (Login, Home, KPIs, Surveys, Badges, Profile) | 80% | parcial (login validado) | no | Metabase token stub; surveys/badges via n8n no validado | Sebastián |
@@ -612,7 +612,7 @@ activo, vista previa, historial, impresión, apertura, cierre o reapertura.
 | `/pwa-pt/*` | Odoo directo | ~25 | live |
 | `/pwa-entregas/*` | Odoo directo | ~17 | live |
 | `/pwa-ruta/*` | Odoo directo | ~13 | live (corte/liquidación localStorage gap) |
-| `/pwa-supv/*` | Odoo directo | ~20 | live (tareas/notas IS_STUB localStorage) |
+| `/pwa-supv/*` | Odoo directo | ~20 | live (tareas/notas → V2 `/gf/salesops/supervisor/v2/tasks|notes`, `IS_STUB=false`) |
 | `/pwa/evidence/upload` | Odoo directo | 1 | optional (no dispara logout en 401) |
 | `/pwa-surveys`, `/pwa-badges` | n8n | 2 | live (no validado runtime) |
 | `/gf/logistics/api/employee/*` | n8n legacy | ~5 | legacy (en proceso de migración a Odoo directo) |
@@ -831,7 +831,7 @@ Endpoints ~20 en [`src/modules/supervisor-ventas/api.js`](../src/modules/supervi
 | `/pwa-supv/team`, `/team-routes`, `/team-targets`, `/kpi-snapshots` | live |
 | `/pwa-supv/forecast-create` | **PR #26 + commits `b968e43`, `46c262b`, `2dd0b08`.** Live. Resuelve `analytic_account_id` en cascada: (1) `body.analytic_account_id` override; (2) `body.sucursal` legacy; (3) `getSession().employee.x_analytic_account_id` desde JWT; (4) **fallback RPC** sobre `hr.employee.x_analytic_account_id` cuando JWT no lo trae todavía. Si falta en todos, lanza `ApiError` accionable con `code: 'missing_x_analytic_account_id'` y mensaje claro al usuario. Normaliza `channel` a lowercase (`'Van'` → `'van'`) antes de mandar al modelo. **QA PASS Aida 2026-04-27**: forecast id=18, state=`draft`, analytic_account_id=820, channel=`van`. Implementación en [`src/lib/api.js:6046-6145`](../src/lib/api.js). |
 | `/pwa-supv/forecasts`, `/forecast-confirm`, `/forecast-cancel` | live (forecast-confirm no fue ejercitado en QA del 2026-04-27). |
-| `/pwa-supv/tasks/*`, `/notes/*` | **Stub frontend** — `IS_STUB=true` en [`tareasService.js`](../src/modules/supervisor-ventas/tareasService.js) y [`notasService.js`](../src/modules/supervisor-ventas/notasService.js). Datos en localStorage. Gap G006 (P1). |
+| `/pwa-supv/tasks/*`, `/notes/*` | **Legacy paths retirados en PWA.** Tareas/Notas usan contrato V2 canónico `/gf/salesops/supervisor/v2/tasks|notes/*` vía [`tareasService.js`](../src/modules/supervisor-ventas/tareasService.js) / [`notasService.js`](../src/modules/supervisor-ventas/notasService.js) (`IS_STUB=false`). Capacidad compartida independiente del shell flag Supervisor V2 (mismas pantallas ON/OFF). Con `supervisor_writes` OFF el backend responde `FEATURE_DISABLED` y la UI debe mostrarlo (no lista vacía exitosa). |
 | `/pwa-supv/customers/inactive`, `/recovery` | live |
 
 ### 7.11 Administración de asistencias de Iguala (`gf_hr_ops`)
@@ -1092,12 +1092,12 @@ Los 11 roles operativos de sucursal son el scope oficial del sistema: **9 primar
 | Módulos visibles | `supervisor_ventas`, universales |
 | Rutas | `/equipo`, `/equipo/vendedor/:vendedorId`, `/sin-visitar`, `/score-semanal`, `/cierre`, `/dashboard`, `/pronostico`, `/metas`, `/tareas`, `/notas`, `/recuperacion`, `/nota-rapida` |
 | Pantallas (12) | `ScreenControlComercial`, `ScreenDashboardVentas`, `ScreenPronostico`, `ScreenMetasVendedores`, `ScreenTareasSupervisor`, `ScreenNotasCliente`, `ScreenClientesRecuperacion`, `ScreenDetalleVendedor`, `ScreenClientesSinVisitar`, `ScreenScoreSemanal`, `ScreenCierreOperativo`, `ScreenNotaRapida` |
-| Endpoints clave | `/pwa-supv/team`, `/team-routes`, `/forecast-*`, `/team-targets`, `/kpi-snapshots`, `/tasks/*`, `/notes/*`, `/customers/*` |
-| Restricciones | Sin role-gating de ruta específico (solo PrivateRoute). |
+| Endpoints clave | `/pwa-supv/team`, `/team-routes`, `/forecast-*`, `/team-targets`, `/kpi-snapshots`, `/customers/*`; Tareas/Notas: `/gf/salesops/supervisor/v2/tasks|notes/*` |
+| Restricciones | Sin role-gating de ruta específico (solo PrivateRoute). Tareas/Notas: canonical shared capability — mismas pantallas con Supervisor V2 ON u OFF (sin `V2ExcludedRoute`); `supervisor_writes` OFF ⇒ `FEATURE_DISABLED` visible en UI. |
 | Estado | 78%–93% completitud frontend |
 | Validado E2E | **parcial — forecast-create QA PASS con Aida 2026-04-27**: forecast id=18, state=`draft`, analytic_account_id=820, channel=`van`. `forecast-confirm` no fue ejecutado en ese QA. |
 | Tests | no |
-| Riesgos abiertos | Tareas y notas en `IS_STUB` (localStorage). Banner visible "modo temporal". Datos no sincronizan entre dispositivos. Gap G006. |
+| Riesgos abiertos | Con `supervisor_writes` OFF, writes de Tareas/Notas fallan con `FEATURE_DISABLED` (UI debe mostrar error). Shell V2 ON/OFF no cambia el contrato de Tareas/Notas. |
 | Fixes recientes | PR #26 + commits `b968e43`, `46c262b`, `2dd0b08`. `forecast-create` ahora resuelve `analytic_account_id` en cascada (body → JWT → RPC fallback `hr.employee.x_analytic_account_id`); normaliza `channel` a lowercase; lanza `ApiError` accionable cuando RRHH no tiene `x_analytic_account_id` poblado. |
 
 ### 8.10 Auxiliar de Producción (rol secundario)
@@ -1472,11 +1472,12 @@ Tomadas de la lectura del código real, no de un linter genérico.
 - **Decisión.** Login y sesión nunca contienen el secreto. La PWA envía sólo la identidad de empleado; el proxy restringido de Vercel agrega `GF_SALESOPS_TOKEN` exclusivamente para `/gf/salesops/*`.
 - **Consecuencias.** El bundle y `localStorage` no exponen la credencial global. El token de voz sigue siendo un riesgo independiente en G003.
 
-### ADR-06 — Stub-adapter para servicios sin backend
+### ADR-06 — Stub-adapter para servicios sin backend (histórico → V2 live)
 
-- **Contexto.** Sprint de productivo cerró antes que el backend de tareas/notas. Necesitamos UI funcional sin endpoints reales.
-- **Decisión.** Servicios `tareasService` y `notasService` exportan `IS_STUB=true` y persisten en `localStorage`. Cuando backend exista, cambiar `IS_STUB=false` y descomentar `api()` calls — la firma no cambia.
-- **Consecuencias.** UI estable. **Riesgo:** datos no sincronizan entre dispositivos, banner visible "modo temporal" — gap G006 (P1).
+- **Contexto.** Sprint de productivo cerró antes que el backend de tareas/notas. Necesitábamos UI funcional sin endpoints reales.
+- **Decisión (original).** Servicios `tareasService` y `notasService` exportaban `IS_STUB=true` y persistían en `localStorage`.
+- **Estado actual.** `IS_STUB=false`. Contrato canónico V2 `/gf/salesops/supervisor/v2/tasks|notes/*`. Capacidad compartida independiente del shell Supervisor V2: las rutas `/equipo/tareas` y `/equipo/notas` no usan `V2ExcludedRoute`; V2 OFF y V2 ON montan las mismas pantallas y el mismo contrato. Rollback del shell no debe romper lecturas. Con flag `supervisor_writes` OFF el backend responde `FEATURE_DISABLED` y la UI debe mostrarlo (nunca lista vacía exitosa).
+- **Consecuencias.** Datos en backend; sin banner “modo temporal” de stub. Gap G006 cerrado en el contrato de lectura/escritura V2.
 
 ### ADR-07 — KPIs no disponibles sin cifras simuladas
 
@@ -1590,7 +1591,7 @@ Una entrada por trampa: síntoma → causa → fix.
 Lista priorizada en [`docs/GAPS_BACKLOG.md`](./GAPS_BACKLOG.md). Resumen de los 10 más urgentes (post-cierre del ciclo de seguridad/inventario 2026-05-05):
 
 1. **G001** — Implementar `/pwa-metabase-token` real en backend (P1, Sebastián). Bloquea KPIs reales para Gerente, Supervisor Ventas y Jefe de Ruta.
-2. **G006** — Conectar `tareasService` y `notasService` a backend real (P1, Sebastián). Datos del Supervisor de Ventas en localStorage.
+2. **G006** — ~~Conectar `tareasService`/`notasService` a backend~~ **cerrado en PWA**: contrato V2 live (`IS_STUB=false`); capacidad compartida independiente del shell V2.
 3. **G016** — Persistir corte y liquidación de ruta en backend (P1, Sebastián). Hoy en localStorage; Jefe de Ruta pierde estado.
 4. **G024** — Configurar dominio custom `colaboradores.grupofrio.mx` o actualizar referencias (P2, Carlos + Yamil).
 5. **G003** — Migrar `VITE_N8N_VOICE_TOKEN` a server-side proxy (P2, Carlos + Sebastián). SalesOps ya usa proxy Vercel.
@@ -1641,7 +1642,7 @@ Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_s
 | `gf_employee_token` | Token opaco generado con `secrets.token_urlsafe(32)`, validado contra BD Odoo. TTL 30d sliding por empleado. **Fuente de verdad de autorización** en endpoints `/pwa-*` y `gf_saleops/*` (post ADR-08). |
 | Secreto SalesOps | Token estático global guardado en `ir.config_parameter`, inyectado por `GF_SALESOPS_TOKEN` sólo en Vercel. Por sí solo NO autoriza acciones con `required_role` — el rol se deriva de `X-GF-Employee-Token` (ver ADR-08). |
 | Voice envelope | Estructura JSON normalizada que devuelve W120 después de pasar audio por Deepgram + OpenAI. |
-| `IS_STUB` | Flag en servicios que indica persistencia en localStorage en lugar de backend. |
+| `IS_STUB` | Flag histórico en servicios (localStorage). Tareas/Notas: `IS_STUB=false` (contrato V2). |
 | `MODULE_ROLE_VARIANTS` | Mapa de módulos multirol a sus roles compatibles (registro_produccion → barra/rolito/aux). |
 | `effectiveRoles` | `[role, ...additional_job_keys]` deduplicado. |
 | Plaza derivada | Plaza inferida desde `warehouse_id` en `roleContext.js` cuando el JWT no la trae. |

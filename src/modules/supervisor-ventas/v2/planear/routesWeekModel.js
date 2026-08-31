@@ -146,6 +146,11 @@ export function rowSource(row) {
   }
 }
 
+/**
+ * Business rule: max 2 operational sources (SO/SP/P) per assembled route.
+ * Aligned with backend MAX_SOURCES=2 — keep this limit in sync; do not raise
+ * unilaterally in the PWA.
+ */
 export const MAX_OPERATIONAL_SOURCES = 2
 
 /** Selección 1–2. Intentar 3 no sustituye en silencio: devuelve el mismo selected + error. */
@@ -197,6 +202,65 @@ export function decodeSourcesParam(raw) {
     .slice(0, MAX_OPERATIONAL_SOURCES)
 }
 
+/**
+ * routeId accionable para armar desde 1–2 sources.
+ * - Todos comparten un routeId → ese id.
+ * - Ninguno tiene routeId → 0 (el usuario elige después).
+ * - Varios routeId distintos → error accionable; NUNCA sources.find(...).routeId.
+ */
+export function resolveTargetRouteId(sources) {
+  const ids = []
+  for (const src of sources || []) {
+    const id = Number(src?.routeId || 0) || 0
+    if (id > 0 && !ids.includes(id)) ids.push(id)
+  }
+  if (ids.length === 0) return { routeId: 0, error: null }
+  if (ids.length === 1) return { routeId: ids[0], error: null }
+  return {
+    routeId: 0,
+    error: 'Los planes seleccionados pertenecen a rutas distintas. Elige planes de la misma ruta, o ábrelos por separado.',
+  }
+}
+
+/**
+ * Fail-closed: no hibridar zonas incompatibles.
+ * - polygonIds distintos → error
+ * - subpolygonIds con padres de polígono distintos (cuando ambos se conocen) → error
+ * - segmentIds distintos OK si el polígono padre es el mismo o desconocido;
+ *   si los padres conocidos conflictúan → error
+ * Callers must assert before zoneFromSources / goArmar.
+ */
+export function assertSourcesZoneCompatible(sources) {
+  const list = Array.isArray(sources) ? sources : []
+  if (list.length <= 1) return { ok: true, error: null }
+
+  const knownParents = new Set()
+  const conflictMsg = 'Los planes seleccionados pertenecen a polígonos distintos. Elige planes de la misma zona.'
+
+  for (const src of list) {
+    const z = rowZone(src)
+    const parentHint = Number(src?.polygon?.id || 0) || 0
+    const isPolygonRow = src?.tipo === 'P' || src?.type === 'P'
+    const polyId = isPolygonRow
+      ? (Number(src?.id || 0) || z.polygonId || 0)
+      : (z.polygonId || parentHint || 0)
+
+    if (polyId) knownParents.add(polyId)
+    if (z.subpolygonId && (z.polygonId || parentHint)) {
+      knownParents.add(z.polygonId || parentHint)
+    }
+    if (z.segmentId && (z.polygonId || parentHint)) {
+      knownParents.add(z.polygonId || parentHint)
+    }
+  }
+
+  if (knownParents.size > 1) {
+    return { ok: false, error: conflictMsg }
+  }
+  return { ok: true, error: null }
+}
+
+/** Solo para sets ya compatibles (assertSourcesZoneCompatible primero). */
 export function zoneFromSources(sources) {
   const zone = { subpolygonId: 0, polygonId: 0, segmentId: 0 }
   for (const src of sources || []) {
@@ -208,7 +272,10 @@ export function zoneFromSources(sources) {
   return zone
 }
 
-/** poly/sub/seg del query GANAN sobre src. Sin params de zona, se deriva de sources. */
+/**
+ * poly/sub/seg del query GANAN sobre src. Sin params de zona, se deriva de sources
+ * SOLO si son compatibles — nunca inventa una zona híbrida de sources incompatibles.
+ */
 export function resolveArmarZone({ poly, sub, seg, src } = {}) {
   const fromParams = {
     polygonId: Number(poly || 0) || 0,
@@ -216,12 +283,16 @@ export function resolveArmarZone({ poly, sub, seg, src } = {}) {
     segmentId: Number(seg || 0) || 0,
   }
   const sources = decodeSourcesParam(src)
-  const fromSrc = zoneFromSources(sources)
+  const compat = assertSourcesZoneCompatible(sources)
+  const fromSrc = compat.ok
+    ? zoneFromSources(sources)
+    : { subpolygonId: 0, polygonId: 0, segmentId: 0 }
   return {
     polygonId: fromParams.polygonId || fromSrc.polygonId,
     subpolygonId: fromParams.subpolygonId || fromSrc.subpolygonId,
     segmentId: fromParams.segmentId || fromSrc.segmentId,
     sources,
+    zoneError: compat.error || null,
   }
 }
 

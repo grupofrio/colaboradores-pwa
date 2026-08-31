@@ -1,10 +1,25 @@
 // ─── Tareas del Supervisor — contrato V2 canónico ────────────────────────────
 // Endpoints: /gf/salesops/supervisor/v2/tasks/{list,create,update,complete}
 // Autoridad: X-GF-Employee-Token (nunca company_id/employee_id/author del cliente).
+//
+// V2 OFF rollback (canonical shared capability):
+// - Tareas es capacidad compartida independiente del shell flag Supervisor V2.
+// - V2 OFF y V2 ON montan las mismas pantallas y el mismo contrato
+//   `/gf/salesops/supervisor/v2/tasks/*` (no hay fallback localStorage / IS_STUB).
+// - Rollback del shell NO debe romper lecturas: las rutas /equipo/tareas NO usan
+//   V2ExcludedRoute; este servicio siempre habla V2.
+// - Con `supervisor_writes` OFF el backend responde FEATURE_DISABLED: unwrap /
+//   list/create DEBEN lanzar (UI muestra error, nunca lista vacía exitosa).
 // ─────────────────────────────────────────────────────────────────────────────
-import { api, ApiError } from '../../lib/api.js'
+import { api as defaultApi, ApiError } from '../../lib/api.js'
 
 export const IS_STUB = false
+
+/** @internal test-only — inject api mock; pass null to restore. */
+let _api = defaultApi
+export function setTasksTransportForTests(fn) {
+  _api = typeof fn === 'function' ? fn : defaultApi
+}
 
 export const TASKS_V2 = Object.freeze({
   list: '/gf/salesops/supervisor/v2/tasks/list',
@@ -57,7 +72,7 @@ function normalizeTask(t) {
 }
 
 async function postTasks(path, data) {
-  const raw = await api('POST', path, {
+  const raw = await _api('POST', path, {
     meta: { request_id: requestId('tasks') },
     data: data || {},
   })
