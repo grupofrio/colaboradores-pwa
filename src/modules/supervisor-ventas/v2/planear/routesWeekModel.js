@@ -179,27 +179,59 @@ export function encodeSourcesParam(selected) {
   }).filter(Boolean).join(',')
 }
 
+/**
+ * Decode deep-link `src` (comma-separated SO/SP/P tokens).
+ *
+ * Fail-closed — NEVER silent truncate via slice(MAX):
+ * - malformed token → { sources: [], error: 'malformed_source' }
+ * - unique valid keys after dedup > MAX → { sources: [], error: 'too_many_sources' }
+ *
+ * Duplicates: count AFTER dedup by key (SO:1,SO:1,SO:2 → 2 unique → PASS).
+ * Raw token count before dedup is not the gate; uniqueness is.
+ *
+ * @returns {{ sources: Array, error: null|'too_many_sources'|'malformed_source' }}
+ */
 export function decodeSourcesParam(raw) {
-  return String(raw || '')
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((token) => {
-      const [main, polyPart] = token.split('@')
-      const [tipo, id] = String(main || '').split(':')
-      const polygonId = polyPart && String(polyPart).startsWith('P:')
-        ? (Number(String(polyPart).slice(2)) || 0)
-        : 0
-      return {
-        key: main,
-        tipo,
-        type: tipo,
-        id: Number(id || 0) || 0,
-        polygon: polygonId ? { id: polygonId } : null,
-      }
+  const text = String(raw || '').trim()
+  if (!text) return { sources: [], error: null }
+
+  const tokens = text.split(',').map((part) => part.trim()).filter(Boolean)
+  const parsed = []
+  for (const token of tokens) {
+    const [main, polyPart] = token.split('@')
+    const [tipo, idRaw] = String(main || '').split(':')
+    const id = Number(idRaw || 0) || 0
+    const tipoOk = ['SO', 'SP', 'P'].includes(tipo)
+    if (!tipoOk || !id) {
+      return { sources: [], error: 'malformed_source' }
+    }
+    const polygonId = polyPart && String(polyPart).startsWith('P:')
+      ? (Number(String(polyPart).slice(2)) || 0)
+      : 0
+    // Trailing @ without P:… is malformed (do not strip silently).
+    if (polyPart != null && polyPart !== '' && !String(polyPart).startsWith('P:')) {
+      return { sources: [], error: 'malformed_source' }
+    }
+    parsed.push({
+      key: `${tipo}:${id}`,
+      tipo,
+      type: tipo,
+      id,
+      polygon: polygonId ? { id: polygonId } : null,
     })
-    .filter((s) => s.id && ['SO', 'SP', 'P'].includes(s.tipo))
-    .slice(0, MAX_OPERATIONAL_SOURCES)
+  }
+
+  const sources = []
+  const seen = new Set()
+  for (const s of parsed) {
+    if (seen.has(s.key)) continue
+    seen.add(s.key)
+    sources.push(s)
+  }
+  if (sources.length > MAX_OPERATIONAL_SOURCES) {
+    return { sources: [], error: 'too_many_sources' }
+  }
+  return { sources, error: null }
 }
 
 /**
@@ -282,7 +314,18 @@ export function resolveArmarZone({ poly, sub, seg, src } = {}) {
     subpolygonId: Number(sub || 0) || 0,
     segmentId: Number(seg || 0) || 0,
   }
-  const sources = decodeSourcesParam(src)
+  const decoded = decodeSourcesParam(src)
+  if (decoded.error) {
+    return {
+      polygonId: fromParams.polygonId,
+      subpolygonId: fromParams.subpolygonId,
+      segmentId: fromParams.segmentId,
+      sources: [],
+      sourcesError: decoded.error,
+      zoneError: null,
+    }
+  }
+  const sources = decoded.sources
   const compat = assertSourcesZoneCompatible(sources)
   const fromSrc = compat.ok
     ? zoneFromSources(sources)
@@ -292,8 +335,20 @@ export function resolveArmarZone({ poly, sub, seg, src } = {}) {
     subpolygonId: fromParams.subpolygonId || fromSrc.subpolygonId,
     segmentId: fromParams.segmentId || fromSrc.segmentId,
     sources,
+    sourcesError: null,
     zoneError: compat.error || null,
   }
+}
+
+/** Mensaje visible para codes de decodeSourcesParam / deep-link. */
+export function sourcesParamErrorMessage(code) {
+  if (code === 'too_many_sources') {
+    return 'No puedes combinar más de 2 planes operativos en una ruta.'
+  }
+  if (code === 'malformed_source') {
+    return 'El enlace de planes operativos no es válido.'
+  }
+  return code ? String(code) : ''
 }
 
 export function canEnsureRoutePlan({ polygonId, subpolygonId, segmentId } = {}) {

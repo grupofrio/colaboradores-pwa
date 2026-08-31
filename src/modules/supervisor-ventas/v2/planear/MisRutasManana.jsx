@@ -14,6 +14,7 @@ import {
   zoneFromSources,
   resolveTargetRouteId,
   assertSourcesZoneCompatible,
+  sourcesParamErrorMessage,
 } from './routesWeekModel'
 
 export default function MisRutasManana() {
@@ -28,6 +29,23 @@ export default function MisRutasManana() {
       seg: params.get('seg'),
       src: params.get('src'),
     })
+    // Deep-link fail-closed: no montar el planner operativo con src inválido
+    // (evita ensure/preview/assign). Error visible + salida.
+    if (zone.sourcesError) {
+      return (
+        <div data-testid="armar-sources-error" data-error={zone.sourcesError} style={{ padding: 16 }}>
+          <p style={{ margin: '0 0 12px', fontWeight: 700 }}>{sourcesParamErrorMessage(zone.sourcesError)}</p>
+          <button
+            type="button"
+            data-testid="armar-sources-error-back"
+            onClick={() => setParams({}, { replace: true })}
+            style={{ minHeight: 44, padding: '8px 14px', fontWeight: 700 }}
+          >
+            Volver
+          </button>
+        </div>
+      )
+    }
     return (
       <PlanearMananaTab
         initialRouteId={routeId}
@@ -35,6 +53,7 @@ export default function MisRutasManana() {
         initialSubpolygonId={zone.subpolygonId}
         initialSegmentId={zone.segmentId}
         initialSources={zone.sources}
+        sourcesError={zone.sourcesError}
         initialLeadId={Number(params.get('lead') || 0) || 0}
         onExit={() => setParams({}, { replace: true })}
       />
