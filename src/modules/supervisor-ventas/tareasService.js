@@ -1,10 +1,17 @@
-// ─── Tareas del Supervisor — backend real ────────────────────────────────────
-// Endpoints: /pwa-supv/tasks (GET), /tasks/create, /tasks/update, /tasks/complete
-// La normalización task_id→id y name→title se hace aquí para no tocar la UI.
+// ─── Tareas del Supervisor — contrato V2 canónico ────────────────────────────
+// Endpoints: /gf/salesops/supervisor/v2/tasks/{list,create,update,complete}
+// Autoridad: X-GF-Employee-Token (nunca company_id/employee_id/author del cliente).
 // ─────────────────────────────────────────────────────────────────────────────
-import { api } from '../../lib/api'
+import { api, ApiError } from '../../lib/api.js'
 
 export const IS_STUB = false
+
+export const TASKS_V2 = Object.freeze({
+  list: '/gf/salesops/supervisor/v2/tasks/list',
+  create: '/gf/salesops/supervisor/v2/tasks/create',
+  update: '/gf/salesops/supervisor/v2/tasks/update',
+  complete: '/gf/salesops/supervisor/v2/tasks/complete',
+})
 
 export const TASK_STATES = {
   pending:     { label: 'Pendiente',  color: '#f59e0b' },
@@ -19,79 +26,98 @@ export const TASK_PRIORITIES = {
   high:   { label: 'Alta',  color: '#ef4444' },
 }
 
-/** Normaliza la respuesta del backend al shape que espera la UI. */
+function requestId(prefix) {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+/** Envelope V2 → data o throw. Nunca inventa listas vacías exitosas. */
+export function unwrapTasksEnvelope(raw, fallbackMessage = 'Tareas no disponibles') {
+  if (!raw || typeof raw !== 'object') {
+    throw new ApiError(fallbackMessage, { status: 0, code: 'UNAVAILABLE' })
+  }
+  if (raw.status === 'ok' || raw.ok === true) {
+    return raw.data && typeof raw.data === 'object' ? raw.data : {}
+  }
+  const code = String(raw.code || 'UNAVAILABLE').toUpperCase()
+  const message = raw.user_message || raw.message || fallbackMessage
+  throw new ApiError(message, { status: 0, code })
+}
+
 function normalizeTask(t) {
   if (!t) return t
   return {
     ...t,
-    id:         t.task_id    ?? t.id,
-    title:      t.name       ?? t.title ?? '',
+    id: t.task_id ?? t.id,
+    title: t.name ?? t.title ?? '',
     created_at: t.create_date ?? t.created_at ?? null,
   }
 }
 
+async function postTasks(path, data) {
+  const raw = await api('POST', path, {
+    meta: { request_id: requestId('tasks') },
+    data: data || {},
+  })
+  return unwrapTasksEnvelope(raw)
+}
+
 /** Lista tareas filtradas. Acepta assignee_id, state, priority. */
 export async function listTasks(filter = {}) {
-  const qs = new URLSearchParams()
-  if (filter.assignee_id) qs.set('assignee_id', String(filter.assignee_id))
-  if (filter.state)       qs.set('state',       filter.state)
-  if (filter.priority)    qs.set('priority',    filter.priority)
-  if (filter.limit)       qs.set('limit',       String(filter.limit))
-
-  const result = await api('GET', `/pwa-supv/tasks${qs.toString() ? `?${qs}` : ''}`)
-  const payload = result?.data ?? result ?? {}
-  const tasks = Array.isArray(payload.tasks) ? payload.tasks
-              : Array.isArray(payload)        ? payload
-              : []
+  const data = {}
+  if (filter.assignee_id) data.assignee_id = Number(filter.assignee_id)
+  if (filter.state) data.state = filter.state
+  if (filter.priority) data.priority = filter.priority
+  if (filter.limit) data.limit = Number(filter.limit)
+  const payload = await postTasks(TASKS_V2.list, data)
+  const tasks = Array.isArray(payload.tasks) ? payload.tasks : null
+  if (!tasks) {
+    throw new ApiError('Respuesta de tareas inválida', { status: 0, code: 'UNAVAILABLE' })
+  }
   return tasks.map(normalizeTask)
 }
 
-/** Crea una tarea. Requiere title, assignee_id. */
-export async function createTask({ title, assignee_id, assignee_name, description, priority = 'medium', due_date, partner_id }) {
+/** Crea una tarea. Requiere title, assignee_id. No envía company/author authority. */
+export async function createTask({ title, assignee_id, description, priority = 'medium', due_date, partner_id }) {
   if (!title || !assignee_id) {
     throw new Error('Título y vendedor asignado son obligatorios')
   }
-  const result = await api('POST', '/pwa-supv/tasks/create', {
+  const data = await postTasks(TASKS_V2.create, {
     title,
     assignee_id: Number(assignee_id),
     description: description || undefined,
     priority,
-    due_date:    due_date    || undefined,
-    partner_id:  partner_id  || undefined,
+    due_date: due_date || undefined,
+    partner_id: partner_id ? Number(partner_id) : undefined,
   })
-  const data = result?.data ?? result
   return normalizeTask(data)
 }
 
-/** Actualiza estado/prioridad/notas. patch: {state, priority, due_date, description} */
+/** Actualiza via { task_id, patch }. */
 export async function updateTask(task_id, patch) {
-  const result = await api('POST', '/pwa-supv/tasks/update', {
+  const data = await postTasks(TASKS_V2.update, {
     task_id: Number(task_id),
-    patch,
+    patch: patch || {},
   })
-  const data = result?.data ?? result
   return normalizeTask(data)
 }
 
-/** Marca como completada con notas. */
+/** Marca como completada conservando completion_notes. */
 export async function completeTask(task_id, completion_notes = '') {
-  const result = await api('POST', '/pwa-supv/tasks/complete', {
-    task_id:          Number(task_id),
-    completion_notes: String(completion_notes).trim(),
+  const data = await postTasks(TASKS_V2.complete, {
+    task_id: Number(task_id),
+    completion_notes: String(completion_notes || '').trim(),
   })
-  const data = result?.data ?? result
   return normalizeTask(data)
 }
 
 /** Cancela una tarea (soft via update). */
-export async function cancelTask(task_id, reason = '') {
-  return updateTask(task_id, {
-    state:            'cancelled',
-    completion_notes: String(reason).trim(),
-  })
+export async function cancelTask(task_id) {
+  return updateTask(task_id, { state: 'cancelled' })
 }
 
-/** Flag para que la UI muestre banner "modo stub". */
 export function isStubMode() {
   return IS_STUB
 }

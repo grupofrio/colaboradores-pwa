@@ -1,74 +1,96 @@
-// ─── Notas de Coaching — backend real ────────────────────────────────────────
-// Endpoints: /pwa-supv/notes (GET), /notes/create, /notes/delete
-// Normalización al shape canónico que consume la UI:
-//   note_id      → id
-//   create_date  → created_at
-//   body         → body  (el backend usa `body`, NO `content`)
-//   (alias)      → content  [defensivo: cualquier UI legacy que lea .content también funciona]
+// ─── Notas de Coaching — contrato V2 canónico ────────────────────────────────
+// Endpoints: /gf/salesops/supervisor/v2/notes/{list,create,delete}
+// Autoridad: X-GF-Employee-Token. No enviar author_id/company_id como autoridad.
+// subject_type=vendor → employee_id; subject_type=customer → partner_id (backend).
 // ─────────────────────────────────────────────────────────────────────────────
-import { api } from '../../lib/api'
+import { api, ApiError } from '../../lib/api.js'
 
 export const IS_STUB = false
 
-/** Normaliza la respuesta del backend al shape que espera la UI.
- *  Garantiza que `body` siempre esté presente y expone `content` como alias. */
+export const NOTES_V2 = Object.freeze({
+  list: '/gf/salesops/supervisor/v2/notes/list',
+  create: '/gf/salesops/supervisor/v2/notes/create',
+  delete: '/gf/salesops/supervisor/v2/notes/delete',
+})
+
+function requestId(prefix) {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+/** Envelope V2 → data o throw. Error/unavailable ≠ lista vacía exitosa. */
+export function unwrapNotesEnvelope(raw, fallbackMessage = 'Notas no disponibles') {
+  if (!raw || typeof raw !== 'object') {
+    throw new ApiError(fallbackMessage, { status: 0, code: 'UNAVAILABLE' })
+  }
+  if (raw.status === 'ok' || raw.ok === true) {
+    return raw.data && typeof raw.data === 'object' ? raw.data : {}
+  }
+  const code = String(raw.code || 'UNAVAILABLE').toUpperCase()
+  const message = raw.user_message || raw.message || fallbackMessage
+  throw new ApiError(message, { status: 0, code })
+}
+
 function normalizeNote(n) {
   if (!n) return n
-  // Backend envía `body`. Aceptamos también `content` por si cambia en el futuro.
   const body = n.body ?? n.content ?? ''
   return {
     ...n,
-    id:         n.note_id     ?? n.id,
+    id: n.note_id ?? n.id,
     created_at: n.create_date ?? n.created_at ?? null,
     body,
-    content:    body, // alias defensivo — UI puede leer cualquiera de los dos
+    content: body,
   }
+}
+
+async function postNotes(path, data) {
+  const raw = await api('POST', path, {
+    meta: { request_id: requestId('notes') },
+    data: data || {},
+  })
+  return unwrapNotesEnvelope(raw)
 }
 
 /** Lista notas de un sujeto (vendor/customer). */
 export async function listNotes({ subject_type, subject_id }) {
-  if (!subject_type || !subject_id) throw new Error('subject_type y subject_id son requeridos')
-  const qs = new URLSearchParams({
+  if (!subject_type || !subject_id) {
+    throw new Error('subject_type y subject_id son requeridos')
+  }
+  const payload = await postNotes(NOTES_V2.list, {
     subject_type,
-    subject_id: String(subject_id),
+    subject_id: Number(subject_id),
   })
-  const result = await api('GET', `/pwa-supv/notes?${qs}`)
-  const payload = result?.data ?? result ?? {}
-  const notes = Array.isArray(payload.notes) ? payload.notes
-              : Array.isArray(payload)        ? payload
-              : []
+  const notes = Array.isArray(payload.notes) ? payload.notes : null
+  if (!notes) {
+    throw new ApiError('Respuesta de notas inválida', { status: 0, code: 'UNAVAILABLE' })
+  }
   return notes.map(normalizeNote)
 }
 
-/** Crea una nota de coaching.
- *  subject_type='vendor'   → subject_id es hr.employee.id
- *  subject_type='customer' → subject_id es res.partner.id
+/**
+ * Crea una nota de coaching.
+ * No envía author_id/company_id: el backend los deriva del token.
  */
-export async function createNote({ subject_type, subject_id, subject_name, body, author_id, author_name }) {
+export async function createNote({ subject_type, subject_id, body }) {
   if (!body || !body.trim()) throw new Error('El contenido de la nota es obligatorio')
   if (!subject_type || !subject_id) throw new Error('subject_type y subject_id son requeridos')
 
-  const result = await api('POST', '/pwa-supv/notes/create', {
-    body:         body.trim(),
+  const data = await postNotes(NOTES_V2.create, {
+    body: body.trim(),
     subject_type,
-    subject_id:   Number(subject_id),
-    author_id:    author_id || undefined,
+    subject_id: Number(subject_id),
   })
-  // Controller devuelve HTTP 200 con {ok:false} cuando falla (p.ej. author no valido).
-  // Sin esta guarda la UI mostraba "Nota agregada" aunque no se persistiera.
-  if (result && typeof result === 'object' && result.ok === false) {
-    throw new Error(result.message || 'No se pudo crear la nota')
-  }
-  const data = result?.data ?? result
   return normalizeNote(data)
 }
 
-/** Elimina una nota (soft delete en backend: active=False). */
+/** Soft-delete (active=False) vía V2. */
 export async function deleteNote(note_id) {
-  const result = await api('POST', '/pwa-supv/notes/delete', {
+  const data = await postNotes(NOTES_V2.delete, {
     note_id: Number(note_id),
   })
-  return result?.data ?? result ?? { ok: true }
+  return data || { note_id: Number(note_id) }
 }
 
 export function isStubMode() {

@@ -1,13 +1,13 @@
 // ─── ScreenNotasCliente — notas de coaching por vendedor o cliente ─────────
 // Selector de sujeto (vendedor o cliente), crear/ver/eliminar notas.
-// Backend real vía /pwa-supv/notes/* (gf_pwa_admin).
+// Backend: contrato V2 /gf/salesops/supervisor/v2/notes/* (token-only).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { useToast } from '../../components/Toast'
-import { Loader, EmptyState } from '../../components/Loader'
+import { Loader, EmptyState, ErrorState } from '../../components/Loader'
 import { getTeam } from './api'
 import {
   listNotes,
@@ -29,6 +29,7 @@ export default function ScreenNotasCliente() {
   const [notes, setNotes] = useState([])
   const [newNote, setNewNote] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -48,18 +49,21 @@ export default function ScreenNotasCliente() {
   }, [])
 
   useEffect(() => {
-    if (!selectedId) { setNotes([]); return }
+    if (!selectedId) { setNotes([]); setLoadError(''); return }
     loadNotes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, subjectType])
 
   async function loadNotes() {
     setLoading(true)
+    setLoadError('')
     try {
       const data = await listNotes({ subject_type: subjectType, subject_id: selectedId })
       setNotes(data || [])
     } catch (e) {
-      toast.error('Error al cargar notas')
+      setNotes([])
+      setLoadError(e?.message || 'Notas no disponibles')
+      toast.error(e?.message || 'Error al cargar notas')
     } finally {
       setLoading(false)
     }
@@ -76,10 +80,7 @@ export default function ScreenNotasCliente() {
       await createNote({
         subject_type: subjectType,
         subject_id: Number(selectedId),
-        subject_name: selectedName,
         body,
-        author_id: session?.employee_id || null,
-        author_name: session?.name || '',
       })
       toast.success('Nota agregada')
       setNewNote('')
@@ -248,6 +249,8 @@ export default function ScreenNotasCliente() {
           />
         ) : loading ? (
           <Loader label="Cargando notas…" />
+        ) : loadError ? (
+          <ErrorState title="Notas no disponibles" message={loadError} />
         ) : notes.length === 0 ? (
           <EmptyState icon="📝" title="Sin notas" subtitle="Agrega la primera nota arriba" />
         ) : (

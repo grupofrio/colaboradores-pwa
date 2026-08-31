@@ -1051,9 +1051,10 @@ export default function App() {
             <Route path="/equipo/planes/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenPlanDiarioClientes />} /></ModuleRoleRoute>} />
             <Route path="/equipo/clientes" element={<ModuleRoleRoute moduleId="supervisor_ventas"><SupervisorV2Gate active="clientes" legacy={<ScreenClientesSupervisor />}><ClientesTab /></SupervisorV2Gate></ModuleRoleRoute>} />
             <Route path="/equipo/metas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenMetasVendedores /></ModuleRoleRoute>} />
-            <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenTareasSupervisor />} /></ModuleRoleRoute>} />
-            <Route path="/equipo/notas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenNotasCliente />} /></ModuleRoleRoute>} />
+            <Route path="/equipo/tareas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenTareasSupervisor /></ModuleRoleRoute>} />
+            <Route path="/equipo/notas" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenNotasCliente /></ModuleRoleRoute>} />
             <Route path="/equipo/recuperacion" element={<ModuleRoleRoute moduleId="supervisor_ventas"><ScreenClientesRecuperacion /></ModuleRoleRoute>} />
+            {/* Nota rápida: voz + /pwa-supv/notes — aún no auditada en contrato V2. */}
             <Route path="/equipo/nota-rapida" element={<ModuleRoleRoute moduleId="supervisor_ventas"><V2ExcludedRoute legacy={<ScreenNotaRapida />} /></ModuleRoleRoute>} />
             {/* V1 legacy routes */}
             <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />

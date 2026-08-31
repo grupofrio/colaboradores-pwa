@@ -1,6 +1,6 @@
 // ─── ScreenTareasSupervisor — gestión de tareas del supervisor a su equipo ──
 // Permite: crear tarea, asignar a vendedor, prioridad, fecha, seguimiento.
-// Backend real vía /pwa-supv/tasks/* (gf_pwa_admin).
+// Backend: contrato V2 /gf/salesops/supervisor/v2/tasks/* (token-only).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -52,13 +52,14 @@ export default function ScreenTareasSupervisor() {
     setLoading(true)
     setError('')
     try {
-      // Cada promesa aislada: si list falla, el form (que depende de team)
-      // sigue utilizable. Antes un solo fallo bloqueaba todo el flujo.
       const [tasksRes, teamRes] = await Promise.allSettled([listTasks(), getTeam()])
       if (tasksRes.status === 'fulfilled') {
         setTasks(tasksRes.value || [])
-      } else if (tasksRes.reason?.message !== 'no_session') {
-        setError('Error al cargar tareas')
+      } else {
+        setTasks([])
+        if (tasksRes.reason?.message !== 'no_session') {
+          setError(tasksRes.reason?.message || 'Tareas no disponibles')
+        }
       }
       setTeam(teamRes.status === 'fulfilled' && Array.isArray(teamRes.value) ? teamRes.value : [])
     } finally {
@@ -119,10 +120,9 @@ export default function ScreenTareasSupervisor() {
   }
 
   async function handleCancel(task) {
-    const reason = prompt('Motivo de cancelación:')
-    if (!reason) return
+    if (!confirm(`¿Cancelar la tarea "${task.title}"?`)) return
     try {
-      await cancelTask(task.id, reason)
+      await cancelTask(task.id)
       toast.success('Tarea cancelada')
       await loadData()
     } catch (e) { toast.error('Error al cancelar') }
