@@ -218,6 +218,8 @@ const GerenteV2Gate          = lazy(() => import('./modules/gerente/v2/GerenteV2
 const HoyGerenteTab          = lazy(() => import('./modules/gerente/v2/tabs/HoyGerenteTab'))
 const EquipoGerenteTab       = lazy(() => import('./modules/gerente/v2/tabs/EquipoGerenteTab'))
 const PendientesGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/PendientesGerenteTab'))
+const EquipoPlanearReadOnly = lazy(() => import('./modules/gerente/v2/tabs/EquipoGerenteReadSurfaces').then(m => ({ default: m.EquipoPlanearReadOnly })))
+const EquipoHoyReadOnlyBanner = lazy(() => import('./modules/gerente/v2/tabs/EquipoGerenteReadSurfaces').then(m => ({ default: m.EquipoHoyReadOnlyBanner })))
 const AdminGerenteTab        = lazy(() => import('./modules/gerente/v2/tabs/AdminGerenteTab'))
 const ProduccionGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/ProduccionGerenteTab'))
 const InventarioGerenteTab   = lazy(() => import('./modules/gerente/v2/tabs/InventarioGerenteTab'))
@@ -1090,6 +1092,15 @@ export default function App() {
                 cual, fuera del shell V2, en ambos modos. */}
             <Route path="/gerente" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="hoy" legacy={<ScreenGerente />}><HoyGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             <Route path="/gerente/equipo" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="equipo"><EquipoGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
+
+            {/* Equipo read wrappers (Gerente): same tab bodies, moduleId=gerente.
+                Avoid /equipo/* ModuleRoleRoute bounce-to-home for gerente_sucursal.
+                Planear is honesty-only (no supervisor write CTAs). */}
+            <Route path="/gerente/equipo/hoy" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="equipo"><EquipoHoyReadOnlyBanner><RutasTab /></EquipoHoyReadOnlyBanner></GerenteV2Gate></ModuleRoleRoute>} />
+            <Route path="/gerente/equipo/radar" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="equipo"><EquipoHoyReadOnlyBanner><RadarTab /></EquipoHoyReadOnlyBanner></GerenteV2Gate></ModuleRoleRoute>} />
+            <Route path="/gerente/equipo/rutas" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="equipo"><EquipoHoyReadOnlyBanner><RutasTab /></EquipoHoyReadOnlyBanner></GerenteV2Gate></ModuleRoleRoute>} />
+            <Route path="/gerente/equipo/planear" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="equipo"><EquipoPlanearReadOnly /></GerenteV2Gate></ModuleRoleRoute>} />
+            <Route path="/gerente/equipo/clientes" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="equipo"><EquipoHoyReadOnlyBanner><ClientesTab /></EquipoHoyReadOnlyBanner></GerenteV2Gate></ModuleRoleRoute>} />
             <Route path="/gerente/admin" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="admin"><AdminGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             <Route path="/gerente/produccion" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="produccion"><ProduccionGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />
             <Route path="/gerente/inventario" element={<ModuleRoleRoute moduleId="gerente"><GerenteV2Gate active="inventario"><InventarioGerenteTab /></GerenteV2Gate></ModuleRoleRoute>} />

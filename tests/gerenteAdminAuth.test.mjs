@@ -97,7 +97,7 @@ test('Gerente pilot write clamp lifts only when server sets gerenteWritesEnabled
   assert.equal(clamped.cashShiftManage, true)
 })
 
-test('auxiliar_admin dual-role is not clamped by gerente pilot', () => {
+test('híbrido gerente+auxiliar: unión de roles no escapa el clamp RO', () => {
   const session = {
     role: 'gerente_sucursal',
     additional_job_keys: ['auxiliar_admin'],
@@ -106,8 +106,9 @@ test('auxiliar_admin dual-role is not clamped by gerente pilot', () => {
     cashClosingWrite: true,
     cashShiftManage: true,
   })
-  assert.equal(clamped.cashClosingWrite, true)
-  assert.equal(clamped.cashShiftManage, true)
+  assert.equal(clamped.cashClosingWrite, false)
+  assert.equal(clamped.cashShiftManage, false)
+  assert.equal(clamped.gerenteWritesEnabled, false)
 })
 
 test('pwa-admin flat proxy no longer spreads IncomingMessage (P0 regression)', () => {

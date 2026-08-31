@@ -68,3 +68,49 @@ test('no hay rutas shell apuntando a legacy /equipo/pendientes write', () => {
   assert.match(equipo, /\/gerente\/pendientes/)
   assert.doesNotMatch(equipo, /\/equipo\/pendientes/)
 })
+
+test('Más: rutas canónicas surveys/badges/profile (no catch-all home)', () => {
+  const mas = src('../src/modules/gerente/v2/tabs/MasGerenteTab.jsx')
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('//'))
+    .join('\n')
+  assert.match(mas, /route: '\/surveys'/)
+  assert.match(mas, /route: '\/badges'/)
+  assert.match(mas, /route: '\/profile'/)
+  assert.doesNotMatch(mas, /route: '\/encuestas'/)
+  assert.doesNotMatch(mas, /route: '\/premios'/)
+  assert.doesNotMatch(mas, /route: '\/perfil'/)
+})
+
+test('Equipo: wrappers /gerente/equipo/* (no bounce /equipo)', () => {
+  const equipo = src('../src/modules/gerente/v2/tabs/EquipoGerenteTab.jsx')
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('//'))
+    .join('\n')
+  for (const r of [
+    '/gerente/equipo/hoy',
+    '/gerente/equipo/radar',
+    '/gerente/equipo/rutas',
+    '/gerente/equipo/planear',
+    '/gerente/equipo/clientes',
+    '/gerente/pendientes',
+  ]) {
+    assert.match(equipo, new RegExp(r.replace(/\//g, '\\/')))
+  }
+  assert.doesNotMatch(equipo, /route: '\/equipo'/)
+  assert.doesNotMatch(equipo, /route: '\/equipo\/radar'/)
+  const app = src('../src/App.jsx')
+  for (const r of ['/gerente/equipo/hoy', '/gerente/equipo/radar', '/gerente/equipo/rutas', '/gerente/equipo/planear', '/gerente/equipo/clientes']) {
+    assert.match(app, new RegExp(`path="${r}"`))
+    assert.match(app, new RegExp(`path="${r}"[^]*?moduleId="gerente"`))
+  }
+})
+
+test('Forecast unlock gated when writes OFF', () => {
+  const unlock = src('../src/modules/gerente/ScreenForecastUnlock.jsx')
+  assert.match(unlock, /isGerentePilotReadOnly/)
+  assert.match(unlock, /writesAllowed/)
+  const hub = src('../src/modules/gerente/ScreenGerente.jsx')
+  assert.match(hub, /forecastAllowed/)
+  assert.match(hub, /isGerentePilotReadOnly/)
+})

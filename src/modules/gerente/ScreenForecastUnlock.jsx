@@ -4,6 +4,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getLockedForecasts, unlockForecast } from './api'
 import { logScreenError } from '../shared/logScreenError'
+import { isGerentePilotReadOnly } from '../admin/gerentePilotCaps.js'
 
 export default function ScreenForecastUnlock() {
   const { session } = useSession()
@@ -14,6 +15,8 @@ export default function ScreenForecastUnlock() {
   const [loading, setLoading] = useState(true)
   const [unlocking, setUnlocking] = useState(null)
   const [error, setError] = useState('')
+  const caps = session?.capabilities || {}
+  const writesAllowed = !isGerentePilotReadOnly(session, caps)
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -39,6 +42,10 @@ export default function ScreenForecastUnlock() {
   }
 
   async function handleUnlock(id) {
+    if (!writesAllowed) {
+      setError('Escrituras de gerente apagadas (piloto Admin read-only).')
+      return
+    }
     setUnlocking(id)
     setError('')
     try {
@@ -83,6 +90,17 @@ export default function ScreenForecastUnlock() {
           </div>
         ) : (
           <>
+
+            {!writesAllowed && (
+              <div style={{
+                marginTop: 8, padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                background: TOKENS.colors.warningSoft || 'rgba(245,158,11,0.12)',
+                border: `1px solid ${TOKENS.colors.warning}40`,
+                fontSize: 12, fontWeight: 600, color: TOKENS.colors.warning,
+              }}>
+                Solo lectura: Desbloquear no está disponible mientras las escrituras de gerente estén apagadas.
+              </div>
+            )}
             {error && (
               <div style={{
                 marginTop: 8, padding: '10px 14px', borderRadius: TOKENS.radius.md,
@@ -143,7 +161,7 @@ export default function ScreenForecastUnlock() {
                         <DetailRow label="Creado por" value={fc.created_by || '-'} typo={typo} />
                       </div>
 
-                      {!isUnlocked && (
+                      {!isUnlocked && writesAllowed && (
                         <button
                           onClick={() => handleUnlock(fc.id)}
                           disabled={isProcessing}

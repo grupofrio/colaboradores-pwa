@@ -111,13 +111,20 @@ test('Caso D — capabilities success gerenteWritesEnabled=true: write nav visib
   assert.equal(isGerentePilotReadOnly(GERENTE_SESSION, caps), false)
 })
 
-test('Caso E — auxiliar dual-role: no Gerente pilot regression', () => {
-  const session = { role: 'gerente_sucursal', additional_job_keys: ['auxiliar_admin'] }
+test('Caso E — híbrido gerente+auxiliar: fail-closed (unión de roles no escapa RO)', () => {
+  const session = {
+    employee_id: 717,
+    session_token: 'h.p.s',
+    role: 'gerente_sucursal',
+    additional_job_keys: ['auxiliar_admin'],
+  }
+  // Brand/pure pilot marker still false for dual-role primary semantics.
   assert.equal(isGerenteSucursalPilotSession(session), false)
+  // Write clamp follows backend: any gerente authority is RO when writes OFF.
+  assert.equal(isGerentePilotReadOnly(session, { gerenteWritesEnabled: false }), true)
   const caps = resolveGerentePilotCapabilities(session, { gerenteWritesEnabled: false }, false)
   const filtered = filterAdminNavForGerentePilot(NAV_FIXTURE, session, caps)
-  assert.ok(filtered.some((i) => i.id === 'gastos-aprobar'))
-  assert.equal(isGerentePilotReadOnly(session, { gerenteWritesEnabled: false }), false)
+  assert.ok(!filtered.some((i) => i.id === 'gastos-aprobar'))
 })
 
 test('MIXED modules stay navigable read-only in AdminShell and AdminGerenteTab', () => {
