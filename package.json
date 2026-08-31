@@ -29,7 +29,7 @@
     "eslint": "^9.9.0",
     "eslint-plugin-react": "^7.35.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
-    "eslint-plugin-react-refresh": "^0.4.9",
+    "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
     "react-test-renderer": "^19.2.8",
     "tailwindcss": "^4.0.0",
