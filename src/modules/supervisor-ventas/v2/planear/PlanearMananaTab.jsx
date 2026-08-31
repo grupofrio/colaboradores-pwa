@@ -252,9 +252,9 @@ function ResourceLists({ resources }) {
   )
 }
 
-// Un selector de recurso (unidad/chofer/vendedor). Marca los ocupados en otra
-// ruta del día como deshabilitados (no se puede doblar). AA: label + estado en
-// texto, no solo color.
+// Un selector de recurso (unidad/chofer/vendedor). Recursos ya en otra ruta del
+// día siguen seleccionables (reuso permitido); se etiquetan con cuántas otras
+// rutas los usan. AA: label + estado en texto, no solo color.
 function ResourcePickerRow({ label, testid, options, currentId, onChange, busy, withCapacity = false }) {
   return (
     <div style={{ marginBottom: 12 }}>
@@ -269,9 +269,12 @@ function ResourcePickerRow({ label, testid, options, currentId, onChange, busy, 
         <option value="">{currentId ? 'Cambiar…' : 'Sin asignar — elige…'}</option>
         {options.map((o) => {
           const cap = withCapacity && o.capacity_kg != null ? ` · ${capacityLabel(o.capacity_kg)}` : ''
-          const busyTag = o.busyElsewhere && !o.isCurrent ? ' — en otra ruta' : ''
+          const n = Number(o.elsewhereCount || 0)
+          const busyTag = n > 0 && !o.isCurrent
+            ? ` — también en ${n} ruta${n === 1 ? '' : 's'}`
+            : ''
           return (
-            <option key={o.id} value={o.id} disabled={o.busyElsewhere && !o.isCurrent}>
+            <option key={o.id} value={o.id}>
               {o.name}{cap}{busyTag}
             </option>
           )
@@ -326,7 +329,7 @@ function ResourcePicker({ resources, planId, assignment, coverage, onAssign, bus
       )}
       <div style={{ fontSize: 11, color: C.textLow, marginTop: 8, lineHeight: 1.5 }}>
         Reasignar aquí cambia la unidad/persona del plan (incluso a última hora). Un recurso
-        ya en otra ruta del día aparece deshabilitado para no doblarlo.
+        ya en otra ruta del día sigue seleccionable y se marca como «también en N rutas».
       </div>
     </Card>
   )
@@ -373,15 +376,26 @@ function CustomerRow({ customer, onRemove, canEdit, removing }) {
 
 // ── Contenedor ───────────────────────────────────────────────────────────────
 
-export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId = 0, initialSubpolygonId = 0, initialSegmentId = 0, initialSources = [], initialLeadId = 0, onExit = null }) {
+export default function PlanearMananaTab({
+  initialRouteId = 0,
+  initialPolygonId = 0,
+  initialSubpolygonId = 0,
+  initialSegmentId = 0,
+  initialSources = [],
+  sourcesError = null,
+  initialLeadId = 0,
+  onExit = null,
+}) {
   const navigate = useNavigate()
   const dateTarget = getTomorrowDateString()
+  // Deep-link src inválido (too_many_sources / malformed): cero ensure/preview/assign.
+  const sourcesBlocked = Boolean(sourcesError)
   // Se entró desde una fila de SEGMENTO operativo (sin zona geográfica heredada):
   // la propuesta debería salir SOLO de la lista curada del segmento.
   const segmentOnlyPlan = Boolean(initialSegmentId) && !initialPolygonId
 
-  const [phase, setPhase] = useState('loading') // loading | ready | error
-  const [loadError, setLoadError] = useState(null)
+  const [phase, setPhase] = useState(sourcesBlocked ? 'error' : 'loading') // loading | ready | error
+  const [loadError, setLoadError] = useState(sourcesBlocked ? String(sourcesError) : null)
   const autoOpenedRef = useRef(false)
   // Herencia de zona: si vino de la matriz con polígono/subpolígono, se preselecciona
   // y se muestra como DATO (no como pregunta). "Cambiar zona" revela los selectores.
@@ -492,6 +506,11 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   const showZoneSelectors = !zoneInherited || showZoneEditor || zoneUnresolved
 
   const loadData = useCallback(async () => {
+    if (sourcesBlocked) {
+      setPhase('error')
+      setLoadError(String(sourcesError))
+      return
+    }
     setPhase((p) => (p === 'ready' ? 'ready' : 'loading'))
     try {
       const [routeRows, polyRows, resRows] = await Promise.all([
@@ -530,21 +549,21 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
       setLoadError(getSupervisorRouteErrorMessage(e))
       setPhase('error')
     }
-  }, [dateTarget, initialPolygonId, segmentOnlyPlan])
+  }, [dateTarget, initialPolygonId, segmentOnlyPlan, sourcesBlocked, sourcesError])
 
   useEffect(() => { loadData() }, [loadData])
 
   // Apertura directa desde la matriz semanal: si llega initialRouteId, entra al
   // detalle de esa ruta apenas cargan las rutas (una sola vez).
   useEffect(() => {
-    if (autoOpenedRef.current || !initialRouteId || phase !== 'ready') return
+    if (sourcesBlocked || autoOpenedRef.current || !initialRouteId || phase !== 'ready') return
     const route = routes.find((r) => Number(r.route_id) === Number(initialRouteId))
     const zoneReady = canEnsureRoutePlan({ polygonId, subpolygonId, segmentId })
     if (!shouldAutoOpenEnsure({ alreadyOpened: autoOpenedRef.current, hasRoute: Boolean(route), zoneReady })) return
     autoOpenedRef.current = true
     handlePrepare(route)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialRouteId, phase, routes, polygonId, subpolygonId, segmentId])
+  }, [initialRouteId, phase, routes, polygonId, subpolygonId, segmentId, sourcesBlocked])
 
   // Subpolígonos del polígono elegido.
   useEffect(() => {
@@ -677,6 +696,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   }
 
   async function handlePrepare(route) {
+    if (sourcesBlocked) return
     if (!route?.route_id) return
     const zoneReady = canEnsureRoutePlan({
       polygonId, subpolygonId, segmentId,
@@ -723,6 +743,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   }
 
   async function handlePreview() {
+    if (sourcesBlocked) return
     if (!selectedRoute) { flash('Selecciona una ruta'); return }
     // Plan por SEGMENTO (lista curada): ya existe server-side. Sin polígono, el
     // backend propone los MIEMBROS del segmento (no clientes ajenos). Antes esto
@@ -948,6 +969,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   }
 
   async function handlePrepareRoute() {
+    if (sourcesBlocked) return
     if (!routePlanId || publishing || snapshotBusy || previewing || preparing) return
     if (!previewCustomers.length) { flash('Cierra la lista de clientes antes de preparar la ruta.'); return }
     if (shouldHaltPrepareForResources(readiness)) {
@@ -1117,6 +1139,7 @@ export default function PlanearMananaTab({ initialRouteId = 0, initialPolygonId 
   // readiness autoritativa del backend y recarga recursos (para reflejar
   // ocupación en las demás rutas). Un CONFLICT muestra el mensaje y no cambia.
   async function handleAssign(field, value) {
+    if (sourcesBlocked) return
     const id = Number(value || 0)
     if (assignBusy || !routePlanId || !id) return
     const reqId = ++resourceReq.current

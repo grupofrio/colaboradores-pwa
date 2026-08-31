@@ -7714,10 +7714,22 @@ const SUPERVISOR_DAY_CONTROL_PATH =
   '/gf/salesops/supervisor/v2/day-control'
 const SUPERVISOR_PULSE_PATH =
   '/gf/salesops/supervisor/v2/pulse'
+const SUPERVISOR_TASKS_NOTES_V2_PATHS = new Set([
+  '/gf/salesops/supervisor/v2/tasks/list',
+  '/gf/salesops/supervisor/v2/tasks/create',
+  '/gf/salesops/supervisor/v2/tasks/update',
+  '/gf/salesops/supervisor/v2/tasks/complete',
+  '/gf/salesops/supervisor/v2/notes/list',
+  '/gf/salesops/supervisor/v2/notes/create',
+  '/gf/salesops/supervisor/v2/notes/delete',
+])
 
 async function directSupervisorDayControl(method, path, body) {
   const cleanPath = path.split('?')[0]
-  if (cleanPath !== SUPERVISOR_DAY_CONTROL_PATH && cleanPath !== SUPERVISOR_PULSE_PATH) {
+  const allowed = cleanPath === SUPERVISOR_DAY_CONTROL_PATH
+    || cleanPath === SUPERVISOR_PULSE_PATH
+    || SUPERVISOR_TASKS_NOTES_V2_PATHS.has(cleanPath)
+  if (!allowed) {
     return NO_DIRECT
   }
   if (method !== 'POST') {
@@ -9042,13 +9054,15 @@ async function directSupervisorVentas(method, path, body) {
     return Array.isArray(envelope?.data) ? envelope.data : []
   }
 
-  // ── Sprint 5: Tareas del supervisor (guía §8) ─────────────────────────────
-  // Passthrough a controllers Odoo. Backend valida permiso is_supervisor_ventas.
+  // ── Sprint 5: Tareas/Notas — migradas a V2 canónico ───────────────────────
+  // El contrato vivo es /gf/salesops/supervisor/v2/tasks|notes (tareasService /
+  // notasService). Estos handlers legacy /pwa-supv/tasks|notes quedan como
+  // passthrough DEPRECATED solo para superficies aún no migradas (p.ej. Nota
+  // rápida). No diverger DTOs respecto a V2.
 
   if (cleanPath === '/pwa-supv/tasks' && method === 'GET') {
     // Controller espera GET (no POST JSON-RPC). Usar odooHttp.
     return odooHttp('GET', '/pwa-supv/tasks', {
-      company_id:  Number(query.get('company_id'))  || companyId || undefined,
       assignee_id: Number(query.get('assignee_id')) || undefined,
       state:       query.get('state')    || undefined,
       priority:    query.get('priority') || undefined,
@@ -9064,7 +9078,6 @@ async function directSupervisorVentas(method, path, body) {
       priority:    body?.priority || 'medium',
       due_date:    body?.due_date || undefined,
       partner_id:  body?.partner_id ? Number(body.partner_id) : undefined,
-      company_id:  companyId || undefined,
     })
   }
 
@@ -9082,14 +9095,13 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
-  // ── Sprint 5: Notas de coaching (guía §8d) ────────────────────────────────
+  // ── Sprint 5: Notas de coaching (legacy DEPRECATED; V2 en notasService) ──
 
   if (cleanPath === '/pwa-supv/notes' && method === 'GET') {
     // Controller espera GET (no POST JSON-RPC). Mismo patron que /pwa-supv/tasks.
     return odooHttp('GET', '/pwa-supv/notes', {
       subject_type: query.get('subject_type') || undefined,
       subject_id:   Number(query.get('subject_id')) || undefined,
-      company_id:   companyId || undefined,
     })
   }
 
@@ -9098,8 +9110,6 @@ async function directSupervisorVentas(method, path, body) {
       body:         String(body?.body || '').trim(),
       subject_type: body?.subject_type || undefined,
       subject_id:   body?.subject_id ? Number(body.subject_id) : undefined,
-      author_id:    body?.author_id ? Number(body.author_id) : undefined,
-      company_id:   companyId || undefined,
     })
   }
 

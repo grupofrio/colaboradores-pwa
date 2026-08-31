@@ -311,14 +311,15 @@ test('la auditoría cierra writers importados y writes por miembro fuera de los 
   assert.doesNotThrow(() => assertAuditedReadConsumerImports(file, `${src(file)}\nimport('../componentes/lectura')`))
 })
 
-test('Más enlaza únicamente las cuatro superficies secundarias aprobadas', () => {
+test('Más enlaza superficies secundarias aprobadas incluyendo Tareas/Notas V2', () => {
   const source = src('modules/supervisor-ventas/v2/mas/MasView.jsx')
   const allowed = [
     '/equipo/metas', '/equipo/score-semanal',
     '/equipo/dashboard', '/equipo/recuperacion',
+    '/equipo/tareas', '/equipo/notas',
   ]
   for (const route of allowed) assert.ok(source.includes(`route: '${route}'`), route)
-  for (const route of ['/equipo/tareas', '/equipo/notas', '/equipo/bajas', '/equipo/pronostico']) {
+  for (const route of ['/equipo/bajas', '/equipo/pronostico', '/equipo/nota-rapida']) {
     assert.equal(source.includes(`route: '${route}'`), false, route)
   }
 })

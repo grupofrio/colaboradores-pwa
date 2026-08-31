@@ -146,6 +146,11 @@ export function rowSource(row) {
   }
 }
 
+/**
+ * Business rule: max 2 operational sources (SO/SP/P) per assembled route.
+ * Aligned with backend MAX_SOURCES=2 — keep this limit in sync; do not raise
+ * unilaterally in the PWA.
+ */
 export const MAX_OPERATIONAL_SOURCES = 2
 
 /** Selección 1–2. Intentar 3 no sustituye en silencio: devuelve el mismo selected + error. */
@@ -174,29 +179,120 @@ export function encodeSourcesParam(selected) {
   }).filter(Boolean).join(',')
 }
 
+/**
+ * Decode deep-link `src` (comma-separated SO/SP/P tokens).
+ *
+ * Fail-closed — NEVER silent truncate via slice(MAX):
+ * - malformed token → { sources: [], error: 'malformed_source' }
+ * - unique valid keys after dedup > MAX → { sources: [], error: 'too_many_sources' }
+ *
+ * Duplicates: count AFTER dedup by key (SO:1,SO:1,SO:2 → 2 unique → PASS).
+ * Raw token count before dedup is not the gate; uniqueness is.
+ *
+ * @returns {{ sources: Array, error: null|'too_many_sources'|'malformed_source' }}
+ */
 export function decodeSourcesParam(raw) {
-  return String(raw || '')
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((token) => {
-      const [main, polyPart] = token.split('@')
-      const [tipo, id] = String(main || '').split(':')
-      const polygonId = polyPart && String(polyPart).startsWith('P:')
-        ? (Number(String(polyPart).slice(2)) || 0)
-        : 0
-      return {
-        key: main,
-        tipo,
-        type: tipo,
-        id: Number(id || 0) || 0,
-        polygon: polygonId ? { id: polygonId } : null,
-      }
+  const text = String(raw || '').trim()
+  if (!text) return { sources: [], error: null }
+
+  const tokens = text.split(',').map((part) => part.trim()).filter(Boolean)
+  const parsed = []
+  for (const token of tokens) {
+    const [main, polyPart] = token.split('@')
+    const [tipo, idRaw] = String(main || '').split(':')
+    const id = Number(idRaw || 0) || 0
+    const tipoOk = ['SO', 'SP', 'P'].includes(tipo)
+    if (!tipoOk || !id) {
+      return { sources: [], error: 'malformed_source' }
+    }
+    const polygonId = polyPart && String(polyPart).startsWith('P:')
+      ? (Number(String(polyPart).slice(2)) || 0)
+      : 0
+    // Trailing @ without P:… is malformed (do not strip silently).
+    if (polyPart != null && polyPart !== '' && !String(polyPart).startsWith('P:')) {
+      return { sources: [], error: 'malformed_source' }
+    }
+    parsed.push({
+      key: `${tipo}:${id}`,
+      tipo,
+      type: tipo,
+      id,
+      polygon: polygonId ? { id: polygonId } : null,
     })
-    .filter((s) => s.id && ['SO', 'SP', 'P'].includes(s.tipo))
-    .slice(0, MAX_OPERATIONAL_SOURCES)
+  }
+
+  const sources = []
+  const seen = new Set()
+  for (const s of parsed) {
+    if (seen.has(s.key)) continue
+    seen.add(s.key)
+    sources.push(s)
+  }
+  if (sources.length > MAX_OPERATIONAL_SOURCES) {
+    return { sources: [], error: 'too_many_sources' }
+  }
+  return { sources, error: null }
 }
 
+/**
+ * routeId accionable para armar desde 1–2 sources.
+ * - Todos comparten un routeId → ese id.
+ * - Ninguno tiene routeId → 0 (el usuario elige después).
+ * - Varios routeId distintos → error accionable; NUNCA sources.find(...).routeId.
+ */
+export function resolveTargetRouteId(sources) {
+  const ids = []
+  for (const src of sources || []) {
+    const id = Number(src?.routeId || 0) || 0
+    if (id > 0 && !ids.includes(id)) ids.push(id)
+  }
+  if (ids.length === 0) return { routeId: 0, error: null }
+  if (ids.length === 1) return { routeId: ids[0], error: null }
+  return {
+    routeId: 0,
+    error: 'Los planes seleccionados pertenecen a rutas distintas. Elige planes de la misma ruta, o ábrelos por separado.',
+  }
+}
+
+/**
+ * Fail-closed: no hibridar zonas incompatibles.
+ * - polygonIds distintos → error
+ * - subpolygonIds con padres de polígono distintos (cuando ambos se conocen) → error
+ * - segmentIds distintos OK si el polígono padre es el mismo o desconocido;
+ *   si los padres conocidos conflictúan → error
+ * Callers must assert before zoneFromSources / goArmar.
+ */
+export function assertSourcesZoneCompatible(sources) {
+  const list = Array.isArray(sources) ? sources : []
+  if (list.length <= 1) return { ok: true, error: null }
+
+  const knownParents = new Set()
+  const conflictMsg = 'Los planes seleccionados pertenecen a polígonos distintos. Elige planes de la misma zona.'
+
+  for (const src of list) {
+    const z = rowZone(src)
+    const parentHint = Number(src?.polygon?.id || 0) || 0
+    const isPolygonRow = src?.tipo === 'P' || src?.type === 'P'
+    const polyId = isPolygonRow
+      ? (Number(src?.id || 0) || z.polygonId || 0)
+      : (z.polygonId || parentHint || 0)
+
+    if (polyId) knownParents.add(polyId)
+    if (z.subpolygonId && (z.polygonId || parentHint)) {
+      knownParents.add(z.polygonId || parentHint)
+    }
+    if (z.segmentId && (z.polygonId || parentHint)) {
+      knownParents.add(z.polygonId || parentHint)
+    }
+  }
+
+  if (knownParents.size > 1) {
+    return { ok: false, error: conflictMsg }
+  }
+  return { ok: true, error: null }
+}
+
+/** Solo para sets ya compatibles (assertSourcesZoneCompatible primero). */
 export function zoneFromSources(sources) {
   const zone = { subpolygonId: 0, polygonId: 0, segmentId: 0 }
   for (const src of sources || []) {
@@ -208,21 +304,51 @@ export function zoneFromSources(sources) {
   return zone
 }
 
-/** poly/sub/seg del query GANAN sobre src. Sin params de zona, se deriva de sources. */
+/**
+ * poly/sub/seg del query GANAN sobre src. Sin params de zona, se deriva de sources
+ * SOLO si son compatibles — nunca inventa una zona híbrida de sources incompatibles.
+ */
 export function resolveArmarZone({ poly, sub, seg, src } = {}) {
   const fromParams = {
     polygonId: Number(poly || 0) || 0,
     subpolygonId: Number(sub || 0) || 0,
     segmentId: Number(seg || 0) || 0,
   }
-  const sources = decodeSourcesParam(src)
-  const fromSrc = zoneFromSources(sources)
+  const decoded = decodeSourcesParam(src)
+  if (decoded.error) {
+    return {
+      polygonId: fromParams.polygonId,
+      subpolygonId: fromParams.subpolygonId,
+      segmentId: fromParams.segmentId,
+      sources: [],
+      sourcesError: decoded.error,
+      zoneError: null,
+    }
+  }
+  const sources = decoded.sources
+  const compat = assertSourcesZoneCompatible(sources)
+  const fromSrc = compat.ok
+    ? zoneFromSources(sources)
+    : { subpolygonId: 0, polygonId: 0, segmentId: 0 }
   return {
     polygonId: fromParams.polygonId || fromSrc.polygonId,
     subpolygonId: fromParams.subpolygonId || fromSrc.subpolygonId,
     segmentId: fromParams.segmentId || fromSrc.segmentId,
     sources,
+    sourcesError: null,
+    zoneError: compat.error || null,
   }
+}
+
+/** Mensaje visible para codes de decodeSourcesParam / deep-link. */
+export function sourcesParamErrorMessage(code) {
+  if (code === 'too_many_sources') {
+    return 'No puedes combinar más de 2 planes operativos en una ruta.'
+  }
+  if (code === 'malformed_source') {
+    return 'El enlace de planes operativos no es válido.'
+  }
+  return code ? String(code) : ''
 }
 
 export function canEnsureRoutePlan({ polygonId, subpolygonId, segmentId } = {}) {

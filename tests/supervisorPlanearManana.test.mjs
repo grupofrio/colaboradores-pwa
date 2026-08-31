@@ -157,15 +157,19 @@ test('derivePlanAssignment: plan sin recursos ⇒ todo null', () => {
   assert.equal(a.salesperson, null)
 })
 
-test('resourceOptions: marca ocupado en otra ruta y conserva el actual', () => {
+test('resourceOptions: marca ocupado en otra ruta y conserva el actual (reuso selectable)', () => {
   const opts = resourceOptions(RESOURCES.vehicles, 50, 1)
   const a = opts.find((o) => o.id === 1)
   const c = opts.find((o) => o.id === 3)
   const b = opts.find((o) => o.id === 2)
   assert.equal(a.isCurrent, true)
   assert.equal(a.busyElsewhere, false) // ocupado por ESTE plan ⇒ no es "en otra ruta"
+  assert.equal(a.elsewhereCount, 0)
   assert.equal(c.busyElsewhere, true)  // plan 99 ≠ 50
+  assert.equal(c.elsewhereCount, 1)
+  assert.deepEqual(c.assignedPlanIds, [99])
   assert.equal(b.busyElsewhere, false) // libre
+  assert.equal(b.elsewhereCount, 0)
 })
 
 test('resourceReadiness: presencia — sin unidad bloquea; sin chofer/vendedor advierte', () => {
@@ -293,9 +297,11 @@ test('wiring: la pestaña usa el picker accionable y el handler de asignación',
     'expone los tres selectores')
 })
 
-test('guard: el picker deshabilita recursos ocupados en otra ruta (no doblar)', () => {
+test('guard: el picker permite reusar recursos de otra ruta (etiqueta, no disabled)', () => {
   const tab = src('modules/supervisor-ventas/v2/planear/PlanearMananaTab.jsx')
-  assert.ok(/disabled=\{o\.busyElsewhere && !o\.isCurrent\}/.test(tab), 'opción ocupada en otra ruta va deshabilitada')
+  assert.doesNotMatch(tab, /disabled=\{o\.busyElsewhere && !o\.isCurrent\}/)
+  assert.match(tab, /también en \$\{n\} ruta/)
+  assert.match(tab, /elsewhereCount/)
 })
 
 test('guard: solo se envían los recursos presentes (ausente = no tocar)', () => {

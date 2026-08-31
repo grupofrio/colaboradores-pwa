@@ -55,18 +55,22 @@ test('wiring: ClientesTab cuenta fallida solo por phase, con request-id', () => 
   assert.ok(!/value\?\.ok\b/.test(s) && !/res\.value\?\.ok/.test(s), 'ClientesTab NO usa .ok')
   assert.ok(/reqIdRef/.test(s) && /dayVersion/.test(s), 'ClientesTab con reqId + versión')
 })
-test('wiring: MasView NO enlaza rutas excluidas (§2/§3)', () => {
+test('wiring: MasView enlaza Tareas/Notas V2 y excluye Nota rápida/Bajas', () => {
   const s = src('modules/supervisor-ventas/v2/mas/MasView.jsx')
-  for (const r of ['/equipo/tareas', '/equipo/notas', '/equipo/nota-rapida', '/equipo/bajas']) {
+  assert.ok(s.includes("route: '/equipo/tareas'"), 'MasView debe declarar Tareas')
+  assert.ok(s.includes("route: '/equipo/notas'"), 'MasView debe declarar Notas')
+  for (const r of ['/equipo/nota-rapida', '/equipo/bajas']) {
     assert.ok(!s.includes(`route: '${r}'`), `MasView NO debe declarar el tile ${r}`)
   }
 })
-test('wiring: rutas legacy excluidas envueltas en V2ExcludedRoute (deep-link seguro)', () => {
+test('wiring: Nota rápida y Bajas envueltas en V2ExcludedRoute; Tareas/Notas liberadas', () => {
   const s = src('App.jsx')
-  for (const path of ['/equipo/tareas', '/equipo/notas', '/equipo/nota-rapida', '/equipo/bajas']) {
+  for (const path of ['/equipo/nota-rapida', '/equipo/bajas']) {
     const re = new RegExp(`path="${path}"[^\\n]*V2ExcludedRoute`)
     assert.ok(re.test(s), `${path} debe ir por V2ExcludedRoute`)
   }
+  assert.ok(!/path="\/equipo\/tareas"[^\n]*V2ExcludedRoute/.test(s), 'tareas sin V2ExcludedRoute')
+  assert.ok(!/path="\/equipo\/notas"[^\n]*V2ExcludedRoute/.test(s), 'notas sin V2ExcludedRoute')
 })
 test('wiring: dataSources ya NO exporta classify/RESULT (contrato único)', () => {
   const s = src('modules/supervisor-ventas/v2/dataSources.js')
