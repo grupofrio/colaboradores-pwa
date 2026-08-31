@@ -916,9 +916,11 @@ for (const [width, viewport] of [[390, 'mobile'], [1280, 'desktop']]) {
 
 test('both POS layouts clear card state when company or warehouse changes', () => {
   for (const [source, viewport] of [[mobileSource, 'mobile'], [desktopSource, 'desktop']]) {
-    const effect = source.match(/useEffect\(\(\) => \{[\s\S]*?\}, \[companyId, warehouseId\]\)/)?.[0] || ''
+    const effect = source.match(/useEffect\(\(\) => \{[\s\S]*?\}, \[identityKey, flow\]\)/)?.[0] || ''
     assert.match(effect, /setPayConfirm\(null\)/, `${viewport}: cierra confirmación`)
     assert.match(effect, /setCardRef\(''\)/, `${viewport}: limpia el folio`)
+    assert.match(effect, /setCart\(\[\]\)/, `${viewport}: limpia el carrito`)
+    assert.match(effect, /emptyPosCustomer\(flow\)/, `${viewport}: limpia el cliente`)
   }
 })
 

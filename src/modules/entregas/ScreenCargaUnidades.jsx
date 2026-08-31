@@ -292,10 +292,11 @@ export default function ScreenCargaUnidades() {
         const linked = res.data?.route_plan_linked === true
         const toastMsg = linked
           ? `Carga enviada al chofer para aceptación${pickName ? ` · ${pickName}` : ''}`
-          : `Carga reservada${pickName ? ` · ${pickName}` : ''} (sin plan de ruta hoy)`
+          : `Carga confirmada${pickName ? ` · ${pickName}` : ''} (pendiente de aceptación; sin plan de ruta hoy)`
         showToast(toastMsg, 'success')
         setExecResults((prev) => ({ ...prev, [empId]: { ok: true, message: toastMsg, data: res.data } }))
-        // Reset manual lines y fuerza recarga del catálogo (stock reservado, cambió disponible)
+        // Reset manual lines y fuerza recarga del catálogo: el picking abierto
+        // reduce la disponibilidad de servidor aunque aún no cambie el stock físico.
         setManualLines((prev) => ({ ...prev, [empId]: [{ product_id: '', qty: '', product_name: '' }] }))
         setVanCatalog((prev) => { const n = { ...prev }; delete n[empId]; return n })
         setExpandedId(null)

@@ -154,7 +154,7 @@ function marisolCatalog(overrides = {}) {
     'buyer.approve': denied('phase_not_enabled', 'approve'),
     'buyer.confirm': denied('phase_not_enabled', 'confirm'),
     'pos.read': allowed('read'),
-    'pos.operate': denied('phase_not_enabled', 'capture'),
+    'pos.operate': denied('not_granted', 'capture'),
     'attendance.read': denied('phase_not_enabled', 'read'),
     'attendance.capture': denied('phase_not_enabled', 'capture'),
     'payroll.csc.read': denied('phase_not_enabled', 'read'),
@@ -304,7 +304,7 @@ test('2. GDL permitido solo segun capacidades publicadas', () => {
   assert.equal(capabilityAllowed(contract, 'delivery.return.gdl'), true)
   assert.equal(capabilityAllowed(contract, 'pos.read'), true)
   assert.equal(capabilityAllowed(contract, 'pos.operate'), false)
-  assert.equal(capabilityDeny(contract, 'pos.operate').code, 'phase_not_enabled')
+  assert.equal(capabilityDeny(contract, 'pos.operate').code, 'not_granted')
   assert.equal(capabilityAllowed(contract, 'liquidation.read.gdl'), true)
   const scope = publishedScope(contract)
   assert.equal(scope.plaza_label, 'GUADALAJARA')
@@ -789,6 +789,9 @@ test('inventario CEDIS recarga cuando llega warehouse_id y no se congela en 0', 
   assert.doesNotMatch(inventario, /useEffect\(\(\) => \{ load\(\) \}, \[\]\)/)
   assert.match(operacion, /Inventario PT/)
   assert.match(carga, /PRODUCTOS CON EXISTENCIA EN ORIGEN/)
+  assert.match(carga, /Carga confirmada/)
+  assert.match(carga, /pendiente de aceptación/)
+  assert.doesNotMatch(carga, /Carga reservada/)
 })
 
 test('AdminProvider no apaga capsReady si el contrato v2 ya es válido', () => {

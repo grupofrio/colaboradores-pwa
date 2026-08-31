@@ -6,7 +6,7 @@
  * la página puede seguir sirviendo HTML/JS cacheado. El bootstrap nuevo (con
  * este reset) solo corre si el navegador ya cargó el entrypoint fresco — hay
  * un chicken-and-egg. Por eso:
- *  1) unregister + delete caches al boot;
+ *  1) update + SKIP_WAITING + unregister + delete caches al boot;
  *  2) si el buildId cambió vs localStorage, un reload one-shot tras limpiar
  *     (sessionStorage evita loops);
  *  3) headers no-store en index.html/sw.js (vercel.json) reducen HTML stale.
@@ -16,7 +16,18 @@
  */
 export async function resetLegacyPwaState(runtime = globalThis, { buildId } = {}) {
   const registrations = await runtime?.navigator?.serviceWorker?.getRegistrations?.().catch(() => []) || []
-  await Promise.allSettled(registrations.map((registration) => registration?.unregister?.()))
+  await Promise.allSettled(registrations.map(async (registration) => {
+    try {
+      await registration?.update?.()
+    } catch {
+      // A controlling SW from an older bundle may reject update(); still unregister.
+    }
+    const waiting = registration?.waiting
+    if (waiting && typeof waiting.postMessage === 'function') {
+      waiting.postMessage({ type: 'SKIP_WAITING' })
+    }
+    return registration?.unregister?.()
+  }))
 
   const cacheKeys = await runtime?.caches?.keys?.().catch(() => []) || []
   await Promise.allSettled(cacheKeys.map((key) => runtime.caches.delete(key)))

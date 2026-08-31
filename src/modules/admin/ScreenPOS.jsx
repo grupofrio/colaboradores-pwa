@@ -20,6 +20,7 @@ import {
   changeCartItemQty,
   getDisplayStock,
   getProductPrice,
+  nextCartQtyWouldExceedStock,
   repriceCartFromCatalog,
   stockLabel,
 } from './posCart'
@@ -39,9 +40,17 @@ import {
   canMutateCanonicalPos,
   canOpenPosPayment,
   classifyPosSaleCreateError,
+  emptyPosCustomer,
   normalizePosSaleResult,
+  posClientIdentityKey,
   requiresCanonicalPosOperate,
 } from './posFlow'
+import {
+  POS_CATALOG_UNAVAILABLE_COPY,
+  nextPosCatalogViewState,
+  posCatalogEmptyCopy,
+  shouldIgnoreLatePosCatalogResponse,
+} from './posCatalogSession.js'
 
 export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
   const { session } = useSession()
@@ -117,14 +126,21 @@ export default function ScreenPOS({ flow = ADMIN_POS_FLOW }) {
 
 function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const { session } = useSession()
-  const { capsReady, scopeState, odooUnavailable } = useAdmin()
+  const { capsReady, scopeState, odooUnavailable, sessionIdentity } = useAdmin()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const companyId = Number(session?.company_id || 0) || undefined
   const defaultCustomerName = flow.defaultCustomerName || 'VENTA PUBLICO'
+  const identityKey = posClientIdentityKey({
+    flow,
+    sessionIdentity,
+    companyId,
+    warehouseId,
+  })
 
   const [products, setProducts] = useState([])
+  const [catalogStatus, setCatalogStatus] = useState('loading')
   const [cart, setCart] = useState([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -132,12 +148,15 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   const [error, setError] = useState('')
 
   // Customer
-  const [customer, setCustomer] = useState({ id: null, name: defaultCustomerName })
+  const [customer, setCustomer] = useState(() => emptyPosCustomer(flow))
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
+  const [catalogLocationName, setCatalogLocationName] = useState('')
   const [catalogCustomerId, setCatalogCustomerId] = useState(null)
   const catalogRequestSeq = useRef(0)
   const defaultCustomerRequestSeq = useRef(0)
   const manualCustomerSelectionSeq = useRef(0)
+  const identityKeyRef = useRef(identityKey)
+  identityKeyRef.current = identityKey
   const [defaultCustomerState, setDefaultCustomerState] = useState({
     status: flow.posScope === 'day' ? 'pending' : 'ready',
     message: '',
@@ -164,12 +183,34 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
+  const catalogBlocked = requiresCanonicalPosOperate(flow)
+    && (odooUnavailable === true || capsReady !== true || scopeState !== 'ready')
+
+  const applyCatalogView = useCallback((event, payload) => {
+    const next = nextPosCatalogViewState(event, payload)
+    if (!next) return
+    setProducts(next.products)
+    setCatalogStatus(next.status)
+    if (next.status === 'unavailable') {
+      setError(next.error || POS_CATALOG_UNAVAILABLE_COPY)
+      setCart([])
+    }
+  }, [])
+
   const loadProducts = useCallback(async (selectedPartnerId) => {
+    const startedFor = identityKey
     const requestId = ++catalogRequestSeq.current
     const requestedCustomerId = toPositiveSafeIntegerId(selectedPartnerId) || null
     setPayConfirm(null)
     setCardRef('')
     setCatalogCustomerId(null)
+    if (catalogBlocked) {
+      applyCatalogView('caps-unavailable')
+      setPricelist({ id: null, name: '' })
+      setLoading(false)
+      return false
+    }
+    applyCatalogView('load-start')
     setLoading(true)
     setError('')
     try {
@@ -179,39 +220,67 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         partnerId: selectedPartnerId || undefined,
         posScope: flow.posScope,
       })
-      if (requestId !== catalogRequestSeq.current) return false
+      if (shouldIgnoreLatePosCatalogResponse({
+        requestId,
+        currentRequestId: catalogRequestSeq.current,
+        startedFor,
+        currentIdentityKey: identityKeyRef.current,
+      })) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
-      setProducts(list)
+      applyCatalogView('load-success', { products: list })
       setPricelist({
         id: catalog?.pricelist_id || null,
         name: catalog?.pricelist_name || '',
       })
+      setCatalogLocationName(catalog?.stock_location_name || '')
       setCart((prev) => repriceCartFromCatalog(prev, list))
       setCatalogCustomerId(requestedCustomerId)
       return true
     } catch (e) {
-      if (requestId !== catalogRequestSeq.current) return false
+      if (shouldIgnoreLatePosCatalogResponse({
+        requestId,
+        currentRequestId: catalogRequestSeq.current,
+        startedFor,
+        currentIdentityKey: identityKeyRef.current,
+      })) return false
       logScreenError('ScreenPOS', 'getPosCatalog', e)
-      setError(flow.posScope === 'day' && e?.status === 403
-        ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
-        : (e?.message || 'Error cargando productos'))
+      applyCatalogView('load-failure', {
+        errorMessage: flow.posScope === 'day' && e?.status === 403
+          ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+          : (e?.message || POS_CATALOG_UNAVAILABLE_COPY),
+      })
       return false
     } finally {
-      if (requestId === catalogRequestSeq.current) setLoading(false)
+      if (requestId === catalogRequestSeq.current && startedFor === identityKeyRef.current) setLoading(false)
     }
-  }, [companyId, flow.posScope, warehouseId])
+  }, [applyCatalogView, catalogBlocked, companyId, flow.posScope, identityKey, warehouseId])
+
+  useEffect(() => {
+    catalogRequestSeq.current += 1
+    defaultCustomerRequestSeq.current += 1
+    customerSearchSeq.current += 1
+    manualCustomerSelectionSeq.current += 1
+    setProducts([])
+    setCatalogStatus('loading')
+    setCart([])
+    setPricelist({ id: null, name: '' })
+    setCatalogLocationName('')
+    setCustomer(emptyPosCustomer(flow))
+    setCatalogCustomerId(null)
+    setCustomerResults([])
+    setCustomerQuery('')
+    setShowCustomerSearch(false)
+    setError('')
+    setPayConfirm(null)
+    setCardRef('')
+  }, [identityKey, flow])
 
   useEffect(() => {
     loadProducts(customer.id)
   }, [customer.id, loadProducts])
 
-  useEffect(() => {
-    setCart([])
-    setPayConfirm(null)
-    setCardRef('')
-  }, [companyId, warehouseId])
-
   const loadDefaultCustomer = useCallback(async () => {
+    const startedFor = identityKey
     const requestId = ++defaultCustomerRequestSeq.current
     const manualSelectionAtStart = manualCustomerSelectionSeq.current
     if (flow.posScope === 'day') {
@@ -222,7 +291,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         companyId,
         { posScope: flow.posScope },
       ))
-      if (requestId !== defaultCustomerRequestSeq.current) return
+      if (requestId !== defaultCustomerRequestSeq.current || startedFor !== identityKeyRef.current) return
       if (!c?.id) {
         if (flow.posScope === 'day') {
           setDefaultCustomerState({
@@ -236,10 +305,13 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         setDefaultCustomerState({ status: 'ready', message: '' })
       }
       if (manualSelectionAtStart === manualCustomerSelectionSeq.current) {
-        setCustomer({ id: c.id, name: c.name || defaultCustomerName })
+        setCustomer({
+          id: c.id,
+          name: c.name || (requiresCanonicalPosOperate(flow) ? '' : defaultCustomerName),
+        })
       }
     } catch (e) {
-      if (requestId !== defaultCustomerRequestSeq.current) return
+      if (requestId !== defaultCustomerRequestSeq.current || startedFor !== identityKeyRef.current) return
       logScreenError('ScreenPOS', 'getDefaultCustomer', e)
       setError(flow.posScope === 'day' && e?.status === 403
         ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
@@ -251,7 +323,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         })
       }
     }
-  }, [companyId, defaultCustomerName, flow.posScope])
+  }, [companyId, defaultCustomerName, flow, identityKey])
 
   useEffect(() => {
     loadDefaultCustomer()
@@ -268,12 +340,16 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
   // Cart operations
   function addToCart(product) {
     resetPaymentContext()
-    setCart((prev) => addProductToCart(prev, product))
+    setCart((prev) => addProductToCart(prev, product, {
+      enforceAvailableStock: requiresCanonicalPosOperate(flow),
+    }))
   }
 
   function updateQty(productId, delta) {
     resetPaymentContext()
-    setCart((prev) => changeCartItemQty(prev, productId, delta))
+    setCart((prev) => changeCartItemQty(prev, productId, delta, {
+      enforceAvailableStock: requiresCanonicalPosOperate(flow),
+    }))
   }
 
   function removeItem(productId) {
@@ -440,7 +516,6 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
         company_id: companyId,
         ...(flow.posScope === undefined ? {} : { pos_scope: flow.posScope }),
         partner_id: customer.id,
-        pricelist_id: pricelist.id || undefined,
         payment_method: payConfirm,
         payment_reference: payConfirm === 'card' ? cardRef.trim() : undefined,
         lines: cart.map(c => ({ product_id: c.product_id, qty: c.qty, price_unit: c.price_unit })),
@@ -459,6 +534,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
       const orderId = saleResult.orderId
       const ticketPath = buildPosTicketPath(flow, orderId)
       if (ticketPath) {
+        await loadProducts(customer.id)
         navigate(ticketPath, { state: { order_id: orderId } })
       } else {
         setError('Venta creada pero sin folio')
@@ -507,7 +583,10 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>{flow.title}</span>
+          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>
+            {flow.title}
+            {catalogLocationName ? ` · ${catalogLocationName}` : ''}
+          </span>
           {flow.salesRoute && (
             <button
               type="button"
@@ -561,7 +640,11 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
                 const stock = getDisplayStock(p)
                 const inCart = cart.find(c => c.product_id === p.id)
                 return (
-                  <button key={p.id} onClick={() => addToCart(p)}
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={requiresCanonicalPosOperate(flow) && nextCartQtyWouldExceedStock(cart, p)}
+                    onClick={() => addToCart(p)}
                     style={{
                       padding: '12px 10px', borderRadius: TOKENS.radius.md,
                       background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
@@ -588,7 +671,7 @@ function MobilePOS({ warehouseId, flow = ADMIN_POS_FLOW }) {
             </div>
 
             {filtered.length === 0 && (
-              <p style={{ ...typo.body, color: TOKENS.colors.textMuted, textAlign: 'center', padding: '20px 0' }}>No se encontraron productos</p>
+              <p role="status">{posCatalogEmptyCopy({ status: catalogStatus, productsLength: products.length })}</p>
             )}
 
             {/* Cart Section */}

@@ -5,6 +5,7 @@ import {
   buildWarehouseStockByProduct,
   mergeProductsWithWarehouseStock,
 } from '../src/modules/admin/posCatalog.js'
+import { normalizePosCatalogResponse } from '../src/modules/admin/posProducts.js'
 
 test('buildWarehouseStockByProduct aggregates on hand minus reserved by product', () => {
   const byProduct = buildWarehouseStockByProduct([
@@ -50,5 +51,50 @@ test('mergeProductsWithWarehouseStock preserves catalog and injects warehouse st
       sale_ok: true,
       available_in_pos: true,
     },
+    {
+      id: 12,
+      name: 'Oculto POS',
+      price: 50,
+      stock: 0,
+      barcode: '',
+      weight: 0,
+      sale_ok: true,
+      available_in_pos: false,
+    },
   ])
+})
+
+test('normalizePosCatalogResponse keeps backend catalog, location and free stock', () => {
+  const catalog = normalizePosCatalogResponse({
+    ok: true,
+    data: {
+      company_id: 34,
+      warehouse_id: 94,
+      stock_location_id: 1330,
+      stock_location_name: 'CGDL/Existencias',
+      pricelist_id: 83,
+      pricelist_name: 'Predeterminado',
+      assortment_enforced: true,
+      assortment_stamp: 'KOLD-5',
+      products: [
+        {
+          id: 750,
+          name: 'KOLD BOLSA DE HIELO CILINDRO (5KG)',
+          default_code: 'KOLD-5',
+          stock: 80,
+          qty_available: 80,
+        },
+      ],
+    },
+  })
+
+  assert.equal(catalog.company_id, 34)
+  assert.equal(catalog.warehouse_id, 94)
+  assert.equal(catalog.stock_location_id, 1330)
+  assert.equal(catalog.stock_location_name, 'CGDL/Existencias')
+  assert.equal(catalog.products.length, 1)
+  assert.equal(catalog.products[0].id, 750)
+  assert.equal(catalog.products[0].stock, 80)
+  assert.equal(catalog.assortment_enforced, true)
+  assert.equal(catalog.assortment_stamp, 'KOLD-5')
 })

@@ -19,6 +19,7 @@ import {
   changeCartItemQty,
   getDisplayStock,
   getProductPrice,
+  nextCartQtyWouldExceedStock,
   repriceCartFromCatalog,
   stockLabel,
 } from '../posCart'
@@ -40,9 +41,17 @@ import {
   canMutateCanonicalPos,
   canOpenPosPayment,
   classifyPosSaleCreateError,
+  emptyPosCustomer,
   normalizePosSaleResult,
+  posClientIdentityKey,
   requiresCanonicalPosOperate,
 } from '../posFlow'
+import {
+  POS_CATALOG_UNAVAILABLE_COPY,
+  nextPosCatalogViewState,
+  posCatalogEmptyCopy,
+  shouldIgnoreLatePosCatalogResponse,
+} from '../posCatalogSession.js'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -55,24 +64,34 @@ export const POS_THRESHOLDS = {
 
 export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: warehouseIdProp, companyId: companyIdProp }) {
   const navigate = useNavigate()
-  const { companyId: adminCompanyId, companyLabel, warehouseId: adminWarehouseId, sucursal, capsReady, scopeState, odooUnavailable } = useAdmin()
+  const { companyId: adminCompanyId, companyLabel, warehouseId: adminWarehouseId, sucursal, capsReady, scopeState, odooUnavailable, sessionIdentity } = useAdmin()
   const warehouseId = warehouseIdProp || adminWarehouseId
   const companyId = companyIdProp || adminCompanyId
   const defaultCustomerName = flow.defaultCustomerName || 'VENTA PUBLICO'
+  const identityKey = posClientIdentityKey({
+    flow,
+    sessionIdentity,
+    companyId,
+    warehouseId,
+  })
 
   const [products, setProducts] = useState([])
+  const [catalogStatus, setCatalogStatus] = useState('loading')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const [cart, setCart] = useState([])
-  const [customer, setCustomer] = useState({ id: null, name: defaultCustomerName })
+  const [customer, setCustomer] = useState(() => emptyPosCustomer(flow))
   const [pricelist, setPricelist] = useState({ id: null, name: '' })
+  const [catalogLocationName, setCatalogLocationName] = useState('')
   const [catalogCustomerId, setCatalogCustomerId] = useState(null)
   const catalogRequestSeq = useRef(0)
   const defaultCustomerRequestSeq = useRef(0)
   const manualCustomerSelectionSeq = useRef(0)
+  const identityKeyRef = useRef(identityKey)
+  identityKeyRef.current = identityKey
   const [defaultCustomerState, setDefaultCustomerState] = useState({
     status: flow.posScope === 'day' ? 'pending' : 'ready',
     message: '',
@@ -92,20 +111,43 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
     setCardRef('')
   }
 
+  const catalogBlocked = requiresCanonicalPosOperate(flow)
+    && (odooUnavailable === true || capsReady !== true || scopeState !== 'ready')
+
+  const applyCatalogView = useCallback((event, payload) => {
+    const next = nextPosCatalogViewState(event, payload)
+    if (!next) return
+    setProducts(next.products)
+    setCatalogStatus(next.status)
+    if (next.status === 'unavailable') {
+      setError(next.error || POS_CATALOG_UNAVAILABLE_COPY)
+      setCart([])
+    }
+  }, [])
+
   const loadCatalog = useCallback(async (selectedPartnerId) => {
+    const startedFor = identityKey
     const requestId = ++catalogRequestSeq.current
     const requestedCustomerId = toPositiveSafeIntegerId(selectedPartnerId) || null
     setPayConfirm(null)
     setCardRef('')
     setCatalogCustomerId(null)
     if (!warehouseId) {
-      setProducts([])
+      applyCatalogView('load-failure', {
+        errorMessage: 'Tu sesión no tiene almacén asignado. Vuelve a iniciar sesión.',
+      })
       setPricelist({ id: null, name: '' })
-      setError('Tu sesión no tiene almacén asignado. Vuelve a iniciar sesión.')
       setLoading(false)
       return
     }
+    if (catalogBlocked) {
+      applyCatalogView('caps-unavailable')
+      setPricelist({ id: null, name: '' })
+      setLoading(false)
+      return false
+    }
 
+    applyCatalogView('load-start')
     setLoading(true)
     setError('')
     try {
@@ -115,26 +157,59 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
         partnerId: selectedPartnerId || undefined,
         posScope: flow.posScope,
       })
-      if (requestId !== catalogRequestSeq.current) return false
+      if (shouldIgnoreLatePosCatalogResponse({
+        requestId,
+        currentRequestId: catalogRequestSeq.current,
+        startedFor,
+        currentIdentityKey: identityKeyRef.current,
+      })) return false
       const list = Array.isArray(catalog?.products) ? catalog.products : []
-      setProducts(list)
+      applyCatalogView('load-success', { products: list })
       setPricelist({
         id: catalog?.pricelist_id || null,
         name: catalog?.pricelist_name || '',
       })
+      setCatalogLocationName(catalog?.stock_location_name || '')
       setCart((prev) => repriceCartFromCatalog(prev, list))
       setCatalogCustomerId(requestedCustomerId)
       return true
     } catch (e) {
-      if (requestId !== catalogRequestSeq.current) return false
-      setError(flow.posScope === 'day' && e?.status === 403
-        ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
-        : (e?.message || 'Error cargando productos'))
+      if (shouldIgnoreLatePosCatalogResponse({
+        requestId,
+        currentRequestId: catalogRequestSeq.current,
+        startedFor,
+        currentIdentityKey: identityKeyRef.current,
+      })) return false
+      applyCatalogView('load-failure', {
+        errorMessage: flow.posScope === 'day' && e?.status === 403
+          ? 'Tu perfil ya no tiene acceso al POS día. Solicita revisar el permiso.'
+          : (e?.message || POS_CATALOG_UNAVAILABLE_COPY),
+      })
       return false
     } finally {
-      if (requestId === catalogRequestSeq.current) setLoading(false)
+      if (requestId === catalogRequestSeq.current && startedFor === identityKeyRef.current) setLoading(false)
     }
-  }, [companyId, flow.posScope, warehouseId])
+  }, [applyCatalogView, catalogBlocked, companyId, flow.posScope, identityKey, warehouseId])
+
+  useEffect(() => {
+    catalogRequestSeq.current += 1
+    defaultCustomerRequestSeq.current += 1
+    customerSearchSeq.current += 1
+    manualCustomerSelectionSeq.current += 1
+    setProducts([])
+    setCatalogStatus('loading')
+    setCart([])
+    setPricelist({ id: null, name: '' })
+    setCatalogLocationName('')
+    setCustomer(emptyPosCustomer(flow))
+    setCatalogCustomerId(null)
+    setCustomerResults([])
+    setCustomerQuery('')
+    setShowCustomerSearch(false)
+    setError('')
+    setPayConfirm(null)
+    setCardRef('')
+  }, [identityKey, flow])
 
   useEffect(() => {
     loadCatalog(customer.id)
@@ -165,7 +240,10 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
           setDefaultCustomerState({ status: 'ready', message: '' })
         }
         if (manualSelectionAtStart === manualCustomerSelectionSeq.current) {
-          setCustomer({ id: c.id, name: c.name || defaultCustomerName })
+          setCustomer({
+            id: c.id,
+            name: c.name || (requiresCanonicalPosOperate(flow) ? '' : defaultCustomerName),
+          })
         }
       } catch (e) {
         if (!alive || requestId !== defaultCustomerRequestSeq.current) return
@@ -187,13 +265,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
         defaultCustomerRequestSeq.current += 1
       }
     }
-  }, [companyId, defaultCustomerName, flow.posScope])
-
-  useEffect(() => {
-    setCart([])
-    setPayConfirm(null)
-    setCardRef('')
-  }, [companyId, warehouseId])
+  }, [companyId, defaultCustomerName, flow, identityKey])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products
@@ -206,12 +278,16 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
 
   function addToCart(product) {
     resetPaymentContext()
-    setCart((prev) => addProductToCart(prev, product))
+    setCart((prev) => addProductToCart(prev, product, {
+      enforceAvailableStock: requiresCanonicalPosOperate(flow),
+    }))
   }
 
   function updateQty(productId, delta) {
     resetPaymentContext()
-    setCart((prev) => changeCartItemQty(prev, productId, delta))
+    setCart((prev) => changeCartItemQty(prev, productId, delta, {
+      enforceAvailableStock: requiresCanonicalPosOperate(flow),
+    }))
   }
 
   function removeItem(productId) {
@@ -386,7 +462,6 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
         partner_id: customer.id,
         payment_method: payConfirm,
         payment_reference: payConfirm === 'card' ? cardRef.trim() : undefined,
-        pricelist_id: pricelist.id || undefined,
         lines: cart.map((c) => ({
           product_id: c.product_id,
           qty: c.qty,
@@ -407,6 +482,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
       const orderId = saleResult.orderId
       const ticketPath = buildPosTicketPath(flow, orderId)
       if (ticketPath) {
+        await loadCatalog(customer.id)
         toast.success('Venta registrada')
         navigate(ticketPath, { state: { order_id: orderId } })
       } else {
@@ -451,6 +527,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
           margin: 0,
         }}>
           VENTA MOSTRADOR · {companyLabel.toUpperCase()}
+          {catalogLocationName ? ` · ${catalogLocationName}` : ''}
         </p>
         <h1 style={{
           fontSize: 26,
@@ -526,7 +603,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
               border: `1px dashed ${TOKENS.colors.border}`,
             }}>
               <p style={{ fontSize: 13, color: TOKENS.colors.textMuted, margin: 0 }}>
-                {products.length === 0 ? 'Sin productos en este almacén' : 'Sin coincidencias'}
+                {posCatalogEmptyCopy({ status: catalogStatus, productsLength: products.length })}
               </p>
             </div>
           ) : (
@@ -545,6 +622,7 @@ export default function AdminPosForm({ flow = ADMIN_POS_FLOW, warehouseId: wareh
                   <button
                     key={p.id}
                     type="button"
+                    disabled={requiresCanonicalPosOperate(flow) && nextCartQtyWouldExceedStock(cart, p)}
                     onClick={() => addToCart(p)}
                     style={{
                       padding: '12px 12px 10px',

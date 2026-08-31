@@ -170,6 +170,35 @@ test('flat PWA admin handler maps nested paths into the protected proxy', async 
   assert.equal(res.statusCode, 200)
 })
 
+test('flat PWA admin handler never forwards Vercel rewrite metadata to Odoo', async () => {
+  let forwarded = null
+  const handler = createPwaAdminProxyHandler({
+    serviceApiKey,
+    fetchFn: async (url, options) => {
+      forwarded = { url, options }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    },
+  })
+  const res = responseRecorder()
+
+  await handler({
+    method: 'GET',
+    query: {
+      path: 'cash-shifts/preview',
+      proxyPath: 'cash-shifts/preview',
+      mode: 'active',
+      shift_id: '7',
+    },
+    headers: { 'x-gf-employee-token': employeeToken },
+  }, res)
+
+  assert.equal(
+    forwarded.url,
+    'https://grupofrio-gf.odoo.com/pwa-admin/cash-shifts/preview?mode=active&shift_id=7',
+  )
+  assert.equal(res.statusCode, 200)
+})
+
 test('P0 Gerente→Admin: non-enumerable headers still forward X-GF-Employee-Token', async () => {
   // Regression for production: {...req} dropped headers → 401 → gf:session-expired.
   const spreadLostHeaders = { ...vercelLikeReq() }
