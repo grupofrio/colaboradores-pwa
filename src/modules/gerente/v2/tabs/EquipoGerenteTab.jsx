@@ -1,25 +1,19 @@
-// ─── Gerente V2 · pestaña Equipo (el módulo del supervisor, completo) ────────
-// Decisión de dirección: el gerente ve Equipo COMPLETO (el mismo del supervisor,
-// con scope de su sucursal), no un resumen. NO se duplica código: esta pestaña
-// es un directorio que lleva a las MISMAS rutas /equipo/* del supervisor, que ya
-// renderizan las superficies V2. El backend ya acepta gerente_sucursal en el
-// guard (SUPERVISOR_V2_ROLES) con el scope de su sucursal.
-//
-// POR QUÉ UN DIRECTORIO Y NO MONTAR EL SHELL DEL SUPERVISOR AQUÍ: montar
-// SupervisorV2Shell dentro de GerenteV2Shell anidaría dos raíles de pestañas. El
-// gerente entra a las superficies del supervisor por su ruta propia; el rail del
-// supervisor lo lleva de vuelta. Cero duplicación de pantallas.
+// ─── Gerente V2 · pestaña Equipo (directorio read-only) ──────────────────────
+// Las tarjetas NO deep-linkean a /equipo/*: ModuleRoleRoute(supervisor_ventas)
+// rechaza gerente_sucursal y el catch-all manda a Home. En su lugar montamos
+// wrappers propios bajo /gerente/equipo/* (moduleId=gerente) que reutilizan
+// los cuerpos de lectura del supervisor sin abrir escrituras de Supervisor.
 import { useNavigate } from 'react-router-dom'
 import { BRAND_TOKENS as TOKENS } from '../../../../theme/brandTokens'
 
 const C = TOKENS.colors
 
 const SURFACES = [
-  { key: 'hoy', label: 'Hoy del equipo', desc: 'Rutas, radar y clientes por visitar', route: '/equipo', glyph: '◉' },
-  { key: 'radar', label: 'Radar', desc: 'Posición de las rutas en vivo', route: '/equipo/radar', glyph: '◎' },
-  { key: 'rutas', label: 'Rutas', desc: 'Rutas del día y planeación', route: '/equipo/rutas', glyph: '⋔' },
-  { key: 'planear', label: 'Planear mañana', desc: 'Recursos y asignación del día siguiente', route: '/equipo/rutas/planear', glyph: '⊹' },
-  { key: 'clientes', label: 'Clientes', desc: 'Cartera y segmentos de la sucursal', route: '/equipo/clientes', glyph: '⚇' },
+  { key: 'hoy', label: 'Hoy del equipo', desc: 'Rutas, radar y clientes por visitar', route: '/gerente/equipo/hoy', glyph: '◉' },
+  { key: 'radar', label: 'Radar', desc: 'Posición de las rutas en vivo', route: '/gerente/equipo/radar', glyph: '◎' },
+  { key: 'rutas', label: 'Rutas', desc: 'Rutas del día y planeación', route: '/gerente/equipo/rutas', glyph: '⋔' },
+  { key: 'planear', label: 'Planear mañana', desc: 'Recursos y asignación del día siguiente', route: '/gerente/equipo/planear', glyph: '⊹' },
+  { key: 'clientes', label: 'Clientes', desc: 'Cartera y segmentos de la sucursal', route: '/gerente/equipo/clientes', glyph: '⚇' },
   // Pendientes va a la superficie READ-ONLY del gerente (/gerente/pendientes):
   // los endpoints de escritura del supervisor lo excluyen a propósito, así que
   // aquí ve tareas y notas en solo lectura, no la pantalla de escritura.

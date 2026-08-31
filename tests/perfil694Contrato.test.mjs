@@ -442,7 +442,7 @@ test('7. gerente_sucursal adicional no evade el clamp ni concede permisos', () =
   ])
   assert.ok(getEffectiveJobKeys(withGerente).includes('gerente_sucursal'))
   assert.equal(getAuthorizationJobKeys(withGerente).includes('gerente_sucursal'), false)
-  assert.equal(isGerentePilotReadOnly(withGerente, { gerenteWritesEnabled: false }), false)
+  assert.equal(isGerentePilotReadOnly(withGerente, { gerenteWritesEnabled: false }), true)
   const contract = marisolContract({
     effective_job_keys: getEffectiveJobKeys(withGerente),
     capabilities: marisolCatalog({

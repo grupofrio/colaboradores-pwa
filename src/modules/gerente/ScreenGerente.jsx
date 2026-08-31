@@ -4,6 +4,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getAlerts, getKpiSummary } from './api'
 import { logScreenError } from '../shared/logScreenError'
+import { isGerentePilotReadOnly } from '../admin/gerentePilotCaps.js'
 
 export default function ScreenGerente() {
   const { session } = useSession()
@@ -46,6 +47,8 @@ export default function ScreenGerente() {
   const alertCount = alerts.length
   const sucursal = session?.sucursal || session?.branch_name || ''
 
+  const caps = session?.capabilities || {}
+  const forecastAllowed = !isGerentePilotReadOnly(session, caps)
   const ACTIONS = [
     { id: 'copiloto', label: 'Copiloto Gerencial', desc: 'Pregunta por tu sucursal', route: '/gerente/copiloto',
       color: TOKENS.colors.blue3,
@@ -129,7 +132,7 @@ export default function ScreenGerente() {
 
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 24, marginBottom: 12 }}>GESTION</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {ACTIONS.map(a => (
+              {ACTIONS.filter((a) => a.id !== 'forecast' || forecastAllowed).map(a => (
                 <button key={a.id} onClick={() => navigate(a.route)} style={{
                   display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: TOKENS.radius.lg,
                   background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
