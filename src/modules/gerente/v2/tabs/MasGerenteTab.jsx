@@ -20,9 +20,9 @@ const GROUPS = [
   {
     title: 'MI CUENTA',
     items: [
-      { key: 'encuestas', label: 'Encuestas', route: '/encuestas', glyph: '☑' },
-      { key: 'premios', label: 'Premios', route: '/premios', glyph: '★' },
-      { key: 'perfil', label: 'Mi perfil', route: '/perfil', glyph: '☺' },
+      { key: 'encuestas', label: 'Encuestas', route: '/surveys', glyph: '☑' },
+      { key: 'premios', label: 'Premios', route: '/badges', glyph: '★' },
+      { key: 'perfil', label: 'Mi perfil', route: '/profile', glyph: '☺' },
     ],
   },
 ]

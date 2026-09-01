@@ -1,4 +1,4 @@
-const ODOO_LOGIN_URL = 'https://grupofrio-gf.odoo.com/api/employee-sign-in'
+import { resolveEmployeeSignInUrl, StagingOriginError } from './_odooOrigin.js'
 const SALESOPS_FIELDS = ['gf_salesops_token', 'salesops_api_token', 'x_gf_token']
 
 function headerValue(headers, name) {
@@ -42,7 +42,7 @@ function redactSalesOpsFields(value) {
   return clean
 }
 
-export function createEmployeeSignInProxyHandler({ fetchFn = globalThis.fetch } = {}) {
+export function createEmployeeSignInProxyHandler({ fetchFn = globalThis.fetch, env = process.env } = {}) {
   return async function employeeSignInProxyHandler(req, res) {
     if (String(req.method || '').toUpperCase() !== 'POST') {
       sendJson(res, 405, { ok: false, message: 'Método no permitido.' })
@@ -57,8 +57,17 @@ export function createEmployeeSignInProxyHandler({ fetchFn = globalThis.fetch } 
       return
     }
 
+    let loginUrl
     try {
-      const upstream = await fetchFn(ODOO_LOGIN_URL, {
+      loginUrl = resolveEmployeeSignInUrl(env)
+    } catch (error) {
+      const status = error instanceof StagingOriginError ? error.status : 503
+      sendJson(res, status, { ok: false, message: error.message || 'Backend staging no configurado.' })
+      return
+    }
+
+    try {
+      const upstream = await fetchFn(loginUrl, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
