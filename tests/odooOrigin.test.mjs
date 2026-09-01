@@ -17,12 +17,21 @@ import { shouldShowStagingBanner } from '../src/lib/stagingRuntime.js'
 
 const stagingHost = 'https://grupofrio-gf-staging10082026-example.dev.odoo.com'
 const authorizedStagingHost = 'https://grupofrio-gf-staging280826-37133857.dev.odoo.com'
+const gerenteMarisolReleaseHost = 'https://grupofrio-gf-release-gerente-marisol-staging-202608-37265427.dev.odoo.com'
 
 test('production Odoo hosts are recognized and rejected for staging isolation', () => {
   assert.equal(isProductionOdooOrigin('https://grupofrio-gf.odoo.com'), true)
   assert.equal(isProductionOdooOrigin('https://grupofrio.odoo.com'), true)
   assert.equal(isIsolatedStagingOdooOrigin(stagingHost, stagingHost), false)
   assert.equal(isIsolatedStagingOdooOrigin(authorizedStagingHost, authorizedStagingHost), true)
+  assert.equal(isIsolatedStagingOdooOrigin(gerenteMarisolReleaseHost, gerenteMarisolReleaseHost), true)
+  assert.equal(
+    isIsolatedStagingOdooOrigin(
+      'https://grupofrio-gf-release-unrelated-37265427.dev.odoo.com',
+      'https://grupofrio-gf-release-unrelated-37265427.dev.odoo.com',
+    ),
+    false,
+  )
   assert.equal(isIsolatedStagingOdooOrigin('https://grupofrio-gf.odoo.com'), false)
 })
 
@@ -61,6 +70,14 @@ test('preview and staging runtimes fail closed without an isolated staging origi
       GF_ALLOWED_ODOO_ORIGIN: authorizedStagingHost,
     }),
     authorizedStagingHost,
+  )
+  assert.equal(
+    resolveOdooOrigin({
+      VERCEL_ENV: 'preview',
+      ODOO_ORIGIN: gerenteMarisolReleaseHost,
+      GF_ALLOWED_ODOO_ORIGIN: gerenteMarisolReleaseHost,
+    }),
+    gerenteMarisolReleaseHost,
   )
   assert.equal(resolveOdooOrigin({}), 'https://grupofrio-gf.odoo.com')
 })

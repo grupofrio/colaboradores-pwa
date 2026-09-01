@@ -3,7 +3,10 @@ const PRODUCTION_ODOO_HOSTS = new Set([
   'www.grupofrio.odoo.com',
   'grupofrio-gf.odoo.com',
 ])
-const STAGING_ODOO_HOST = /^grupofrio-gf-staging280826-\d+\.dev\.odoo\.com$/
+const ISOLATED_ODOO_HOSTS = [
+  /^grupofrio-gf-staging280826-\d+\.dev\.odoo\.com$/,
+  /^grupofrio-gf-release-gerente-marisol-staging-202608-\d+\.dev\.odoo\.com$/,
+]
 
 export class StagingOriginError extends Error {
   constructor(message = 'Backend staging no configurado.') {
@@ -47,7 +50,7 @@ export function isIsolatedStagingOdooOrigin(origin, authorizedOrigin) {
       && (url.pathname === '' || url.pathname === '/')
       && !url.search
       && !url.hash
-      && STAGING_ODOO_HOST.test(url.hostname.toLowerCase())
+      && ISOLATED_ODOO_HOSTS.some((pattern) => pattern.test(url.hostname.toLowerCase()))
     )
   } catch {
     return false
