@@ -4,6 +4,10 @@ const PRODUCTION_ODOO_HOSTS = new Set([
   'grupofrio-gf.odoo.com',
 ])
 
+const STABLE_STAGING_ODOO_HOSTS = new Set([
+  'odoo-staging.grupofrio.mx',
+])
+
 export class StagingOriginError extends Error {
   constructor(message = 'Backend staging no configurado.') {
     super(message)
@@ -27,7 +31,8 @@ export function isProductionOdooOrigin(origin) {
 export function isIsolatedStagingOdooOrigin(origin) {
   const host = hostnameOf(origin)
   if (!host || isProductionOdooOrigin(origin)) return false
-  return host.endsWith('.dev.odoo.com') && host.includes('staging')
+  return STABLE_STAGING_ODOO_HOSTS.has(host)
+    || (host.endsWith('.dev.odoo.com') && host.includes('staging'))
 }
 
 export function mustIsolateFromProduction(env = process.env) {
