@@ -16,12 +16,22 @@ import { createOdooOriginProxyHandler } from '../api/odoo-origin.js'
 import { shouldShowStagingBanner } from '../src/lib/stagingRuntime.js'
 
 const stagingHost = 'https://grupofrio-gf-staging10082026-example.dev.odoo.com'
+const stableStagingHost = 'https://odoo-staging.grupofrio.mx'
 
 test('production Odoo hosts are recognized and rejected for staging isolation', () => {
   assert.equal(isProductionOdooOrigin('https://grupofrio-gf.odoo.com'), true)
   assert.equal(isProductionOdooOrigin('https://grupofrio.odoo.com'), true)
   assert.equal(isIsolatedStagingOdooOrigin(stagingHost), true)
   assert.equal(isIsolatedStagingOdooOrigin('https://grupofrio-gf.odoo.com'), false)
+})
+
+test('stable staging domain is accepted without allowing arbitrary domains', () => {
+  assert.equal(isIsolatedStagingOdooOrigin(stableStagingHost), true)
+  assert.equal(
+    resolveOdooOrigin({ VERCEL_ENV: 'preview', ODOO_ORIGIN: stableStagingHost }),
+    stableStagingHost,
+  )
+  assert.equal(isIsolatedStagingOdooOrigin('https://odoo-staging.example.com'), false)
 })
 
 test('preview and staging runtimes fail closed without an isolated staging origin', () => {
